@@ -128,7 +128,7 @@
 
                 <a
                   v-if="authStore.isAdmin"
-                  href="https://github.com/chroime/sub2api"
+                  href="https://github.com/test/sub2api"
                   target="_blank"
                   rel="noopener noreferrer"
                   @click="closeDropdown"
