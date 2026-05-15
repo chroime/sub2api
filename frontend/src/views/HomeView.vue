@@ -51,18 +51,6 @@
           <!-- Language Switcher -->
           <LocaleSwitcher />
 
-          <!-- Doc Link -->
-          <a
-            v-if="docUrl"
-            :href="docUrl"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="rounded-lg p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-dark-400 dark:hover:bg-dark-800 dark:hover:text-white"
-            :title="t('home.viewDocs')"
-          >
-            <Icon name="book" size="md" />
-          </a>
-
           <!-- Theme Toggle -->
           <button
             @click="toggleTheme"
@@ -380,25 +368,6 @@
         <p class="text-sm text-gray-500 dark:text-dark-400">
           &copy; {{ currentYear }} {{ siteName }}. {{ t('home.footer.allRightsReserved') }}
         </p>
-        <div class="flex items-center gap-4">
-          <a
-            v-if="docUrl"
-            :href="docUrl"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="text-sm text-gray-500 transition-colors hover:text-gray-700 dark:text-dark-400 dark:hover:text-white"
-          >
-            {{ t('home.docs') }}
-          </a>
-          <a
-            :href="githubUrl"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="text-sm text-gray-500 transition-colors hover:text-gray-700 dark:text-dark-400 dark:hover:text-white"
-          >
-            GitHub
-          </a>
-        </div>
       </div>
     </footer>
   </div>
@@ -420,7 +389,6 @@ const appStore = useAppStore()
 const siteName = computed(() => appStore.cachedPublicSettings?.site_name || appStore.siteName || 'Sub2API')
 const siteLogo = computed(() => appStore.cachedPublicSettings?.site_logo || appStore.siteLogo || '')
 const siteSubtitle = computed(() => appStore.cachedPublicSettings?.site_subtitle || 'AI API Gateway Platform')
-const docUrl = computed(() => appStore.cachedPublicSettings?.doc_url || appStore.docUrl || '')
 const homeContent = computed(() => appStore.cachedPublicSettings?.home_content || '')
 
 // Check if homeContent is a URL (for iframe display)
@@ -431,9 +399,6 @@ const isHomeContentUrl = computed(() => {
 
 // Theme
 const isDark = ref(document.documentElement.classList.contains('dark'))
-
-// GitHub URL
-const githubUrl = 'https://github.com/chroime/sub2api'
 
 // Auth state
 const isAuthenticated = computed(() => authStore.isAuthenticated)
