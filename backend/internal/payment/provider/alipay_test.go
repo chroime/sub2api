@@ -204,6 +204,9 @@ func TestCreateTradeUsesPagePayCashierForDesktopWhenPrecreateUnavailable(t *test
 	if resp.QRCode != "" {
 		t.Fatalf("qr_code = %q, want empty because page.pay URL is not a scan payload", resp.QRCode)
 	}
+	if resp.PaymentMode != "popup" {
+		t.Fatalf("payment_mode = %q, want popup because Alipay blocks iframe embedding", resp.PaymentMode)
+	}
 }
 
 func TestCreateTradeUsesWapPayForMobile(t *testing.T) {

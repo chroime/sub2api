@@ -21,7 +21,6 @@
             :payment-type="paymentState.paymentType"
             :pay-url="paymentState.payUrl"
             :order-type="paymentState.orderType"
-            :payment-mode="paymentState.paymentMode"
             :currency="paymentState.currency || selectedCurrency"
             @done="onPaymentDone"
             @success="onPaymentSuccess"
@@ -780,9 +779,6 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
     }
     if (decision.kind === 'airwallex_route') {
       window.location.href = decision.paymentState.payUrl
-      return
-    }
-    if (decision.kind === 'embedded_cashier') {
       return
     }
     if (decision.kind === 'wechat_jsapi' && decision.jsapi) {

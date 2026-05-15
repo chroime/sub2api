@@ -22,7 +22,6 @@ export type VisiblePaymentMethod = 'alipay' | 'wxpay' | 'stripe' | 'airwallex'
 export type StripeVisibleMethod = 'alipay' | 'wechat_pay'
 export type PaymentLaunchKind =
   | 'qr_waiting'
-  | 'embedded_cashier'
   | 'redirect_waiting'
   | 'stripe_popup'
   | 'stripe_route'
@@ -201,18 +200,15 @@ export function decidePaymentLaunch(
       || isOfficialAlipayPagePay
     )
   ) {
+    const paymentState = {
+      ...baseState,
+      qrCode: '',
+      paymentMode: 'popup',
+    }
     return {
-      kind: 'embedded_cashier',
-      paymentState: {
-        ...baseState,
-        qrCode: isOfficialAlipayPagePay && baseState.qrCode === baseState.payUrl ? '' : baseState.qrCode,
-        paymentMode: 'embedded_cashier',
-      },
-      recovery: {
-        ...baseState,
-        qrCode: isOfficialAlipayPagePay && baseState.qrCode === baseState.payUrl ? '' : baseState.qrCode,
-        paymentMode: 'embedded_cashier',
-      },
+      kind: 'redirect_waiting',
+      paymentState,
+      recovery: paymentState,
     }
   }
 

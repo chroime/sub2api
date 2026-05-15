@@ -129,7 +129,7 @@ describe('PaymentStatusPanel', () => {
     openSpy.mockRestore()
   })
 
-  it('embeds hosted Alipay cashier without rendering the pay URL as a local QR code', async () => {
+  it('shows hosted Alipay cashier as a new-window flow without iframe or local QR rendering', async () => {
     const wrapper = mount(PaymentStatusPanel, {
       props: {
         orderId: 42,
@@ -138,7 +138,6 @@ describe('PaymentStatusPanel', () => {
         expiresAt: '2099-01-01T12:30:00Z',
         paymentType: 'alipay',
         orderType: 'balance',
-        paymentMode: 'embedded_cashier',
       },
       global: {
         stubs: {
@@ -149,9 +148,9 @@ describe('PaymentStatusPanel', () => {
 
     await flushPromises()
 
-    const iframe = wrapper.get('iframe[data-testid="payment-cashier-frame"]')
-    expect(iframe.attributes('src')).toBe('https://openapi.alipay.com/gateway.do?method=alipay.trade.page.pay')
-    expect(wrapper.text()).toContain('payment.qr.embeddedCashierHint')
+    expect(wrapper.find('iframe').exists()).toBe(false)
+    expect(wrapper.text()).toContain('payment.qr.payInNewWindowHint')
+    expect(wrapper.text()).toContain('payment.qr.openPayWindow')
     expect(toCanvas).not.toHaveBeenCalled()
   })
 })

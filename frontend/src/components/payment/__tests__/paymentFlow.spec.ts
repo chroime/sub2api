@@ -177,20 +177,20 @@ describe('decidePaymentLaunch', () => {
     expect(decision.paymentState.qrCode).toBe('https://pay.example.com/qr/session')
   })
 
-  it('uses embedded cashier flow for desktop official Alipay page pay URLs', () => {
+  it('uses hosted popup flow for desktop official Alipay page pay URLs', () => {
     const decision = decidePaymentLaunch(createOrderResult({
       pay_url: 'https://openapi.alipay.com/gateway.do?method=alipay.trade.page.pay&biz_content=...',
-      payment_mode: 'embedded_cashier',
+      payment_mode: 'popup',
     }), {
       visibleMethod: 'alipay',
       orderType: 'balance',
       isMobile: false,
     })
 
-    expect(decision.kind).toBe('embedded_cashier')
+    expect(decision.kind).toBe('redirect_waiting')
     expect(decision.paymentState.payUrl).toContain('alipay.trade.page.pay')
     expect(decision.paymentState.qrCode).toBe('')
-    expect(decision.recovery.paymentMode).toBe('embedded_cashier')
+    expect(decision.recovery.paymentMode).toBe('popup')
   })
 
   it('does not render legacy Alipay page pay URLs as QR codes on desktop', () => {
@@ -204,9 +204,10 @@ describe('decidePaymentLaunch', () => {
       isMobile: false,
     })
 
-    expect(decision.kind).toBe('embedded_cashier')
+    expect(decision.kind).toBe('redirect_waiting')
     expect(decision.paymentState.payUrl).toBe(pagePayUrl)
     expect(decision.paymentState.qrCode).toBe('')
+    expect(decision.paymentState.paymentMode).toBe('popup')
   })
 
   it('returns wechat oauth launch when backend requires in-app authorization', () => {

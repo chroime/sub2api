@@ -6633,7 +6633,6 @@ export default {
       scanWxpayHint: '请使用手机打开微信，扫描二维码完成支付',
       payInNewWindow: '请在新窗口中完成支付',
       payInNewWindowHint: '支付页面已在新窗口打开，请在新窗口中完成支付后返回此页面',
-      embeddedCashierHint: '请使用手机支付宝扫描下方官方收银台二维码完成支付',
       openPayWindow: '重新打开支付页面',
       expiresIn: '剩余支付时间',
       expired: '订单已过期',

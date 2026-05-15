@@ -108,13 +108,13 @@ func TestBuildCreateOrderResponseUsesProviderPaymentModeOverride(t *testing.T) {
 		&payment.CreatePaymentResponse{
 			TradeNo:     "sub2_99",
 			PayURL:      "https://openapi.alipay.com/gateway.do?method=alipay.trade.page.pay",
-			PaymentMode: "embedded_cashier",
+			PaymentMode: "popup",
 		},
 		payment.CreatePaymentResultOrderCreated,
 	)
 
-	if resp.PaymentMode != "embedded_cashier" {
-		t.Fatalf("payment_mode = %q, want embedded_cashier", resp.PaymentMode)
+	if resp.PaymentMode != "popup" {
+		t.Fatalf("payment_mode = %q, want popup", resp.PaymentMode)
 	}
 	if resp.QRCode != "" {
 		t.Fatalf("qr_code = %q, want empty", resp.QRCode)
