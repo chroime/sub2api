@@ -497,6 +497,16 @@ func selectedInstanceSupportedTypes(sel *payment.InstanceSelection) string {
 	return sel.SupportedTypes
 }
 
+func resolvedCreatePaymentMode(sel *payment.InstanceSelection, pr *payment.CreatePaymentResponse) string {
+	if pr != nil && strings.TrimSpace(pr.PaymentMode) != "" {
+		return strings.TrimSpace(pr.PaymentMode)
+	}
+	if sel == nil {
+		return ""
+	}
+	return strings.TrimSpace(sel.PaymentMode)
+}
+
 func (s *PaymentService) buildPaymentSubject(plan *dbent.SubscriptionPlan, limitAmount float64, cfg *PaymentConfig, sel *payment.InstanceSelection) string {
 	if plan != nil {
 		if plan.ProductName != "" {
@@ -677,7 +687,7 @@ func buildCreateOrderResponse(order *dbent.PaymentOrder, req CreateOrderRequest,
 		JSAPI:        pr.JSAPI,
 		JSAPIPayload: pr.JSAPI,
 		ExpiresAt:    order.ExpiresAt,
-		PaymentMode:  sel.PaymentMode,
+		PaymentMode:  resolvedCreatePaymentMode(sel, pr),
 	}
 }
 

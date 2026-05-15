@@ -99,6 +99,34 @@
       </button>
     </template>
 
+    <!-- Embedded Hosted Cashier Mode -->
+    <template v-else-if="showEmbeddedCashier">
+      <div class="card overflow-hidden p-0">
+        <div class="border-b border-gray-100 px-4 py-3 dark:border-dark-700">
+          <p class="font-semibold text-gray-900 dark:text-white">{{ t('payment.qr.scanAlipay') }}</p>
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('payment.qr.embeddedCashierHint') }}</p>
+        </div>
+        <iframe
+          data-testid="payment-cashier-frame"
+          :src="payUrl"
+          class="h-[640px] w-full bg-white"
+          title="Alipay cashier"
+          referrerpolicy="no-referrer-when-downgrade"
+        ></iframe>
+      </div>
+      <div class="card p-4 text-center">
+        <p class="text-sm text-gray-500 dark:text-gray-400">{{ t('payment.qr.expiresIn') }}</p>
+        <p class="mt-1 text-2xl font-bold tabular-nums text-gray-900 dark:text-white">{{ countdownDisplay }}</p>
+        <p class="mt-1 text-xs text-gray-400 dark:text-gray-500">{{ t('payment.qr.waitingPayment') }}</p>
+        <button v-if="payUrl" class="btn btn-secondary mt-3 text-sm" @click="reopenPopup">
+          {{ t('payment.qr.openPayWindow') }}
+        </button>
+      </div>
+      <button class="btn btn-secondary w-full" :disabled="cancelling" @click="handleCancel">
+        {{ cancelling ? t('common.processing') : t('payment.qr.cancelOrder') }}
+      </button>
+    </template>
+
     <!-- Waiting for Popup/Redirect Mode -->
     <template v-else>
       <div class="card p-6">
@@ -143,6 +171,7 @@ const props = defineProps<{
   paymentType: string
   payUrl?: string
   orderType?: string
+  paymentMode?: string
   currency?: string
 }>()
 
@@ -178,6 +207,10 @@ let countdownTimer: ReturnType<typeof setInterval> | null = null
 
 const isAlipay = computed(() => props.paymentType.includes('alipay'))
 const isWxpay = computed(() => props.paymentType.includes('wxpay'))
+const showEmbeddedCashier = computed(() =>
+  !!props.payUrl
+  && props.paymentMode?.trim().toLowerCase() === 'embedded_cashier',
+)
 
 const qrBorderClass = computed(() => {
   if (isAlipay.value) return 'border-[#00AEEF] bg-blue-50 dark:border-[#00AEEF]/70 dark:bg-blue-950/20'
@@ -290,7 +323,7 @@ function cleanup() {
 }
 
 // Initialize on mount
-qrUrl.value = props.qrCode
+qrUrl.value = showEmbeddedCashier.value ? '' : props.qrCode
 let seconds = 30 * 60
 if (props.expiresAt) {
   seconds = Math.floor((new Date(props.expiresAt).getTime() - Date.now()) / 1000)

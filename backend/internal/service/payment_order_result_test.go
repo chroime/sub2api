@@ -91,6 +91,36 @@ func TestBuildCreateOrderResponseCopiesJSAPIPayload(t *testing.T) {
 	}
 }
 
+func TestBuildCreateOrderResponseUsesProviderPaymentModeOverride(t *testing.T) {
+	t.Parallel()
+
+	resp := buildCreateOrderResponse(
+		&dbent.PaymentOrder{
+			ID:         99,
+			Amount:     18,
+			FeeRate:    0,
+			ExpiresAt:  time.Date(2026, 4, 16, 14, 0, 0, 0, time.UTC),
+			OutTradeNo: "sub2_99",
+		},
+		CreateOrderRequest{PaymentType: payment.TypeAlipay},
+		18,
+		&payment.InstanceSelection{PaymentMode: ""},
+		&payment.CreatePaymentResponse{
+			TradeNo:     "sub2_99",
+			PayURL:      "https://openapi.alipay.com/gateway.do?method=alipay.trade.page.pay",
+			PaymentMode: "embedded_cashier",
+		},
+		payment.CreatePaymentResultOrderCreated,
+	)
+
+	if resp.PaymentMode != "embedded_cashier" {
+		t.Fatalf("payment_mode = %q, want embedded_cashier", resp.PaymentMode)
+	}
+	if resp.QRCode != "" {
+		t.Fatalf("qr_code = %q, want empty", resp.QRCode)
+	}
+}
+
 func TestValidateSelectedCreateOrderAmountCurrencyRejectsFractionalZeroDecimal(t *testing.T) {
 	t.Parallel()
 

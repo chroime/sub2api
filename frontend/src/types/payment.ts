@@ -164,6 +164,7 @@ export interface CreateOrderRequest {
 }
 
 export type CreateOrderResultType = 'order_created' | 'oauth_required' | 'jsapi_ready'
+export type PaymentDisplayMode = 'qrcode' | 'native' | 'redirect' | 'popup' | 'embedded_cashier' | (string & {})
 
 export interface WechatOAuthInfo {
   authorize_url?: string
@@ -199,7 +200,7 @@ export interface CreateOrderResult {
   result_type?: CreateOrderResultType
   payment_type?: string
   out_trade_no?: string
-  payment_mode?: string
+  payment_mode?: PaymentDisplayMode
   resume_token?: string
   oauth?: WechatOAuthInfo
   jsapi?: WechatJSAPIPayload

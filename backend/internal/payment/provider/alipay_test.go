@@ -136,7 +136,7 @@ func TestNewAlipay(t *testing.T) {
 	}
 }
 
-func TestCreateTradeUsesPagePayForDesktop(t *testing.T) {
+func TestCreateTradeUsesPagePayCashierForDesktopWhenPrecreateUnavailable(t *testing.T) {
 	origPreCreate := alipayTradePreCreate
 	origPagePay := alipayTradePagePay
 	origWapPay := alipayTradeWapPay
@@ -158,8 +158,20 @@ func TestCreateTradeUsesPagePayForDesktop(t *testing.T) {
 		if param.OutTradeNo != "sub2_100" {
 			t.Fatalf("out_trade_no = %q, want %q", param.OutTradeNo, "sub2_100")
 		}
+		if param.ProductCode != alipayProductCodePagePay {
+			t.Fatalf("product_code = %q, want %q", param.ProductCode, alipayProductCodePagePay)
+		}
 		if param.NotifyURL != "https://merchant.example.com/api/v1/payment/webhook/alipay" {
 			t.Fatalf("notify_url = %q", param.NotifyURL)
+		}
+		if param.ReturnURL != "https://merchant.example.com/payment/result" {
+			t.Fatalf("return_url = %q", param.ReturnURL)
+		}
+		if param.QRPayMode != "4" {
+			t.Fatalf("qr_pay_mode = %q, want %q", param.QRPayMode, "4")
+		}
+		if param.QRCodeWidth != "240" {
+			t.Fatalf("qrcode_width = %q, want %q", param.QRCodeWidth, "240")
 		}
 		return url.Parse("https://openapi.alipay.com/gateway.do?page-pay")
 	}
@@ -189,8 +201,8 @@ func TestCreateTradeUsesPagePayForDesktop(t *testing.T) {
 	if resp.PayURL == "" {
 		t.Fatal("expected pay_url for desktop page pay")
 	}
-	if resp.QRCode != resp.PayURL {
-		t.Fatalf("qr_code = %q, want same as pay_url %q", resp.QRCode, resp.PayURL)
+	if resp.QRCode != "" {
+		t.Fatalf("qr_code = %q, want empty because page.pay URL is not a scan payload", resp.QRCode)
 	}
 }
 

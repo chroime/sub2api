@@ -6448,6 +6448,7 @@ export default {
       scanWxpayHint: 'Open WeChat on your phone and scan the QR code to pay',
       payInNewWindow: 'Complete Payment in New Window',
       payInNewWindowHint: 'The payment page has opened in a new window. Please complete the payment there and return to this page.',
+      embeddedCashierHint: 'Use Alipay on your phone to scan the official cashier QR code below.',
       openPayWindow: 'Reopen Payment Page',
       expiresIn: 'Expires in',
       expired: 'Order Expired',

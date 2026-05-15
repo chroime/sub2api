@@ -18,6 +18,8 @@ const (
 	alipayProductCodePreCreate = "FACE_TO_FACE_PAYMENT"
 	alipayProductCodeWapPay    = "QUICK_WAP_WAY"
 	alipayProductCodePagePay   = "FAST_INSTANT_TRADE_PAY"
+	alipayPagePayQRMode        = "4"
+	alipayPagePayQRWidth       = "240"
 )
 
 // Alipay response constants.
@@ -107,8 +109,8 @@ func (a *Alipay) MerchantIdentityMetadata() map[string]string {
 //   - Mobile (H5): alipay.trade.wap.pay — browser redirect into Alipay.
 //   - Desktop: prefer alipay.trade.precreate to get a scan payload directly.
 //   - Desktop fallback: if precreate is unavailable for the merchant, fall back
-//     to alipay.trade.page.pay and expose both pay_url and qr_code so the
-//     frontend can render a QR while still allowing direct page open.
+//     to alipay.trade.page.pay and let the frontend embed/open Alipay's
+//     cashier page. The page.pay URL itself is not a QR scan payload.
 func (a *Alipay) CreatePayment(ctx context.Context, req payment.CreatePaymentRequest) (*payment.CreatePaymentResponse, error) {
 	client, err := a.getClient()
 	if err != nil {
@@ -199,15 +201,17 @@ func (a *Alipay) createPagePayTrade(client *alipay.Client, req payment.CreatePay
 	param.ProductCode = alipayProductCodePagePay
 	param.NotifyURL = notifyURL
 	param.ReturnURL = returnURL
+	param.QRPayMode = alipayPagePayQRMode
+	param.QRCodeWidth = alipayPagePayQRWidth
 
 	payURL, err := alipayTradePagePay(client, param)
 	if err != nil {
 		return nil, fmt.Errorf("alipay TradePagePay: %w", err)
 	}
 	return &payment.CreatePaymentResponse{
-		TradeNo: req.OrderID,
-		PayURL:  payURL.String(),
-		QRCode:  payURL.String(),
+		TradeNo:     req.OrderID,
+		PayURL:      payURL.String(),
+		PaymentMode: "embedded_cashier",
 	}, nil
 }
 
