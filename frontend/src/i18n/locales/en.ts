@@ -5598,7 +5598,7 @@ export default {
         alipayGuideFaceToFaceFallback: 'If unavailable or failed, the flow falls back to website checkout automatically.',
         alipayGuidePagePayTitle: 'Website Payment',
         alipayGuidePagePayOpen: 'Enable website payment.',
-        alipayGuidePagePayCall: 'When face-to-face is unavailable on desktop, the flow calls alipay.trade.page.pay and still renders the returned link as a QR code.',
+        alipayGuidePagePayCall: 'When face-to-face is unavailable on desktop, the flow calls alipay.trade.page.pay and opens the official Alipay cashier page.',
         alipayGuidePagePayFallback: 'The cashier link stays available so users can reopen the checkout page manually.',
         alipayGuideWapTitle: 'WAP Payment',
         alipayGuideWapOpen: 'Enable mobile website payment.',

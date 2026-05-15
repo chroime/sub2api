@@ -18,8 +18,6 @@ const (
 	alipayProductCodePreCreate = "FACE_TO_FACE_PAYMENT"
 	alipayProductCodeWapPay    = "QUICK_WAP_WAY"
 	alipayProductCodePagePay   = "FAST_INSTANT_TRADE_PAY"
-	alipayPagePayQRMode        = "4"
-	alipayPagePayQRWidth       = "240"
 	alipayPaymentModePopup     = "popup"
 )
 
@@ -202,8 +200,6 @@ func (a *Alipay) createPagePayTrade(client *alipay.Client, req payment.CreatePay
 	param.ProductCode = alipayProductCodePagePay
 	param.NotifyURL = notifyURL
 	param.ReturnURL = returnURL
-	param.QRPayMode = alipayPagePayQRMode
-	param.QRCodeWidth = alipayPagePayQRWidth
 
 	payURL, err := alipayTradePagePay(client, param)
 	if err != nil {

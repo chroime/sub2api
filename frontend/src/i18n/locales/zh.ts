@@ -5759,7 +5759,7 @@ export default {
         alipayGuideFaceToFaceFallback: '接口不可用或返回失败时，自动降级到电脑网站支付。',
         alipayGuidePagePayTitle: '电脑网站支付',
         alipayGuidePagePayOpen: '需开通电脑网站支付。',
-        alipayGuidePagePayCall: '桌面端当面付不可用时调用 alipay.trade.page.pay，并继续把返回链接渲染成二维码。',
+        alipayGuidePagePayCall: '桌面端当面付不可用时调用 alipay.trade.page.pay，并打开支付宝官方收银台页面。',
         alipayGuidePagePayFallback: '同时保留打开收银台入口，用户可手动重新拉起支付页。',
         alipayGuideWapTitle: '手机网站支付',
         alipayGuideWapOpen: '需开通手机网站支付。',

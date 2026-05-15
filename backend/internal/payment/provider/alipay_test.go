@@ -167,11 +167,11 @@ func TestCreateTradeUsesPagePayCashierForDesktopWhenPrecreateUnavailable(t *test
 		if param.ReturnURL != "https://merchant.example.com/payment/result" {
 			t.Fatalf("return_url = %q", param.ReturnURL)
 		}
-		if param.QRPayMode != "4" {
-			t.Fatalf("qr_pay_mode = %q, want %q", param.QRPayMode, "4")
+		if param.QRPayMode != "" {
+			t.Fatalf("qr_pay_mode = %q, want empty for official cashier page", param.QRPayMode)
 		}
-		if param.QRCodeWidth != "240" {
-			t.Fatalf("qrcode_width = %q, want %q", param.QRCodeWidth, "240")
+		if param.QRCodeWidth != "" {
+			t.Fatalf("qrcode_width = %q, want empty for official cashier page", param.QRCodeWidth)
 		}
 		return url.Parse("https://openapi.alipay.com/gateway.do?page-pay")
 	}
