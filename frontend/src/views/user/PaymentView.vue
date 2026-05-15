@@ -259,7 +259,7 @@ import type { SubscriptionPlan, CheckoutInfoResponse, CreateOrderResult, OrderTy
 import AppLayout from '@/components/layout/AppLayout.vue'
 import AmountInput from '@/components/payment/AmountInput.vue'
 import PaymentMethodSelector from '@/components/payment/PaymentMethodSelector.vue'
-import { METHOD_ORDER, getPaymentPopupFeatures } from '@/components/payment/providerConfig'
+import { METHOD_ORDER, openPaymentUrl } from '@/components/payment/providerConfig'
 import {
   PAYMENT_RECOVERY_STORAGE_KEY,
   buildCreateOrderPayload,
@@ -707,12 +707,6 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
     }
 
     const result = await paymentStore.createOrder(payload) as CreateOrderResult & { resume_token?: string }
-    const openWindow = (url: string) => {
-      const win = window.open(url, 'paymentPopup', getPaymentPopupFeatures())
-      if (!win || win.closed) {
-        window.location.href = url
-      }
-    }
     const visibleMethod = normalizeVisibleMethod(requestType) || requestType
     // When user clicks the dedicated Stripe button, leave method blank so the
     // landing page renders Stripe's full Payment Element (card/link/alipay/wxpay).
@@ -770,7 +764,7 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
     persistRecoverySnapshot(decision.recovery)
 
     if (decision.kind === 'stripe_popup') {
-      openWindow(decision.paymentState.payUrl)
+      openPaymentUrl(decision.paymentState.payUrl)
       return
     }
     if (decision.kind === 'stripe_route') {
@@ -828,7 +822,7 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
         window.location.href = decision.paymentState.payUrl
         return
       }
-      openWindow(decision.paymentState.payUrl)
+      openPaymentUrl(decision.paymentState.payUrl, decision.openMode || 'popup')
     }
   } catch (err: unknown) {
     const apiErr = err as Record<string, unknown>

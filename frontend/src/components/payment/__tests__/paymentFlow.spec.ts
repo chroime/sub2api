@@ -191,6 +191,7 @@ describe('decidePaymentLaunch', () => {
     expect(decision.paymentState.payUrl).toContain('alipay.trade.page.pay')
     expect(decision.paymentState.qrCode).toBe('')
     expect(decision.recovery.paymentMode).toBe('popup')
+    expect(decision.openMode).toBe('tab')
   })
 
   it('does not render legacy Alipay page pay URLs as QR codes on desktop', () => {

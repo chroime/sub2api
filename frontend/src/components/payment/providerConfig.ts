@@ -47,6 +47,7 @@ export const METHOD_ORDER = ['alipay', 'alipay_direct', 'wxpay', 'wxpay_direct',
 /** Payment mode constants */
 export const PAYMENT_MODE_QRCODE = 'qrcode'
 export const PAYMENT_MODE_POPUP = 'popup'
+export type PaymentOpenMode = 'popup' | 'tab'
 
 export const PAYMENT_CURRENCY_OPTIONS: TypeOption[] = [
   { value: 'CNY', label: 'CNY' },
@@ -82,6 +83,21 @@ export function getPaymentPopupFeatures(): string {
   const left = Math.max(0, Math.floor((availW - width) / 2))
   const top = Math.max(0, Math.floor((availH - height) / 2))
   return `width=${width},height=${height},left=${left},top=${top},scrollbars=yes,resizable=yes`
+}
+
+/** Open a hosted payment URL. Use a new tab for official cashier pages that
+ * need the full browser chrome, otherwise use a sized popup window. */
+export function openPaymentUrl(url: string, mode: PaymentOpenMode = 'popup'): Window | null {
+  if (!url) return null
+  const target = mode === 'tab' ? '_blank' : 'paymentPopup'
+  const features = mode === 'tab' ? undefined : getPaymentPopupFeatures()
+  const win = features
+    ? window.open(url, target, features)
+    : window.open(url, target)
+  if (!win || win.closed) {
+    window.location.href = url
+  }
+  return win
 }
 
 /** Webhook paths for each provider (relative to origin). */

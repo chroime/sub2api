@@ -65,6 +65,7 @@ export interface PaymentLaunchDecision {
   kind: PaymentLaunchKind
   paymentState: PaymentRecoverySnapshot
   recovery: PaymentRecoverySnapshot
+  openMode?: 'popup' | 'tab'
   stripeMethod?: StripeVisibleMethod
   oauth?: WechatOAuthInfo
   jsapi?: WechatJSAPIPayload
@@ -209,6 +210,7 @@ export function decidePaymentLaunch(
       kind: 'redirect_waiting',
       paymentState,
       recovery: paymentState,
+      openMode: 'tab',
     }
   }
 

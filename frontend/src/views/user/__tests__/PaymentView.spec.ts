@@ -19,6 +19,7 @@ const showInfo = vi.hoisted(() => vi.fn())
 const showWarning = vi.hoisted(() => vi.fn())
 const getCheckoutInfo = vi.hoisted(() => vi.fn())
 const bridgeInvoke = vi.hoisted(() => vi.fn())
+const isMobileDeviceMock = vi.hoisted(() => vi.fn(() => true))
 
 vi.mock('vue-router', async () => {
   const actual = await vi.importActual<typeof import('vue-router')>('vue-router')
@@ -81,7 +82,7 @@ vi.mock('@/api/payment', () => ({
 }))
 
 vi.mock('@/utils/device', () => ({
-  isMobileDevice: () => true,
+  isMobileDevice: isMobileDeviceMock,
 }))
 
 function checkoutInfoFixture() {
@@ -198,6 +199,7 @@ describe('PaymentView WeChat JSAPI flow', () => {
     showWarning.mockReset()
     getCheckoutInfo.mockReset().mockResolvedValue(checkoutInfoFixture())
     bridgeInvoke.mockReset()
+    isMobileDeviceMock.mockReturnValue(true)
     window.localStorage.clear()
     ;(window as Window & { WeixinJSBridge?: { invoke: typeof bridgeInvoke } }).WeixinJSBridge = {
       invoke: bridgeInvoke,
@@ -415,4 +417,5 @@ describe('PaymentView WeChat JSAPI flow', () => {
     expect(showError).not.toHaveBeenCalled()
     expect(window.localStorage.getItem(PAYMENT_RECOVERY_STORAGE_KEY)).toContain('weixin://wxpay/bizpayurl?pr=fallback-native')
   })
+
 })

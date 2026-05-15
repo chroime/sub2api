@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { PAYMENT_CURRENCY_OPTIONS, PROVIDER_CONFIG_FIELDS } from '@/components/payment/providerConfig'
+import { describe, expect, it, vi } from 'vitest'
+import { PAYMENT_CURRENCY_OPTIONS, PROVIDER_CONFIG_FIELDS, openPaymentUrl } from '@/components/payment/providerConfig'
 
 function findField(providerKey: string, key: string) {
   const fields = PROVIDER_CONFIG_FIELDS[providerKey] || []
@@ -48,5 +48,34 @@ describe('PROVIDER_CONFIG_FIELDS.stripe', () => {
     expect(currency?.defaultValue).toBe('CNY')
     expect(currency?.hintKey).toBe('admin.settings.payment.field_paymentCurrencyHint')
     expect(currency?.options).toBe(PAYMENT_CURRENCY_OPTIONS)
+  })
+})
+
+describe('openPaymentUrl', () => {
+  it('opens hosted payment pages in a new tab when requested', () => {
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue({ closed: false } as Window)
+
+    openPaymentUrl('https://openapi.alipay.com/gateway.do?method=alipay.trade.page.pay', 'tab')
+
+    expect(openSpy).toHaveBeenCalledWith(
+      'https://openapi.alipay.com/gateway.do?method=alipay.trade.page.pay',
+      '_blank',
+    )
+
+    openSpy.mockRestore()
+  })
+
+  it('opens popup payments with the configured popup features', () => {
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue({ closed: false } as Window)
+
+    openPaymentUrl('https://pay.example.com/session/42', 'popup')
+
+    expect(openSpy).toHaveBeenCalledWith(
+      'https://pay.example.com/session/42',
+      'paymentPopup',
+      expect.stringContaining('width='),
+    )
+
+    openSpy.mockRestore()
   })
 })
