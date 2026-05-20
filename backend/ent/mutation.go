@@ -30676,6 +30676,7 @@ type SubscriptionPlanMutation struct {
 	features          *string
 	product_name      *string
 	for_sale          *bool
+	single_purchase   *bool
 	sort_order        *int
 	addsort_order     *int
 	created_at        *time.Time
@@ -31238,6 +31239,42 @@ func (m *SubscriptionPlanMutation) ResetForSale() {
 	m.for_sale = nil
 }
 
+// SetSinglePurchase sets the "single_purchase" field.
+func (m *SubscriptionPlanMutation) SetSinglePurchase(b bool) {
+	m.single_purchase = &b
+}
+
+// SinglePurchase returns the value of the "single_purchase" field in the mutation.
+func (m *SubscriptionPlanMutation) SinglePurchase() (r bool, exists bool) {
+	v := m.single_purchase
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSinglePurchase returns the old "single_purchase" field's value of the SubscriptionPlan entity.
+// If the SubscriptionPlan object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionPlanMutation) OldSinglePurchase(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSinglePurchase is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSinglePurchase requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSinglePurchase: %w", err)
+	}
+	return oldValue.SinglePurchase, nil
+}
+
+// ResetSinglePurchase resets all changes to the "single_purchase" field.
+func (m *SubscriptionPlanMutation) ResetSinglePurchase() {
+	m.single_purchase = nil
+}
+
 // SetSortOrder sets the "sort_order" field.
 func (m *SubscriptionPlanMutation) SetSortOrder(i int) {
 	m.sort_order = &i
@@ -31400,7 +31437,7 @@ func (m *SubscriptionPlanMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SubscriptionPlanMutation) Fields() []string {
-	fields := make([]string, 0, 13)
+	fields := make([]string, 0, 14)
 	if m.group_id != nil {
 		fields = append(fields, subscriptionplan.FieldGroupID)
 	}
@@ -31430,6 +31467,9 @@ func (m *SubscriptionPlanMutation) Fields() []string {
 	}
 	if m.for_sale != nil {
 		fields = append(fields, subscriptionplan.FieldForSale)
+	}
+	if m.single_purchase != nil {
+		fields = append(fields, subscriptionplan.FieldSinglePurchase)
 	}
 	if m.sort_order != nil {
 		fields = append(fields, subscriptionplan.FieldSortOrder)
@@ -31468,6 +31508,8 @@ func (m *SubscriptionPlanMutation) Field(name string) (ent.Value, bool) {
 		return m.ProductName()
 	case subscriptionplan.FieldForSale:
 		return m.ForSale()
+	case subscriptionplan.FieldSinglePurchase:
+		return m.SinglePurchase()
 	case subscriptionplan.FieldSortOrder:
 		return m.SortOrder()
 	case subscriptionplan.FieldCreatedAt:
@@ -31503,6 +31545,8 @@ func (m *SubscriptionPlanMutation) OldField(ctx context.Context, name string) (e
 		return m.OldProductName(ctx)
 	case subscriptionplan.FieldForSale:
 		return m.OldForSale(ctx)
+	case subscriptionplan.FieldSinglePurchase:
+		return m.OldSinglePurchase(ctx)
 	case subscriptionplan.FieldSortOrder:
 		return m.OldSortOrder(ctx)
 	case subscriptionplan.FieldCreatedAt:
@@ -31587,6 +31631,13 @@ func (m *SubscriptionPlanMutation) SetField(name string, value ent.Value) error 
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetForSale(v)
+		return nil
+	case subscriptionplan.FieldSinglePurchase:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSinglePurchase(v)
 		return nil
 	case subscriptionplan.FieldSortOrder:
 		v, ok := value.(int)
@@ -31759,6 +31810,9 @@ func (m *SubscriptionPlanMutation) ResetField(name string) error {
 		return nil
 	case subscriptionplan.FieldForSale:
 		m.ResetForSale()
+		return nil
+	case subscriptionplan.FieldSinglePurchase:
+		m.ResetSinglePurchase()
 		return nil
 	case subscriptionplan.FieldSortOrder:
 		m.ResetSortOrder()

@@ -3,10 +3,11 @@ package service
 import (
 	"bytes"
 	"context"
+	cryptorand "crypto/rand"
 	"encoding/hex"
 	"fmt"
 	"log/slog"
-	"math/rand/v2"
+	"math/big"
 	"os"
 	"strings"
 	"sync"
@@ -45,7 +46,7 @@ const (
 	topUsersLimit      = 10
 	amountToleranceCNY = 0.01
 
-	orderIDPrefix = "sub2_"
+	legacyOrderIDPrefix = "sub2_"
 )
 
 const paymentResumeSigningKeyEnv = "PAYMENT_RESUME_SIGNING_KEY"
@@ -53,20 +54,27 @@ const paymentResumeSigningKeyEnv = "PAYMENT_RESUME_SIGNING_KEY"
 // --- Types ---
 
 // generateOutTradeNo creates a unique external order ID for payment providers.
-// Format: sub2_20250409aB3kX9mQ (prefix + date + 8-char random)
-func generateOutTradeNo() string {
-	date := time.Now().Format("20060102")
-	rnd := generateRandomString(8)
-	return orderIDPrefix + date + rnd
+// Format: 20250409153045A7K3M9Q2XZ (timestamp + 10-char random).
+func generateOutTradeNo() (string, error) {
+	timestamp := time.Now().Format("20060102150405")
+	rnd, err := generateRandomString(10)
+	if err != nil {
+		return "", err
+	}
+	return timestamp + rnd, nil
 }
 
-func generateRandomString(n int) string {
-	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+func generateRandomString(n int) (string, error) {
+	const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	b := make([]byte, n)
 	for i := range b {
-		b[i] = charset[rand.IntN(len(charset))]
+		num, err := cryptorand.Int(cryptorand.Reader, big.NewInt(int64(len(charset))))
+		if err != nil {
+			return "", fmt.Errorf("generate payment order random suffix: %w", err)
+		}
+		b[i] = charset[num.Int64()]
 	}
-	return string(b)
+	return string(b), nil
 }
 
 type CreateOrderRequest struct {

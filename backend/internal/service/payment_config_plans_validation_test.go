@@ -3,6 +3,7 @@
 package service
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -190,4 +191,37 @@ func TestValidatePlanPatch_ValidValidityUnit(t *testing.T) {
 func TestValidatePlanPatch_AllNil(t *testing.T) {
 	err := validatePlanPatch(UpdatePlanRequest{})
 	require.NoError(t, err)
+}
+
+func TestCreatePlanPersistsSinglePurchaseFlag(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentConfigServiceTestClient(t)
+	svc := &PaymentConfigService{entClient: client}
+
+	group := client.Group.Create().
+		SetName("New user group").
+		SetRateMultiplier(1).
+		SetStatus("active").
+		SetSubscriptionType("subscription").
+		SaveX(ctx)
+
+	plan, err := svc.CreatePlan(ctx, CreatePlanRequest{
+		GroupID:        group.ID,
+		Name:           "New user special",
+		Description:    "Only once",
+		Price:          9.99,
+		ValidityDays:   30,
+		ValidityUnit:   "days",
+		Features:       "starter",
+		ProductName:    "Starter",
+		ForSale:        true,
+		SortOrder:      1,
+		SinglePurchase: true,
+	})
+	require.NoError(t, err)
+	require.True(t, plan.SinglePurchase)
+
+	got, err := svc.GetPlan(ctx, plan.ID)
+	require.NoError(t, err)
+	require.True(t, got.SinglePurchase)
 }

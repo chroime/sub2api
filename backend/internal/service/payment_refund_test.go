@@ -186,6 +186,92 @@ func TestGwRefundRejectsAlipayMerchantIdentitySnapshotMismatch(t *testing.T) {
 	require.ErrorContains(t, err, "alipay app_id mismatch")
 }
 
+func TestPrepareRefundAllowsPaidFailedOrder(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentConfigServiceTestClient(t)
+
+	user, err := client.User.Create().
+		SetEmail("refund-paid-failed@example.com").
+		SetPasswordHash("hash").
+		SetUsername("refund-paid-failed-user").
+		Save(ctx)
+	require.NoError(t, err)
+	inst, err := client.PaymentProviderInstance.Create().
+		SetProviderKey(payment.TypeAlipay).
+		SetName("alipay-paid-failed-refund").
+		SetConfig("{}").
+		SetSupportedTypes("alipay").
+		SetEnabled(true).
+		SetRefundEnabled(true).
+		Save(ctx)
+	require.NoError(t, err)
+	instID := strconv.FormatInt(inst.ID, 10)
+	now := time.Now()
+	order, err := client.PaymentOrder.Create().
+		SetUserID(user.ID).
+		SetUserEmail(user.Email).
+		SetUserName(user.Username).
+		SetAmount(66).
+		SetPayAmount(66).
+		SetFeeRate(0).
+		SetRechargeCode("REFUND-PAID-FAILED").
+		SetOutTradeNo("refund_paid_failed").
+		SetPaymentType(payment.TypeAlipay).
+		SetPaymentTradeNo("trade-paid-failed").
+		SetOrderType(payment.OrderTypeSubscription).
+		SetStatus(OrderStatusFailed).
+		SetExpiresAt(now.Add(time.Hour)).
+		SetPaidAt(now).
+		SetClientIP("127.0.0.1").
+		SetSrcHost("api.example.com").
+		SetProviderInstanceID(instID).
+		SetProviderKey(payment.TypeAlipay).
+		Save(ctx)
+	require.NoError(t, err)
+
+	svc := &PaymentService{entClient: client}
+	plan, result, err := svc.PrepareRefund(ctx, order.ID, 0, "duplicate single purchase", false, false)
+	require.NoError(t, err)
+	require.NotNil(t, plan)
+	require.Nil(t, result)
+	require.Equal(t, order.Amount, plan.RefundAmount)
+}
+
+func TestPrepareRefundRejectsUnpaidFailedOrder(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentConfigServiceTestClient(t)
+
+	user, err := client.User.Create().
+		SetEmail("refund-unpaid-failed@example.com").
+		SetPasswordHash("hash").
+		SetUsername("refund-unpaid-failed-user").
+		Save(ctx)
+	require.NoError(t, err)
+	order, err := client.PaymentOrder.Create().
+		SetUserID(user.ID).
+		SetUserEmail(user.Email).
+		SetUserName(user.Username).
+		SetAmount(66).
+		SetPayAmount(66).
+		SetFeeRate(0).
+		SetRechargeCode("REFUND-UNPAID-FAILED").
+		SetOutTradeNo("refund_unpaid_failed").
+		SetPaymentType(payment.TypeAlipay).
+		SetPaymentTradeNo("").
+		SetOrderType(payment.OrderTypeSubscription).
+		SetStatus(OrderStatusFailed).
+		SetExpiresAt(time.Now().Add(time.Hour)).
+		SetClientIP("127.0.0.1").
+		SetSrcHost("api.example.com").
+		Save(ctx)
+	require.NoError(t, err)
+
+	svc := &PaymentService{entClient: client}
+	_, _, err = svc.PrepareRefund(ctx, order.ID, 0, "", false, false)
+	require.Error(t, err)
+	require.Equal(t, "INVALID_STATUS", infraerrors.Reason(err))
+}
+
 func TestCalculateGatewayRefundAmountUsesCurrencyPrecision(t *testing.T) {
 	require.InDelta(t, 6.173, calculateGatewayRefundAmount(100, 12.345, 50, "KWD"), 1e-12)
 	require.InDelta(t, 12.345, calculateGatewayRefundAmount(100, 12.345, 100, "KWD"), 1e-12)

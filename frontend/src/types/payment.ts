@@ -118,6 +118,7 @@ export interface SubscriptionPlan {
   /** Stored as JSON string in backend; API layer should parse before use */
   features: string[]
   for_sale: boolean
+  single_purchase: boolean
   sort_order: number
 }
 

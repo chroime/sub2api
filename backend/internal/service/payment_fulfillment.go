@@ -53,10 +53,10 @@ func parseLegacyPaymentOrderID(orderID string, lookupErr error) (int64, bool) {
 		return 0, false
 	}
 	orderID = strings.TrimSpace(orderID)
-	if !strings.HasPrefix(orderID, orderIDPrefix) {
+	if !strings.HasPrefix(orderID, legacyOrderIDPrefix) {
 		return 0, false
 	}
-	trimmed := strings.TrimPrefix(orderID, orderIDPrefix)
+	trimmed := strings.TrimPrefix(orderID, legacyOrderIDPrefix)
 	if trimmed == "" || trimmed == orderID {
 		return 0, false
 	}
@@ -337,9 +337,38 @@ func (s *PaymentService) ExecuteSubscriptionFulfillment(ctx context.Context, oid
 	if c == 0 {
 		return nil
 	}
+	if err := s.ensureSinglePurchaseSubscriptionCanFulfill(ctx, o); err != nil {
+		s.markFailed(ctx, oid, err)
+		return err
+	}
 	if err := s.doSub(ctx, o); err != nil {
 		s.markFailed(ctx, oid, err)
 		return err
+	}
+	return nil
+}
+
+func (s *PaymentService) ensureSinglePurchaseSubscriptionCanFulfill(ctx context.Context, o *dbent.PaymentOrder) error {
+	if o == nil || o.PlanID == nil {
+		return nil
+	}
+	plan, err := s.entClient.SubscriptionPlan.Get(ctx, *o.PlanID)
+	if err != nil {
+		return err
+	}
+	if !plan.SinglePurchase {
+		return nil
+	}
+	purchased, err := s.hasCompletedSubscriptionPlanOrderExcept(ctx, o.UserID, plan.ID, o.ID)
+	if err != nil {
+		return err
+	}
+	if purchased {
+		s.writeAuditLog(ctx, o.ID, "SINGLE_PURCHASE_REJECTED", "system", map[string]any{
+			"planID": plan.ID,
+			"reason": "user already has a completed order for this single-purchase plan",
+		})
+		return infraerrors.Conflict("PLAN_ALREADY_PURCHASED", "subscription plan can only be purchased once")
 	}
 	return nil
 }

@@ -33,6 +33,8 @@ const (
 	FieldProductName = "product_name"
 	// FieldForSale holds the string denoting the for_sale field in the database.
 	FieldForSale = "for_sale"
+	// FieldSinglePurchase holds the string denoting the single_purchase field in the database.
+	FieldSinglePurchase = "single_purchase"
 	// FieldSortOrder holds the string denoting the sort_order field in the database.
 	FieldSortOrder = "sort_order"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
@@ -56,6 +58,7 @@ var Columns = []string{
 	FieldFeatures,
 	FieldProductName,
 	FieldForSale,
+	FieldSinglePurchase,
 	FieldSortOrder,
 	FieldCreatedAt,
 	FieldUpdatedAt,
@@ -90,6 +93,8 @@ var (
 	ProductNameValidator func(string) error
 	// DefaultForSale holds the default value on creation for the "for_sale" field.
 	DefaultForSale bool
+	// DefaultSinglePurchase holds the default value on creation for the "single_purchase" field.
+	DefaultSinglePurchase bool
 	// DefaultSortOrder holds the default value on creation for the "sort_order" field.
 	DefaultSortOrder int
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
@@ -156,6 +161,11 @@ func ByProductName(opts ...sql.OrderTermOption) OrderOption {
 // ByForSale orders the results by the for_sale field.
 func ByForSale(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldForSale, opts...).ToFunc()
+}
+
+// BySinglePurchase orders the results by the single_purchase field.
+func BySinglePurchase(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSinglePurchase, opts...).ToFunc()
 }
 
 // BySortOrder orders the results by the sort_order field.

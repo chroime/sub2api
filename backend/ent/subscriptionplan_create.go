@@ -138,6 +138,20 @@ func (_c *SubscriptionPlanCreate) SetNillableForSale(v *bool) *SubscriptionPlanC
 	return _c
 }
 
+// SetSinglePurchase sets the "single_purchase" field.
+func (_c *SubscriptionPlanCreate) SetSinglePurchase(v bool) *SubscriptionPlanCreate {
+	_c.mutation.SetSinglePurchase(v)
+	return _c
+}
+
+// SetNillableSinglePurchase sets the "single_purchase" field if the given value is not nil.
+func (_c *SubscriptionPlanCreate) SetNillableSinglePurchase(v *bool) *SubscriptionPlanCreate {
+	if v != nil {
+		_c.SetSinglePurchase(*v)
+	}
+	return _c
+}
+
 // SetSortOrder sets the "sort_order" field.
 func (_c *SubscriptionPlanCreate) SetSortOrder(v int) *SubscriptionPlanCreate {
 	_c.mutation.SetSortOrder(v)
@@ -239,6 +253,10 @@ func (_c *SubscriptionPlanCreate) defaults() {
 		v := subscriptionplan.DefaultForSale
 		_c.mutation.SetForSale(v)
 	}
+	if _, ok := _c.mutation.SinglePurchase(); !ok {
+		v := subscriptionplan.DefaultSinglePurchase
+		_c.mutation.SetSinglePurchase(v)
+	}
 	if _, ok := _c.mutation.SortOrder(); !ok {
 		v := subscriptionplan.DefaultSortOrder
 		_c.mutation.SetSortOrder(v)
@@ -296,6 +314,9 @@ func (_c *SubscriptionPlanCreate) check() error {
 	}
 	if _, ok := _c.mutation.ForSale(); !ok {
 		return &ValidationError{Name: "for_sale", err: errors.New(`ent: missing required field "SubscriptionPlan.for_sale"`)}
+	}
+	if _, ok := _c.mutation.SinglePurchase(); !ok {
+		return &ValidationError{Name: "single_purchase", err: errors.New(`ent: missing required field "SubscriptionPlan.single_purchase"`)}
 	}
 	if _, ok := _c.mutation.SortOrder(); !ok {
 		return &ValidationError{Name: "sort_order", err: errors.New(`ent: missing required field "SubscriptionPlan.sort_order"`)}
@@ -372,6 +393,10 @@ func (_c *SubscriptionPlanCreate) createSpec() (*SubscriptionPlan, *sqlgraph.Cre
 	if value, ok := _c.mutation.ForSale(); ok {
 		_spec.SetField(subscriptionplan.FieldForSale, field.TypeBool, value)
 		_node.ForSale = value
+	}
+	if value, ok := _c.mutation.SinglePurchase(); ok {
+		_spec.SetField(subscriptionplan.FieldSinglePurchase, field.TypeBool, value)
+		_node.SinglePurchase = value
 	}
 	if value, ok := _c.mutation.SortOrder(); ok {
 		_spec.SetField(subscriptionplan.FieldSortOrder, field.TypeInt, value)
@@ -584,6 +609,18 @@ func (u *SubscriptionPlanUpsert) SetForSale(v bool) *SubscriptionPlanUpsert {
 // UpdateForSale sets the "for_sale" field to the value that was provided on create.
 func (u *SubscriptionPlanUpsert) UpdateForSale() *SubscriptionPlanUpsert {
 	u.SetExcluded(subscriptionplan.FieldForSale)
+	return u
+}
+
+// SetSinglePurchase sets the "single_purchase" field.
+func (u *SubscriptionPlanUpsert) SetSinglePurchase(v bool) *SubscriptionPlanUpsert {
+	u.Set(subscriptionplan.FieldSinglePurchase, v)
+	return u
+}
+
+// UpdateSinglePurchase sets the "single_purchase" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsert) UpdateSinglePurchase() *SubscriptionPlanUpsert {
+	u.SetExcluded(subscriptionplan.FieldSinglePurchase)
 	return u
 }
 
@@ -834,6 +871,20 @@ func (u *SubscriptionPlanUpsertOne) SetForSale(v bool) *SubscriptionPlanUpsertOn
 func (u *SubscriptionPlanUpsertOne) UpdateForSale() *SubscriptionPlanUpsertOne {
 	return u.Update(func(s *SubscriptionPlanUpsert) {
 		s.UpdateForSale()
+	})
+}
+
+// SetSinglePurchase sets the "single_purchase" field.
+func (u *SubscriptionPlanUpsertOne) SetSinglePurchase(v bool) *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.SetSinglePurchase(v)
+	})
+}
+
+// UpdateSinglePurchase sets the "single_purchase" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsertOne) UpdateSinglePurchase() *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.UpdateSinglePurchase()
 	})
 }
 
@@ -1255,6 +1306,20 @@ func (u *SubscriptionPlanUpsertBulk) SetForSale(v bool) *SubscriptionPlanUpsertB
 func (u *SubscriptionPlanUpsertBulk) UpdateForSale() *SubscriptionPlanUpsertBulk {
 	return u.Update(func(s *SubscriptionPlanUpsert) {
 		s.UpdateForSale()
+	})
+}
+
+// SetSinglePurchase sets the "single_purchase" field.
+func (u *SubscriptionPlanUpsertBulk) SetSinglePurchase(v bool) *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.SetSinglePurchase(v)
+	})
+}
+
+// UpdateSinglePurchase sets the "single_purchase" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsertBulk) UpdateSinglePurchase() *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.UpdateSinglePurchase()
 	})
 }
 

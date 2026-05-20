@@ -13,6 +13,7 @@ import (
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
+	"github.com/Wei-Shaw/sub2api/ent/predicate"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	"github.com/Wei-Shaw/sub2api/internal/payment/provider"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
@@ -141,7 +142,62 @@ func (s *PaymentService) validateSubOrder(ctx context.Context, req CreateOrderRe
 	if !group.IsSubscriptionType() {
 		return nil, infraerrors.BadRequest("GROUP_TYPE_MISMATCH", "group is not a subscription type")
 	}
+	if plan.SinglePurchase {
+		purchased, err := s.hasCompletedSubscriptionPlanOrder(ctx, req.UserID, plan.ID)
+		if err != nil {
+			return nil, err
+		}
+		if purchased {
+			return nil, infraerrors.Conflict("PLAN_ALREADY_PURCHASED", "subscription plan can only be purchased once")
+		}
+		pending, err := s.hasActivePendingSubscriptionPlanOrder(ctx, req.UserID, plan.ID)
+		if err != nil {
+			return nil, err
+		}
+		if pending {
+			return nil, infraerrors.Conflict("PLAN_PENDING_ORDER_EXISTS", "subscription plan already has a pending order")
+		}
+	}
 	return plan, nil
+}
+
+func (s *PaymentService) hasCompletedSubscriptionPlanOrder(ctx context.Context, userID, planID int64) (bool, error) {
+	return s.hasCompletedSubscriptionPlanOrderExcept(ctx, userID, planID, 0)
+}
+
+func (s *PaymentService) hasCompletedSubscriptionPlanOrderExcept(ctx context.Context, userID, planID, excludeOrderID int64) (bool, error) {
+	predicates := []predicate.PaymentOrder{
+		paymentorder.UserIDEQ(userID),
+		paymentorder.PlanIDEQ(planID),
+		paymentorder.OrderTypeEQ(payment.OrderTypeSubscription),
+		paymentorder.StatusIn(OrderStatusPaid, OrderStatusRecharging, OrderStatusCompleted),
+	}
+	if excludeOrderID > 0 {
+		predicates = append(predicates, paymentorder.IDNEQ(excludeOrderID))
+	}
+	exists, err := s.entClient.PaymentOrder.Query().
+		Where(predicates...).
+		Exist(ctx)
+	if err != nil {
+		return false, fmt.Errorf("check single-purchase plan history: %w", err)
+	}
+	return exists, nil
+}
+
+func (s *PaymentService) hasActivePendingSubscriptionPlanOrder(ctx context.Context, userID, planID int64) (bool, error) {
+	exists, err := s.entClient.PaymentOrder.Query().
+		Where(
+			paymentorder.UserIDEQ(userID),
+			paymentorder.PlanIDEQ(planID),
+			paymentorder.OrderTypeEQ(payment.OrderTypeSubscription),
+			paymentorder.StatusEQ(OrderStatusPending),
+			paymentorder.ExpiresAtGT(time.Now()),
+		).
+		Exist(ctx)
+	if err != nil {
+		return false, fmt.Errorf("check single-purchase pending order: %w", err)
+	}
+	return exists, nil
 }
 
 func (s *PaymentService) createOrderInTx(ctx context.Context, req CreateOrderRequest, user *User, plan *dbent.SubscriptionPlan, cfg *PaymentConfig, orderAmount, limitAmount, feeRate, payAmount float64, sel *payment.InstanceSelection) (*dbent.PaymentOrder, error) {
@@ -222,7 +278,10 @@ func (s *PaymentService) createOrderInTx(ctx context.Context, req CreateOrderReq
 func (s *PaymentService) allocateOutTradeNo(ctx context.Context, tx *dbent.Tx) (string, error) {
 	const maxAttempts = 5
 	for attempt := 0; attempt < maxAttempts; attempt++ {
-		candidate := generateOutTradeNo()
+		candidate, err := generateOutTradeNo()
+		if err != nil {
+			return "", err
+		}
 		exists, err := tx.PaymentOrder.Query().Where(paymentorder.OutTradeNo(candidate)).Exist(ctx)
 		if err != nil {
 			return "", fmt.Errorf("check out_trade_no uniqueness: %w", err)
