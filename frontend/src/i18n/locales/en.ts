@@ -7243,8 +7243,6 @@ export default {
     paymentAmount: 'Payment Amount',
     creditedBalance: 'Credited Balance',
     quickAmounts: 'Quick Amounts',
-    customAmount: 'Custom Amount',
-    enterAmount: 'Enter amount',
     paymentMethod: 'Payment Method',
     fee: 'Fee',
     actualPay: 'Actual Payment',
