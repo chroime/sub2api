@@ -58,4 +58,49 @@ describe('codex quick setup scripts', () => {
       expect(script.content).toContain('cp "$CONFIG_FILE" "$BACKUP_DIR/config.toml.bak"')
     }
   )
+
+  it('builds a Claude Code Windows settings script for anthropic groups', () => {
+    const script = buildCodexQuickSetupScript({
+      ...options,
+      platform: 'windows',
+      groupPlatform: 'anthropic',
+    })
+
+    expect(script.filename).toBe('claude-quick-setup-windows.bat')
+    expect(script.mimeType).toBe('application/x-bat')
+    expect(script.content).toContain('%USERPROFILE%\\.claude')
+    expect(script.content).toContain('settings.json')
+    expect(script.content).toContain('"ANTHROPIC_AUTH_TOKEN": "sk-row-key-123"')
+    expect(script.content).toContain('"ANTHROPIC_BASE_URL": "https://api.oreniva.com"')
+    expect(script.content).toContain('"ANTHROPIC_MODEL": "claude-sonnet-4-6"')
+    expect(script.content).toContain('copy /Y "%SETTINGS_FILE%" "%BACKUP_DIR%\\settings.json.bak"')
+    expect(script.content).not.toContain('%USERPROFILE%\\.codex')
+    expect(script.content).not.toContain('OPENAI_API_KEY')
+    expect(script.content).not.toContain('config.toml')
+  })
+
+  it.each([
+    ['macos', '${HOME}/.claude'],
+    ['linux', '${HOME}/.claude'],
+  ] as Array<[CodexQuickSetupPlatform, string]>)(
+    'builds a Claude Code %s settings script for anthropic groups',
+    (platform, configDir) => {
+      const script = buildCodexQuickSetupScript({
+        ...options,
+        platform,
+        groupPlatform: 'anthropic',
+      })
+
+      expect(script.filename).toBe(`claude-quick-setup-${platform}.sh`)
+      expect(script.mimeType).toBe('application/x-sh')
+      expect(script.content).toContain(configDir)
+      expect(script.content).toContain('SETTINGS_FILE="${CLAUDE_DIR}/settings.json"')
+      expect(script.content).toContain('"ANTHROPIC_AUTH_TOKEN": "sk-row-key-123"')
+      expect(script.content).toContain('"ANTHROPIC_BASE_URL": "https://api.oreniva.com"')
+      expect(script.content).toContain('cp "$SETTINGS_FILE" "$BACKUP_DIR/settings.json.bak"')
+      expect(script.content).not.toContain('${HOME}/.codex')
+      expect(script.content).not.toContain('OPENAI_API_KEY')
+      expect(script.content).not.toContain('config.toml')
+    }
+  )
 })

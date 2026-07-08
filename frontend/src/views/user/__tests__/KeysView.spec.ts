@@ -112,7 +112,7 @@ vi.mock('vue-i18n', async () => {
   }
 })
 
-const createApiKey = (): ApiKey => ({
+const createApiKey = (overrides: Partial<ApiKey> = {}): ApiKey => ({
   id: 1,
   user_id: 1,
   key: 'sk-test-key',
@@ -140,6 +140,7 @@ const createApiKey = (): ApiKey => ({
   reset_5h_at: null,
   reset_1d_at: null,
   reset_7d_at: null,
+  ...overrides,
 })
 
 const AppLayoutStub = {
@@ -337,5 +338,133 @@ describe('user KeysView column settings', () => {
     expect(wrapper.text()).toContain('Windows')
     expect(wrapper.text()).toContain('macOS')
     expect(wrapper.text()).toContain('Linux')
+  })
+
+  it('downloads a Claude settings script for an anthropic row using the selected row key', async () => {
+    listKeys.mockResolvedValue({
+      items: [
+        createApiKey({
+          key: 'sk-claude-row-key',
+          group_id: 7,
+          group: {
+            id: 7,
+            name: 'Claude',
+            platform: 'anthropic',
+            rate_multiplier: 1,
+            subscription_type: 'standard',
+          } as ApiKey['group'],
+        }),
+      ],
+      total: 1,
+      page: 1,
+      page_size: 20,
+      pages: 1,
+    })
+    getPublicSettings.mockResolvedValue({
+      api_base_url: 'https://api.oreniva.com/',
+    })
+
+    const originalCreateObjectURL = URL.createObjectURL
+    const originalRevokeObjectURL = URL.revokeObjectURL
+    const createObjectURL = vi.fn(() => 'blob:quick-setup')
+    const revokeObjectURL = vi.fn()
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createObjectURL })
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: revokeObjectURL })
+
+    try {
+      const wrapper = await mountView()
+
+      await getButtonByText(wrapper, 'Quick Setup').trigger('click')
+      await nextTick()
+      await getButtonByText(wrapper, 'Windows').trigger('click')
+      await flushPromises()
+
+      const blob = createObjectURL.mock.calls[0]?.[0] as Blob
+      const content = await blob.text()
+
+      expect(content).toContain('%USERPROFILE%\\.claude')
+      expect(content).toContain('"ANTHROPIC_AUTH_TOKEN": "sk-claude-row-key"')
+      expect(content).toContain('"ANTHROPIC_BASE_URL": "https://api.oreniva.com"')
+      expect(content).not.toContain('OPENAI_API_KEY')
+      expect(showSuccess).toHaveBeenCalledWith('keys.quickSetupDownloadSuccess')
+    } finally {
+      clickSpy.mockRestore()
+      Object.defineProperty(URL, 'createObjectURL', {
+        configurable: true,
+        value: originalCreateObjectURL,
+      })
+      Object.defineProperty(URL, 'revokeObjectURL', {
+        configurable: true,
+        value: originalRevokeObjectURL,
+      })
+    }
+  })
+
+  it('resolves the quick setup target from group_id when the row does not include a nested group', async () => {
+    listKeys.mockResolvedValue({
+      items: [
+        createApiKey({
+          key: 'sk-claude-group-id-key',
+          group_id: 8,
+        }),
+      ],
+      total: 1,
+      page: 1,
+      page_size: 20,
+      pages: 1,
+    })
+    getPublicSettings.mockResolvedValue({
+      api_base_url: 'https://api.oreniva.com/',
+    })
+    getAvailableGroups.mockResolvedValue([
+      {
+        id: 8,
+        name: 'Claude',
+        description: null,
+        platform: 'anthropic',
+        rate_multiplier: 1,
+        subscription_type: 'standard',
+        peak_rate_enabled: false,
+        peak_start: '',
+        peak_end: '',
+        peak_rate_multiplier: 1,
+      },
+    ])
+
+    const originalCreateObjectURL = URL.createObjectURL
+    const originalRevokeObjectURL = URL.revokeObjectURL
+    const createObjectURL = vi.fn(() => 'blob:quick-setup')
+    const revokeObjectURL = vi.fn()
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createObjectURL })
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: revokeObjectURL })
+
+    try {
+      const wrapper = await mountView()
+
+      await getButtonByText(wrapper, 'Quick Setup').trigger('click')
+      await nextTick()
+      await getButtonByText(wrapper, 'Linux').trigger('click')
+      await flushPromises()
+
+      const blob = createObjectURL.mock.calls[0]?.[0] as Blob
+      const content = await blob.text()
+
+      expect(content).toContain('${HOME}/.claude')
+      expect(content).toContain('"ANTHROPIC_AUTH_TOKEN": "sk-claude-group-id-key"')
+      expect(content).not.toContain('${HOME}/.codex')
+      expect(content).not.toContain('OPENAI_API_KEY')
+    } finally {
+      clickSpy.mockRestore()
+      Object.defineProperty(URL, 'createObjectURL', {
+        configurable: true,
+        value: originalCreateObjectURL,
+      })
+      Object.defineProperty(URL, 'revokeObjectURL', {
+        configurable: true,
+        value: originalRevokeObjectURL,
+      })
+    }
   })
 })

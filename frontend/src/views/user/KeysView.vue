@@ -1610,12 +1610,20 @@ const resolveApiBaseUrl = () => {
   return configuredBaseUrl || window.location.origin
 }
 
+const resolveKeyGroupPlatform = (key: ApiKey): GroupPlatform | null => {
+  if (key.group?.platform) return key.group.platform
+  if (key.group_id === null) return null
+
+  return groups.value.find((group) => group.id === key.group_id)?.platform ?? null
+}
+
 const downloadCodexQuickSetup = (key: ApiKey, platform: CodexQuickSetupPlatform) => {
   try {
     const script = buildCodexQuickSetupScript({
       platform,
       apiKey: key.key,
       baseUrl: resolveApiBaseUrl(),
+      groupPlatform: resolveKeyGroupPlatform(key),
     })
     const blob = new Blob([script.content], { type: `${script.mimeType};charset=utf-8` })
     const url = URL.createObjectURL(blob)
@@ -1628,7 +1636,7 @@ const downloadCodexQuickSetup = (key: ApiKey, platform: CodexQuickSetupPlatform)
     setTimeout(() => URL.revokeObjectURL(url), 0)
     appStore.showSuccess(t('keys.quickSetupDownloadSuccess'))
   } catch (error) {
-    console.error('Failed to download Codex quick setup script:', error)
+    console.error('Failed to download quick setup script:', error)
     appStore.showError(t('keys.quickSetupDownloadFailed'))
   } finally {
     closeQuickSetupMenu()
