@@ -377,6 +377,16 @@
                 <Icon name="upload" size="sm" />
                 <span class="text-xs">{{ t('keys.importToCcSwitch') }}</span>
               </button>
+              <!-- Codex Quick Setup Download Button -->
+              <button
+                :ref="(el) => setQuickSetupButtonRef(row.id, el)"
+                @click.stop="toggleQuickSetupMenu(row)"
+                class="quick-setup-dropdown flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-cyan-50 hover:text-cyan-600 dark:hover:bg-cyan-900/20 dark:hover:text-cyan-400"
+                :title="t('keys.quickSetup')"
+              >
+                <Icon name="download" size="sm" />
+                <span class="text-xs">{{ t('keys.quickSetup') }}</span>
+              </button>
               <!-- Toggle Status Button -->
               <button
                 @click="toggleKeyStatus(row)"
@@ -1034,6 +1044,32 @@
       </template>
     </BaseDialog>
 
+    <!-- Codex Quick Setup Menu (Teleported to avoid table overflow clipping) -->
+    <Teleport to="body">
+      <div
+        v-if="quickSetupMenuKeyId !== null && quickSetupDropdownPosition"
+        ref="quickSetupDropdownRef"
+        class="quick-setup-dropdown fixed z-[100000020] w-48 overflow-hidden rounded-xl bg-white py-1 shadow-lg ring-1 ring-black/5 dark:bg-dark-800 dark:ring-white/10"
+        style="pointer-events: auto !important;"
+        :style="{
+          top: quickSetupDropdownPosition.top !== undefined ? quickSetupDropdownPosition.top + 'px' : undefined,
+          bottom: quickSetupDropdownPosition.bottom !== undefined ? quickSetupDropdownPosition.bottom + 'px' : undefined,
+          left: quickSetupDropdownPosition.left + 'px'
+        }"
+      >
+        <button
+          v-for="option in quickSetupPlatformOptions"
+          :key="option.value"
+          type="button"
+          class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
+          @click="selectedQuickSetupKey && downloadCodexQuickSetup(selectedQuickSetupKey, option.value)"
+        >
+          <Icon name="download" size="sm" class="text-gray-400" />
+          <span>{{ option.label }}</span>
+        </button>
+      </div>
+    </Teleport>
+
     <!-- Group Selector Dropdown (Teleported to body to avoid overflow clipping) -->
     <Teleport to="body">
       <div
@@ -1138,6 +1174,10 @@ import {
   buildCcSwitchImportDeeplink,
   type CcSwitchClientType
 } from '@/utils/ccswitchImport'
+import {
+  buildCodexQuickSetupScript,
+  type CodexQuickSetupPlatform
+} from '@/utils/codexQuickSetup'
 
 // Helper to format date for datetime-local input
 const formatDateTimeLocal = (isoDate: string): string => {
@@ -1273,6 +1313,9 @@ const showUseKeyModal = ref(false)
 const showCcsClientSelect = ref(false)
 const showColumnDropdown = ref(false)
 const pendingCcsRow = ref<ApiKey | null>(null)
+const quickSetupMenuKeyId = ref<number | null>(null)
+const quickSetupDropdownRef = ref<HTMLElement | null>(null)
+const quickSetupDropdownPosition = ref<{ top?: number; bottom?: number; left: number } | null>(null)
 const selectedKey = ref<ApiKey | null>(null)
 const copiedKeyId = ref<number | null>(null)
 const groupSelectorKeyId = ref<number | null>(null)
@@ -1281,6 +1324,7 @@ const dropdownRef = ref<HTMLElement | null>(null)
 const columnDropdownRef = ref<HTMLElement | null>(null)
 const dropdownPosition = ref<{ top?: number; bottom?: number; left: number } | null>(null)
 const groupButtonRefs = ref<Map<number, HTMLElement>>(new Map())
+const quickSetupButtonRefs = ref<Map<number, HTMLElement>>(new Map())
 let abortController: AbortController | null = null
 
 // Get the currently selected key for group change
@@ -1289,11 +1333,30 @@ const selectedKeyForGroup = computed(() => {
   return apiKeys.value.find((k) => k.id === groupSelectorKeyId.value) || null
 })
 
+const selectedQuickSetupKey = computed(() => {
+  if (quickSetupMenuKeyId.value === null) return null
+  return apiKeys.value.find((k) => k.id === quickSetupMenuKeyId.value) || null
+})
+
+const quickSetupPlatformOptions = computed<Array<{ value: CodexQuickSetupPlatform; label: string }>>(() => [
+  { value: 'windows', label: t('keys.quickSetupPlatforms.windows') },
+  { value: 'macos', label: t('keys.quickSetupPlatforms.macos') },
+  { value: 'linux', label: t('keys.quickSetupPlatforms.linux') },
+])
+
 const setGroupButtonRef = (keyId: number, el: Element | ComponentPublicInstance | null) => {
   if (el instanceof HTMLElement) {
     groupButtonRefs.value.set(keyId, el)
   } else {
     groupButtonRefs.value.delete(keyId)
+  }
+}
+
+const setQuickSetupButtonRef = (keyId: number, el: Element | ComponentPublicInstance | null) => {
+  if (el instanceof HTMLElement) {
+    quickSetupButtonRefs.value.set(keyId, el)
+  } else {
+    quickSetupButtonRefs.value.delete(keyId)
   }
 }
 
@@ -1509,6 +1572,69 @@ const closeUseKeyModal = () => {
   selectedKey.value = null
 }
 
+const closeQuickSetupMenu = () => {
+  quickSetupMenuKeyId.value = null
+  quickSetupDropdownPosition.value = null
+}
+
+const toggleQuickSetupMenu = (key: ApiKey) => {
+  if (quickSetupMenuKeyId.value === key.id) {
+    closeQuickSetupMenu()
+    return
+  }
+
+  const buttonEl = quickSetupButtonRefs.value.get(key.id)
+  if (buttonEl) {
+    const rect = buttonEl.getBoundingClientRect()
+    const menuWidth = 192
+    const menuHeight = 132
+    const viewportPadding = 8
+    const spaceBelow = window.innerHeight - rect.bottom
+    const left = Math.min(
+      Math.max(viewportPadding, rect.right - menuWidth),
+      Math.max(viewportPadding, window.innerWidth - menuWidth - viewportPadding)
+    )
+
+    quickSetupDropdownPosition.value = spaceBelow < menuHeight
+      ? { bottom: window.innerHeight - rect.top + 4, left }
+      : { top: rect.bottom + 4, left }
+  } else {
+    quickSetupDropdownPosition.value = { top: 0, left: 0 }
+  }
+
+  quickSetupMenuKeyId.value = key.id
+}
+
+const resolveApiBaseUrl = () => {
+  const configuredBaseUrl = publicSettings.value?.api_base_url?.trim()
+  return configuredBaseUrl || window.location.origin
+}
+
+const downloadCodexQuickSetup = (key: ApiKey, platform: CodexQuickSetupPlatform) => {
+  try {
+    const script = buildCodexQuickSetupScript({
+      platform,
+      apiKey: key.key,
+      baseUrl: resolveApiBaseUrl(),
+    })
+    const blob = new Blob([script.content], { type: `${script.mimeType};charset=utf-8` })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = script.filename
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    setTimeout(() => URL.revokeObjectURL(url), 0)
+    appStore.showSuccess(t('keys.quickSetupDownloadSuccess'))
+  } catch (error) {
+    console.error('Failed to download Codex quick setup script:', error)
+    appStore.showError(t('keys.quickSetupDownloadFailed'))
+  } finally {
+    closeQuickSetupMenu()
+  }
+}
+
 const handlePageChange = (page: number) => {
   pagination.value.page = page
   loadApiKeys()
@@ -1617,6 +1743,9 @@ const closeGroupSelector = (event: MouseEvent) => {
   if (!target.closest('.group\\/dropdown') && !dropdownRef.value?.contains(target)) {
     groupSelectorKeyId.value = null
     dropdownPosition.value = null
+  }
+  if (!target.closest('.quick-setup-dropdown') && !quickSetupDropdownRef.value?.contains(target)) {
+    closeQuickSetupMenu()
   }
   if (columnDropdownRef.value && !columnDropdownRef.value.contains(target)) {
     showColumnDropdown.value = false

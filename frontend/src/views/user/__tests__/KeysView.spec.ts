@@ -31,6 +31,8 @@ const {
 
 const messages: Record<string, string> = {
   'common.actions': 'Actions',
+  'common.delete': 'Delete',
+  'common.edit': 'Edit',
   'common.name': 'Name',
   'common.refresh': 'Refresh',
   'common.status': 'Status',
@@ -45,11 +47,18 @@ const messages: Record<string, string> = {
   'keys.currentConcurrency': 'Current Concurrency',
   'keys.lastUsedAt': 'Last Used',
   'keys.rateLimitColumn': 'Rate Limit',
+  'keys.disable': 'Disable',
+  'keys.importToCcSwitch': 'Import to CCS',
+  'keys.quickSetup': 'Quick Setup',
+  'keys.quickSetupPlatforms.linux': 'Linux',
+  'keys.quickSetupPlatforms.macos': 'macOS',
+  'keys.quickSetupPlatforms.windows': 'Windows',
   'keys.searchPlaceholder': 'Search name or key...',
   'keys.status.active': 'Active',
   'keys.status.expired': 'Expired',
   'keys.status.inactive': 'Inactive',
   'keys.status.quota_exhausted': 'Quota exhausted',
+  'keys.useKey': 'Use Key',
   'keys.usage': 'Usage',
 }
 
@@ -159,6 +168,7 @@ const DataTableStub = {
         <div data-test="current-concurrency">
           <slot name="cell-current_concurrency" :value="row.current_concurrency" :row="row" />
         </div>
+        <slot name="cell-actions" :value="row.actions" :row="row" />
       </div>
       <slot name="empty" />
     </div>
@@ -316,5 +326,16 @@ describe('user KeysView column settings', () => {
     const wrapper = await mountView()
 
     expect(wrapper.get('[data-test="current-concurrency"]').text()).toBe('3')
+  })
+
+  it('opens the Codex quick setup platform menu from the action column', async () => {
+    const wrapper = await mountView()
+
+    await getButtonByText(wrapper, 'Quick Setup').trigger('click')
+    await nextTick()
+
+    expect(wrapper.text()).toContain('Windows')
+    expect(wrapper.text()).toContain('macOS')
+    expect(wrapper.text()).toContain('Linux')
   })
 })

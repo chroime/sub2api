@@ -762,6 +762,14 @@ export default {
     copyToClipboard: '复制到剪贴板',
     copied: '已复制！',
     importToCcSwitch: '导入到 CCS',
+    quickSetup: '快捷配置',
+    quickSetupPlatforms: {
+      windows: 'Windows',
+      macos: 'macOS',
+      linux: 'Linux'
+    },
+    quickSetupDownloadSuccess: '快捷配置脚本已下载',
+    quickSetupDownloadFailed: '下载快捷配置脚本失败',
     enable: '启用',
     disable: '禁用',
     nameLabel: '名称',
