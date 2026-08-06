@@ -1,0 +1,22 @@
+#!/bin/bash
+
+set -euo pipefail
+
+if [[ "${1:-}" == "-f" ]]; then
+    format=${2:-}
+    path=${3:-}
+    case "${format}" in
+        %u)
+            /usr/bin/stat -c '%u' "${path}"
+            ;;
+        %Lp)
+            /usr/bin/stat -c '%a' "${path}"
+            ;;
+        *)
+            printf 'unsupported fake stat format: %s\n' "${format}" >&2
+            exit 1
+            ;;
+    esac
+else
+    /usr/bin/stat "$@"
+fi

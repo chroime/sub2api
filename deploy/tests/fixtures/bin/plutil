@@ -1,0 +1,43 @@
+#!/bin/bash
+
+set -euo pipefail
+
+extract=""
+format=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -extract)
+            extract=$2
+            shift 2
+            ;;
+        json|raw)
+            format=$1
+            shift
+            ;;
+        -o)
+            shift 2
+            ;;
+        -)
+            shift
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
+
+input="$(cat)"
+
+case "${extract}:${format}" in
+    0.configuration.labels:json)
+        sed -n 's/.*"labels":\({[^}]*}\).*/\1/p' <<<"${input}"
+        ;;
+    0.status.networks.0.ipv4Address:raw)
+        sed -n 's/.*"ipv4Address":"\([^"]*\)".*/\1/p' <<<"${input}"
+        ;;
+    *)
+        printf 'unsupported fake plutil extraction: %s %s\n' "${extract}" "${format}" >&2
+        exit 1
+        ;;
+esac
