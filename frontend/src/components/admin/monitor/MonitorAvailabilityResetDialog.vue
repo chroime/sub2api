@@ -7,7 +7,7 @@
   >
     <form class="space-y-4" @submit.prevent="submit">
       <p class="text-sm text-gray-600 dark:text-gray-400">
-        {{ t('admin.channelMonitor.availabilityReset.description', { model: monitor.primary_model }) }}
+        {{ t('admin.channelMonitor.availabilityReset.description', { model: monitor?.primary_model ?? '' }) }}
       </p>
 
       <div>
