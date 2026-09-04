@@ -604,6 +604,75 @@ func (r *channelMonitorRepository) ComputeAvailabilityForMonitors(ctx context.Co
 	return out, nil
 }
 
+// ComputeAvailabilityForMonitorsSince computes primary-model availability
+// after a per-monitor reset boundary while retaining the normal window cap.
+func (r *channelMonitorRepository) ComputeAvailabilityForMonitorsSince(
+	ctx context.Context,
+	ids []int64,
+	primaryModels map[int64]string,
+	since map[int64]time.Time,
+	windowDays int,
+) (map[int64][]*service.ChannelMonitorAvailability, error) {
+	out := make(map[int64][]*service.ChannelMonitorAvailability, len(ids))
+	pairIDs, pairModels := buildMonitorModelPairs(ids, primaryModels)
+	resetTimes := make([]time.Time, 0, len(pairIDs))
+	validIDs := make([]int64, 0, len(pairIDs))
+	validModels := make([]string, 0, len(pairIDs))
+	for i, id := range pairIDs {
+		at, ok := since[id]
+		if !ok || at.IsZero() {
+			continue
+		}
+		validIDs = append(validIDs, id)
+		validModels = append(validModels, pairModels[i])
+		resetTimes = append(resetTimes, at)
+	}
+	if len(validIDs) == 0 {
+		return out, nil
+	}
+	if windowDays <= 0 {
+		windowDays = 7
+	}
+	const q = `
+		WITH targets AS (
+		    SELECT unnest($1::bigint[]) AS monitor_id,
+		           unnest($2::text[]) AS model,
+		           unnest($3::timestamptz[]) AS reset_at
+		)
+		SELECT h.monitor_id,
+		       h.model,
+		       COUNT(*) AS total,
+		       COUNT(*) FILTER (WHERE h.status IN ('operational','degraded')) AS ok,
+		       CASE WHEN COUNT(h.latency_ms) > 0
+		            THEN SUM(h.latency_ms) FILTER (WHERE h.latency_ms IS NOT NULL)::float8 / COUNT(h.latency_ms)
+		            ELSE NULL END AS avg_latency_ms
+		FROM channel_monitor_histories h
+		JOIN targets t ON t.monitor_id = h.monitor_id AND t.model = h.model
+		WHERE h.checked_at >= NOW() - ($4::int || ' days')::interval
+		  AND h.checked_at >= t.reset_at
+		GROUP BY h.monitor_id, h.model
+	`
+	rows, err := r.db.QueryContext(ctx, q, pq.Array(validIDs), pq.Array(validModels), pq.Array(resetTimes), windowDays)
+	if err != nil {
+		return nil, fmt.Errorf("query availability after reset batch: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var monitorID int64
+		row := &service.ChannelMonitorAvailability{WindowDays: windowDays}
+		var avgLatency sql.NullFloat64
+		if err := rows.Scan(&monitorID, &row.Model, &row.TotalChecks, &row.OperationalChecks, &avgLatency); err != nil {
+			return nil, fmt.Errorf("scan availability after reset row: %w", err)
+		}
+		finalizeAvailabilityRow(row, avgLatency)
+		out[monitorID] = append(out[monitorID], row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ---------- 聚合维护 ----------
 
 // UpsertDailyRollupsFor 把 targetDate 当天（[targetDate, targetDate+1d)）的明细
@@ -769,6 +838,11 @@ func entToServiceMonitor(row *dbent.ChannelMonitor) *service.ChannelMonitor {
 	}
 	duplicateOperationID := headers[service.ChannelMonitorDuplicateOperationIDMetadataKey]
 	delete(headers, service.ChannelMonitorDuplicateOperationIDMetadataKey)
+	var availabilityReset *service.ChannelMonitorAvailabilityReset
+	if raw := headers[service.ChannelMonitorAvailabilityResetMetadataKey]; raw != "" {
+		availabilityReset, _ = service.DecodeAvailabilityResetMetadata(raw)
+	}
+	delete(headers, service.ChannelMonitorAvailabilityResetMetadataKey)
 	out := &service.ChannelMonitor{
 		ID:                   row.ID,
 		Name:                 row.Name,
@@ -791,6 +865,7 @@ func entToServiceMonitor(row *dbent.ChannelMonitor) *service.ChannelMonitor {
 		BodyOverride:         row.BodyOverride,
 		CheckMode:            defaultCheckModeRepo(row.CheckMode),
 		DuplicateOperationID: duplicateOperationID,
+		AvailabilityReset:    availabilityReset,
 	}
 	if row.TemplateID != nil {
 		id := *row.TemplateID
@@ -807,15 +882,18 @@ func channelMonitorHeadersForPersistence(m *service.ChannelMonitor) map[string]s
 	if m == nil {
 		return map[string]string{}
 	}
-	headers := make(map[string]string, len(m.ExtraHeaders)+1)
+	headers := make(map[string]string, len(m.ExtraHeaders)+2)
 	for key, value := range m.ExtraHeaders {
-		if key == service.ChannelMonitorDuplicateOperationIDMetadataKey {
+		if key == service.ChannelMonitorDuplicateOperationIDMetadataKey || key == service.ChannelMonitorAvailabilityResetMetadataKey {
 			continue
 		}
 		headers[key] = value
 	}
 	if operationID := strings.TrimSpace(m.DuplicateOperationID); operationID != "" {
 		headers[service.ChannelMonitorDuplicateOperationIDMetadataKey] = operationID
+	}
+	if raw, err := service.EncodeAvailabilityResetMetadata(m.AvailabilityReset); err == nil && raw != "" {
+		headers[service.ChannelMonitorAvailabilityResetMetadataKey] = raw
 	}
 	return headers
 }

@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"math"
+	"time"
 )
 
 // 渠道监控聚合层：把 latest + availability 拼成 admin/user 视图所需的 summary / detail。
@@ -21,6 +23,7 @@ func (s *ChannelMonitorService) BatchMonitorStatusSummary(
 	ids []int64,
 	primaryByID map[int64]string,
 	extrasByID map[int64][]string,
+	resetsByID map[int64]*ChannelMonitorAvailabilityReset,
 ) map[int64]MonitorStatusSummary {
 	out := make(map[int64]MonitorStatusSummary, len(ids))
 	if len(ids) == 0 {
@@ -36,6 +39,47 @@ func (s *ChannelMonitorService) BatchMonitorStatusSummary(
 		slog.Warn("channel_monitor: batch compute availability failed", "error", err)
 		availMap = map[int64][]*ChannelMonitorAvailability{}
 	}
+	resetIDs := make([]int64, 0)
+	resetModels := make(map[int64]string)
+	resetSince := make(map[int64]time.Time)
+	summaryResets := make(map[int64]*ChannelMonitorAvailabilityReset, len(resetsByID))
+	for id, reset := range resetsByID {
+		summaryResets[id] = reset
+	}
+	now := time.Now().UTC()
+	for _, id := range ids {
+		reset := resetsByID[id]
+		if reset == nil || reset.Model != primaryByID[id] || !AvailabilityResetIsActive(reset, primaryByID[id], now) {
+			continue
+		}
+		resetIDs = append(resetIDs, id)
+		resetModels[id] = primaryByID[id]
+		resetSince[id] = reset.ResetAt
+	}
+	if len(resetIDs) > 0 {
+		postReset, postErr := s.repo.ComputeAvailabilityForMonitorsSince(ctx, resetIDs, resetModels, resetSince, monitorAvailability7Days)
+		if postErr != nil {
+			slog.Warn("channel_monitor: batch compute post-reset availability failed", "error", postErr)
+			for _, id := range resetIDs {
+				delete(summaryResets, id)
+			}
+		} else {
+			for _, id := range resetIDs {
+				rows := postReset[id]
+				merged := make([]*ChannelMonitorAvailability, 0, len(availMap[id])+1)
+				for _, row := range availMap[id] {
+					if row != nil && row.Model != primaryByID[id] {
+						merged = append(merged, row)
+					}
+				}
+				if len(rows) == 0 {
+					rows = []*ChannelMonitorAvailability{{Model: primaryByID[id], WindowDays: monitorAvailability7Days}}
+				}
+				merged = append(merged, rows...)
+				availMap[id] = merged
+			}
+		}
+	}
 
 	for _, id := range ids {
 		out[id] = buildStatusSummary(
@@ -43,6 +87,8 @@ func (s *ChannelMonitorService) BatchMonitorStatusSummary(
 			indexAvailabilityByModel(availMap[id]),
 			primaryByID[id],
 			extrasByID[id],
+			summaryResets[id],
+			now,
 		)
 	}
 	return out
@@ -65,9 +111,10 @@ func (s *ChannelMonitorService) ListUserView(ctx context.Context) ([]*UserMonito
 	}
 
 	ids, primaryByID, extrasByID := collectMonitorIndexes(monitors)
-	summaries := s.BatchMonitorStatusSummary(ctx, ids, primaryByID, extrasByID)
+	resetsByID := collectMonitorResets(monitors)
+	summaries := s.BatchMonitorStatusSummary(ctx, ids, primaryByID, extrasByID, resetsByID)
 	latestMap := s.batchLatest(ctx, ids)
-	timelineMap := s.batchTimeline(ctx, ids, primaryByID)
+	timelineMap := s.batchTimeline(ctx, ids, primaryByID, resetsByID)
 
 	views := make([]*UserMonitorView, 0, len(monitors))
 	for _, m := range monitors {
@@ -75,6 +122,14 @@ func (s *ChannelMonitorService) ListUserView(ctx context.Context) ([]*UserMonito
 		views = append(views, buildUserViewFromSummary(m, summaries[m.ID], primaryLatest, timelineMap[m.ID]))
 	}
 	return views, nil
+}
+
+func collectMonitorResets(monitors []*ChannelMonitor) map[int64]*ChannelMonitorAvailabilityReset {
+	out := make(map[int64]*ChannelMonitorAvailabilityReset, len(monitors))
+	for _, monitor := range monitors {
+		out[monitor.ID] = monitor.AvailabilityReset
+	}
+	return out
 }
 
 // collectMonitorIndexes 把 monitors 列表按 ID 展开为聚合查询所需的三个索引结构。
@@ -105,11 +160,16 @@ func (s *ChannelMonitorService) batchTimeline(
 	ctx context.Context,
 	ids []int64,
 	primaryByID map[int64]string,
+	resetsByID map[int64]*ChannelMonitorAvailabilityReset,
 ) map[int64][]*ChannelMonitorHistoryEntry {
 	timelineMap, err := s.repo.ListRecentHistoryForMonitors(ctx, ids, primaryByID, monitorTimelineMaxPoints)
 	if err != nil {
 		slog.Warn("channel_monitor: user view batch timeline failed", "error", err)
 		return map[int64][]*ChannelMonitorHistoryEntry{}
+	}
+	now := time.Now().UTC()
+	for _, id := range ids {
+		timelineMap[id] = buildResetTimeline(timelineMap[id], resetsByID[id], now, monitorTimelineMaxPoints)
 	}
 	return timelineMap
 }
@@ -142,7 +202,7 @@ func (s *ChannelMonitorService) GetUserDetail(ctx context.Context, id int64) (*U
 	if err != nil {
 		return nil, fmt.Errorf("list latest per model: %w", err)
 	}
-	availMap, err := s.collectAvailabilityWindows(ctx, id)
+	availMap, err := s.collectAvailabilityWindows(ctx, m)
 	if err != nil {
 		return nil, err
 	}
@@ -158,15 +218,39 @@ func (s *ChannelMonitorService) GetUserDetail(ctx context.Context, id int64) (*U
 }
 
 // collectAvailabilityWindows 一次性查询 7/15/30 天三个窗口，按模型组织。
-func (s *ChannelMonitorService) collectAvailabilityWindows(ctx context.Context, monitorID int64) (map[int]map[string]*ChannelMonitorAvailability, error) {
+func (s *ChannelMonitorService) collectAvailabilityWindows(ctx context.Context, monitor *ChannelMonitor) (map[int]map[string]*ChannelMonitorAvailability, error) {
 	out := make(map[int]map[string]*ChannelMonitorAvailability, 3)
 	windows := []int{monitorAvailability7Days, monitorAvailability15Days, monitorAvailability30Days}
 	for _, w := range windows {
-		rows, err := s.repo.ComputeAvailability(ctx, monitorID, w)
+		rows, err := s.repo.ComputeAvailability(ctx, monitor.ID, w)
 		if err != nil {
 			return nil, fmt.Errorf("compute availability %dd: %w", w, err)
 		}
 		out[w] = indexAvailabilityByModel(rows)
+	}
+	if AvailabilityResetIsActive(monitor.AvailabilityReset, monitor.PrimaryModel, time.Now().UTC()) {
+		post, err := s.repo.ComputeAvailabilityForMonitorsSince(ctx, []int64{monitor.ID}, map[int64]string{monitor.ID: monitor.PrimaryModel}, map[int64]time.Time{monitor.ID: monitor.AvailabilityReset.ResetAt}, monitorAvailability7Days)
+		if err != nil {
+			return nil, fmt.Errorf("compute post-reset availability: %w", err)
+		}
+		rows := post[monitor.ID]
+		if len(rows) == 0 {
+			rows = []*ChannelMonitorAvailability{{Model: monitor.PrimaryModel, WindowDays: monitorAvailability7Days}}
+		}
+		resetRows := indexAvailabilityByModel(rows)
+		if primary := resetRows[monitor.PrimaryModel]; primary != nil {
+			resetRows[monitor.PrimaryModel] = applyAvailabilityReset(primary, monitor.AvailabilityReset, time.Now().UTC())
+		}
+		merged := make(map[string]*ChannelMonitorAvailability, len(out[monitorAvailability7Days])+1)
+		for model, row := range out[monitorAvailability7Days] {
+			if model != monitor.PrimaryModel {
+				merged[model] = row
+			}
+		}
+		for model, row := range resetRows {
+			merged[model] = row
+		}
+		out[monitorAvailability7Days] = merged
 	}
 	return out, nil
 }
@@ -198,6 +282,8 @@ func buildStatusSummary(
 	availByModel map[string]*ChannelMonitorAvailability,
 	primary string,
 	extras []string,
+	reset *ChannelMonitorAvailabilityReset,
+	now time.Time,
 ) MonitorStatusSummary {
 	summary := MonitorStatusSummary{ExtraModels: make([]ExtraModelStatus, 0, len(extras))}
 	if primary != "" {
@@ -208,6 +294,9 @@ func buildStatusSummary(
 			summary.LatestQuota = l.Quota
 		}
 		if a, ok := availByModel[primary]; ok {
+			if reset != nil && reset.Model == primary {
+				a = applyAvailabilityReset(a, reset, now)
+			}
 			summary.Availability7d = a.AvailabilityPct
 		}
 	}
@@ -261,6 +350,102 @@ func buildTimelinePoints(entries []*ChannelMonitorHistoryEntry) []UserMonitorTim
 		})
 	}
 	return out
+}
+
+// availabilityResetRemaining returns the linear amount of virtual baseline
+// that remains during the seven-day window.
+func availabilityResetRemaining(resetAt, now time.Time) float64 {
+	if now.Before(resetAt) {
+		return 1
+	}
+	remaining := 1 - now.Sub(resetAt).Hours()/(7*24)
+	if remaining < 0 {
+		return 0
+	}
+	return remaining
+}
+
+// applyAvailabilityReset combines post-reset real counts with the decaying
+// virtual baseline. The input row is copied so repository results remain
+// reusable by other views.
+func applyAvailabilityReset(real *ChannelMonitorAvailability, reset *ChannelMonitorAvailabilityReset, now time.Time) *ChannelMonitorAvailability {
+	if real == nil {
+		return nil
+	}
+	out := *real
+	if reset == nil || reset.BaselineTotal <= 0 || now.Before(reset.ResetAt) {
+		return &out
+	}
+	remaining := availabilityResetRemaining(reset.ResetAt, now)
+	if remaining == 0 {
+		return &out
+	}
+	baselineTotal := float64(reset.BaselineTotal) * remaining
+	baselineOK := float64(reset.BaselineOK) * remaining
+	total := baselineTotal + float64(real.TotalChecks)
+	ok := baselineOK + float64(real.OperationalChecks)
+	if total == 0 {
+		out.TotalChecks = 0
+		out.OperationalChecks = 0
+		out.AvailabilityPct = 0
+		return &out
+	}
+	out.TotalChecks = int(math.Round(total))
+	out.OperationalChecks = int(math.Round(ok))
+	if out.OperationalChecks > out.TotalChecks {
+		out.OperationalChecks = out.TotalChecks
+	}
+	out.AvailabilityPct = ok * 100 / total
+	return &out
+}
+
+// buildResetTimeline hides pre-reset primary-model history and fills the
+// missing older slots with ordinary operational/degraded points.
+func buildResetTimeline(entries []*ChannelMonitorHistoryEntry, reset *ChannelMonitorAvailabilityReset, now time.Time, limit int) []*ChannelMonitorHistoryEntry {
+	if limit <= 0 {
+		return []*ChannelMonitorHistoryEntry{}
+	}
+	if reset == nil || availabilityResetRemaining(reset.ResetAt, now) == 0 {
+		if len(entries) > limit {
+			return entries[:limit]
+		}
+		return entries
+	}
+
+	real := make([]*ChannelMonitorHistoryEntry, 0, minInt(len(entries), limit))
+	for _, entry := range entries {
+		if entry == nil || entry.CheckedAt.Before(reset.ResetAt) {
+			continue
+		}
+		real = append(real, entry)
+		if len(real) == limit {
+			return real
+		}
+	}
+
+	missing := limit - len(real)
+	if missing <= 0 {
+		return real
+	}
+	for i := 0; i < missing; i++ {
+		status := MonitorStatusOperational
+		if i < reset.DegradedBars {
+			status = MonitorStatusDegraded
+		}
+		real = append(real, &ChannelMonitorHistoryEntry{
+			Model:     reset.Model,
+			Status:    status,
+			CheckedAt: reset.ResetAt.Add(-time.Duration(i+1) * time.Minute),
+		})
+	}
+	return real
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // mergeModelDetails 合并 latest + availability 三个窗口为 ModelDetail 列表。

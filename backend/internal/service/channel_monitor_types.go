@@ -66,9 +66,27 @@ type ChannelMonitor struct {
 	// never be serialized to clients or forwarded to an upstream provider.
 	DuplicateOperationID string
 
+	// AvailabilityReset is internal metadata persisted in extra_headers. It is
+	// never serialized as a user header or sent to an upstream provider.
+	AvailabilityReset *ChannelMonitorAvailabilityReset
+
 	// APIKeyDecryptFailed 表示 APIKey 字段无法解密（密钥不一致或损坏）。
 	// 此时 APIKey 为空字符串，runner / RunCheck 必须跳过该监控并提示重填。
 	APIKeyDecryptFailed bool
+}
+
+// ChannelMonitorAvailabilityReset describes a temporary primary-model
+// availability baseline. The JSON form is persisted under the existing
+// extra_headers JSONB column rather than a separate schema field.
+type ChannelMonitorAvailabilityReset struct {
+	Version       int       `json:"version"`
+	Model         string    `json:"model"`
+	TargetPct     float64   `json:"target_pct"`
+	DegradedBars  int       `json:"degraded_bars"`
+	ResetAt       time.Time `json:"reset_at"`
+	BaselineTotal int       `json:"baseline_total"`
+	BaselineOK    int       `json:"baseline_ok"`
+	CreatedBy     int64     `json:"created_by"`
 }
 
 // ChannelMonitorListParams 列表查询过滤参数。

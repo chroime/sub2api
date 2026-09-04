@@ -85,28 +85,34 @@ type channelMonitorUpdateRequest struct {
 	AccountID *int64  `json:"account_id"`
 }
 
+type channelMonitorAvailabilityResetRequest struct {
+	AvailabilityPct *float64 `json:"availability_pct"`
+	DegradedBars    *int     `json:"degraded_bars"`
+}
+
 type channelMonitorResponse struct {
-	ID                  int64                                `json:"id"`
-	Name                string                               `json:"name"`
-	Provider            string                               `json:"provider"`
-	APIMode             string                               `json:"api_mode"`
-	Endpoint            string                               `json:"endpoint"`
-	APIKeyMasked        string                               `json:"api_key_masked"`
-	APIKeyDecryptFailed bool                                 `json:"api_key_decrypt_failed"`
-	PrimaryModel        string                               `json:"primary_model"`
-	ExtraModels         []string                             `json:"extra_models"`
-	GroupName           string                               `json:"group_name"`
-	Enabled             bool                                 `json:"enabled"`
-	IntervalSeconds     int                                  `json:"interval_seconds"`
-	JitterSeconds       int                                  `json:"jitter_seconds"`
-	LastCheckedAt       *string                              `json:"last_checked_at"`
-	CreatedBy           int64                                `json:"created_by"`
-	CreatedAt           string                               `json:"created_at"`
-	UpdatedAt           string                               `json:"updated_at"`
-	PrimaryStatus       string                               `json:"primary_status"`
-	PrimaryLatencyMs    *int                                 `json:"primary_latency_ms"`
-	Availability7d      float64                              `json:"availability_7d"`
-	ExtraModelsStatus   []dto.ChannelMonitorExtraModelStatus `json:"extra_models_status"`
+	ID                      int64                                `json:"id"`
+	Name                    string                               `json:"name"`
+	Provider                string                               `json:"provider"`
+	APIMode                 string                               `json:"api_mode"`
+	Endpoint                string                               `json:"endpoint"`
+	APIKeyMasked            string                               `json:"api_key_masked"`
+	APIKeyDecryptFailed     bool                                 `json:"api_key_decrypt_failed"`
+	PrimaryModel            string                               `json:"primary_model"`
+	ExtraModels             []string                             `json:"extra_models"`
+	GroupName               string                               `json:"group_name"`
+	Enabled                 bool                                 `json:"enabled"`
+	IntervalSeconds         int                                  `json:"interval_seconds"`
+	JitterSeconds           int                                  `json:"jitter_seconds"`
+	LastCheckedAt           *string                              `json:"last_checked_at"`
+	CreatedBy               int64                                `json:"created_by"`
+	CreatedAt               string                               `json:"created_at"`
+	UpdatedAt               string                               `json:"updated_at"`
+	PrimaryStatus           string                               `json:"primary_status"`
+	PrimaryLatencyMs        *int                                 `json:"primary_latency_ms"`
+	Availability7d          float64                              `json:"availability_7d"`
+	AvailabilityResetActive bool                                 `json:"availability_reset_active"`
+	ExtraModelsStatus       []dto.ChannelMonitorExtraModelStatus `json:"extra_models_status"`
 	// 请求自定义快照：前端编辑 / 展示「高级设置」用
 	TemplateID       *int64            `json:"template_id"`
 	ExtraHeaders     map[string]string `json:"extra_headers"`
@@ -162,28 +168,29 @@ func channelMonitorToResponse(m *service.ChannelMonitor) *channelMonitorResponse
 		headers = map[string]string{}
 	}
 	resp := &channelMonitorResponse{
-		ID:                  m.ID,
-		Name:                m.Name,
-		Provider:            m.Provider,
-		APIMode:             m.APIMode,
-		Endpoint:            m.Endpoint,
-		APIKeyMasked:        maskAPIKey(m.APIKey),
-		APIKeyDecryptFailed: m.APIKeyDecryptFailed,
-		PrimaryModel:        m.PrimaryModel,
-		ExtraModels:         extras,
-		GroupName:           m.GroupName,
-		Enabled:             m.Enabled,
-		IntervalSeconds:     m.IntervalSeconds,
-		JitterSeconds:       m.JitterSeconds,
-		CreatedBy:           m.CreatedBy,
-		CreatedAt:           m.CreatedAt.UTC().Format(time.RFC3339),
-		UpdatedAt:           m.UpdatedAt.UTC().Format(time.RFC3339),
-		TemplateID:          m.TemplateID,
-		ExtraHeaders:        headers,
-		BodyOverrideMode:    m.BodyOverrideMode,
-		BodyOverride:        m.BodyOverride,
-		CheckMode:           m.CheckMode,
-		AccountID:           m.AccountID,
+		ID:                      m.ID,
+		Name:                    m.Name,
+		Provider:                m.Provider,
+		APIMode:                 m.APIMode,
+		Endpoint:                m.Endpoint,
+		APIKeyMasked:            maskAPIKey(m.APIKey),
+		APIKeyDecryptFailed:     m.APIKeyDecryptFailed,
+		PrimaryModel:            m.PrimaryModel,
+		ExtraModels:             extras,
+		GroupName:               m.GroupName,
+		Enabled:                 m.Enabled,
+		IntervalSeconds:         m.IntervalSeconds,
+		JitterSeconds:           m.JitterSeconds,
+		CreatedBy:               m.CreatedBy,
+		CreatedAt:               m.CreatedAt.UTC().Format(time.RFC3339),
+		UpdatedAt:               m.UpdatedAt.UTC().Format(time.RFC3339),
+		TemplateID:              m.TemplateID,
+		ExtraHeaders:            headers,
+		BodyOverrideMode:        m.BodyOverrideMode,
+		BodyOverride:            m.BodyOverride,
+		AvailabilityResetActive: service.AvailabilityResetIsActive(m.AvailabilityReset, m.PrimaryModel, time.Now().UTC()),
+		CheckMode:               m.CheckMode,
+		AccountID:               m.AccountID,
 		// PrimaryStatus / PrimaryLatencyMs / Availability7d / LatestQuota
 		// 由 List handler 在批量聚合后填充。
 	}
@@ -280,12 +287,14 @@ func (h *ChannelMonitorHandler) batchSummaryFor(c *gin.Context, items []*service
 	ids := make([]int64, 0, len(items))
 	primaryByID := make(map[int64]string, len(items))
 	extrasByID := make(map[int64][]string, len(items))
+	resetsByID := make(map[int64]*service.ChannelMonitorAvailabilityReset, len(items))
 	for _, m := range items {
 		ids = append(ids, m.ID)
 		primaryByID[m.ID] = m.PrimaryModel
 		extrasByID[m.ID] = m.ExtraModels
+		resetsByID[m.ID] = m.AvailabilityReset
 	}
-	return h.monitorService.BatchMonitorStatusSummary(c.Request.Context(), ids, primaryByID, extrasByID)
+	return h.monitorService.BatchMonitorStatusSummary(c.Request.Context(), ids, primaryByID, extrasByID, resetsByID)
 }
 
 // buildListItemResponse 把 monitor + summary 装成 admin list 的响应行。
@@ -469,6 +478,46 @@ func (h *ChannelMonitorHandler) Delete(c *gin.Context) {
 		return
 	}
 	response.Success(c, nil)
+}
+
+// AvailabilityReset POST /api/v1/admin/channel-monitors/:id/availability-reset
+func (h *ChannelMonitorHandler) AvailabilityReset(c *gin.Context) {
+	id, ok := ParseChannelMonitorID(c)
+	if !ok {
+		return
+	}
+	var req channelMonitorAvailabilityResetRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.ErrorFrom(c, infraerrors.BadRequest("VALIDATION_ERROR", err.Error()))
+		return
+	}
+	if req.AvailabilityPct == nil || req.DegradedBars == nil {
+		response.ErrorFrom(c, infraerrors.BadRequest("VALIDATION_ERROR", "availability_pct and degraded_bars are required"))
+		return
+	}
+	subject, _ := middleware2.GetAuthSubjectFromContext(c)
+	m, err := h.monitorService.SetAvailabilityReset(c.Request.Context(), id, subject.UserID, *req.AvailabilityPct, *req.DegradedBars)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	summary := h.batchSummaryFor(c, []*service.ChannelMonitor{m})[id]
+	response.Success(c, buildListItemResponse(m, summary))
+}
+
+// ClearAvailabilityReset DELETE /api/v1/admin/channel-monitors/:id/availability-reset
+func (h *ChannelMonitorHandler) ClearAvailabilityReset(c *gin.Context) {
+	id, ok := ParseChannelMonitorID(c)
+	if !ok {
+		return
+	}
+	m, err := h.monitorService.ClearAvailabilityReset(c.Request.Context(), id)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	summary := h.batchSummaryFor(c, []*service.ChannelMonitor{m})[id]
+	response.Success(c, buildListItemResponse(m, summary))
 }
 
 // Run POST /api/v1/admin/channel-monitors/:id/run

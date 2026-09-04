@@ -31,6 +31,7 @@ function makeItem(overrides: Partial<UserMonitorView> = {}): UserMonitorView {
     primary_latency_ms: null,
     primary_ping_latency_ms: null,
     availability_7d: 100,
+    availability_reset_active: false,
     extra_models: [],
     timeline: [],
     ...overrides,

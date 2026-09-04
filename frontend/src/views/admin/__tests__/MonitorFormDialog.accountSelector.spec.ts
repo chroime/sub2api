@@ -96,6 +96,7 @@ function makeMonitor(overrides: Partial<ChannelMonitor> = {}): ChannelMonitor {
     primary_status: '',
     primary_latency_ms: null,
     availability_7d: 0,
+    availability_reset_active: false,
     extra_models_status: [],
     template_id: null,
     extra_headers: {},

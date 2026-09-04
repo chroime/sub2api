@@ -87,6 +87,8 @@ export interface ChannelMonitor {
   primary_latency_ms: number | null
   /** Primary model 7-day availability percentage (0-100) */
   availability_7d: number
+  /** Whether a temporary primary-model availability reset is active */
+  availability_reset_active: boolean
   /** Latest status per extra model (used for hover tooltip) */
   extra_models_status: ExtraModelStatus[]
   /** 请求自定义快照字段（高级设置） */
@@ -190,6 +192,11 @@ export interface HistoryParams {
 
 export interface HistoryResponse {
   items: HistoryItem[]
+}
+
+export interface AvailabilityResetParams {
+  availability_pct: number
+  degraded_bars: number
 }
 
 /**
@@ -329,6 +336,21 @@ export async function runNow(id: number): Promise<RunNowResponse> {
   return data
 }
 
+/** Set a temporary seven-day availability baseline for the primary model. */
+export async function availabilityReset(id: number, params: AvailabilityResetParams): Promise<ChannelMonitor> {
+  const { data } = await apiClient.post<ChannelMonitor>(
+    `/admin/channel-monitors/${id}/availability-reset`,
+    params
+  )
+  return data
+}
+
+/** Clear the temporary seven-day availability baseline. */
+export async function clearAvailabilityReset(id: number): Promise<ChannelMonitor> {
+  const { data } = await apiClient.delete<ChannelMonitor>(`/admin/channel-monitors/${id}/availability-reset`)
+  return data
+}
+
 /**
  * List historical check results for a monitor.
  */
@@ -351,6 +373,8 @@ export const channelMonitorAPI = {
   update,
   del,
   runNow,
+  availabilityReset,
+  clearAvailabilityReset,
   listHistory,
 }
 

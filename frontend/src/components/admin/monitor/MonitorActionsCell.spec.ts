@@ -29,6 +29,7 @@ function makeMonitor(overrides: Partial<ChannelMonitor> = {}): ChannelMonitor {
     primary_status: '',
     primary_latency_ms: null,
     availability_7d: 0,
+    availability_reset_active: false,
     extra_models_status: [],
     template_id: null,
     extra_headers: {},
@@ -41,6 +42,28 @@ function makeMonitor(overrides: Partial<ChannelMonitor> = {}): ChannelMonitor {
 }
 
 describe('MonitorActionsCell duplicate action', () => {
+  it('emits availability reset for the selected monitor', async () => {
+    const row = makeMonitor()
+    const wrapper = mount(MonitorActionsCell, {
+      props: { row, running: false, duplicating: false },
+    })
+
+    await wrapper.get('[data-testid="monitor-availability-reset"]').trigger('click')
+
+    expect(wrapper.emitted('availability-reset')).toEqual([[row]])
+  })
+
+  it('shows and emits cancel only when a reset is active', async () => {
+    const row = makeMonitor({ availability_reset_active: true })
+    const wrapper = mount(MonitorActionsCell, {
+      props: { row, running: false, duplicating: false },
+    })
+
+    await wrapper.get('[data-testid="monitor-availability-reset-cancel"]').trigger('click')
+
+    expect(wrapper.emitted('availability-reset-cancel')).toEqual([[row]])
+  })
+
   it('emits the selected monitor when duplicate is clicked', async () => {
     const row = makeMonitor()
     const wrapper = mount(MonitorActionsCell, {

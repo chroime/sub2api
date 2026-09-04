@@ -787,6 +787,8 @@ func registerChannelMonitorRoutes(admin *gin.RouterGroup, h *handler.Handlers, s
 		monitors.PUT("/:id", h.Admin.ChannelMonitor.Update)
 		monitors.DELETE("/:id", h.Admin.ChannelMonitor.Delete)
 		monitors.POST("/:id/run", h.Admin.ChannelMonitor.Run)
+		monitors.POST("/:id/availability-reset", h.Admin.ChannelMonitor.AvailabilityReset)
+		monitors.DELETE("/:id/availability-reset", h.Admin.ChannelMonitor.ClearAvailabilityReset)
 		monitors.GET("/:id/history", h.Admin.ChannelMonitor.History)
 	}
 

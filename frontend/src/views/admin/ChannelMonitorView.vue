@@ -105,8 +105,11 @@
               :row="row"
               :running="runningId === row.id"
               :duplicating="duplicatingIds.has(row.id)"
+              :resetting="resettingIds.has(row.id)"
               @run="handleRunNow"
               @duplicate="handleDuplicate"
+              @availability-reset="openAvailabilityReset"
+              @availability-reset-cancel="handleAvailabilityResetCancel"
               @edit="openEditDialog"
               @delete="handleDelete"
             />
@@ -155,6 +158,14 @@
       @close="showRunResult = false"
     />
 
+    <MonitorAvailabilityResetDialog
+      :show="showAvailabilityResetDialog"
+      :monitor="availabilityResetTarget"
+      :submitting="availabilityResetTarget ? resettingIds.has(availabilityResetTarget.id) : false"
+      @close="closeAvailabilityResetDialog"
+      @submit="handleAvailabilityResetSubmit"
+    />
+
     <ConfirmDialog
       :show="showDeleteDialog"
       :title="t('common.delete')"
@@ -179,6 +190,7 @@ import type {
   CheckResult,
   ListParams,
   Provider,
+  AvailabilityResetParams,
 } from '@/api/admin/channelMonitor'
 import type { Column } from '@/components/common/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
@@ -196,6 +208,7 @@ import MonitorTemplateManagerDialog from '@/components/admin/monitor/MonitorTemp
 import MonitorRunResultDialog from '@/components/admin/monitor/MonitorRunResultDialog.vue'
 import MonitorPrimaryModelCell from '@/components/admin/monitor/MonitorPrimaryModelCell.vue'
 import MonitorActionsCell from '@/components/admin/monitor/MonitorActionsCell.vue'
+import MonitorAvailabilityResetDialog from '@/components/admin/monitor/MonitorAvailabilityResetDialog.vue'
 import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
 import { useChannelMonitorFormat } from '@/composables/useChannelMonitorFormat'
 import MonitorSettingsPanel from '@/features/channel-monitor-v2/MonitorSettingsPanel.vue'
@@ -230,6 +243,9 @@ const deleting = ref<ChannelMonitor | null>(null)
 const showRunResult = ref(false)
 const runResults = ref<CheckResult[]>([])
 const duplicatingIds = reactive(new Set<number>())
+const resettingIds = reactive(new Set<number>())
+const showAvailabilityResetDialog = ref(false)
+const availabilityResetTarget = ref<ChannelMonitor | null>(null)
 
 let abortController: AbortController | null = null
 let searchTimeout: ReturnType<typeof setTimeout> | null = null
@@ -367,6 +383,51 @@ async function handleDuplicate(row: ChannelMonitor) {
 function handleDelete(row: ChannelMonitor) {
   deleting.value = row
   showDeleteDialog.value = true
+}
+
+function openAvailabilityReset(row: ChannelMonitor) {
+  if (resettingIds.has(row.id)) return
+  availabilityResetTarget.value = row
+  showAvailabilityResetDialog.value = true
+}
+
+function closeAvailabilityResetDialog() {
+  if (availabilityResetTarget.value && resettingIds.has(availabilityResetTarget.value.id)) return
+  showAvailabilityResetDialog.value = false
+  availabilityResetTarget.value = null
+}
+
+async function handleAvailabilityResetSubmit(params: AvailabilityResetParams) {
+  const target = availabilityResetTarget.value
+  if (!target || resettingIds.has(target.id)) return
+
+  resettingIds.add(target.id)
+  try {
+    await adminAPI.channelMonitor.availabilityReset(target.id, params)
+    appStore.showSuccess(t('admin.channelMonitor.availabilityReset.success'))
+    showAvailabilityResetDialog.value = false
+    availabilityResetTarget.value = null
+    await reload()
+  } catch (err: unknown) {
+    appStore.showError(extractApiErrorMessage(err, t('admin.channelMonitor.availabilityReset.failure')))
+  } finally {
+    resettingIds.delete(target.id)
+  }
+}
+
+async function handleAvailabilityResetCancel(row: ChannelMonitor) {
+  if (!row.availability_reset_active || resettingIds.has(row.id)) return
+
+  resettingIds.add(row.id)
+  try {
+    await adminAPI.channelMonitor.clearAvailabilityReset(row.id)
+    appStore.showSuccess(t('admin.channelMonitor.availabilityReset.cancelSuccess'))
+    await reload()
+  } catch (err: unknown) {
+    appStore.showError(extractApiErrorMessage(err, t('admin.channelMonitor.availabilityReset.cancelFailure')))
+  } finally {
+    resettingIds.delete(row.id)
+  }
 }
 
 async function confirmDelete() {

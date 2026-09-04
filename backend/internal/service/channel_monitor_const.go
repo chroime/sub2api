@@ -201,6 +201,9 @@ var (
 	ErrChannelMonitorAPIKeyDecryptFailed = infraerrors.InternalServer(
 		"CHANNEL_MONITOR_KEY_DECRYPT_FAILED", "api key decryption failed; please re-edit the monitor with a fresh key",
 	)
+	ErrChannelMonitorInvalidAvailabilityReset = infraerrors.BadRequest(
+		"CHANNEL_MONITOR_INVALID_AVAILABILITY_RESET", "availability_pct must be between 0 and 100 with at most two decimal places, and degraded_bars must be between 0 and 8",
+	)
 )
 
 var (

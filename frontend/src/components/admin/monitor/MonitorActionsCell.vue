@@ -9,6 +9,27 @@
       <span class="text-xs">{{ t('admin.channelMonitor.runNow') }}</span>
     </button>
     <button
+      data-testid="monitor-availability-reset"
+      :disabled="resetting"
+      :title="t('admin.channelMonitor.availabilityReset.button')"
+      @click="$emit('availability-reset', row)"
+      class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary-600 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-dark-700 dark:hover:text-primary-400"
+    >
+      <Icon name="chart" size="sm" />
+      <span class="text-xs">{{ t('admin.channelMonitor.availabilityReset.button') }}</span>
+    </button>
+    <button
+      v-if="row.availability_reset_active"
+      data-testid="monitor-availability-reset-cancel"
+      :disabled="resetting"
+      :title="t('admin.channelMonitor.availabilityReset.cancel')"
+      @click="$emit('availability-reset-cancel', row)"
+      class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-amber-600 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-dark-700 dark:hover:text-amber-400"
+    >
+      <Icon name="x" size="sm" />
+      <span class="text-xs">{{ t('admin.channelMonitor.availabilityReset.cancel') }}</span>
+    </button>
+    <button
       data-testid="monitor-duplicate"
       :title="duplicateTitle"
       :disabled="duplicating || Boolean(row.api_key_decrypt_failed)"
@@ -47,10 +68,13 @@ const props = defineProps<{
   row: ChannelMonitor
   running: boolean
   duplicating: boolean
+  resetting?: boolean
 }>()
 
 defineEmits<{
   (e: 'run', row: ChannelMonitor): void
+  (e: 'availability-reset', row: ChannelMonitor): void
+  (e: 'availability-reset-cancel', row: ChannelMonitor): void
   (e: 'duplicate', row: ChannelMonitor): void
   (e: 'edit', row: ChannelMonitor): void
   (e: 'delete', row: ChannelMonitor): void

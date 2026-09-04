@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"math"
 	"strconv"
 	"strings"
 	"sync"
@@ -43,6 +44,7 @@ type ChannelMonitorRepository interface {
 	// 批量聚合（admin/user list 用，避免 N+1）
 	ListLatestForMonitorIDs(ctx context.Context, ids []int64) (map[int64][]*ChannelMonitorLatest, error)
 	ComputeAvailabilityForMonitors(ctx context.Context, ids []int64, windowDays int) (map[int64][]*ChannelMonitorAvailability, error)
+	ComputeAvailabilityForMonitorsSince(ctx context.Context, ids []int64, primaryModels map[int64]string, since map[int64]time.Time, windowDays int) (map[int64][]*ChannelMonitorAvailability, error)
 	// ListRecentHistoryForMonitors 批量取多个 monitor 各自主模型（primaryModels[monitorID]）最近 perMonitorLimit 条历史。
 	// 返回的 entry 已按 checked_at DESC 排序（最新在前），不含 message 字段。
 	ListRecentHistoryForMonitors(ctx context.Context, ids []int64, primaryModels map[int64]string, perMonitorLimit int) (map[int64][]*ChannelMonitorHistoryEntry, error)
@@ -84,6 +86,61 @@ type ChannelMonitorService struct {
 	quotaFetcher *ChannelMonitorQuotaFetcher
 }
 
+// SetAvailabilityReset writes the temporary primary-model availability
+// baseline into the existing monitor JSON metadata.
+func (s *ChannelMonitorService) SetAvailabilityReset(ctx context.Context, id, actorID int64, targetPct float64, degradedBars int) (*ChannelMonitor, error) {
+	if math.IsNaN(targetPct) || math.IsInf(targetPct, 0) || targetPct < 0 || targetPct > 100 ||
+		math.Abs(targetPct*100-math.Round(targetPct*100)) > 1e-9 || degradedBars < 0 || degradedBars > 8 {
+		return nil, ErrChannelMonitorInvalidAvailabilityReset
+	}
+	existing, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(existing.PrimaryModel) == "" {
+		return nil, ErrChannelMonitorMissingPrimaryModel
+	}
+	interval := existing.IntervalSeconds
+	if interval < 1 {
+		interval = 1
+	}
+	baselineTotal := int(math.Ceil(float64((7 * 24 * time.Hour).Seconds()) / float64(interval)))
+	if baselineTotal < 1 {
+		baselineTotal = 1
+	}
+	baselineOK := int(math.Round(float64(baselineTotal) * targetPct / 100))
+	existing.AvailabilityReset = &ChannelMonitorAvailabilityReset{
+		Version:       1,
+		Model:         existing.PrimaryModel,
+		TargetPct:     targetPct,
+		DegradedBars:  degradedBars,
+		ResetAt:       time.Now().UTC(),
+		BaselineTotal: baselineTotal,
+		BaselineOK:    baselineOK,
+		CreatedBy:     actorID,
+	}
+	if err := s.repo.Update(ctx, existing); err != nil {
+		return nil, fmt.Errorf("set channel monitor availability reset: %w", err)
+	}
+	s.decryptInPlace(existing)
+	return existing, nil
+}
+
+// ClearAvailabilityReset removes only the temporary baseline metadata. It is
+// idempotent and leaves all real history and user headers untouched.
+func (s *ChannelMonitorService) ClearAvailabilityReset(ctx context.Context, id int64) (*ChannelMonitor, error) {
+	existing, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	existing.AvailabilityReset = nil
+	if err := s.repo.Update(ctx, existing); err != nil {
+		return nil, fmt.Errorf("clear channel monitor availability reset: %w", err)
+	}
+	s.decryptInPlace(existing)
+	return existing, nil
+}
+
 const maxChannelMonitorNameRunes = 100
 
 // ChannelMonitorDuplicateOperationIDMetadataKey is stored in the existing
@@ -91,6 +148,49 @@ const maxChannelMonitorNameRunes = 100
 // invalid HTTP header name, and repository adapters remove it before exposing
 // ExtraHeaders to the service layer.
 const ChannelMonitorDuplicateOperationIDMetadataKey = "sub2api:duplicate_operation_id"
+
+// ChannelMonitorAvailabilityResetMetadataKey is stored in the existing
+// extra_headers JSON column and removed before headers reach handlers or
+// upstream providers.
+const ChannelMonitorAvailabilityResetMetadataKey = "sub2api:availability_reset"
+
+// EncodeAvailabilityResetMetadata serializes the internal reset document for
+// repository persistence.
+func EncodeAvailabilityResetMetadata(reset *ChannelMonitorAvailabilityReset) (string, error) {
+	if reset == nil {
+		return "", nil
+	}
+	payload, err := json.Marshal(reset)
+	return string(payload), err
+}
+
+// DecodeAvailabilityResetMetadata validates and decodes a persisted reset
+// document. Invalid documents are treated as absent by callers.
+func DecodeAvailabilityResetMetadata(raw string) (*ChannelMonitorAvailabilityReset, error) {
+	if strings.TrimSpace(raw) == "" {
+		return nil, nil
+	}
+	var reset ChannelMonitorAvailabilityReset
+	if err := json.Unmarshal([]byte(raw), &reset); err != nil {
+		return nil, err
+	}
+	if reset.Version != 1 || strings.TrimSpace(reset.Model) == "" ||
+		math.IsNaN(reset.TargetPct) || math.IsInf(reset.TargetPct, 0) ||
+		reset.TargetPct < 0 || reset.TargetPct > 100 ||
+		math.Abs(reset.TargetPct*100-math.Round(reset.TargetPct*100)) > 1e-9 ||
+		reset.DegradedBars < 0 || reset.DegradedBars > 8 ||
+		reset.ResetAt.IsZero() || reset.BaselineTotal <= 0 ||
+		reset.BaselineOK < 0 || reset.BaselineOK > reset.BaselineTotal {
+		return nil, fmt.Errorf("invalid availability reset metadata")
+	}
+	return &reset, nil
+}
+
+// AvailabilityResetIsActive reports whether a reset applies to the current
+// primary model and still has non-zero seven-day weight.
+func AvailabilityResetIsActive(reset *ChannelMonitorAvailabilityReset, primary string, now time.Time) bool {
+	return reset != nil && reset.Model == primary && availabilityResetRemaining(reset.ResetAt, now) > 0
+}
 
 // NewChannelMonitorService 创建渠道监控服务实例。
 func NewChannelMonitorService(repo ChannelMonitorRepository, encryptor SecretEncryptor) *ChannelMonitorService {
@@ -250,6 +350,7 @@ func (s *ChannelMonitorService) Duplicate(
 		CheckMode:            defaultCheckMode(source.CheckMode),
 		AccountID:            cloneInt64Pointer(source.AccountID),
 		DuplicateOperationID: operationID,
+		AvailabilityReset:    nil,
 	}
 	if err := s.repo.Create(ctx, duplicate); err != nil {
 		return nil, fmt.Errorf("duplicate channel monitor: %w", err)
