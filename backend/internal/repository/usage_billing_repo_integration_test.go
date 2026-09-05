@@ -4,8 +4,10 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -78,6 +80,89 @@ func TestUsageBillingRepositoryApply_DeduplicatesBalanceBilling(t *testing.T) {
 	var dedupCount int
 	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM usage_billing_dedup WHERE request_id = $1 AND api_key_id = $2", requestID, apiKey.ID).Scan(&dedupCount))
 	require.Equal(t, 1, dedupCount)
+}
+
+func TestUsageBillingRepositoryApply_RejectsInsufficientBalanceWithoutOverdraft(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	repo := NewUsageBillingRepository(client, integrationDB)
+
+	user := mustCreateUser(t, client, &service.User{
+		Email:        fmt.Sprintf("usage-billing-insufficient-%d@example.com", time.Now().UnixNano()),
+		PasswordHash: "hash",
+		Balance:      1,
+	})
+	apiKey := mustCreateApiKey(t, client, &service.APIKey{
+		UserID: user.ID,
+		Key:    "sk-usage-billing-insufficient-" + uuid.NewString(),
+		Name:   "billing-insufficient",
+	})
+
+	_, err := repo.Apply(ctx, &service.UsageBillingCommand{
+		RequestID:   uuid.NewString(),
+		APIKeyID:    apiKey.ID,
+		UserID:      user.ID,
+		BalanceCost: 2,
+	})
+	require.ErrorIs(t, err, service.ErrInsufficientBalance)
+
+	var balance float64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT balance FROM users WHERE id = $1", user.ID).Scan(&balance))
+	require.InDelta(t, 1, balance, 0.000001)
+}
+
+func TestUsageBillingRepositoryApply_ConcurrentChargesNeverOverdraft(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	repo := NewUsageBillingRepository(client, integrationDB)
+
+	user := mustCreateUser(t, client, &service.User{
+		Email:        fmt.Sprintf("usage-billing-concurrent-%d@example.com", time.Now().UnixNano()),
+		PasswordHash: "hash",
+		Balance:      10,
+	})
+	apiKey := mustCreateApiKey(t, client, &service.APIKey{
+		UserID: user.ID,
+		Key:    "sk-usage-billing-concurrent-" + uuid.NewString(),
+		Name:   "billing-concurrent",
+	})
+
+	const requests = 100
+	errs := make([]error, requests)
+	var wg sync.WaitGroup
+	wg.Add(requests)
+	for i := 0; i < requests; i++ {
+		go func(i int) {
+			defer wg.Done()
+			_, errs[i] = repo.Apply(ctx, &service.UsageBillingCommand{
+				RequestID:   fmt.Sprintf("concurrent-%d-%s", i, uuid.NewString()),
+				APIKeyID:    apiKey.ID,
+				UserID:      user.ID,
+				BalanceCost: 1,
+			})
+		}(i)
+	}
+	wg.Wait()
+
+	succeeded := 0
+	insufficient := 0
+	for _, err := range errs {
+		switch {
+		case err == nil:
+			succeeded++
+		case errors.Is(err, service.ErrInsufficientBalance):
+			insufficient++
+		default:
+			t.Fatalf("unexpected concurrent billing error: %v", err)
+		}
+	}
+	require.Equal(t, 10, succeeded)
+	require.Equal(t, 90, insufficient)
+
+	var balance float64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT balance FROM users WHERE id = $1", user.ID).Scan(&balance))
+	require.InDelta(t, 0, balance, 0.000001)
+	require.GreaterOrEqual(t, balance, 0.0)
 }
 
 func TestUsageBillingRepositoryApply_DeduplicatesSubscriptionBilling(t *testing.T) {
