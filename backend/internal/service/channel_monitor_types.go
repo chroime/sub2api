@@ -79,14 +79,15 @@ type ChannelMonitor struct {
 // availability baseline. The JSON form is persisted under the existing
 // extra_headers JSONB column rather than a separate schema field.
 type ChannelMonitorAvailabilityReset struct {
-	Version       int       `json:"version"`
-	Model         string    `json:"model"`
-	TargetPct     float64   `json:"target_pct"`
-	DegradedBars  int       `json:"degraded_bars"`
-	ResetAt       time.Time `json:"reset_at"`
-	BaselineTotal int       `json:"baseline_total"`
-	BaselineOK    int       `json:"baseline_ok"`
-	CreatedBy     int64     `json:"created_by"`
+	Version           int       `json:"version"`
+	Model             string    `json:"model"`
+	TargetPct         float64   `json:"target_pct"`
+	DegradedBars      int       `json:"degraded_bars"`
+	DegradedBarLayout string    `json:"degraded_bar_layout,omitempty"`
+	ResetAt           time.Time `json:"reset_at"`
+	BaselineTotal     int       `json:"baseline_total"`
+	BaselineOK        int       `json:"baseline_ok"`
+	CreatedBy         int64     `json:"created_by"`
 }
 
 // ChannelMonitorListParams 列表查询过滤参数。

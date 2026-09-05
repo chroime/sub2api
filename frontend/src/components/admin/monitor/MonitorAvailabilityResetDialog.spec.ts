@@ -74,7 +74,7 @@ describe('MonitorAvailabilityResetDialog', () => {
 
     await input.setValue('100')
     await wrapper.get('form').trigger('submit')
-    expect(wrapper.emitted('submit')).toEqual([[{ availability_pct: 100, degraded_bars: 0 }]])
+    expect(wrapper.emitted('submit')).toEqual([[{ availability_pct: 100, degraded_bars: 0, degraded_bar_layout: 'even' }]])
   })
 
   it('emits the selected yellow bar count', async () => {
@@ -83,6 +83,19 @@ describe('MonitorAvailabilityResetDialog', () => {
     await wrapper.get('#availability-reset-pct').setValue('0')
     await wrapper.get('form').trigger('submit')
 
-    expect(wrapper.emitted('submit')).toEqual([[{ availability_pct: 0, degraded_bars: 8 }]])
+    expect(wrapper.emitted('submit')).toEqual([[{ availability_pct: 0, degraded_bars: 8, degraded_bar_layout: 'even' }]])
+  })
+
+  it('offers four layouts and submits the selected layout', async () => {
+    const wrapper = mountDialog()
+    const select = wrapper.get('#availability-reset-layout')
+    expect(select.findAll('option')).toHaveLength(4)
+    expect((select.element as HTMLSelectElement).value).toBe('even')
+
+    await select.setValue('block_newest')
+    await wrapper.get('form').trigger('submit')
+    expect(wrapper.emitted('submit')).toEqual([[
+      { availability_pct: 73.25, degraded_bars: 0, degraded_bar_layout: 'block_newest' },
+    ]])
   })
 })

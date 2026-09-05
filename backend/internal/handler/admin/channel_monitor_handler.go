@@ -86,8 +86,9 @@ type channelMonitorUpdateRequest struct {
 }
 
 type channelMonitorAvailabilityResetRequest struct {
-	AvailabilityPct *float64 `json:"availability_pct"`
-	DegradedBars    *int     `json:"degraded_bars"`
+	AvailabilityPct   *float64 `json:"availability_pct"`
+	DegradedBars      *int     `json:"degraded_bars"`
+	DegradedBarLayout *string  `json:"degraded_bar_layout"`
 }
 
 type channelMonitorResponse struct {
@@ -495,8 +496,12 @@ func (h *ChannelMonitorHandler) AvailabilityReset(c *gin.Context) {
 		response.ErrorFrom(c, infraerrors.BadRequest("VALIDATION_ERROR", "availability_pct and degraded_bars are required"))
 		return
 	}
+	layout := service.AvailabilityResetLayoutEven
+	if req.DegradedBarLayout != nil {
+		layout = *req.DegradedBarLayout
+	}
 	subject, _ := middleware2.GetAuthSubjectFromContext(c)
-	m, err := h.monitorService.SetAvailabilityReset(c.Request.Context(), id, subject.UserID, *req.AvailabilityPct, *req.DegradedBars)
+	m, err := h.monitorService.SetAvailabilityReset(c.Request.Context(), id, subject.UserID, *req.AvailabilityPct, *req.DegradedBars, layout)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return

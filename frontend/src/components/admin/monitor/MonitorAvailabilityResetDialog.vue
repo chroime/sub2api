@@ -50,6 +50,21 @@
         </div>
       </fieldset>
 
+      <div>
+        <label class="input-label" for="availability-reset-layout">
+          {{ t('admin.channelMonitor.availabilityReset.yellowBarLayout') }}
+        </label>
+        <select
+          id="availability-reset-layout"
+          v-model="yellowBarLayout"
+          class="input w-full"
+        >
+          <option v-for="option in yellowBarLayoutOptions" :key="option.value" :value="option.value">
+            {{ t(option.label) }}
+          </option>
+        </select>
+      </div>
+
       <p v-if="errorMessage" id="availability-reset-error" class="text-sm text-red-600 dark:text-red-400">
         {{ errorMessage }}
       </p>
@@ -86,8 +101,15 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const availabilityText = ref('100')
 const yellowBars = ref(0)
+const yellowBarLayout = ref<AvailabilityResetParams['degraded_bar_layout']>('even')
 const errorMessage = ref('')
 const yellowBarOptions = Array.from({ length: 9 }, (_, index) => index)
+const yellowBarLayoutOptions = [
+  { value: 'even', label: 'admin.channelMonitor.availabilityReset.layoutEven' },
+  { value: 'block_oldest', label: 'admin.channelMonitor.availabilityReset.layoutBlockOldest' },
+  { value: 'block_newest', label: 'admin.channelMonitor.availabilityReset.layoutBlockNewest' },
+  { value: 'random', label: 'admin.channelMonitor.availabilityReset.layoutRandom' },
+] as const
 
 watch(
   () => [props.show, props.monitor] as const,
@@ -96,6 +118,7 @@ watch(
     const current = Number(monitor.availability_7d)
     availabilityText.value = Number.isFinite(current) ? current.toFixed(2).replace(/\.00$/, '') : '100'
     yellowBars.value = 0
+    yellowBarLayout.value = 'even'
     errorMessage.value = ''
   },
   { immediate: true }
@@ -113,6 +136,6 @@ function submit() {
     return
   }
   errorMessage.value = ''
-  emit('submit', { availability_pct: value, degraded_bars: yellowBars.value })
+  emit('submit', { availability_pct: value, degraded_bars: yellowBars.value, degraded_bar_layout: yellowBarLayout.value })
 }
 </script>

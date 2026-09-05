@@ -88,9 +88,12 @@ type ChannelMonitorService struct {
 
 // SetAvailabilityReset writes the temporary primary-model availability
 // baseline into the existing monitor JSON metadata.
-func (s *ChannelMonitorService) SetAvailabilityReset(ctx context.Context, id, actorID int64, targetPct float64, degradedBars int) (*ChannelMonitor, error) {
+func (s *ChannelMonitorService) SetAvailabilityReset(ctx context.Context, id, actorID int64, targetPct float64, degradedBars int, layout string) (*ChannelMonitor, error) {
+	if layout == "" {
+		layout = AvailabilityResetLayoutEven
+	}
 	if math.IsNaN(targetPct) || math.IsInf(targetPct, 0) || targetPct < 0 || targetPct > 100 ||
-		math.Abs(targetPct*100-math.Round(targetPct*100)) > 1e-9 || degradedBars < 0 || degradedBars > 8 {
+		math.Abs(targetPct*100-math.Round(targetPct*100)) > 1e-9 || degradedBars < 0 || degradedBars > 8 || !IsValidAvailabilityResetLayout(layout) {
 		return nil, ErrChannelMonitorInvalidAvailabilityReset
 	}
 	existing, err := s.repo.GetByID(ctx, id)
@@ -110,14 +113,15 @@ func (s *ChannelMonitorService) SetAvailabilityReset(ctx context.Context, id, ac
 	}
 	baselineOK := int(math.Round(float64(baselineTotal) * targetPct / 100))
 	existing.AvailabilityReset = &ChannelMonitorAvailabilityReset{
-		Version:       1,
-		Model:         existing.PrimaryModel,
-		TargetPct:     targetPct,
-		DegradedBars:  degradedBars,
-		ResetAt:       time.Now().UTC(),
-		BaselineTotal: baselineTotal,
-		BaselineOK:    baselineOK,
-		CreatedBy:     actorID,
+		Version:           1,
+		Model:             existing.PrimaryModel,
+		TargetPct:         targetPct,
+		DegradedBars:      degradedBars,
+		DegradedBarLayout: layout,
+		ResetAt:           time.Now().UTC(),
+		BaselineTotal:     baselineTotal,
+		BaselineOK:        baselineOK,
+		CreatedBy:         actorID,
 	}
 	if err := s.repo.Update(ctx, existing); err != nil {
 		return nil, fmt.Errorf("set channel monitor availability reset: %w", err)
@@ -181,6 +185,12 @@ func DecodeAvailabilityResetMetadata(raw string) (*ChannelMonitorAvailabilityRes
 		reset.DegradedBars < 0 || reset.DegradedBars > 8 ||
 		reset.ResetAt.IsZero() || reset.BaselineTotal <= 0 ||
 		reset.BaselineOK < 0 || reset.BaselineOK > reset.BaselineTotal {
+		return nil, fmt.Errorf("invalid availability reset metadata")
+	}
+	if reset.DegradedBarLayout == "" {
+		reset.DegradedBarLayout = AvailabilityResetLayoutEven
+	}
+	if !IsValidAvailabilityResetLayout(reset.DegradedBarLayout) {
 		return nil, fmt.Errorf("invalid availability reset metadata")
 	}
 	return &reset, nil

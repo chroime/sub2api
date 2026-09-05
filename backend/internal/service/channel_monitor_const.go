@@ -202,9 +202,25 @@ var (
 		"CHANNEL_MONITOR_KEY_DECRYPT_FAILED", "api key decryption failed; please re-edit the monitor with a fresh key",
 	)
 	ErrChannelMonitorInvalidAvailabilityReset = infraerrors.BadRequest(
-		"CHANNEL_MONITOR_INVALID_AVAILABILITY_RESET", "availability_pct must be between 0 and 100 with at most two decimal places, and degraded_bars must be between 0 and 8",
+		"CHANNEL_MONITOR_INVALID_AVAILABILITY_RESET", "availability_pct must be between 0 and 100 with at most two decimal places, degraded_bars must be between 0 and 8, and degraded_bar_layout must be valid",
 	)
 )
+
+const (
+	AvailabilityResetLayoutEven        = "even"
+	AvailabilityResetLayoutBlockOldest = "block_oldest"
+	AvailabilityResetLayoutBlockNewest = "block_newest"
+	AvailabilityResetLayoutRandom      = "random"
+)
+
+func IsValidAvailabilityResetLayout(layout string) bool {
+	switch layout {
+	case AvailabilityResetLayoutEven, AvailabilityResetLayoutBlockOldest, AvailabilityResetLayoutBlockNewest, AvailabilityResetLayoutRandom:
+		return true
+	default:
+		return false
+	}
+}
 
 var (
 	ErrChannelMonitorDisabled = infraerrors.Forbidden(

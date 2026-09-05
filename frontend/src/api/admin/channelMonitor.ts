@@ -197,6 +197,7 @@ export interface HistoryResponse {
 export interface AvailabilityResetParams {
   availability_pct: number
   degraded_bars: number
+  degraded_bar_layout: 'even' | 'block_oldest' | 'block_newest' | 'random'
 }
 
 /**

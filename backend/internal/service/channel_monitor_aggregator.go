@@ -3,8 +3,12 @@ package service
 import (
 	"context"
 	"fmt"
+	"hash/fnv"
 	"log/slog"
 	"math"
+	"math/rand"
+	"sort"
+	"strconv"
 	"time"
 )
 
@@ -427,18 +431,77 @@ func buildResetTimeline(entries []*ChannelMonitorHistoryEntry, reset *ChannelMon
 	if missing <= 0 {
 		return real
 	}
-	for i := 0; i < missing; i++ {
+	degraded := minInt(reset.DegradedBars, missing)
+	layout := reset.DegradedBarLayout
+	if layout == "" {
+		layout = AvailabilityResetLayoutEven
+	}
+	positions := degradedBarPositions(missing, degraded, layout, reset)
+	degradedSet := make(map[int]struct{}, len(positions))
+	for _, position := range positions {
+		degradedSet[position] = struct{}{}
+	}
+	// Build synthetic points from oldest to newest, then append newest first to
+	// match the repository timeline ordering.
+	for position := missing - 1; position >= 0; position-- {
 		status := MonitorStatusOperational
-		if i < reset.DegradedBars {
+		if _, ok := degradedSet[position]; ok {
 			status = MonitorStatusDegraded
 		}
 		real = append(real, &ChannelMonitorHistoryEntry{
 			Model:     reset.Model,
 			Status:    status,
-			CheckedAt: reset.ResetAt.Add(-time.Duration(i+1) * time.Minute),
+			CheckedAt: reset.ResetAt.Add(-time.Duration(position+1) * time.Minute),
 		})
 	}
 	return real
+}
+
+// degradedBarPositions returns sorted synthetic-slot indexes from oldest (0)
+// to newest (slotCount-1). It is intentionally pure and deterministic.
+func degradedBarPositions(slotCount, degradedCount int, layout string, reset *ChannelMonitorAvailabilityReset) []int {
+	if slotCount <= 0 || degradedCount <= 0 {
+		return []int{}
+	}
+	if degradedCount > slotCount {
+		degradedCount = slotCount
+	}
+	positions := make([]int, 0, degradedCount)
+	switch layout {
+	case AvailabilityResetLayoutBlockOldest:
+		for i := 0; i < degradedCount; i++ {
+			positions = append(positions, i)
+		}
+	case AvailabilityResetLayoutBlockNewest:
+		for i := slotCount - degradedCount; i < slotCount; i++ {
+			positions = append(positions, i)
+		}
+	case AvailabilityResetLayoutRandom:
+		seed := availabilityResetLayoutSeed(reset, slotCount, degradedCount)
+		permutation := rand.New(rand.NewSource(seed)).Perm(slotCount)
+		positions = append(positions, permutation[:degradedCount]...)
+		sort.Ints(positions)
+	default:
+		if degradedCount == 1 {
+			positions = append(positions, slotCount/2)
+		} else {
+			for i := 0; i < degradedCount; i++ {
+				positions = append(positions, int(math.Round(float64(i*(slotCount-1))/float64(degradedCount-1))))
+			}
+		}
+	}
+	return positions
+}
+
+func availabilityResetLayoutSeed(reset *ChannelMonitorAvailabilityReset, slotCount, degradedCount int) int64 {
+	h := fnv.New64a()
+	if reset != nil {
+		_, _ = h.Write([]byte(reset.Model))
+		_, _ = h.Write([]byte(reset.ResetAt.UTC().Format(time.RFC3339Nano)))
+	}
+	_, _ = h.Write([]byte(strconv.Itoa(slotCount)))
+	_, _ = h.Write([]byte(strconv.Itoa(degradedCount)))
+	return int64(h.Sum64())
 }
 
 func minInt(a, b int) int {

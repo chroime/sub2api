@@ -62,7 +62,7 @@ const DataTableStub = defineComponent({
 const ResetDialogStub = defineComponent({
   props: { show: Boolean, monitor: Object, submitting: Boolean },
   emits: ['submit', 'close'],
-  template: '<div v-if="show" data-testid="availability-reset-dialog"><button data-testid="dialog-submit" @click="$emit(\'submit\', { availability_pct: 91.25, degraded_bars: 3 })" /></div>',
+  template: '<div v-if="show" data-testid="availability-reset-dialog"><button data-testid="dialog-submit" @click="$emit(\'submit\', { availability_pct: 91.25, degraded_bars: 3, degraded_bar_layout: \'even\' })" /></div>',
 })
 
 function makeMonitor(overrides: Partial<ChannelMonitor> = {}): ChannelMonitor {
@@ -142,7 +142,7 @@ describe('ChannelMonitorView availability reset', () => {
     await wrapper.get('[data-testid="dialog-submit"]').trigger('click')
     await flushPromises()
 
-    expect(availabilityReset).toHaveBeenCalledWith(42, { availability_pct: 91.25, degraded_bars: 3 })
+    expect(availabilityReset).toHaveBeenCalledWith(42, { availability_pct: 91.25, degraded_bars: 3, degraded_bar_layout: 'even' })
     expect(showSuccess).toHaveBeenCalledWith('admin.channelMonitor.availabilityReset.success')
     expect(listMonitors.mock.calls.length).toBeGreaterThan(1)
     wrapper.unmount()
