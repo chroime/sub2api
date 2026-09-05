@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"strings"
+	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
@@ -60,6 +61,288 @@ func (r *usageBillingRepository) Apply(ctx context.Context, cmd *service.UsageBi
 	}
 	tx = nil
 	return result, nil
+}
+
+// ReserveUsageBalance atomically moves available balance into frozen_balance
+// and records a request-scoped reservation. A zero HoldAmount means all
+// currently available balance, which serializes in-flight balance users to
+// one request without requiring an unreliable cost estimate.
+func (r *usageBillingRepository) ReserveUsageBalance(ctx context.Context, cmd *service.UsageBalanceReservationCommand) (_ *service.UsageBalanceReservationResult, err error) {
+	if cmd == nil {
+		return &service.UsageBalanceReservationResult{}, nil
+	}
+	if r == nil || r.db == nil {
+		return nil, errors.New("usage billing repository db is nil")
+	}
+	now := time.Now().UTC()
+	cmd.Normalize(now)
+	if err := cmd.Validate(now); err != nil {
+		return nil, err
+	}
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if tx != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	var existing service.UsageBalanceReservationResult
+	err = tx.QueryRowContext(ctx, `
+		SELECT request_id, request_fingerprint, api_key_id, user_id, hold_amount, actual_amount, status, expires_at
+		FROM balance_reservations
+		WHERE request_id = $1 AND api_key_id = $2
+		FOR UPDATE
+	`, cmd.RequestID, cmd.APIKeyID).Scan(&existing.RequestID, &existing.RequestFingerprint, &existing.APIKeyID, &existing.UserID, &existing.HoldAmount, &existing.ActualAmount, &existing.Status, &existing.ExpiresAt)
+	if err == nil {
+		if existing.UserID != cmd.UserID || (existing.RequestFingerprint != "" && existing.RequestFingerprint != cmd.RequestFingerprint) {
+			return nil, service.ErrUsageBalanceReservationConflict
+		}
+		existing.Applied = false
+		if existing.ActualAmount != nil {
+			actual := *existing.ActualAmount
+			existing.ActualAmount = &actual
+		}
+		if err := tx.Commit(); err != nil {
+			return nil, err
+		}
+		tx = nil
+		return &existing, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return nil, err
+	}
+
+	var balance, frozen, hold float64
+	if err := tx.QueryRowContext(ctx, `SELECT balance FROM users WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`, cmd.UserID).Scan(&hold); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			if exists, existsErr := userExistsForBilling(ctx, tx, cmd.UserID); existsErr != nil {
+				return nil, existsErr
+			} else if !exists {
+				return nil, service.ErrUserNotFound
+			}
+			return nil, service.ErrInsufficientBalance
+		}
+		return nil, err
+	}
+	// A concurrent retry with the same request ID may have passed the initial
+	// reservation lookup before waiting on the user row lock. Recheck after the
+	// lock so it returns the committed reservation instead of false insufficiency.
+	err = tx.QueryRowContext(ctx, `
+		SELECT request_id, request_fingerprint, api_key_id, user_id, hold_amount, actual_amount, status, expires_at
+		FROM balance_reservations WHERE request_id = $1 AND api_key_id = $2 FOR UPDATE
+	`, cmd.RequestID, cmd.APIKeyID).Scan(&existing.RequestID, &existing.RequestFingerprint, &existing.APIKeyID, &existing.UserID, &existing.HoldAmount, &existing.ActualAmount, &existing.Status, &existing.ExpiresAt)
+	if err == nil {
+		if existing.UserID != cmd.UserID || (existing.RequestFingerprint != "" && existing.RequestFingerprint != cmd.RequestFingerprint) {
+			return nil, service.ErrUsageBalanceReservationConflict
+		}
+		existing.Applied = false
+		if err := tx.Commit(); err != nil {
+			return nil, err
+		}
+		tx = nil
+		return &existing, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return nil, err
+	}
+	if cmd.HoldAmount > 0 {
+		hold = cmd.HoldAmount
+	}
+	if hold <= 0 || hold > balance+0.00000001 {
+		return nil, service.ErrInsufficientBalance
+	}
+	err = tx.QueryRowContext(ctx, `
+		UPDATE users
+		SET balance = balance - $1,
+			frozen_balance = COALESCE(frozen_balance, 0) + $1,
+			updated_at = NOW()
+		WHERE id = $2 AND deleted_at IS NULL AND balance >= $1
+		RETURNING balance, frozen_balance
+	`, hold, cmd.UserID).Scan(&balance, &frozen)
+	if errors.Is(err, sql.ErrNoRows) {
+		if exists, existsErr := userExistsForBilling(ctx, tx, cmd.UserID); existsErr != nil {
+			return nil, existsErr
+		} else if !exists {
+			return nil, service.ErrUserNotFound
+		}
+		return nil, service.ErrInsufficientBalance
+	}
+	if err != nil {
+		return nil, err
+	}
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO balance_reservations
+			(request_id, request_fingerprint, api_key_id, user_id, hold_amount, expires_at, status, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, 'held', NOW(), NOW())
+	`, cmd.RequestID, cmd.RequestFingerprint, cmd.APIKeyID, cmd.UserID, hold, cmd.ExpiresAt); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	tx = nil
+	return &service.UsageBalanceReservationResult{Applied: true, Status: service.UsageBalanceReservationHeld, RequestID: cmd.RequestID, APIKeyID: cmd.APIKeyID, UserID: cmd.UserID, HoldAmount: hold, NewBalance: &balance, FrozenBalance: &frozen}, nil
+}
+
+func (r *usageBillingRepository) SettleUsageBalance(ctx context.Context, cmd *service.UsageBalanceReservationCommand) (_ *service.UsageBalanceReservationResult, err error) {
+	return r.transitionUsageBalanceReservation(ctx, cmd, service.UsageBalanceReservationSettled)
+}
+
+func (r *usageBillingRepository) ReleaseUsageBalance(ctx context.Context, cmd *service.UsageBalanceReservationCommand) (_ *service.UsageBalanceReservationResult, err error) {
+	return r.transitionUsageBalanceReservation(ctx, cmd, service.UsageBalanceReservationReleased)
+}
+
+func (r *usageBillingRepository) transitionUsageBalanceReservation(ctx context.Context, cmd *service.UsageBalanceReservationCommand, target string) (_ *service.UsageBalanceReservationResult, err error) {
+	if cmd == nil {
+		return &service.UsageBalanceReservationResult{}, nil
+	}
+	if r == nil || r.db == nil {
+		return nil, errors.New("usage billing repository db is nil")
+	}
+	now := time.Now().UTC()
+	cmd.Normalize(now)
+	if err := cmd.Validate(now); err != nil {
+		return nil, err
+	}
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if tx != nil {
+			_ = tx.Rollback()
+		}
+	}()
+	var result service.UsageBalanceReservationResult
+	err = tx.QueryRowContext(ctx, `
+		SELECT request_id, request_fingerprint, api_key_id, user_id, hold_amount, actual_amount, status, expires_at
+		FROM balance_reservations WHERE request_id = $1 AND api_key_id = $2 FOR UPDATE
+	`, cmd.RequestID, cmd.APIKeyID).Scan(&result.RequestID, &result.RequestFingerprint, &result.APIKeyID, &result.UserID, &result.HoldAmount, &result.ActualAmount, &result.Status, &result.ExpiresAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, service.ErrUsageBalanceReservationNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	if result.UserID != cmd.UserID || (result.RequestFingerprint != "" && result.RequestFingerprint != cmd.RequestFingerprint) {
+		return nil, service.ErrUsageBalanceReservationConflict
+	}
+	if result.Status == target || result.Status == service.UsageBalanceReservationReleased || result.Status == service.UsageBalanceReservationSettled {
+		result.Applied = false
+		if err := tx.Commit(); err != nil {
+			return nil, err
+		}
+		tx = nil
+		return &result, nil
+	}
+	if result.Status != service.UsageBalanceReservationHeld {
+		return nil, service.ErrUsageBalanceReservationConflict
+	}
+	if !result.ExpiresAt.After(now) {
+		return nil, service.ErrUsageBalanceReservationExpired
+	}
+	actual := service.QuantizeUsageBillingAmount(cmd.ActualAmount)
+	if target == service.UsageBalanceReservationSettled && actual > result.HoldAmount+0.00000001 {
+		return nil, service.ErrUsageBalanceSettlementExceedsHold
+	}
+	var balance, frozen float64
+	if target == service.UsageBalanceReservationSettled {
+		err = tx.QueryRowContext(ctx, `UPDATE users SET balance = balance + $1 - $2, frozen_balance = COALESCE(frozen_balance, 0) - $1, updated_at = NOW() WHERE id = $3 AND deleted_at IS NULL AND COALESCE(frozen_balance, 0) >= $1 RETURNING balance, frozen_balance`, result.HoldAmount, actual, cmd.UserID).Scan(&balance, &frozen)
+	} else {
+		err = tx.QueryRowContext(ctx, `UPDATE users SET balance = balance + $1, frozen_balance = COALESCE(frozen_balance, 0) - $1, updated_at = NOW() WHERE id = $2 AND deleted_at IS NULL AND COALESCE(frozen_balance, 0) >= $1 RETURNING balance, frozen_balance`, result.HoldAmount, cmd.UserID).Scan(&balance, &frozen)
+	}
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, errors.New("frozen balance is insufficient")
+	}
+	if err != nil {
+		return nil, err
+	}
+	if target == service.UsageBalanceReservationSettled {
+		_, err = tx.ExecContext(ctx, `UPDATE balance_reservations SET actual_amount = $1, status = $2, updated_at = NOW() WHERE request_id = $3 AND api_key_id = $4`, actual, target, cmd.RequestID, cmd.APIKeyID)
+	} else {
+		_, err = tx.ExecContext(ctx, `UPDATE balance_reservations SET status = $1, updated_at = NOW() WHERE request_id = $2 AND api_key_id = $3`, target, cmd.RequestID, cmd.APIKeyID)
+	}
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	tx = nil
+	result.Applied = true
+	result.Status = target
+	result.NewBalance = &balance
+	result.FrozenBalance = &frozen
+	if target == service.UsageBalanceReservationSettled {
+		result.ActualAmount = &actual
+	}
+	return &result, nil
+}
+
+func (r *usageBillingRepository) RecoverExpiredUsageBalances(ctx context.Context, limit int) ([]int64, error) {
+	if r == nil || r.db == nil {
+		return nil, errors.New("usage billing repository db is nil")
+	}
+	if limit <= 0 {
+		limit = 100
+	}
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if tx != nil {
+			_ = tx.Rollback()
+		}
+	}()
+	rows, err := tx.QueryContext(ctx, `SELECT id, user_id, api_key_id, request_id, hold_amount FROM balance_reservations WHERE status = 'held' AND expires_at <= NOW() ORDER BY expires_at LIMIT $1 FOR UPDATE SKIP LOCKED`, limit)
+	if err != nil {
+		return nil, err
+	}
+	reservations := make([]struct {
+		id     int64
+		userID int64
+		hold   float64
+	}, 0)
+	for rows.Next() {
+		var id, userID, apiKeyID int64
+		var requestID string
+		var hold float64
+		if err := rows.Scan(&id, &userID, &apiKeyID, &requestID, &hold); err != nil {
+			_ = rows.Close()
+			return nil, err
+		}
+		reservations = append(reservations, struct {
+			id     int64
+			userID int64
+			hold   float64
+		}{id: id, userID: userID, hold: hold})
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return nil, err
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	userIDs := make([]int64, 0, len(reservations))
+	for _, reservation := range reservations {
+		if _, err := tx.ExecContext(ctx, `UPDATE users SET balance = balance + $1, frozen_balance = COALESCE(frozen_balance, 0) - $1, updated_at = NOW() WHERE id = $2 AND deleted_at IS NULL AND COALESCE(frozen_balance, 0) >= $1`, reservation.hold, reservation.userID); err != nil {
+			return nil, err
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE balance_reservations SET status = 'released', updated_at = NOW() WHERE id = $1`, reservation.id); err != nil {
+			return nil, err
+		}
+		userIDs = append(userIDs, reservation.userID)
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	tx = nil
+	return userIDs, nil
 }
 
 func (r *usageBillingRepository) claimUsageBillingKey(ctx context.Context, tx *sql.Tx, cmd *service.UsageBillingCommand) (bool, error) {
@@ -178,7 +461,15 @@ func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, t
 		}
 	}
 
-	if cmd.BalanceCost > 0 {
+	if held, err := usageBalanceReservationHeld(ctx, tx, cmd); err != nil {
+		return err
+	} else if held {
+		newBalance, err := settleUsageBalanceReservationTx(ctx, tx, cmd)
+		if err != nil {
+			return err
+		}
+		result.NewBalance = &newBalance
+	} else if cmd.BalanceCost > 0 {
 		newBalance, sufficient, err := deductUsageBillingBalance(ctx, tx, cmd.UserID, cmd.BalanceCost)
 		if err != nil {
 			return err
@@ -210,6 +501,63 @@ func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, t
 	}
 
 	return nil
+}
+
+func usageBalanceReservationHeld(ctx context.Context, tx *sql.Tx, cmd *service.UsageBillingCommand) (bool, error) {
+	if cmd == nil || cmd.RequestID == "" || cmd.APIKeyID <= 0 || cmd.UserID <= 0 {
+		return false, nil
+	}
+	var userID int64
+	var status string
+	var expiresAt time.Time
+	err := tx.QueryRowContext(ctx, `SELECT user_id, status, expires_at FROM balance_reservations WHERE request_id = $1 AND api_key_id = $2 FOR UPDATE`, cmd.RequestID, cmd.APIKeyID).Scan(&userID, &status, &expiresAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if userID != cmd.UserID {
+		return false, service.ErrUsageBalanceReservationConflict
+	}
+	if status == service.UsageBalanceReservationHeld && !expiresAt.After(time.Now().UTC()) {
+		return false, service.ErrUsageBalanceReservationExpired
+	}
+	return status == service.UsageBalanceReservationHeld, nil
+}
+
+func settleUsageBalanceReservationTx(ctx context.Context, tx *sql.Tx, cmd *service.UsageBillingCommand) (float64, error) {
+	var hold, actual float64
+	var userID int64
+	var status string
+	var expiresAt time.Time
+	if err := tx.QueryRowContext(ctx, `SELECT hold_amount, user_id, status, expires_at FROM balance_reservations WHERE request_id = $1 AND api_key_id = $2 FOR UPDATE`, cmd.RequestID, cmd.APIKeyID).Scan(&hold, &userID, &status, &expiresAt); err != nil {
+		return 0, err
+	}
+	if userID != cmd.UserID {
+		return 0, service.ErrUsageBalanceReservationConflict
+	}
+	if status != service.UsageBalanceReservationHeld {
+		return 0, nil
+	}
+	if !expiresAt.After(time.Now().UTC()) {
+		return 0, service.ErrUsageBalanceReservationExpired
+	}
+	actual = service.QuantizeUsageBillingAmount(cmd.BalanceCost)
+	if actual < 0 || actual > hold+0.00000001 {
+		return 0, service.ErrUsageBalanceSettlementExceedsHold
+	}
+	var balance float64
+	if err := tx.QueryRowContext(ctx, `UPDATE users SET balance = balance + $1 - $2, frozen_balance = COALESCE(frozen_balance, 0) - $1, updated_at = NOW() WHERE id = $3 AND deleted_at IS NULL AND COALESCE(frozen_balance, 0) >= $1 RETURNING balance`, hold, actual, cmd.UserID).Scan(&balance); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, errors.New("frozen balance is insufficient")
+		}
+		return 0, err
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE balance_reservations SET actual_amount = $1, status = 'settled', updated_at = NOW() WHERE request_id = $2 AND api_key_id = $3`, actual, cmd.RequestID, cmd.APIKeyID); err != nil {
+		return 0, err
+	}
+	return balance, nil
 }
 
 func incrementUsageBillingSubscription(ctx context.Context, tx *sql.Tx, subscriptionID int64, costUSD float64) error {

@@ -102,6 +102,9 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	usageService := service.NewUsageService(usageLogRepository, userRepository, client, apiKeyAuthCacheInvalidator)
 	opsRepository := repository.NewOpsRepository(db)
 	usageBillingRepository := repository.NewUsageBillingRepository(client, db)
+	if reservationRepo, ok := usageBillingRepository.(service.UsageBalanceReservationRepository); ok {
+		billingCacheService.SetUsageBalanceReservationRepository(reservationRepo)
+	}
 	gatewayCache := repository.NewGatewayCache(redisClient)
 	schedulerOutboxRepository := repository.NewSchedulerOutboxRepository(db)
 	schedulerSnapshotService := service.ProvideSchedulerSnapshotService(schedulerCache, schedulerOutboxRepository, accountRepository, groupRepository, configConfig)

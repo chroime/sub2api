@@ -10,8 +10,51 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/stretchr/testify/require"
 )
+
+type usageReservationRepoStub struct {
+	reserveCalls chan *UsageBalanceReservationCommand
+	releaseCalls chan *UsageBalanceReservationCommand
+}
+
+func (s *usageReservationRepoStub) ReserveUsageBalance(_ context.Context, cmd *UsageBalanceReservationCommand) (*UsageBalanceReservationResult, error) {
+	s.reserveCalls <- cmd
+	return &UsageBalanceReservationResult{Applied: true, Status: UsageBalanceReservationHeld, RequestID: cmd.RequestID, APIKeyID: cmd.APIKeyID, UserID: cmd.UserID, HoldAmount: 1, ExpiresAt: time.Now().Add(time.Minute)}, nil
+}
+func (s *usageReservationRepoStub) SettleUsageBalance(context.Context, *UsageBalanceReservationCommand) (*UsageBalanceReservationResult, error) {
+	return nil, nil
+}
+func (s *usageReservationRepoStub) ReleaseUsageBalance(_ context.Context, cmd *UsageBalanceReservationCommand) (*UsageBalanceReservationResult, error) {
+	s.releaseCalls <- cmd
+	return &UsageBalanceReservationResult{Status: UsageBalanceReservationReleased}, nil
+}
+func (s *usageReservationRepoStub) RecoverExpiredUsageBalances(context.Context, int) ([]int64, error) {
+	return nil, nil
+}
+
+func TestCheckBillingEligibility_ReservesAndReleasesOnRequestCancellation(t *testing.T) {
+	cache := &balanceEligibilityCacheStub{balance: 10}
+	cfg := &config.Config{}
+	reservationRepo := &usageReservationRepoStub{reserveCalls: make(chan *UsageBalanceReservationCommand, 1), releaseCalls: make(chan *UsageBalanceReservationCommand, 1)}
+	svc := NewBillingCacheService(cache, nil, nil, nil, nil, nil, cfg, nil)
+	svc.SetUsageBalanceReservationRepository(reservationRepo)
+	t.Cleanup(svc.Stop)
+
+	ctx, cancel := context.WithCancel(context.WithValue(context.Background(), ctxkey.ClientRequestID, "client-1"))
+	err := svc.CheckBillingEligibility(ctx, &User{ID: 1}, &APIKey{ID: 2}, nil, nil, "")
+	require.NoError(t, err)
+	reserved := <-reservationRepo.reserveCalls
+	require.Equal(t, "client:client-1", reserved.RequestID)
+	cancel()
+	select {
+	case released := <-reservationRepo.releaseCalls:
+		require.Equal(t, reserved.RequestID, released.RequestID)
+	case <-time.After(time.Second):
+		t.Fatal("reservation was not released after request cancellation")
+	}
+}
 
 type balanceEligibilityCacheStub struct {
 	billingCacheWorkerStub

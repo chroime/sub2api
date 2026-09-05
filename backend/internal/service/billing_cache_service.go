@@ -2,13 +2,16 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
@@ -104,28 +107,72 @@ type subscriptionCacheInvalidationPubSub interface {
 // BillingCacheService 计费缓存服务
 // 负责余额和订阅数据的缓存管理，提供高性能的计费资格检查
 type BillingCacheService struct {
-	cache                 BillingCache
-	userRepo              UserRepository
-	subRepo               UserSubscriptionRepository
-	apiKeyRateLimitLoader apiKeyRateLimitLoader
-	userRPMCache          UserRPMCache
-	userGroupRateRepo     UserGroupRateRepository
-	cfg                   *config.Config
-	circuitBreaker        *billingCircuitBreaker
-	userPlatformQuotaRepo UserPlatformQuotaRepository
+	cache                       BillingCache
+	userRepo                    UserRepository
+	subRepo                     UserSubscriptionRepository
+	apiKeyRateLimitLoader       apiKeyRateLimitLoader
+	userRPMCache                UserRPMCache
+	userGroupRateRepo           UserGroupRateRepository
+	cfg                         *config.Config
+	circuitBreaker              *billingCircuitBreaker
+	userPlatformQuotaRepo       UserPlatformQuotaRepository
+	usageBalanceReservationRepo UsageBalanceReservationRepository
 
-	cacheWriteChan     chan cacheWriteTask
-	cacheWriteWg       sync.WaitGroup
-	cacheWriteStopOnce sync.Once
-	cacheWriteMu       sync.RWMutex
-	stopped            atomic.Bool
-	balanceLoadSF      singleflight.Group
-	quotaLoadSF        singleflight.Group
+	cacheWriteChan      chan cacheWriteTask
+	cacheWriteWg        sync.WaitGroup
+	cacheWriteStopOnce  sync.Once
+	cacheWriteMu        sync.RWMutex
+	stopped             atomic.Bool
+	reservationStopOnce sync.Once
+	reservationStopChan chan struct{}
+	reservationWg       sync.WaitGroup
+	balanceLoadSF       singleflight.Group
+	quotaLoadSF         singleflight.Group
 	// 丢弃日志节流计数器（减少高负载下日志噪音）
 	cacheWriteDropFullCount     uint64
 	cacheWriteDropFullLastLog   int64
 	cacheWriteDropClosedCount   uint64
 	cacheWriteDropClosedLastLog int64
+}
+
+// SetUsageBalanceReservationRepository connects durable request reservations
+// after construction, preserving the existing constructor signature and test
+// doubles. It also starts the expiry reaper once the repository is available.
+func (s *BillingCacheService) SetUsageBalanceReservationRepository(repo UsageBalanceReservationRepository) {
+	if s == nil || repo == nil || s.usageBalanceReservationRepo != nil {
+		return
+	}
+	s.usageBalanceReservationRepo = repo
+	s.reservationStopChan = make(chan struct{})
+	s.reservationWg.Add(1)
+	go s.runUsageBalanceReservationReaper(repo, s.reservationStopChan)
+}
+
+func (s *BillingCacheService) runUsageBalanceReservationReaper(repo UsageBalanceReservationRepository, stop <-chan struct{}) {
+	defer s.reservationWg.Done()
+	recoverExpired := func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		userIDs, err := repo.RecoverExpiredUsageBalances(ctx, 100)
+		cancel()
+		if err != nil {
+			logger.LegacyPrintf("service.billing_cache", "Warning: recover expired balance reservations failed: %v", err)
+			return
+		}
+		for _, userID := range userIDs {
+			_ = s.InvalidateUserBalance(context.Background(), userID)
+		}
+	}
+	recoverExpired()
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			recoverExpired()
+		case <-stop:
+			return
+		}
+	}
 }
 
 // NewBillingCacheService 创建计费缓存服务
@@ -156,6 +203,12 @@ func NewBillingCacheService(
 
 // Stop 关闭缓存写入工作池
 func (s *BillingCacheService) Stop() {
+	s.reservationStopOnce.Do(func() {
+		if s.reservationStopChan != nil {
+			close(s.reservationStopChan)
+		}
+	})
+	s.reservationWg.Wait()
 	s.cacheWriteStopOnce.Do(func() {
 		s.stopped.Store(true)
 
@@ -773,7 +826,62 @@ func (s *BillingCacheService) CheckBillingEligibility(ctx context.Context, user 
 		return err
 	}
 
+	// Freeze the user's currently available balance as the final preflight step.
+	// This is deliberately after all cheaper eligibility checks, and only uses
+	// middleware-provided IDs so Apply can settle the same durable reservation.
+	if !isSubscriptionMode && s.usageBalanceReservationRepo != nil && user != nil && apiKey != nil {
+		requestID := usageBalanceReservationRequestID(ctx)
+		if requestID != "" {
+			reservation, err := s.usageBalanceReservationRepo.ReserveUsageBalance(ctx, &UsageBalanceReservationCommand{
+				RequestID:          requestID,
+				APIKeyID:           apiKey.ID,
+				UserID:             user.ID,
+				RequestFingerprint: resolveUsageBillingPayloadFingerprint(ctx, ""),
+			})
+			if err != nil {
+				if errors.Is(err, ErrInsufficientBalance) {
+					return ErrInsufficientBalance
+				}
+				return ErrBillingServiceUnavailable.WithCause(err)
+			}
+			if reservation != nil && reservation.NewBalance != nil {
+				_ = s.InvalidateUserBalance(ctx, user.ID)
+			}
+			if reservation != nil && reservation.Status == UsageBalanceReservationHeld {
+				// The request context is canceled when the handler returns or the
+				// client disconnects. Releasing from a detached context makes failed
+				// requests return their hold promptly; the DB reaper remains the
+				// restart-safe fallback for abandoned processes.
+				releaseCmd := &UsageBalanceReservationCommand{
+					RequestID: requestID, APIKeyID: apiKey.ID, UserID: user.ID,
+					ExpiresAt: reservation.ExpiresAt,
+				}
+				go func() {
+					<-ctx.Done()
+					releaseCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+					defer cancel()
+					if _, releaseErr := s.usageBalanceReservationRepo.ReleaseUsageBalance(releaseCtx, releaseCmd); releaseErr != nil && !errors.Is(releaseErr, ErrUsageBalanceReservationExpired) {
+						logger.LegacyPrintf("service.billing_cache", "Warning: release request balance reservation failed user=%d request=%s: %v", user.ID, requestID, releaseErr)
+					}
+				}()
+			}
+		}
+	}
+
 	return nil
+}
+
+func usageBalanceReservationRequestID(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	if id, _ := ctx.Value(ctxkey.ClientRequestID).(string); strings.TrimSpace(id) != "" {
+		return resolveUsageBillingRequestID(ctx, "")
+	}
+	if id, _ := ctx.Value(ctxkey.RequestID).(string); strings.TrimSpace(id) != "" {
+		return resolveUsageBillingRequestID(ctx, "")
+	}
+	return ""
 }
 
 // checkRPM 执行并行 RPM 限流，所有适用的限制同时生效，任一超限即拒绝：

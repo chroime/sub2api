@@ -165,6 +165,151 @@ func TestUsageBillingRepositoryApply_ConcurrentChargesNeverOverdraft(t *testing.
 	require.GreaterOrEqual(t, balance, 0.0)
 }
 
+func TestUsageBillingRepositoryBalanceReservation_Lifecycle(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	repo := NewUsageBillingRepository(client, integrationDB)
+	reservationRepo, ok := repo.(service.UsageBalanceReservationRepository)
+	require.True(t, ok)
+
+	user := mustCreateUser(t, client, &service.User{
+		Email:        fmt.Sprintf("balance-reservation-%d@example.com", time.Now().UnixNano()),
+		PasswordHash: "hash",
+		Balance:      10,
+	})
+	apiKey := mustCreateApiKey(t, client, &service.APIKey{
+		UserID: user.ID,
+		Key:    "sk-balance-reservation-" + uuid.NewString(),
+		Name:   "balance-reservation",
+	})
+	requestID := "reservation-" + uuid.NewString()
+
+	hold, err := reservationRepo.ReserveUsageBalance(ctx, &service.UsageBalanceReservationCommand{
+		RequestID: requestID,
+		APIKeyID:  apiKey.ID,
+		UserID:    user.ID,
+	})
+	require.NoError(t, err)
+	require.True(t, hold.Applied)
+	require.Equal(t, service.UsageBalanceReservationHeld, hold.Status)
+	require.InDelta(t, 10, hold.HoldAmount, 0.000001)
+	require.InDelta(t, 0, *hold.NewBalance, 0.000001)
+	require.InDelta(t, 10, *hold.FrozenBalance, 0.000001)
+
+	duplicate, err := reservationRepo.ReserveUsageBalance(ctx, &service.UsageBalanceReservationCommand{
+		RequestID: requestID,
+		APIKeyID:  apiKey.ID,
+		UserID:    user.ID,
+	})
+	require.NoError(t, err)
+	require.False(t, duplicate.Applied)
+	require.Equal(t, hold.HoldAmount, duplicate.HoldAmount)
+
+	actual := 3.5
+	settled, err := reservationRepo.SettleUsageBalance(ctx, &service.UsageBalanceReservationCommand{
+		RequestID:    requestID,
+		APIKeyID:     apiKey.ID,
+		UserID:       user.ID,
+		ActualAmount: actual,
+	})
+	require.NoError(t, err)
+	require.Equal(t, service.UsageBalanceReservationSettled, settled.Status)
+	require.InDelta(t, actual, *settled.ActualAmount, 0.000001)
+	require.InDelta(t, 6.5, *settled.NewBalance, 0.000001)
+	require.InDelta(t, 0, *settled.FrozenBalance, 0.000001)
+
+	var balance float64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT balance FROM users WHERE id = $1", user.ID).Scan(&balance))
+	require.InDelta(t, 6.5, balance, 0.000001)
+}
+
+func TestUsageBillingRepositoryApply_SettlesHeldReservationWithoutDoubleCharge(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	repo := NewUsageBillingRepository(client, integrationDB)
+	reservationRepo, ok := repo.(service.UsageBalanceReservationRepository)
+	require.True(t, ok)
+	user := mustCreateUser(t, client, &service.User{
+		Email:        fmt.Sprintf("balance-reservation-apply-%d@example.com", time.Now().UnixNano()),
+		PasswordHash: "hash",
+		Balance:      10,
+	})
+	apiKey := mustCreateApiKey(t, client, &service.APIKey{UserID: user.ID, Key: "sk-balance-reservation-apply-" + uuid.NewString(), Name: "billing"})
+	requestID := "reservation-apply-" + uuid.NewString()
+	_, err := reservationRepo.ReserveUsageBalance(ctx, &service.UsageBalanceReservationCommand{RequestID: requestID, APIKeyID: apiKey.ID, UserID: user.ID})
+	require.NoError(t, err)
+	result, err := repo.Apply(ctx, &service.UsageBillingCommand{RequestID: requestID, APIKeyID: apiKey.ID, UserID: user.ID, BalanceCost: 3.5})
+	require.NoError(t, err)
+	require.True(t, result.Applied)
+	require.NotNil(t, result.NewBalance)
+	require.InDelta(t, 6.5, *result.NewBalance, 0.000001)
+	var balance, frozen float64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT balance, frozen_balance FROM users WHERE id = $1", user.ID).Scan(&balance, &frozen))
+	require.InDelta(t, 6.5, balance, 0.000001)
+	require.InDelta(t, 0, frozen, 0.000001)
+	result, err = repo.Apply(ctx, &service.UsageBillingCommand{RequestID: requestID, APIKeyID: apiKey.ID, UserID: user.ID, BalanceCost: 3.5})
+	require.NoError(t, err)
+	require.False(t, result.Applied)
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT balance FROM users WHERE id = $1", user.ID).Scan(&balance))
+	require.InDelta(t, 6.5, balance, 0.000001)
+}
+
+func TestUsageBillingRepositoryBalanceReservation_ConcurrentCapacity(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	repo := NewUsageBillingRepository(client, integrationDB)
+	reservationRepo, ok := repo.(service.UsageBalanceReservationRepository)
+	require.True(t, ok)
+
+	user := mustCreateUser(t, client, &service.User{
+		Email:        fmt.Sprintf("balance-reservation-concurrent-%d@example.com", time.Now().UnixNano()),
+		PasswordHash: "hash",
+		Balance:      10,
+	})
+	apiKey := mustCreateApiKey(t, client, &service.APIKey{
+		UserID: user.ID,
+		Key:    "sk-balance-reservation-concurrent-" + uuid.NewString(),
+		Name:   "balance-reservation-concurrent",
+	})
+
+	const requests = 100
+	results := make([]*service.UsageBalanceReservationResult, requests)
+	errs := make([]error, requests)
+	var wg sync.WaitGroup
+	wg.Add(requests)
+	for i := 0; i < requests; i++ {
+		go func(i int) {
+			defer wg.Done()
+			results[i], errs[i] = reservationRepo.ReserveUsageBalance(ctx, &service.UsageBalanceReservationCommand{
+				RequestID: fmt.Sprintf("reservation-concurrent-%d-%s", i, uuid.NewString()),
+				APIKeyID:  apiKey.ID,
+				UserID:    user.ID,
+			})
+		}(i)
+	}
+	wg.Wait()
+
+	succeeded := 0
+	insufficient := 0
+	for i, err := range errs {
+		switch {
+		case err == nil:
+			succeeded++
+		case errors.Is(err, service.ErrInsufficientBalance):
+			insufficient++
+		default:
+			t.Fatalf("reservation %d failed unexpectedly: %v", i, err)
+		}
+	}
+	require.Equal(t, 1, succeeded)
+	require.Equal(t, requests-1, insufficient)
+
+	var balance, frozen float64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT balance, frozen_balance FROM users WHERE id = $1", user.ID).Scan(&balance, &frozen))
+	require.InDelta(t, 0, balance, 0.000001)
+	require.InDelta(t, 10, frozen, 0.000001)
+}
+
 func TestUsageBillingRepositoryApply_DeduplicatesSubscriptionBilling(t *testing.T) {
 	ctx := context.Background()
 	client := testEntClient(t)
