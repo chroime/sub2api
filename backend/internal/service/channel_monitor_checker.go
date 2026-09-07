@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -294,9 +295,24 @@ func callProvider(ctx context.Context, provider, endpoint, apiKey, model, prompt
 	}
 	headers := mergeHeaders(adapter.buildHeaders(apiKey), opts)
 	full := joinURL(endpoint, adapter.buildPath(model))
-	respBytes, status, err := postRawJSON(ctx, full, body, headers)
+	streaming := gjson.GetBytes(body, "stream").Bool()
+	respBytes, status, err := postRawJSON(ctx, full, body, headers, streaming)
 	if err != nil {
 		return "", "", status, err
+	}
+	if streaming {
+		text := extractMonitorSSEText(respBytes, provider, apiMode)
+		if text == "" {
+			// Some OpenAI-compatible gateways advertise/accept stream=true but
+			// return one complete JSON response. Keep detection compatible with
+			// those gateways instead of treating a valid 2xx response as empty.
+			if provider == MonitorProviderOpenAI && apiMode == MonitorAPIModeResponses {
+				text = extractOpenAIResponsesText(respBytes)
+			} else {
+				text = extractMonitorResponseText(adapter, respBytes)
+			}
+		}
+		return text, string(respBytes), status, nil
 	}
 	if provider == MonitorProviderOpenAI && apiMode == MonitorAPIModeResponses {
 		return extractOpenAIResponsesText(respBytes), string(respBytes), status, nil
@@ -449,15 +465,15 @@ func buildRequestBody(adapter providerAdapter, provider, apiMode, model, prompt 
 //
 //nolint:gochecknoglobals // 静态查表，初始化后不变。
 var bodyMergeKeyDenyList = map[string]map[string]bool{
-	MonitorProviderOpenAI + ":" + MonitorAPIModeChatCompletions: {"model": true, "messages": true, "stream": true},
-	MonitorProviderOpenAI + ":" + MonitorAPIModeResponses:       {"model": true, "instructions": true, "input": true, "stream": true},
-	MonitorProviderGrok:      {"model": true, "messages": true, "stream": true},
+	MonitorProviderOpenAI + ":" + MonitorAPIModeChatCompletions: {"model": true, "messages": true},
+	MonitorProviderOpenAI + ":" + MonitorAPIModeResponses:       {"model": true, "instructions": true, "input": true},
+	MonitorProviderGrok:      {"model": true, "messages": true},
 	MonitorProviderAnthropic: {"model": true, "messages": true},
 	MonitorProviderGemini:    {"contents": true},
 	// 国产 3 家与 OpenAI Chat Completions 同构。
-	MonitorProviderKimi:     {"model": true, "messages": true, "stream": true},
-	MonitorProviderZhipu:    {"model": true, "messages": true, "stream": true},
-	MonitorProviderDeepseek: {"model": true, "messages": true, "stream": true},
+	MonitorProviderKimi:     {"model": true, "messages": true},
+	MonitorProviderZhipu:    {"model": true, "messages": true},
+	MonitorProviderDeepseek: {"model": true, "messages": true},
 }
 
 func checkAPIMode(opts *CheckOptions) string {
@@ -527,13 +543,17 @@ func hasNonEmptyBodyValue(v any) bool {
 
 // postRawJSON 发送 POST + 已序列化好的 JSON 字节，限制响应体大小，返回响应字节、HTTP status、错误。
 // adapter 自行 marshal 是为了精确控制字段顺序与类型，所以这里直接收 []byte 而不是 any。
-func postRawJSON(ctx context.Context, fullURL string, payload []byte, headers map[string]string) ([]byte, int, error) {
+func postRawJSON(ctx context.Context, fullURL string, payload []byte, headers map[string]string, streaming bool) ([]byte, int, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, fullURL, bytes.NewReader(payload))
 	if err != nil {
 		return nil, 0, fmt.Errorf("build request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
+	if streaming {
+		req.Header.Set("Accept", "text/event-stream")
+	} else {
+		req.Header.Set("Accept", "application/json")
+	}
 	for k, v := range headers {
 		req.Header.Set(k, v)
 	}
@@ -549,6 +569,93 @@ func postRawJSON(ctx context.Context, fullURL string, payload []byte, headers ma
 		return nil, resp.StatusCode, fmt.Errorf("read body: %w", err)
 	}
 	return respBody, resp.StatusCode, nil
+}
+
+// extractMonitorSSEText extracts challenge text from both OpenAI-compatible
+// Chat Completions chunks and Responses API output_text delta events.
+// It intentionally returns an empty string for an SSE stream with no usable
+// text, so the normal challenge validation marks it as failed.
+func extractMonitorSSEText(respBytes []byte, provider, apiMode string) string {
+	var parts []string
+	var completeResponseText string
+	scanner := bufio.NewScanner(strings.NewReader(string(respBytes)))
+	scanner.Buffer(make([]byte, 1024), monitorResponseMaxBytes)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if !strings.HasPrefix(line, "data:") {
+			continue
+		}
+		data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+		if data == "" || data == "[DONE]" {
+			continue
+		}
+		var event map[string]any
+		if json.Unmarshal([]byte(data), &event) != nil {
+			continue
+		}
+		var text string
+		if provider == MonitorProviderOpenAI && defaultAPIMode(apiMode) == MonitorAPIModeResponses {
+			if typ, _ := event["type"].(string); typ == "response.output_text.delta" {
+				text = monitorEventText(event["delta"])
+			} else if response, ok := event["response"].(map[string]any); ok {
+				if outputText, ok := response["output_text"].(string); ok {
+					completeResponseText = outputText
+				} else if b, err := json.Marshal(response); err == nil {
+					if responseText := extractOpenAIResponsesText(b); responseText != "" {
+						completeResponseText = responseText
+					}
+				}
+			}
+		}
+		// A number of OpenAI-compatible Responses endpoints return Chat
+		// Completions-shaped chunks even when stream=true. Accept those as a
+		// compatibility fallback in either API mode.
+		if text == "" {
+			if choices, ok := event["choices"].([]any); ok && len(choices) > 0 {
+				if choice, ok := choices[0].(map[string]any); ok {
+					if delta, ok := choice["delta"].(map[string]any); ok {
+						text = monitorEventText(delta["content"])
+					}
+					if text == "" {
+						if message, ok := choice["message"].(map[string]any); ok {
+							text = monitorEventText(message["content"])
+						}
+					}
+				}
+			}
+		}
+		if text != "" {
+			parts = append(parts, text)
+		}
+	}
+	text := strings.Join(parts, "")
+	if strings.TrimSpace(text) != "" || completeResponseText == "" {
+		return text
+	}
+	return completeResponseText
+}
+
+func monitorEventText(value any) string {
+	switch v := value.(type) {
+	case string:
+		return v
+	case map[string]any:
+		if text, ok := v["text"].(string); ok {
+			return text
+		}
+		if content, ok := v["content"]; ok {
+			return monitorEventText(content)
+		}
+	case []any:
+		var parts []string
+		for _, item := range v {
+			if text := monitorEventText(item); text != "" {
+				parts = append(parts, text)
+			}
+		}
+		return strings.Join(parts, "")
+	}
+	return ""
 }
 
 // joinURL 把 base origin 与 path 拼成完整 URL。

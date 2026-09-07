@@ -452,6 +452,117 @@ func TestRunCheckForModel_ReplaceMode_EmptyResponseIsFailed(t *testing.T) {
 	}
 }
 
+func TestRunCheckForModel_ChatStreamingOverride_UsesSSEAndPassesChallenge(t *testing.T) {
+	var gotBody map[string]any
+	var gotAccept string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAccept = r.Header.Get("Accept")
+		defer r.Body.Close()
+		_ = json.NewDecoder(r.Body).Decode(&gotBody)
+		prompt := ""
+		if messages, ok := gotBody["messages"].([]any); ok && len(messages) > 0 {
+			prompt, _ = messages[0].(map[string]any)["content"].(string)
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"content\":\"" + answerFromChallengePrompt(prompt) + "\"}}]}\n\n"))
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	t.Cleanup(srv.Close)
+	swapMonitorHTTPClient(t)
+
+	res := runCheckForModel(context.Background(), MonitorProviderOpenAI, srv.URL, "sk-openai", "gpt-test", &CheckOptions{
+		BodyOverrideMode: MonitorBodyOverrideModeMerge,
+		BodyOverride:     map[string]any{"stream": true},
+	})
+	if res.Status != MonitorStatusOperational {
+		t.Fatalf("streaming chat check should pass challenge, got status=%s message=%q", res.Status, res.Message)
+	}
+	if gotBody["stream"] != true {
+		t.Fatalf("custom stream=true must reach upstream, got %v", gotBody["stream"])
+	}
+	if gotAccept != "text/event-stream" {
+		t.Fatalf("streaming check should request SSE, got Accept=%q", gotAccept)
+	}
+}
+
+func TestRunCheckForModel_ResponsesStreamingOverride_UsesSSEAndPassesChallenge(t *testing.T) {
+	var gotBody map[string]any
+	var gotAccept string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAccept = r.Header.Get("Accept")
+		defer r.Body.Close()
+		_ = json.NewDecoder(r.Body).Decode(&gotBody)
+		prompt, _ := gotBody["input"].(string)
+		w.Header().Set("Content-Type", "text/event-stream")
+		payload, _ := json.Marshal(map[string]any{"type": "response.output_text.delta", "delta": answerFromChallengePrompt(prompt)})
+		_, _ = w.Write([]byte("event: response.output_text.delta\ndata: " + string(payload) + "\n\n"))
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	t.Cleanup(srv.Close)
+	swapMonitorHTTPClient(t)
+
+	res := runCheckForModel(context.Background(), MonitorProviderOpenAI, srv.URL, "sk-openai", "gpt-test", &CheckOptions{
+		APIMode:          MonitorAPIModeResponses,
+		BodyOverrideMode: MonitorBodyOverrideModeMerge,
+		BodyOverride:     map[string]any{"stream": true},
+	})
+	if res.Status != MonitorStatusOperational {
+		t.Fatalf("streaming responses check should pass challenge, got status=%s message=%q", res.Status, res.Message)
+	}
+	if gotBody["stream"] != true {
+		t.Fatalf("custom stream=true must reach responses upstream, got %v", gotBody["stream"])
+	}
+	if gotAccept != "text/event-stream" {
+		t.Fatalf("streaming responses check should request SSE, got Accept=%q", gotAccept)
+	}
+}
+
+func TestExtractMonitorSSEText_IgnoresNonTextEvents(t *testing.T) {
+	body := "event: response.created\ndata: {\"type\":\"response.created\"}\n\n" +
+		"data: {\"choices\":[{\"delta\":{\"content\":\"4\"}}]}\n\n" +
+		"data: [DONE]\n\n"
+	if got := extractMonitorSSEText([]byte(body), MonitorProviderOpenAI, MonitorAPIModeChatCompletions); got != "4" {
+		t.Fatalf("expected SSE text 4, got %q", got)
+	}
+}
+
+func TestExtractMonitorSSEText_ResponsesAcceptsChatCompatibleChunk(t *testing.T) {
+	body := "data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n\n" +
+		"data: [DONE]\n\n"
+	if got := extractMonitorSSEText([]byte(body), MonitorProviderOpenAI, MonitorAPIModeResponses); got != "ok" {
+		t.Fatalf("expected chat-compatible fallback text, got %q", got)
+	}
+}
+
+func TestExtractMonitorSSEText_ResponsesDoesNotDuplicateCompletedResponse(t *testing.T) {
+	body := "data: {\"type\":\"response.output_text.delta\",\"delta\":\"37\"}\n\n" +
+		"data: {\"type\":\"response.completed\",\"response\":{\"output\":[{\"type\":\"message\",\"content\":[{\"type\":\"output_text\",\"text\":\"37\"}]}]}}\n\n"
+	if got := extractMonitorSSEText([]byte(body), MonitorProviderOpenAI, MonitorAPIModeResponses); got != "37" {
+		t.Fatalf("expected delta text without completed-response duplication, got %q", got)
+	}
+}
+
+func TestRunCheckForModel_StreamingResponsesFallsBackToCompleteJSON(t *testing.T) {
+	h := &openAICaptureHandler{
+		rawResponse: `{"output":[{"type":"message","content":[{"type":"output_text","text":"ok"}]}]}`,
+	}
+	endpoint := setupFakeOpenAI(t, h)
+	res := runCheckForModel(context.Background(), MonitorProviderOpenAI, endpoint, "sk-openai", "gpt-test", &CheckOptions{
+		APIMode:          MonitorAPIModeResponses,
+		BodyOverrideMode: MonitorBodyOverrideModeReplace,
+		BodyOverride: map[string]any{
+			"model":             "gpt-test",
+			"instructions":      "answer briefly",
+			"input":             "hello",
+			"stream":            true,
+			"max_output_tokens": 20,
+		},
+	})
+	if res.Status != MonitorStatusOperational {
+		t.Fatalf("complete JSON fallback should be operational, got status=%s message=%q", res.Status, res.Message)
+	}
+}
+
 func TestExtractAnthropicMonitorText(t *testing.T) {
 	tests := []struct {
 		name string

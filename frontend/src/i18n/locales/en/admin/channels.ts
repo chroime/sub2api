@@ -632,7 +632,7 @@ export default {
         bodyModeHintReplace: 'Use the JSON below as the complete body. Challenge validation is skipped; HTTP 2xx + non-empty response text is treated as operational.',
         bodyJson: 'Body JSON',
         bodyJsonFormat: 'Format',
-        bodyJsonHint: 'Parsed on blur. Empty means no override.',
+        bodyJsonHint: 'Parsed on blur. Empty means no override. For upstreams that only allow streaming, set "stream": true; the monitor will consume the SSE response.',
         bodyJsonError: 'JSON parse failed',
         bodyJsonObjectError: 'Body must be a JSON object (no arrays or primitives)'
       },
