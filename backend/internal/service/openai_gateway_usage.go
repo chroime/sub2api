@@ -75,8 +75,9 @@ type CyberPolicyUsageInput struct {
 // （HTTP forward 返回错误路径）记录用量并按上游真实 token 计费，使其与 WS cyber 路径、
 // 与正常请求的计费口径统一（不再是 tokens=0 免费行）。token 取自上游 response.failed
 // 报告的 usage（非流式直接拒通常为 0，cost 随之为 0）。复用 RecordUsage 完成成本计算、
-// 扣费与用量行写入（request_type=cyber 由 CyberBlocked 置位）。仅 forward 返回错误的
-// 路径由 handler 调用，避免与成功路径的正常 RecordUsage 重复。
+// 扣费与用量行写入（request_type=cyber 由 CyberBlocked 置位）。零 token 且所有最终
+// 费用为零时，RecordUsage 会统一跳过计费与用量行。仅 forward 返回错误的路径由
+// handler 调用，避免与成功路径的正常 RecordUsage 重复。
 func (s *OpenAIGatewayService) RecordCyberPolicyUsageLog(ctx context.Context, in CyberPolicyUsageInput) {
 	if s == nil || in.APIKey == nil || in.APIKey.User == nil || in.Account == nil || strings.TrimSpace(in.Model) == "" {
 		return
@@ -148,6 +149,29 @@ func groupBillsOpenAIFastAtStandard(apiKey *APIKey, account *Account, serviceTie
 	default:
 		return false
 	}
+}
+
+// isZeroTokenZeroCostOpenAIUsage reports whether an OpenAI usage row carries
+// neither token evidence nor any final charge. Media/search metadata alone is
+// intentionally not enough to retain a row when pricing resolves to zero.
+func isZeroTokenZeroCostOpenAIUsage(usageLog *UsageLog) bool {
+	if usageLog == nil {
+		return false
+	}
+	if usageLog.InputTokens != 0 ||
+		usageLog.OutputTokens != 0 ||
+		usageLog.CacheCreationTokens != 0 ||
+		usageLog.CacheReadTokens != 0 ||
+		usageLog.CacheCreation5mTokens != 0 ||
+		usageLog.CacheCreation1hTokens != 0 ||
+		usageLog.ImageInputTokens != 0 ||
+		usageLog.ImageOutputTokens != 0 {
+		return false
+	}
+	if usageLog.TotalCost != 0 || usageLog.ActualCost != 0 {
+		return false
+	}
+	return usageLog.AccountStatsCost == nil || *usageLog.AccountStatsCost == 0
 }
 
 // RecordUsage records usage and deducts balance
@@ -474,6 +498,17 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 			account.ID, *apiKey.GroupID, result.UpstreamModel, result.Model,
 			tokens, cost.TotalCost,
 		)
+	}
+	if isZeroTokenZeroCostOpenAIUsage(usageLog) {
+		logger.FromContext(ctx).Debug("openai_usage.zero_token_zero_cost_skipped",
+			zap.String("request_id", usageLog.RequestID),
+			zap.Int64("api_key_id", usageLog.APIKeyID),
+			zap.Int64("account_id", usageLog.AccountID),
+		)
+		if s.deferredService != nil {
+			s.deferredService.ScheduleLastUsedUpdate(account.ID)
+		}
+		return nil
 	}
 
 	if s.cfg != nil && s.cfg.RunMode == config.RunModeSimple {

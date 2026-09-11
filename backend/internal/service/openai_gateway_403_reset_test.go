@@ -44,5 +44,7 @@ func TestOpenAIGatewayServiceRecordUsage_ResetsOpenAI403CounterForZeroUsage(t *t
 
 	require.NoError(t, err)
 	require.Equal(t, []int64{777}, counter.resetCalls)
-	require.Equal(t, 1, usageRepo.calls)
+	// Provider health is reset before the storage predicate; omitting the empty
+	// usage row must not change that behavior.
+	require.Equal(t, 0, usageRepo.calls)
 }
