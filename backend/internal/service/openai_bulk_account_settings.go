@@ -12,12 +12,13 @@ type bulkOpenAISettings struct {
 	longContextBilling      bool
 	endpointCapabilities    bool
 	responsesMode           bool
+	syntheticFirstResponse  bool
 	capabilitiesIncludeChat bool
 	forcedResponsesMode     bool
 }
 
 func (s bulkOpenAISettings) any() bool {
-	return s.longContextBilling || s.endpointCapabilities || s.responsesMode
+	return s.longContextBilling || s.endpointCapabilities || s.responsesMode || s.syntheticFirstResponse
 }
 
 func normalizeBulkOpenAISettings(input *BulkUpdateAccountsInput) (bulkOpenAISettings, error) {
@@ -29,6 +30,13 @@ func normalizeBulkOpenAISettings(input *BulkUpdateAccountsInput) (bulkOpenAISett
 	if _, exists := input.Extra[openAILongContextBillingEnabledKey]; exists {
 		settings.longContextBilling = true
 		if err := ValidateOpenAILongContextBillingExtra(PlatformOpenAI, input.Extra); err != nil {
+			return settings, err
+		}
+	}
+
+	if _, exists := input.Extra[OpenAISyntheticFirstResponseEnabledExtraKey]; exists {
+		settings.syntheticFirstResponse = true
+		if err := ValidateOpenAISyntheticFirstResponseExtra(PlatformOpenAI, input.Extra); err != nil {
 			return settings, err
 		}
 	}
@@ -169,6 +177,15 @@ func validateBulkOpenAISettingsTargets(
 			}
 			if account.IsShadow() {
 				inheritedCount++
+			}
+		}
+
+		if settings.syntheticFirstResponse {
+			if account.Platform != PlatformOpenAI {
+				return 0, invalidBulkOpenAITarget(accountID, "synthetic first response requires an OpenAI account")
+			}
+			if account.IsShadow() {
+				return 0, invalidBulkOpenAITarget(accountID, "synthetic first response is managed on the parent account and is unavailable for spark shadow accounts")
 			}
 		}
 

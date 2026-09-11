@@ -580,6 +580,9 @@ export default {
         longContextBilling: 'API long-context pricing',
         longContextBillingDesc:
           'Disabled by default. Enable only when this account\'s upstream charges OpenAI API long-context rates above the model threshold.',
+        syntheticFirstResponse: 'Streaming first-response ACK',
+        syntheticFirstResponseDesc:
+          'Disabled by default. For this account only, emit a non-visible SSE ACK for streaming requests in its assigned group; genuine upstream text is never delayed or changed.',
         responsesWebsocketsV2: 'Responses WebSocket v2',
         responsesWebsocketsV2Desc:
           'Disabled by default. Enable to allow responses_websockets_v2 capability (still gated by global and account-type switches).',

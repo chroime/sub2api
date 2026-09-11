@@ -241,8 +241,8 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 
 		service.SetOpsLatencyMs(c, service.OpsRoutingLatencyMsKey, time.Since(routingStart).Milliseconds())
 		forwardStart := time.Now()
-		if stopSyntheticFirstResponse == nil {
-			stopSyntheticFirstResponse = h.startSyntheticFirstResponse(c, reqStream, forwardStart)
+		if stopSyntheticFirstResponse == nil && !streamStarted && account.IsOpenAISyntheticFirstResponseEnabledForGroup(apiKey.GroupID) {
+			stopSyntheticFirstResponse = h.startSyntheticFirstResponse(c, reqStream, forwardStart, account, apiKey.GroupID)
 		}
 
 		forwardBody := body
@@ -261,6 +261,9 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 		service.ApplyOpenAISyntheticFirstResponseResult(c, result)
 		if service.OpenAISyntheticFirstResponseCommitted(c) {
 			streamStarted = true
+		}
+		if err != nil {
+			resetSyntheticFirstResponseForRetry(c, &stopSyntheticFirstResponse, writerSizeBeforeForward)
 		}
 		var cyberBlockBodyChat []byte
 		if service.GetOpsCyberPolicy(c) != nil {

@@ -886,6 +886,10 @@ func (h *AccountHandler) Create(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
+	if err := service.ValidateOpenAISyntheticFirstResponseExtra(req.Platform, req.Extra); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
 	if req.RateMultiplier != nil && *req.RateMultiplier < 0 {
 		response.BadRequest(c, "rate_multiplier must be >= 0")
 		return
@@ -1484,6 +1488,10 @@ func (h *AccountHandler) ApplyOAuthCredentials(c *gin.Context) {
 		return
 	}
 	if err := service.ValidateOpenAILongContextBillingExtra(existing.Platform, req.Extra); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	if err := service.ValidateOpenAISyntheticFirstResponseExtra(existing.Platform, req.Extra); err != nil {
 		response.ErrorFrom(c, err)
 		return
 	}

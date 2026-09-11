@@ -247,6 +247,36 @@ describe('CreateAccountModal OpenAI long-context billing', () => {
     expect(createAccountMock.mock.calls[0]?.[0]?.extra?.openai_long_context_billing_enabled).toBe(false)
   })
 
+  it('writes the synthetic first-response opt-in only when enabled', async () => {
+    const wrapper = mountModal()
+    await selectButtonByText(wrapper, 'OpenAI')
+    await selectButtonByText(wrapper, 'API Key')
+    await wrapper.get('form#create-account-form input[type="text"]').setValue('OpenAI ACK account')
+    await wrapper.get('form#create-account-form input[type="password"]').setValue('test-api-key')
+
+    const toggle = wrapper.get('[data-testid="openai-synthetic-first-response-toggle"]')
+    expect(toggle.attributes('aria-checked')).toBe('false')
+    await toggle.trigger('click')
+    await wrapper.get('form#create-account-form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(createAccountMock).toHaveBeenCalledTimes(1)
+    expect(createAccountMock.mock.calls[0]?.[0]?.extra?.openai_synthetic_first_response_enabled).toBe(true)
+  })
+
+  it('resets the synthetic first-response opt-in when switching away from OpenAI', async () => {
+    const wrapper = mountModal()
+    await selectButtonByText(wrapper, 'OpenAI')
+    const toggle = wrapper.get('[data-testid="openai-synthetic-first-response-toggle"]')
+    await toggle.trigger('click')
+    expect(toggle.attributes('aria-checked')).toBe('true')
+
+    await selectButtonByText(wrapper, 'Anthropic')
+    await selectButtonByText(wrapper, 'OpenAI')
+
+    expect(wrapper.get('[data-testid="openai-synthetic-first-response-toggle"]').attributes('aria-checked')).toBe('false')
+  })
+
   it('omits the upstream request id header from extra when left empty', async () => {
     await submitApiKeyAccount('openai')
 

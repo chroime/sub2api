@@ -88,6 +88,11 @@ type OpenAIEndpointCapability string
 
 const openAILongContextBillingEnabledKey = "openai_long_context_billing_enabled"
 
+// OpenAISyntheticFirstResponseEnabledExtraKey is the per-account opt-in for
+// the synthetic SSE acknowledgement. The global gateway setting remains the
+// master switch; this key keeps the feature disabled for accounts by default.
+const OpenAISyntheticFirstResponseEnabledExtraKey = "openai_synthetic_first_response_enabled"
+
 const (
 	OpenAIEndpointCapabilityChatCompletions OpenAIEndpointCapability = "chat_completions"
 	OpenAIEndpointCapabilityEmbeddings      OpenAIEndpointCapability = "embeddings"
@@ -1282,6 +1287,41 @@ func (a *Account) IsOpenAILongContextBillingEnabled() bool {
 	}
 	enabled, ok := a.Extra[openAILongContextBillingEnabledKey].(bool)
 	return ok && enabled
+}
+
+// IsOpenAISyntheticFirstResponseEnabled reports whether this OpenAI account
+// explicitly opted in to the synthetic streaming acknowledgement.
+// Missing, malformed, or false values are all treated as disabled.
+func (a *Account) IsOpenAISyntheticFirstResponseEnabled() bool {
+	if a == nil || !a.IsOpenAI() || a.IsShadow() || a.Extra == nil {
+		return false
+	}
+	enabled, ok := a.Extra[OpenAISyntheticFirstResponseEnabledExtraKey].(bool)
+	return ok && enabled
+}
+
+// IsOpenAISyntheticFirstResponseEnabledForGroup combines the account opt-in
+// with the request's effective group. This keeps an enabled account from
+// affecting a request routed outside its current group (including the
+// ungrouped pool when groupID is nil).
+func (a *Account) IsOpenAISyntheticFirstResponseEnabledForGroup(groupID *int64) bool {
+	if !a.IsOpenAISyntheticFirstResponseEnabled() {
+		return false
+	}
+	if groupID == nil || *groupID <= 0 {
+		return len(a.AccountGroups) == 0 && len(a.GroupIDs) == 0
+	}
+	for _, id := range a.GroupIDs {
+		if id == *groupID {
+			return true
+		}
+	}
+	for _, accountGroup := range a.AccountGroups {
+		if accountGroup.GroupID == *groupID {
+			return true
+		}
+	}
+	return false
 }
 
 func (a *Account) IsAnthropic() bool {

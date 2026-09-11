@@ -29,12 +29,16 @@ func TestSchedulerMetadataAccountKeepsOpenAISubscriptionIdentity(t *testing.T) {
 			"plan_type":    "plus",
 			"access_token": "secret-access-token",
 		},
+		Extra: map[string]any{
+			service.OpenAISyntheticFirstResponseEnabledExtraKey: true,
+		},
 	}
 
 	metadata := buildSchedulerMetadataAccount(account)
 
 	require.True(t, metadata.IsOpenAIChatGPTSubscription())
 	require.Empty(t, metadata.GetCredential("access_token"))
+	require.True(t, metadata.IsOpenAISyntheticFirstResponseEnabled())
 }
 
 func TestSchedulerMetadataAccountProjectsUpstreamBillingProbe(t *testing.T) {

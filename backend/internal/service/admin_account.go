@@ -466,6 +466,9 @@ func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccou
 	if err != nil {
 		return nil, err
 	}
+	if err := ValidateOpenAISyntheticFirstResponseExtra(input.Platform, accountExtra); err != nil {
+		return nil, err
+	}
 	accountExtra, err = normalizeGrokMediaEligibilityExtra(input.Platform, accountExtra)
 	if err != nil {
 		return nil, err
@@ -560,6 +563,9 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 	if input.Extra != nil {
 		normalizedExtra, err = normalizeOpenAILongContextBillingUpdateExtra(account, input)
 		if err != nil {
+			return nil, err
+		}
+		if err := ValidateOpenAISyntheticFirstResponseExtra(account.Platform, normalizedExtra); err != nil {
 			return nil, err
 		}
 		normalizedExtra, err = normalizeGrokMediaEligibilityUpdateExtra(account, input, normalizedExtra)
@@ -886,12 +892,23 @@ func (s *adminServiceImpl) UpdateAccountExtra(ctx context.Context, id int64, upd
 	delete(updates, OllamaCloudUsageSessionExtraKey)
 	delete(updates, OllamaCloudUsageAutoRefreshExtraKey)
 	delete(updates, OllamaCloudUsageSnapshotExtraKey)
-	if _, exists := updates[openAILongContextBillingEnabledKey]; exists {
+	if _, longContextProvided := updates[openAILongContextBillingEnabledKey]; longContextProvided {
 		account, err := s.accountRepo.GetByID(ctx, id)
 		if err != nil {
 			return err
 		}
 		if err := ValidateOpenAILongContextBillingExtra(account.Platform, updates); err != nil {
+			return err
+		}
+		if err := ValidateOpenAISyntheticFirstResponseExtra(account.Platform, updates); err != nil {
+			return err
+		}
+	} else if _, syntheticProvided := updates[OpenAISyntheticFirstResponseEnabledExtraKey]; syntheticProvided {
+		account, err := s.accountRepo.GetByID(ctx, id)
+		if err != nil {
+			return err
+		}
+		if err := ValidateOpenAISyntheticFirstResponseExtra(account.Platform, updates); err != nil {
 			return err
 		}
 	}

@@ -12,8 +12,28 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/gin-gonic/gin"
 )
+
+// ValidateOpenAISyntheticFirstResponseExtra validates the account-level
+// opt-in when it is supplied in an OpenAI account's extra map. Other provider
+// extras are intentionally left untouched because their namespaces are
+// provider-owned.
+func ValidateOpenAISyntheticFirstResponseExtra(platform string, extra map[string]any) error {
+	if platform != PlatformOpenAI || extra == nil {
+		return nil
+	}
+	if raw, exists := extra[OpenAISyntheticFirstResponseEnabledExtraKey]; exists {
+		if _, ok := raw.(bool); !ok {
+			return infraerrors.BadRequest(
+				"OPENAI_SYNTHETIC_FIRST_RESPONSE_INVALID",
+				"openai_synthetic_first_response_enabled must be a boolean",
+			)
+		}
+	}
+	return nil
+}
 
 const openAISyntheticFirstResponseKey = "openai_synthetic_first_response"
 
@@ -77,7 +97,12 @@ func StartOpenAISyntheticFirstResponse(c *gin.Context, cfg config.GatewaySynthet
 	}
 	if existing, ok := c.Get(openAISyntheticFirstResponseKey); ok {
 		if state, valid := existing.(*openAISyntheticFirstResponse); valid && state != nil {
-			return state.Stop
+			state.mu.Lock()
+			active := !state.stopped
+			state.mu.Unlock()
+			if active {
+				return state.Stop
+			}
 		}
 	}
 	if startedAt.IsZero() {

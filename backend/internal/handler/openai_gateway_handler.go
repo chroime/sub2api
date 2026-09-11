@@ -763,8 +763,8 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 		// Forward request
 		service.SetOpsLatencyMs(c, service.OpsRoutingLatencyMsKey, time.Since(routingStart).Milliseconds())
 		forwardStart := time.Now()
-		if stopSyntheticFirstResponse == nil {
-			stopSyntheticFirstResponse = h.startSyntheticFirstResponse(c, reqStream, forwardStart)
+		if stopSyntheticFirstResponse == nil && !streamStarted && account.IsOpenAISyntheticFirstResponseEnabledForGroup(apiKey.GroupID) {
+			stopSyntheticFirstResponse = h.startSyntheticFirstResponse(c, reqStream, forwardStart, account, apiKey.GroupID)
 		}
 		// 用扣除非语义心跳字节的口径快照：心跳注释不构成语义响应，
 		// 不能因心跳字节变化而放弃 failover 换号（#3887）。
@@ -784,6 +784,9 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 		service.ApplyOpenAISyntheticFirstResponseResult(c, result)
 		if service.OpenAISyntheticFirstResponseCommitted(c) {
 			streamStarted = true
+		}
+		if err != nil {
+			resetSyntheticFirstResponseForRetry(c, &stopSyntheticFirstResponse, writerSizeBeforeForward)
 		}
 		var cyberBlockBodyHTTP []byte
 		if service.GetOpsCyberPolicy(c) != nil {
@@ -1343,8 +1346,8 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 
 		service.SetOpsLatencyMs(c, service.OpsRoutingLatencyMsKey, time.Since(routingStart).Milliseconds())
 		forwardStart := time.Now()
-		if stopSyntheticFirstResponse == nil {
-			stopSyntheticFirstResponse = h.startSyntheticFirstResponse(c, reqStream, forwardStart)
+		if stopSyntheticFirstResponse == nil && !streamStarted && account.IsOpenAISyntheticFirstResponseEnabledForGroup(apiKey.GroupID) {
+			stopSyntheticFirstResponse = h.startSyntheticFirstResponse(c, reqStream, forwardStart, account, apiKey.GroupID)
 		}
 
 		defaultMappedModel := strings.TrimSpace(effectiveMappedModel)
@@ -1362,6 +1365,9 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 		service.ApplyOpenAISyntheticFirstResponseResult(c, result)
 		if service.OpenAISyntheticFirstResponseCommitted(c) {
 			streamStarted = true
+		}
+		if err != nil {
+			resetSyntheticFirstResponseForRetry(c, &stopSyntheticFirstResponse, writerSizeBeforeForward)
 		}
 		var cyberBlockBodyMsg []byte
 		if service.GetOpsCyberPolicy(c) != nil {
