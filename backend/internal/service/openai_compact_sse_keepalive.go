@@ -191,7 +191,7 @@ func OpenAICompactKeepaliveAdjustedWrittenSize(c *gin.Context) int {
 	if size < 0 {
 		return size
 	}
-	keepaliveBytes := compactKeepaliveBytes + streamKeepaliveBytes
+	keepaliveBytes := compactKeepaliveBytes + streamKeepaliveBytes + openAISyntheticFirstResponseBytes(c)
 	if keepaliveBytes <= 0 {
 		return size
 	}

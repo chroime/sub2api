@@ -939,6 +939,16 @@ type ImageConcurrencyConfig struct {
 	MaxWaitingRequests int `mapstructure:"max_waiting_requests"`
 }
 
+// GatewaySyntheticFirstResponseConfig controls the optional one-shot SSE
+// acknowledgement used by OpenAI-compatible streaming endpoints.
+type GatewaySyntheticFirstResponseConfig struct {
+	Enabled                  bool `mapstructure:"enabled"`
+	MinDelayMs               int  `mapstructure:"min_delay_ms"`
+	MaxDelayMs               int  `mapstructure:"max_delay_ms"`
+	UnderOneSecondPercent    int  `mapstructure:"under_one_second_percent"`
+	UnderOneSecondMaxDelayMs int  `mapstructure:"under_one_second_max_delay_ms"`
+}
+
 const (
 	ImageConcurrencyOverflowModeReject = "reject"
 	ImageConcurrencyOverflowModeWait   = "wait"
@@ -960,6 +970,9 @@ type GatewayConfig struct {
 	// OpenAIHighEffortFirstOutputTimeoutSeconds: high/xhigh/max 推理的首个语义输出超时（秒）。
 	// 0 表示回退到 OpenAIFirstOutputTimeoutSeconds。
 	OpenAIHighEffortFirstOutputTimeoutSeconds int `mapstructure:"openai_high_effort_first_output_timeout_seconds"`
+	// SyntheticFirstResponse emits a non-semantic SSE comment when a stream has
+	// not produced client output before its deterministic sub-second deadline.
+	SyntheticFirstResponse GatewaySyntheticFirstResponseConfig `mapstructure:"synthetic_first_response"`
 	// 请求体最大字节数，用于网关请求体大小限制
 	MaxBodySize int64 `mapstructure:"max_body_size"`
 	// TextMaxBodySize limits endpoints that cannot carry inline image/video payloads.
@@ -2362,6 +2375,11 @@ func setDefaults() {
 	viper.SetDefault("gateway.grok_response_header_timeout", 120)
 	viper.SetDefault("gateway.openai_first_output_timeout_seconds", 0)
 	viper.SetDefault("gateway.openai_high_effort_first_output_timeout_seconds", 0)
+	viper.SetDefault("gateway.synthetic_first_response.enabled", false)
+	viper.SetDefault("gateway.synthetic_first_response.min_delay_ms", 600)
+	viper.SetDefault("gateway.synthetic_first_response.max_delay_ms", 1500)
+	viper.SetDefault("gateway.synthetic_first_response.under_one_second_percent", 90)
+	viper.SetDefault("gateway.synthetic_first_response.under_one_second_max_delay_ms", 900)
 	viper.SetDefault("gateway.log_upstream_error_body", true)
 	viper.SetDefault("gateway.log_upstream_error_body_max_bytes", 2048)
 	viper.SetDefault("gateway.inject_beta_for_apikey", false)
@@ -3361,6 +3379,23 @@ func (c *Config) Validate() error {
 	if c.Gateway.StreamKeepaliveInterval != 0 &&
 		(c.Gateway.StreamKeepaliveInterval < 5 || c.Gateway.StreamKeepaliveInterval > 30) {
 		return fmt.Errorf("gateway.stream_keepalive_interval must be 0 or between 5-30 seconds")
+	}
+	if c.Gateway.SyntheticFirstResponse.MinDelayMs <= 0 {
+		return fmt.Errorf("gateway.synthetic_first_response.min_delay_ms must be positive")
+	}
+	if c.Gateway.SyntheticFirstResponse.MaxDelayMs < c.Gateway.SyntheticFirstResponse.MinDelayMs {
+		return fmt.Errorf("gateway.synthetic_first_response.min_delay_ms must be <= max_delay_ms")
+	}
+	if c.Gateway.SyntheticFirstResponse.UnderOneSecondPercent < 90 || c.Gateway.SyntheticFirstResponse.UnderOneSecondPercent > 100 {
+		return fmt.Errorf("gateway.synthetic_first_response.under_one_second_percent must be between 90 and 100")
+	}
+	if c.Gateway.SyntheticFirstResponse.UnderOneSecondMaxDelayMs < c.Gateway.SyntheticFirstResponse.MinDelayMs ||
+		c.Gateway.SyntheticFirstResponse.UnderOneSecondMaxDelayMs >= 1000 ||
+		c.Gateway.SyntheticFirstResponse.UnderOneSecondMaxDelayMs > c.Gateway.SyntheticFirstResponse.MaxDelayMs {
+		return fmt.Errorf("gateway.synthetic_first_response.under_one_second_max_delay_ms must be between min_delay_ms and min(max_delay_ms, 999)")
+	}
+	if c.Gateway.SyntheticFirstResponse.MaxDelayMs < 1000 && c.Gateway.SyntheticFirstResponse.UnderOneSecondPercent < 100 {
+		return fmt.Errorf("gateway.synthetic_first_response.max_delay_ms must be at least 1000 when under_one_second_percent is below 100")
 	}
 	if c.Gateway.ImageStreamDataIntervalTimeout < 0 {
 		return fmt.Errorf("gateway.image_stream_data_interval_timeout must be non-negative")

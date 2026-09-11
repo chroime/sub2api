@@ -413,6 +413,38 @@ func TestLoadDefaultOpenAIFirstOutputTimeoutsDisabled(t *testing.T) {
 	require.Zero(t, cfg.Gateway.OpenAIHighEffortFirstOutputTimeoutSeconds)
 }
 
+func TestLoadDefaultSyntheticFirstResponseConfig(t *testing.T) {
+	resetViperWithJWTSecret(t)
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.False(t, cfg.Gateway.SyntheticFirstResponse.Enabled)
+	require.Equal(t, 600, cfg.Gateway.SyntheticFirstResponse.MinDelayMs)
+	require.Equal(t, 1500, cfg.Gateway.SyntheticFirstResponse.MaxDelayMs)
+	require.Equal(t, 90, cfg.Gateway.SyntheticFirstResponse.UnderOneSecondPercent)
+	require.Equal(t, 900, cfg.Gateway.SyntheticFirstResponse.UnderOneSecondMaxDelayMs)
+}
+
+func TestValidateSyntheticFirstResponseRange(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	cfg, err := Load()
+	require.NoError(t, err)
+
+	cfg.Gateway.SyntheticFirstResponse.Enabled = true
+	cfg.Gateway.SyntheticFirstResponse.MinDelayMs = 1281
+	cfg.Gateway.SyntheticFirstResponse.MaxDelayMs = 1280
+	require.ErrorContains(t, cfg.Validate(), "gateway.synthetic_first_response.min_delay_ms")
+
+	cfg.Gateway.SyntheticFirstResponse.MinDelayMs = 600
+	cfg.Gateway.SyntheticFirstResponse.UnderOneSecondPercent = 89
+	require.ErrorContains(t, cfg.Validate(), "gateway.synthetic_first_response.under_one_second_percent")
+
+	cfg.Gateway.SyntheticFirstResponse.UnderOneSecondPercent = 100
+	cfg.Gateway.SyntheticFirstResponse.MaxDelayMs = 800
+	cfg.Gateway.SyntheticFirstResponse.UnderOneSecondMaxDelayMs = 900
+	require.ErrorContains(t, cfg.Validate(), "gateway.synthetic_first_response.under_one_second_max_delay_ms")
+}
+
 func TestLoadOpenAIFirstOutputTimeoutsFromEnv(t *testing.T) {
 	resetViperWithJWTSecret(t)
 	t.Setenv("GATEWAY_OPENAI_FIRST_OUTPUT_TIMEOUT_SECONDS", "90")

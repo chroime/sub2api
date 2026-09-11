@@ -476,6 +476,14 @@ gateway:
   # Stream keepalive interval (seconds), 0=disable
   # 流式 keepalive 间隔（秒），0=禁用
   stream_keepalive_interval: 10
+  # Optional one-shot SSE comment for slow OpenAI-compatible streams. Fast real
+  # output is never delayed. The distributable default is disabled.
+  synthetic_first_response:
+    enabled: false
+    min_delay_ms: 600
+    max_delay_ms: 1500
+    under_one_second_percent: 90
+    under_one_second_max_delay_ms: 900
   # Image stream data interval timeout (seconds), 0=disable; independent from ordinary text streams
   # 图片流数据间隔超时（秒），0=禁用；独立于普通文本流式
   image_stream_data_interval_timeout: 900
