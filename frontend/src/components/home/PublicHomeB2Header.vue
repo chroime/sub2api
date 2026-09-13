@@ -12,7 +12,10 @@
         <Icon class="icon" :name="isDark ? 'sun' : 'moon'" :data-theme-icon="isDark ? 'sun' : 'moon'" aria-hidden="true" />
       </button>
       <LocaleSwitcher class="b2-locale" />
-      <RouterLink :to="destination" class="login">{{ authenticated ? t('home.dashboard') : t('home.login') }}</RouterLink>
+      <RouterLink :to="destination" class="login">
+        <span class="login-label">{{ authenticated ? t('home.dashboard') : t('home.login') }}</span>
+        <Icon name="arrowRight" class="login-arrow icon" aria-hidden="true" />
+      </RouterLink>
     </nav>
   </header>
 </template>
