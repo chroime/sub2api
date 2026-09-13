@@ -238,6 +238,27 @@ func TestSettingService_UpdateSettings_PersistsCompactHomeEnabled(t *testing.T) 
 	require.Equal(t, "true", repo.updates[SettingKeyCompactHomeEnabled])
 }
 
+func TestSettingService_UpdateSettings_PersistsDocumentationAndOmittingPreservesIt(t *testing.T) {
+	repo := newMockSettingRepo()
+	svc := NewSettingService(repo, &config.Config{})
+
+	require.NoError(t, svc.UpdateSettings(context.Background(), &SystemSettings{
+		DocsTitle:   "Stored docs",
+		DocsContent: "# Stored docs",
+	}))
+	require.Equal(t, "Stored docs", repo.data[SettingKeyDocsTitle])
+	require.Equal(t, "# Stored docs", repo.data[SettingKeyDocsContent])
+
+	require.NoError(t, svc.UpdateSettingsOmitting(context.Background(), &SystemSettings{
+		RiskControlEnabled: true,
+	}, OmittedSettingKeys{
+		SettingKeyDocsTitle:   {},
+		SettingKeyDocsContent: {},
+	}))
+	require.Equal(t, "Stored docs", repo.data[SettingKeyDocsTitle])
+	require.Equal(t, "# Stored docs", repo.data[SettingKeyDocsContent])
+}
+
 func TestSettingService_UpdateSettings_DefaultSubscriptions_ValidGroup(t *testing.T) {
 	repo := &settingUpdateRepoStub{}
 	groupReader := &defaultSubGroupReaderStub{

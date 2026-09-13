@@ -745,6 +745,20 @@ describe("admin SettingsView payment visible method controls", () => {
     wrapper.unmount();
   });
 
+  it("loads and saves built-in documentation with a public settings refresh", async () => {
+    getSettings.mockResolvedValue({ ...baseSettingsResponse, docs_title: "API guide", docs_content: "## Existing" });
+    const wrapper = mountView();
+    await flushPromises();
+    expect((wrapper.get('#public-docs-title').element as HTMLInputElement).value).toBe('API guide');
+    expect((wrapper.get('#public-docs-markdown').element as HTMLTextAreaElement).value).toBe('## Existing');
+    await wrapper.get('#public-docs-title').setValue('接入文档');
+    await wrapper.get('#public-docs-markdown').setValue('## 快速开始\n\nPublished content');
+    await wrapper.find('form').trigger('submit.prevent');
+    await flushPromises();
+    expect(updateSettings).toHaveBeenCalledWith(expect.objectContaining({ docs_title: '接入文档', docs_content: '## 快速开始\n\nPublished content' }));
+    expect(fetchPublicSettings).toHaveBeenCalledWith(true);
+  });
+
   it("submits the compact home page toggle", async () => {
     const wrapper = mountView();
     await flushPromises();
@@ -1513,6 +1527,23 @@ describe("admin SettingsView payment visible method controls", () => {
     expect(paymentHelpImageUpload).toBeDefined();
     expect(paymentHelpImageUpload?.attributes("data-upload-label")).toBe("上传图片");
     expect(paymentHelpImageUpload?.attributes("data-remove-label")).toBe("移除");
+  });
+
+  it("allows a 1 MiB site logo without expanding other upload limits", async () => {
+    const wrapper = mountView();
+    await flushPromises();
+    const siteTab = wrapper.findAll("button").find((node) => node.text().includes("admin.settings.tabs.general"));
+    expect(siteTab).toBeDefined();
+    await siteTab?.trigger("click");
+    await flushPromises();
+    const logoUpload = wrapper.findAll(".image-upload-stub").find(
+      (node) => node.attributes("hint") === "admin.settings.site.logoHint",
+    );
+    expect(logoUpload).toBeDefined();
+    expect(logoUpload?.attributes("max-size")).toBe(String(1024 * 1024));
+    expect(zhSettings.settings.site.logoHint).toContain("1MB");
+    expect(enSettings.settings.site.logoHint).toContain("1MB");
+    wrapper.unmount();
   });
 
   it("normalizes null supported_types from API so provider card stays visible", async () => {

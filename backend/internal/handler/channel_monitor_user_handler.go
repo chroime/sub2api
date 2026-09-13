@@ -158,6 +158,18 @@ func userMonitorDetailToResponse(d *service.UserMonitorDetail) *channelMonitorUs
 
 // List GET /api/v1/channel-monitors
 func (h *ChannelMonitorUserHandler) List(c *gin.Context) {
+	h.list(c, h.quotaVisible(c))
+}
+
+// ListPublic exposes the same operational monitor projection used by the
+// authenticated status page, without quota snapshots or account-specific data.
+// Only enabled monitors are returned by the service; secrets are never part of
+// the view model.
+func (h *ChannelMonitorUserHandler) ListPublic(c *gin.Context) {
+	h.list(c, false)
+}
+
+func (h *ChannelMonitorUserHandler) list(c *gin.Context, includeQuota bool) {
 	if !h.featureEnabled(c) {
 		response.Success(c, gin.H{"items": []channelMonitorUserListItem{}})
 		return
@@ -167,7 +179,6 @@ func (h *ChannelMonitorUserHandler) List(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
-	includeQuota := h.quotaVisible(c)
 	items := make([]channelMonitorUserListItem, 0, len(views))
 	for _, v := range views {
 		items = append(items, userMonitorViewToItem(v, includeQuota))

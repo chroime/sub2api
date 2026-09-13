@@ -6518,12 +6518,12 @@
                 >
                   {{ t("admin.settings.site.contactInfo") }}
                 </label>
-                <input
+                <textarea
                   v-model="form.contact_info"
-                  type="text"
-                  class="input"
+                  rows="3"
+                  class="input resize-y"
                   :placeholder="t('admin.settings.site.contactInfoPlaceholder')"
-                />
+                ></textarea>
                 <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
                   {{ t("admin.settings.site.contactInfoHint") }}
                 </p>
@@ -6547,6 +6547,12 @@
                 </p>
               </div>
 
+              <PublicDocsEditor
+                v-model:title="form.docs_title"
+                v-model:content="form.docs_content"
+                :base-url="form.api_base_url"
+              />
+
               <!-- Site Logo Upload -->
               <div>
                 <label
@@ -6560,7 +6566,7 @@
                   :upload-label="t('admin.settings.site.uploadImage')"
                   :remove-label="t('admin.settings.site.remove')"
                   :hint="t('admin.settings.site.logoHint')"
-                  :max-size="300 * 1024"
+                  :max-size="1024 * 1024"
                 />
               </div>
 
@@ -8864,6 +8870,7 @@ import {
   resolveSiteBillingMode,
   type SiteBillingMode,
 } from "@/utils/siteBillingMode";
+import PublicDocsEditor from "@/components/docs/PublicDocsEditor.vue";
 import ConfirmDialog from "@/components/common/ConfirmDialog.vue";
 import PaymentProviderList from "@/components/payment/PaymentProviderList.vue";
 import PaymentProviderDialog from "@/components/payment/PaymentProviderDialog.vue";
@@ -9627,6 +9634,8 @@ const form = reactive<SettingsForm>({
   api_base_url: "",
   contact_info: "",
   doc_url: "",
+  docs_title: "",
+  docs_content: "",
   home_content: "",
   compact_home_enabled: false,
   backend_mode_enabled: false,
@@ -11284,6 +11293,8 @@ async function saveSettings() {
       api_base_url: form.api_base_url,
       contact_info: form.contact_info,
       doc_url: form.doc_url,
+      docs_title: form.docs_title,
+      docs_content: form.docs_content,
       home_content: form.home_content,
       compact_home_enabled: form.compact_home_enabled,
       backend_mode_enabled: form.backend_mode_enabled,

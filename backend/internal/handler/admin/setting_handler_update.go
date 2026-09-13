@@ -159,6 +159,8 @@ type UpdateSettingsRequest struct {
 	APIBaseURL                  string                `json:"api_base_url"`
 	ContactInfo                 string                `json:"contact_info"`
 	DocURL                      string                `json:"doc_url"`
+	DocsTitle                   string                `json:"docs_title"`
+	DocsContent                 string                `json:"docs_content"`
 	HomeContent                 string                `json:"home_content"`
 	CompactHomeEnabled          bool                  `json:"compact_home_enabled"`
 	HideCcsImportButton         bool                  `json:"hide_ccs_import_button"`
@@ -492,6 +494,14 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 	var req UpdateSettingsRequest
 	if err := c.ShouldBindBodyWith(&req, binding.JSON); err != nil {
 		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	if len([]rune(req.DocsTitle)) > 120 {
+		response.BadRequest(c, "Documentation title is too long (max 120 characters)")
+		return
+	}
+	if len(req.DocsContent) > 2<<20 {
+		response.BadRequest(c, "Documentation content is too large (max 2MB)")
 		return
 	}
 	auditReq := settingsAuditRequest(req)
@@ -1623,6 +1633,8 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		APIBaseURL:                             req.APIBaseURL,
 		ContactInfo:                            req.ContactInfo,
 		DocURL:                                 req.DocURL,
+		DocsTitle:                              req.DocsTitle,
+		DocsContent:                            req.DocsContent,
 		HomeContent:                            req.HomeContent,
 		CompactHomeEnabled:                     req.CompactHomeEnabled,
 		HideCcsImportButton:                    req.HideCcsImportButton,
@@ -2263,6 +2275,8 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		APIBaseURL:                                             updatedSettings.APIBaseURL,
 		ContactInfo:                                            updatedSettings.ContactInfo,
 		DocURL:                                                 updatedSettings.DocURL,
+		DocsTitle:                                              updatedSettings.DocsTitle,
+		DocsContent:                                            updatedSettings.DocsContent,
 		HomeContent:                                            updatedSettings.HomeContent,
 		CompactHomeEnabled:                                     updatedSettings.CompactHomeEnabled,
 		HideCcsImportButton:                                    updatedSettings.HideCcsImportButton,

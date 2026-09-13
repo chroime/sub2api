@@ -1075,7 +1075,7 @@
           class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
           @click="selectedQuickSetupKey && downloadCodexQuickSetup(selectedQuickSetupKey, option.value)"
         >
-          <Icon name="download" size="sm" class="text-gray-400" />
+          <component :is="option.icon" class="h-4 w-4 text-gray-400" aria-hidden="true" />
           <span>{{ option.label }}</span>
         </button>
       </div>
@@ -1153,7 +1153,7 @@
 </template>
 
 <script setup lang="ts">
-	import { ref, reactive, computed, onMounted, onUnmounted, type ComponentPublicInstance } from 'vue'
+  import { ref, reactive, computed, onMounted, onUnmounted, h, type Component, type ComponentPublicInstance } from 'vue'
 	import { useI18n } from 'vue-i18n'
 	import { useAppStore } from '@/stores/app'
 	import { useOnboardingStore } from '@/stores/onboarding'
@@ -1368,10 +1368,11 @@ const selectedQuickSetupKey = computed(() => {
   return apiKeys.value.find((k) => k.id === quickSetupMenuKeyId.value) || null
 })
 
-const quickSetupPlatformOptions = computed<Array<{ value: CodexQuickSetupPlatform; label: string }>>(() => [
-  { value: 'windows', label: t('keys.quickSetupPlatforms.windows') },
-  { value: 'macos', label: t('keys.quickSetupPlatforms.macos') },
-  { value: 'linux', label: t('keys.quickSetupPlatforms.linux') },
+const QuickSetupIcon = (path: string): Component => ({ render: () => h('svg', { fill: 'currentColor', viewBox: '0 0 24 24', class: 'h-4 w-4' }, [h('path', { d: path })]) })
+const quickSetupPlatformOptions = computed<Array<{ value: CodexQuickSetupPlatform; label: string; icon: Component }>>(() => [
+  { value: 'windows', label: t('keys.quickSetupPlatforms.windows'), icon: QuickSetupIcon('M3 12V6.75l6-1.32v6.48L3 12zm17-9v8.75l-10 .15V5.21L20 3zM3 13l6 .09v6.81l-6-1.15V13zm7 .25l10 .15V21l-10-1.91v-5.84z') },
+  { value: 'macos', label: t('keys.quickSetupPlatforms.macos'), icon: QuickSetupIcon('M16.7 12.6c0-2.1 1.7-3.1 1.8-3.2-1-.1-2.1.6-2.6.6-.5 0-1.3-.6-2.2-.6-1.1 0-2.1.7-2.7 1.7-1.2 2.1-.3 5.2.9 6.9.6.8 1.2 1.7 2.1 2.1 2.1.8 0 1.1-.5 2.1-.5 1 0 1.3.5 2.1.5.9 0 1.5-.8 2.1-1.6.7-.9 1-1.8 1-1.9-.1 0-2.6-1-2.6-4zM15.2 9c.4-.5.7-1.3.6-2-0-.1-.1-.1-.2-.1-.8.1-1.6.5-2 1-.4.4-.7 1.2-.6 1.9.1.1.1.1.2.1.8-.1 1.6-.5 2-0.9z') },
+  { value: 'linux', label: t('keys.quickSetupPlatforms.linux'), icon: QuickSetupIcon('M12 2a5 5 0 0 0-5 5v3c0 2.8-2 4.4-2 7a7 7 0 0 0 14 0c0-2.6-2-4.2-2-7V7a5 5 0 0 0-5-5zm-2 7h1v1h-1V9zm3 0h1v1h-1V9zm-4 6h6a3 3 0 0 1-6 0z') },
 ])
 
 const setGroupButtonRef = (keyId: number, el: Element | ComponentPublicInstance | null) => {

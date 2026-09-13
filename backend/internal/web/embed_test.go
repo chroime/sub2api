@@ -5,6 +5,7 @@ package web
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
@@ -115,6 +116,15 @@ func TestInjectSiteTitle(t *testing.T) {
 }
 
 func TestInjectSiteFavicon(t *testing.T) {
+	t.Run("uses_static_mascot_for_default_branding", func(t *testing.T) {
+		html := []byte(`<link rel="icon" href="/logo.svg" />`)
+		for _, logo := range []string{"/xeno-alien-spin.svg", "/xeno-alien-emotions.svg", "/logo.svg"} {
+			settingsJSON, err := json.Marshal(map[string]string{"site_logo": logo})
+			require.NoError(t, err)
+			assert.Contains(t, string(injectSiteFavicon(html, settingsJSON)), `/xeno-alien-spin-still.svg`)
+		}
+	})
+
 	t.Run("replaces_favicon_with_site_logo", func(t *testing.T) {
 		html := []byte(`<html><head><link rel="icon" type="image/png" href="/logo.png" /></head></html>`)
 		settingsJSON := []byte(`{"site_logo":"https://example.com/custom-logo.png"}`)
@@ -269,6 +279,23 @@ func TestFrontendServer_InjectSettings(t *testing.T) {
 
 		assert.Contains(t, string(result), `window.__APP_CONFIG__={"nested":{"array":[1,2,3]},"special":"<>&"};`)
 	})
+}
+
+func TestFrontendServer_ServeIndexHTML_EscapesDocumentationForScriptContext(t *testing.T) {
+	provider := &mockSettingsProvider{settings: map[string]string{
+		"docs_content": "</script><script>alert(1)</script>",
+	}}
+	server, err := NewFrontendServer(provider)
+	require.NoError(t, err)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/", nil)
+	server.serveIndexHTML(c)
+
+	body := w.Body.String()
+	assert.NotContains(t, body, "</script><script>alert(1)</script>")
+	assert.Contains(t, body, `\u003c/script\u003e\u003cscript\u003ealert(1)\u003c/script\u003e`)
 }
 
 func TestFrontendServer_ServeIndexHTML(t *testing.T) {
@@ -650,11 +677,11 @@ func TestFrontendServer_Middleware(t *testing.T) {
 
 		// Request for existing static file
 		w := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/logo.png", nil)
+		req := httptest.NewRequest(http.MethodGet, "/logo.svg", nil)
 		router.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
-		assert.Contains(t, w.Header().Get("Content-Type"), "image/png")
+		assert.Contains(t, w.Header().Get("Content-Type"), "image/svg+xml")
 		assert.Empty(t, w.Header().Get("Cache-Control"))
 
 		entries, err := fs.ReadDir(server.distFS, "assets")
@@ -735,11 +762,11 @@ func TestServeEmbeddedFrontend(t *testing.T) {
 		router.Use(middleware)
 
 		w := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/logo.png", nil)
+		req := httptest.NewRequest(http.MethodGet, "/logo.svg", nil)
 		router.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
-		assert.Contains(t, w.Header().Get("Content-Type"), "image/png")
+		assert.Contains(t, w.Header().Get("Content-Type"), "image/svg+xml")
 	})
 
 	t.Run("serves_index_html_for_root", func(t *testing.T) {

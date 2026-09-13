@@ -111,6 +111,55 @@ export default {
     },
     footer: {
       allRightsReserved: 'All rights reserved.'
+    },
+    public: {
+    b2: {
+      integrationTitle: 'Connect in one minute', integrationDescription: 'Compatible with the OpenAI SDK. Just change the Base URL.',
+      fullDocs: 'Read the full docs', codeLanguage: 'Code language', copyCode: 'Copy code', copied: 'Copied', copyFailed: 'Copy failed', contacts: 'Contact'
+    },
+    nav: {
+      apiGateway: 'API gateway', channels: 'Channels', pricing: 'Pricing', modelPlaza: 'Model plaza', docs: 'Docs', startBuilding: 'Start building'
+    },
+    contact: { joinNow: 'Join the community' },
+    hero: {
+      eyebrow: 'Unified model gateway', title: 'One gateway. Every model that matters.',
+      titleLead: 'One API, ', titleAccent: 'every frontier model, ', titleEnd: 'smart routing.',
+      subtitle: 'Route OpenAI-compatible requests across the providers your product depends on, with transparent pricing and operational visibility.',
+      createApiKey: 'Create an API key', exploreApi: 'Read the integration guide', gatewayPreview: 'Gateway preview', keysStayYours: 'Keys stay yours', joinGroup: 'Join QQ group',
+      channels: 'channels', platforms: 'platforms', protocol: 'protocol', available: '{count} available', signInRequired: 'Sign in required', loading: 'Loading', error: 'Temporarily unavailable', empty: 'No channels yet', notLoaded: 'Not loaded', openAi: 'OpenAI',
+      routingLayer: 'Routing layer', smartFallback: 'Smart fallback', visibleChannels: 'Visible channels', supportedModels: 'Supported models', providers: 'Providers', compatibility: 'Compatibility', routing: 'Routing', openAiApi: 'OpenAI API', smartSticky: 'Smart + sticky', p50Latency: 'p50 latency', successRate: 'success rate', activeRoutes: 'active routes', readDocs: 'Read the docs'
+    },
+    models: { title: '8 leading model providers', pricing: 'View model details', app: 'Your application', appType: 'Web · App · Agent', gateway: 'Unified model access', entry: 'API endpoint', platforms: 'Model providers', coverage: 'Connected to 8 leading model providers and expanding' },
+    overview: {
+      channelStatus: 'Channel status', available: '{count} available', signInRequired: 'Sign in required', loading: 'Loading', error: 'Temporarily unavailable', empty: 'No channels yet', notLoaded: 'Not loaded', modelsIndexed: 'Models indexed', platforms: 'Platforms', gateway: 'Gateway', openAiCompatible: 'OpenAI-compatible'
+    },
+    channelStatus: {
+      eyebrow: 'Platform coverage', title: 'Channel status', description: 'See which providers and model groups are currently available through your gateway.', platformsAvailable: '{count} platform(s) available',
+      loadingAria: 'Loading channel status', errorTitle: 'Channel status is temporarily unavailable', errorFallback: 'Please try again in a moment.', retry: 'Try again',
+      unavailableTitle: 'Channel data is unavailable', unavailableDescription: 'Public channel data could not be loaded. Please try again later.',
+      idleTitle: 'Channel status has not loaded yet', idleDescription: 'Status data will appear here when the public summary is requested.', emptyTitle: 'No channel data yet', emptyDescription: 'There are no channels available for this workspace yet.',
+      active: 'Active', table: { platform: 'Platform', status: 'Status', channels: 'Channels', groups: 'Groups', models: 'Models' }, noNamedChannels: 'No named channels', moreChannels: '+{count} more', namesNote: 'Public group coverage for enabled channels, not a live health check.', viewFullStatus: 'View model details'
+    },
+    pricing: {
+      eyebrow: 'Model access', title: 'Pricing and model coverage', description: 'Browse published model prices by platform. Configured prices are separated from official reference prices when available.', modelsShown: '{shown} of {total} models shown',
+      loadingAria: 'Loading pricing summary', errorTitle: 'Pricing data is temporarily unavailable', errorFallback: 'Please try again in a moment.', retry: 'Try again', unavailableTitle: 'Pricing data is unavailable', unavailableDescription: 'Public pricing data could not be loaded. Please try again later.',
+      idleTitle: 'Pricing has not loaded yet', idleDescription: 'The published model summary will appear here when requested.', emptyTitle: 'No published models yet', emptyDescription: 'Pricing will appear when the model plaza has entries.', noMatchesTitle: 'No models match these filters', noMatchesDescription: 'Try a different search term or platform.',
+      searchPlaceholder: 'Search models', platform: 'Platform', allPlatforms: 'All platforms', clearFilters: 'Clear filters', caption: 'Published model prices by platform', table: { platform: 'Platform', model: 'Model', billing: 'Billing', input: 'Input', output: 'Output', cacheRead: 'Cache read', groups: 'Groups', perToken: 'USD / token' },
+      officialReference: 'Official reference', noPricePublished: 'No price published', perRequest: 'Per request', perRequestWithPrice: 'Per request {price}', tokenBilling: 'Per token', reference: 'Reference', notSpecified: 'Not specified', footerNote: 'Prices are provider-configured and may vary by billing mode.', browseModelPlaza: 'Browse model plaza'
+    },
+    integration: {
+      eyebrow: 'Drop-in integration', title: 'Get started in 1 minute', description: 'Use the SDKs you already know. Point them at one OpenAI-compatible base URL, then let {siteName} handle provider routing, retries, and usage metering.',
+      benefits: { sdk: 'OpenAI-compatible REST and SDKs', failover: 'Automatic failover across configured channels', limits: 'Per-key limits, logs, and usage visibility' }, apiReference: 'Read the integration guide', codeExamples: 'Code examples', copy: 'Copy', baseUrl: 'Base URL', curl: 'cURL', javascript: 'JavaScript', python: 'Python', codePanelAria: 'Code examples', codePanelFor: '{label} code example'
+    },
+    footer: {
+      builtForTeams: 'Built for teams shipping with AI.',
+      brandDescription: 'Unified model access and smart routing',
+      contactTitle: 'Contact us',
+      serviceLabel: 'Support contact',
+      copyContact: 'Copy contact',
+      linksLabel: 'Related links',
+      serviceStatus: 'Unified API gateway · Ready to connect'
+    }
     }
   },
 

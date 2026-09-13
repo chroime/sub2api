@@ -3,7 +3,7 @@
  * Defines all application routes with lazy loading and navigation guards
  */
 
-import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
+import { createRouter, createWebHistory, START_LOCATION, type RouteRecordRaw } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useAppStore } from '@/stores/app'
 import { useAdminSettingsStore } from '@/stores/adminSettings'
@@ -164,6 +164,16 @@ const routes: RouteRecordRaw[] = [
     meta: {
       requiresAuth: false,
       title: 'Key Usage',
+    }
+  },
+  {
+    path: '/docs',
+    name: 'PublicDocs',
+    component: () => import('@/views/public/PublicDocsView.vue'),
+    meta: {
+      requiresAuth: false,
+      title: 'Integration Guide',
+      titleKey: 'publicDocs.title'
     }
   },
   {
@@ -732,10 +742,18 @@ const routes: RouteRecordRaw[] = [
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes,
-  scrollBehavior(_to, _from, savedPosition) {
-    // Scroll to saved position when using browser back/forward
-    if (savedPosition) {
+  scrollBehavior(to, from, savedPosition) {
+    const isFreshHomeNavigation = to.name === 'Home' && from === START_LOCATION &&
+      (performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined)?.type !== 'back_forward'
+    // Reloads can carry saved scroll too; preserve it only for history returns.
+    if (savedPosition && !isFreshHomeNavigation) {
       return savedPosition
+    }
+    if (to.name === 'Home' && ['#channels', '#top'].includes(to.hash)) {
+      return { el: to.hash, top: 24 }
+    }
+    if (isFreshHomeNavigation) {
+      return { left: 0, top: 0, behavior: 'instant' }
     }
     // Scroll to top for new routes
     return { top: 0 }
@@ -751,7 +769,7 @@ let authInitialized = false
 const navigationLoading = useNavigationLoadingState()
 // 延迟初始化预加载，传入 router 实例
 let routePrefetch: ReturnType<typeof useRoutePrefetch> | null = null
-const BACKEND_MODE_ALLOWED_PATHS = ['/login', '/key-usage', '/setup', '/payment/result', '/payment/airwallex', '/legal']
+const BACKEND_MODE_ALLOWED_PATHS = ['/login', '/key-usage', '/setup', '/payment/result', '/payment/airwallex', '/legal', '/docs']
 const BACKEND_MODE_CALLBACK_PATHS = [
   '/auth/callback',
   '/auth/linuxdo/callback',

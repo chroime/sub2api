@@ -11,10 +11,10 @@
       <!-- Custom Logo or Default Logo -->
       <router-link
         :to="homePath"
-        class="sidebar-logo flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl shadow-glow transition-opacity hover:opacity-80"
+        class="sidebar-logo flex h-9 w-9 items-center justify-center transition-opacity hover:opacity-80"
         @click="handleMenuItemClick(homePath)"
       >
-        <img v-if="settingsLoaded" :src="siteLogo || '/logo.svg'" alt="Logo" class="h-full w-full object-contain" />
+        <SiteLogo v-if="settingsLoaded" :src="siteLogo" :alt="siteName" class="h-full w-full" />
       </router-link>
       <div class="sidebar-brand" :class="{ 'sidebar-brand-collapsed': sidebarCollapsed }" :aria-hidden="sidebarCollapsed ? 'true' : 'false'">
         <router-link
@@ -24,8 +24,14 @@
         >
           {{ siteName }}
         </router-link>
-        <!-- Version Badge -->
-        <VersionBadge :version="siteVersion" />
+        <VersionBadge v-if="isAdmin" :version="siteVersion" />
+        <span
+          v-else-if="firstContactLine"
+          class="sidebar-brand-contact block max-w-full truncate text-xs leading-5 text-gray-500 dark:text-dark-400"
+          :title="firstContactLine"
+        >
+          {{ firstContactLine }}
+        </span>
       </div>
     </div>
 
@@ -151,7 +157,7 @@
     <div class="mt-auto border-t border-gray-100 p-3 dark:border-dark-800">
       <!-- Theme Toggle -->
       <button
-        aria-disabled="true"
+        @click="toggleTheme"
         class="sidebar-link mb-2 w-full"
         :class="{ 'sidebar-link-collapsed': sidebarCollapsed }"
         :title="sidebarCollapsed ? (isDark ? t('nav.lightMode') : t('nav.darkMode')) : undefined"
@@ -193,6 +199,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAdminSettingsStore, useAppStore, useAuthStore, useOnboardingStore } from '@/stores'
 import VersionBadge from '@/components/common/VersionBadge.vue'
+import SiteLogo from '@/components/common/SiteLogo.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { sanitizeSvg } from '@/utils/sanitize'
 import { sanitizeUrl } from '@/utils/url'
@@ -265,6 +272,9 @@ const siteName = computed(() => appStore.siteName)
 const siteLogo = computed(() => sanitizeUrl(appStore.siteLogo || '', { allowRelative: true, allowDataUrl: true }))
 const siteVersion = computed(() => appStore.siteVersion)
 const settingsLoaded = computed(() => appStore.publicSettingsLoaded)
+const firstContactLine = computed(() =>
+  appStore.contactInfo.split(/[\r\n]+/).map(line => line.trim()).find(Boolean) || ''
+)
 
 // SVG Icon Components
 const DashboardIcon = {
@@ -863,6 +873,12 @@ function toggleSidebar() {
   appStore.toggleSidebar()
 }
 
+function toggleTheme() {
+  isDark.value = !isDark.value
+  document.documentElement.classList.toggle('dark', isDark.value)
+  localStorage.setItem('theme', isDark.value ? 'dark' : 'light')
+}
+
 function closeMobile() {
   appStore.setMobileOpen(false)
 }
@@ -926,9 +942,8 @@ function handleGroupClick(item: NavItem) {
   groupExpandOverrides.value.set(item.path, true)
 }
 
-// Initialize theme
-isDark.value = true
-document.documentElement.classList.add('dark')
+// Initialize theme from the global class set before app mount.
+isDark.value = document.documentElement.classList.contains('dark')
 
 // Fetch admin settings (for feature-gated nav items like Ops).
 watch(

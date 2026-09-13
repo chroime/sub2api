@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/util/logredact"
@@ -202,9 +203,26 @@ func RedactAuditBody(raw []byte, contentType string) string {
 	}
 	out := string(encoded)
 	if len(out) > auditRequestBodyMaxBytes {
-		out = out[:auditRequestBodyMaxBytes] + "...<truncated>"
+		out = truncateAuditUTF8(out, auditRequestBodyMaxBytes)
 	}
 	return out
+}
+
+// truncateAuditUTF8 caps a redacted body without splitting a multi-byte rune.
+// JSON escaping is not enabled here, so the encoded value can contain UTF-8
+// characters such as Chinese text.
+func truncateAuditUTF8(value string, maxBytes int) string {
+	if maxBytes <= 0 {
+		return "...<truncated>"
+	}
+	if len(value) <= maxBytes {
+		return value
+	}
+	end := maxBytes
+	for end > 0 && !utf8.ValidString(value[:end]) {
+		end--
+	}
+	return value[:end] + "...<truncated>"
 }
 
 const auditRedactMaxDepth = 24

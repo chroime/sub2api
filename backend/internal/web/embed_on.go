@@ -230,6 +230,10 @@ func injectSiteFavicon(html, settingsJSON []byte) []byte {
 	if logoURL == "" {
 		return html
 	}
+	switch logoURL {
+	case "/logo.svg", "/xeno-alien-emotions.svg", "/xeno-alien-spin.svg":
+		logoURL = "/xeno-alien-spin-still.svg"
+	}
 
 	linkStart := bytes.Index(html, []byte(`<link rel="icon"`))
 	if linkStart == -1 {

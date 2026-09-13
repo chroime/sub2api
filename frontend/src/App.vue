@@ -35,9 +35,7 @@ function updateDocumentTitle() {
 watch(
   () => appStore.siteLogo,
   (newLogo) => {
-    if (newLogo) {
-      updateFavicon(newLogo)
-    }
+    updateFavicon(newLogo)
   },
   { immediate: true }
 )

@@ -82,6 +82,33 @@ func TestSettingService_GetPublicSettings_ExposesTablePreferences(t *testing.T) 
 	require.Equal(t, []int{20, 50, 100}, settings.TablePageSizeOptions)
 }
 
+func TestSettingService_GetPublicSettings_ExposesDocumentation(t *testing.T) {
+	repo := &settingPublicRepoStub{values: map[string]string{
+		SettingKeyDocsTitle:   "Gateway API",
+		SettingKeyDocsContent: "# Hello\n\nUse the API.",
+	}}
+
+	settings, err := NewSettingService(repo, &config.Config{}).GetPublicSettings(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, "Gateway API", settings.DocsTitle)
+	require.Equal(t, "# Hello\n\nUse the API.", settings.DocsContent)
+
+	injected, err := NewSettingService(repo, &config.Config{}).GetPublicSettingsForInjection(context.Background())
+	require.NoError(t, err)
+	payload := injected.(*PublicSettingsInjectionPayload)
+	require.Equal(t, settings.DocsTitle, payload.DocsTitle)
+	require.Equal(t, settings.DocsContent, payload.DocsContent)
+}
+
+func TestSettingService_GetPublicSettings_DocumentationTitleDefaultsToEmpty(t *testing.T) {
+	svc := NewSettingService(&settingPublicRepoStub{values: map[string]string{}}, &config.Config{})
+	settings, err := svc.
+		GetPublicSettings(context.Background())
+	require.NoError(t, err)
+	require.Empty(t, settings.DocsTitle)
+	require.Empty(t, svc.parseSettings(map[string]string{}).DocsTitle)
+}
+
 func TestSettingService_GetPublicSettings_ExposesCompactHomeEnabled(t *testing.T) {
 	repo := &settingPublicRepoStub{
 		values: map[string]string{

@@ -5,9 +5,9 @@
   </AppLayout>
 
   <!-- 独立形态:自带导航条(logo/站名 + 登录/回后台) -->
-  <div v-else class="min-h-screen bg-gray-50 dark:bg-dark-950">
+  <div v-else class="public-model-plaza min-h-screen">
     <PlazaNavBar />
-    <main class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+    <main class="public-model-plaza-main mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
       <ModelPlazaContent :response="data" :loading="loading" :error="loadFailed" />
     </main>
   </div>
@@ -46,3 +46,57 @@ onMounted(async () => {
   }
 })
 </script>
+
+<style scoped>
+.public-model-plaza {
+  --plaza-bg: #070c11;
+  --plaza-panel: #0a1016;
+  --plaza-border: rgb(148 163 184 / 0.16);
+  min-height: 100vh;
+  background: var(--plaza-bg);
+  color: #e2e8f0;
+}
+
+.public-model-plaza-main {
+  position: relative;
+}
+
+.public-model-plaza-main::before {
+  position: absolute;
+  inset: 0 1rem auto;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgb(94 234 212 / 0.28), transparent);
+  content: '';
+  pointer-events: none;
+}
+
+:deep(.model-plaza-content) {
+  color: #e2e8f0;
+}
+
+:deep(.model-plaza-content .rounded-xl),
+:deep(.model-plaza-content .rounded-lg) {
+  border-color: var(--plaza-border);
+  background-color: var(--plaza-panel);
+}
+
+:deep(.model-plaza-content h1) { color: #f1f5f9; }
+:deep(.model-plaza-content > div > p) { color: #94a3b8; }
+:deep(.model-plaza-content .plaza-description) {
+  border-color: var(--plaza-border);
+  background: rgb(10 16 22 / 0.78);
+  box-shadow: 0 18px 45px rgb(0 0 0 / 0.16);
+}
+
+:deep(.model-plaza-content a) {
+  color: #99f6e4;
+}
+
+:deep(.model-plaza-content a:hover) {
+  color: #ccfbf1;
+}
+
+@media (max-width: 639px) {
+  .public-model-plaza-main { padding-top: 1.5rem; }
+}
+</style>
