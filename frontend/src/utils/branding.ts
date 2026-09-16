@@ -3,6 +3,7 @@ import { sanitizeUrl } from '@/utils/url'
 const BUILT_IN_SPIN_PATH = '/xeno-alien-spin.svg'
 export const DEFAULT_SITE_LOGO = `${BUILT_IN_SPIN_PATH}?rev=20260914-round-head-2`
 export const STATIC_SITE_LOGO = '/xeno-alien-spin-still.svg'
+export const DEFAULT_FAVICON = '/logo.svg'
 
 export function resolveSiteLogo(logoUrl = ''): string {
   const sanitizedLogoUrl = sanitizeUrl(logoUrl, {
@@ -17,9 +18,16 @@ export function resolveSiteLogo(logoUrl = ''): string {
   return sanitizedLogoUrl
 }
 
-export function updateFavicon(logoUrl: string): void {
-  const siteLogo = resolveSiteLogo(logoUrl)
-  const faviconUrl = siteLogo === DEFAULT_SITE_LOGO ? STATIC_SITE_LOGO : siteLogo
+export function updateFavicon(value = ''): void {
+  const candidate = value.trim()
+  // Match the server's image URL rules before the browser normalizes network paths.
+  const unsafePath = candidate.includes('\\') || Array.from(candidate).some(char => {
+    const code = char.charCodeAt(0)
+    return code < 0x20 || code === 0x7f
+  })
+  const faviconUrl = unsafePath
+    ? DEFAULT_FAVICON
+    : sanitizeUrl(candidate, { allowRelative: true, allowDataUrl: true }) || DEFAULT_FAVICON
 
   let link = document.querySelector<HTMLLinkElement>('link[rel="icon"]')
   if (!link) {

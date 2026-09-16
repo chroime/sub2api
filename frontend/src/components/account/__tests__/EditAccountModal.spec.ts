@@ -1,11 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent } from 'vue'
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 
-const { updateAccountMock, checkMixedChannelRiskMock, authIsSimpleMode } = vi.hoisted(() => ({
+const { updateAccountMock, checkMixedChannelRiskMock, authIsSimpleMode, getStreamingACKSettingsMock } = vi.hoisted(() => ({
   updateAccountMock: vi.fn(),
   checkMixedChannelRiskMock: vi.fn(),
-  authIsSimpleMode: { value: true }
+  authIsSimpleMode: { value: true },
+  getStreamingACKSettingsMock: vi.fn()
+}))
+
+vi.mock('@/api/admin/settings', () => ({
+  getStreamingACKSettings: getStreamingACKSettingsMock
 }))
 
 vi.mock('@/stores/app', () => ({
@@ -326,6 +331,7 @@ function mountModal(account = buildAccount(), renderGroupSelector = false) {
 describe('EditAccountModal', () => {
   beforeEach(() => {
     authIsSimpleMode.value = true
+    getStreamingACKSettingsMock.mockReset().mockResolvedValue({ enabled: true })
   })
 
   afterEach(() => vi.useRealTimers())
@@ -820,6 +826,31 @@ describe('EditAccountModal', () => {
     )
   })
 
+  it('shows that a saved ACK opt-in is blocked by the global setting', async () => {
+    const account = buildAccount()
+    account.extra = { openai_synthetic_first_response_enabled: true }
+    getStreamingACKSettingsMock.mockResolvedValue({ enabled: false })
+    const wrapper = mountModal(account)
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="streaming-ack-status"]').text()).toContain(
+      'admin.accounts.openai.syntheticFirstResponseStatusGlobalOff'
+    )
+    expect(wrapper.get('[data-testid="streaming-ack-settings-link"]').attributes('href')).toBe(
+      '/admin/settings#streaming-ack-settings'
+    )
+  })
+
+  it('does not describe an unsaved ACK toggle as effective', async () => {
+    const wrapper = mountModal()
+    await flushPromises()
+    await wrapper.get('[data-testid="openai-synthetic-first-response-toggle"]').trigger('click')
+
+    const status = wrapper.get('[data-testid="streaming-ack-status"]').text()
+    expect(status).toContain('admin.accounts.openai.syntheticFirstResponseStatusPending')
+    expect(status).not.toContain('admin.accounts.openai.syntheticFirstResponseStatusEnabled')
+  })
+
   it('does not render the synthetic first-response toggle for Spark shadow accounts', async () => {
     const account = buildOpenAISparkShadowAccount()
     updateAccountMock.mockReset().mockResolvedValue(account)
@@ -828,6 +859,7 @@ describe('EditAccountModal', () => {
     const wrapper = mountModal(account)
 
     expect(wrapper.find('[data-testid="openai-synthetic-first-response-toggle"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="streaming-ack-status"]').exists()).toBe(false)
   })
 
   it('loads and clears the OAuth-only Codex namespace flatten toggle', async () => {

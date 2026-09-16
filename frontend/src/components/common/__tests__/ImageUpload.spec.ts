@@ -47,3 +47,45 @@ describe('ImageUpload size boundaries', () => {
     wrapper.unmount()
   })
 })
+
+describe('ImageUpload ICO compatibility', () => {
+  async function uploadIco(type: string, content: BlobPart, allowIco = true) {
+    const wrapper = mount(ImageUpload, {
+      props: { modelValue: '', allowIco },
+      global: { stubs: { Icon: true } },
+    })
+    const input = wrapper.get('input[type="file"]')
+    Object.defineProperty(input.element, 'files', { value: [new File([content], 'favicon.ico', { type })] })
+    await input.trigger('change')
+    await flushPromises()
+    return wrapper
+  }
+
+  const icon = new Uint8Array(26)
+  icon.set([0, 0, 1, 0, 1, 0, 1, 1, 0, 0, 1, 0, 32, 0, 4, 0, 0, 0, 22, 0, 0, 0, 0, 0, 0, 0])
+
+  it.each(['', 'application/octet-stream'])('accepts a valid ICO without an image MIME type: %s', async (type) => {
+    const wrapper = await uploadIco(type, icon)
+    await vi.waitFor(() => expect(wrapper.emitted('update:modelValue')).toHaveLength(1))
+    const value = wrapper.emitted('update:modelValue')![0][0] as string
+    expect(value).toMatch(/^data:image\/x-icon;base64,/)
+    expect(atob(value.split(',')[1]).length).toBe(icon.length)
+    expect(wrapper.get('input').attributes('accept')).toContain('.ico')
+    wrapper.unmount()
+  })
+
+  it('rejects a renamed non-image file rather than trusting the ico extension', async () => {
+    const wrapper = await uploadIco('', '<script>alert(1)</script>')
+    await vi.waitFor(() => expect(wrapper.text()).toContain('common.selectImageFile'))
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+    wrapper.unmount()
+  })
+
+  it('does not expand acceptance for unrelated uploaders', async () => {
+    const wrapper = await uploadIco('', icon, false)
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+    expect(wrapper.text()).toContain('common.selectImageFile')
+    expect(wrapper.get('input').attributes('accept')).toBe('image/*')
+    wrapper.unmount()
+  })
+})

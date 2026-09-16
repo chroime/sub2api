@@ -601,6 +601,14 @@ export default {
         longContextBillingDesc:
           'Disabled by default. Enable only when this account\'s upstream charges OpenAI API long-context rates above the model threshold.',
         syntheticFirstResponse: 'Streaming first-response ACK',
+        syntheticFirstResponseStatusLoading: 'Loading global setting',
+        syntheticFirstResponseStatusUnavailable: 'Global setting unavailable',
+        syntheticFirstResponseStatusPending: 'Unsaved changes, not yet applied',
+        syntheticFirstResponseStatusAccountOff: 'Account ACK disabled, no intervention',
+        syntheticFirstResponseStatusGlobalOff: 'Global setting off, not effective',
+        syntheticFirstResponseStatusEnabled: 'Enabled for matching-group streaming requests only',
+        syntheticFirstResponseRefresh: 'Refresh global setting',
+        syntheticFirstResponseSettings: 'Global ACK setting',
         syntheticFirstResponseDesc:
           'Disabled by default. For this account only, emit a non-visible SSE ACK for streaming requests in its assigned group; genuine upstream text is never delayed or changed.',
         responsesWebsocketsV2: 'Responses WebSocket v2',

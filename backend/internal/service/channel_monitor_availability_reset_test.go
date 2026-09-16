@@ -73,15 +73,20 @@ func TestBuildResetTimelineHidesPreResetFailuresAndAddsSyntheticBars(t *testing.
 	result := buildResetTimeline([]*ChannelMonitorHistoryEntry{newSuccess, newFailure, oldFailure}, reset, resetAt.Add(time.Hour), 5)
 
 	require.Len(t, result, 5)
+	require.Same(t, newSuccess, result[0])
+	require.Same(t, newFailure, result[1])
+	// The default even layout spreads degraded bars across the synthetic slots.
 	require.Equal(t, []string{
 		MonitorStatusOperational,
 		MonitorStatusFailed,
 		MonitorStatusDegraded,
-		MonitorStatusDegraded,
 		MonitorStatusOperational,
+		MonitorStatusDegraded,
 	}, timelineStatuses(result))
-	for _, point := range result {
-		require.NotEqual(t, oldFailure.CheckedAt, point.CheckedAt)
+	require.NotContains(t, result, oldFailure)
+	for _, point := range result[2:] {
+		require.Equal(t, reset.Model, point.Model)
+		require.True(t, point.CheckedAt.Before(resetAt))
 	}
 }
 

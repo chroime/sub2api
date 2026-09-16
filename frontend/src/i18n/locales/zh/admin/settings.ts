@@ -470,6 +470,16 @@ export default {
         saved: 'Ollama Cloud 用量刷新设置已保存',
         saveFailed: '保存 Ollama Cloud 用量刷新设置失败'
       },
+      streamingACK: {
+        title: '流式首响 ACK 总开关',
+        scope: '仅限已开启 ACK 的 OpenAI 账号及其匹配分组',
+        enabled: '总开关已开启',
+        disabled: '总开关已关闭',
+        saved: '已保存，对新请求生效',
+        loadFailed: '无法读取 ACK 总开关状态',
+        retry: '重新读取',
+        saveFailed: '保存未确认，请重新读取状态'
+      },
       gatewayForwarding: {
         title: '请求转发行为',
         description: '控制请求转发到上游 OAuth 账号时的行为',
@@ -654,6 +664,8 @@ export default {
         docsContentPlaceholder: '## 接入准备\n\n编写密钥获取、客户端配置与常见问题……',
         docsContentHint: '保存后发布到 /docs。留空使用内置接入指南；可导入模板后编辑。自定义内容不会被模板覆盖，渲染前会进行安全清理。',
         siteLogo: '站点Logo',
+        siteFavicon: 'Favicon',
+        faviconHint: 'ICO、PNG 或 SVG 格式，最大 1MB。建议：32x32px 或 64x64px 正方形图片。',
         uploadImage: '上传图片',
         remove: '移除',
         logoHint: 'PNG、JPG 或 SVG 格式，最大 1MB。建议：80x80px 正方形图片。',

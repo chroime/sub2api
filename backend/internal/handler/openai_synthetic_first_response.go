@@ -17,7 +17,11 @@ func (h *OpenAIGatewayHandler) startSyntheticFirstResponse(
 	if !stream || h == nil || h.cfg == nil || !account.IsOpenAISyntheticFirstResponseEnabledForGroup(groupID) {
 		return func() {}
 	}
-	return service.StartOpenAISyntheticFirstResponse(c, h.cfg.Gateway.SyntheticFirstResponse, startedAt)
+	cfg := h.cfg.Gateway.SyntheticFirstResponse
+	if h.gatewayService != nil {
+		cfg = h.gatewayService.SyntheticFirstResponseConfig(c.Request.Context())
+	}
+	return service.StartOpenAISyntheticFirstResponse(c, cfg, startedAt)
 }
 
 // resetSyntheticFirstResponseForRetry cancels an uncommitted ACK before a

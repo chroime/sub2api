@@ -22,7 +22,7 @@
         <Icon name="plus" size="sm" />{{ t('publicDocs.insertTemplate') }}
       </button>
     </div>
-    <div v-else class="docs-editor-preview">
+    <div v-else class="public-theme docs-editor-preview">
       <PublicDocsContent :title="title" :content="content.trim() ? content : template" :preview="true" />
     </div>
   </section>
@@ -46,7 +46,7 @@ const template = computed(() => buildIntegrationGuide(locale.value, props.baseUr
 .docs-editor { border-top: 1px solid rgb(229 231 235); padding-top: 20px; }
 .docs-editor-tab { border-radius: 6px; padding: 7px 12px; color: rgb(107 114 128); font-size: 13px; font-weight: 600; }
 .docs-editor-tab.active { background: rgb(8 145 178 / .12); color: rgb(14 116 144); }
-.docs-editor-preview { overflow: hidden; border: 1px solid rgb(226 232 240); border-radius: 8px; background: #070c11; padding: 24px; }
+.docs-editor-preview { overflow: hidden; border: 1px solid var(--public-border); border-radius: 8px; background: var(--public-bg); padding: 24px; }
 .docs-editor-preview :deep(.docs-sidebar) { display: none; }
 .docs-editor-preview :deep(.has-chapters) { display: block; }
 .docs-editor-preview :deep(.docs-article-header) { margin-bottom: 18px; padding-bottom: 18px; }

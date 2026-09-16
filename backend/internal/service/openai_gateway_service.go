@@ -275,8 +275,9 @@ type OpenAIForwardResult struct {
 	ResponseHeaders       http.Header
 	Duration              time.Duration
 	FirstTokenMs          *int
-	// UpstreamFirstTokenMs preserves the real upstream TTFT when the user-facing
-	// FirstTokenMs is shortened by a synthetic SSE acknowledgement.
+	// StreamingAckMs measures the downstream SSE comment flush, not model output.
+	StreamingAckMs *int
+	// UpstreamFirstTokenMs retains the real upstream latency used by the scheduler.
 	UpstreamFirstTokenMs *int
 	ClientDisconnect     bool
 	ImageCount           int

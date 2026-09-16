@@ -1,5 +1,5 @@
 <template>
-  <picture class="site-logo">
+  <picture class="site-logo" :class="{ 'site-logo-default': resolvedSrc === DEFAULT_SITE_LOGO }">
     <source
       v-if="resolvedSrc === DEFAULT_SITE_LOGO"
       media="(prefers-reduced-motion: reduce)"
@@ -27,4 +27,8 @@ const resolvedSrc = computed(() => resolveSiteLogo(props.src))
 <style scoped>
 .site-logo { display: inline-block; flex-shrink: 0; overflow: hidden; vertical-align: middle; }
 .site-logo img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.site-logo-default {
+  border-radius: 25%;
+  background: #131617;
+}
 </style>

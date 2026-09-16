@@ -338,6 +338,7 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	// OEM设置
 	updates[SettingKeySiteName] = settings.SiteName
 	updates[SettingKeySiteLogo] = settings.SiteLogo
+	updates[SettingKeySiteFavicon] = settings.SiteFavicon
 	updates[SettingKeySiteSubtitle] = settings.SiteSubtitle
 	updates[SettingKeyAPIBaseURL] = settings.APIBaseURL
 	updates[SettingKeyContactInfo] = settings.ContactInfo

@@ -14,7 +14,6 @@
       <LocaleSwitcher class="b2-locale" />
       <RouterLink :to="destination" class="login">
         <span class="login-label">{{ authenticated ? t('home.dashboard') : t('home.login') }}</span>
-        <Icon name="arrowRight" class="login-arrow icon" aria-hidden="true" />
       </RouterLink>
     </nav>
   </header>

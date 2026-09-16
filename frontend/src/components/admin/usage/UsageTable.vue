@@ -247,6 +247,10 @@
               <span v-else class="text-gray-400 dark:text-gray-500">-</span>
               <span class="text-gray-400 dark:text-gray-500">{{ t('usage.latencyDuration') }}</span>
               <span class="font-medium tabular-nums" :class="LATENCY_TEXT_CLASSES[durationSeverity(row.duration_ms ?? 0)]">{{ formatDuration(row.duration_ms) }}</span>
+              <template v-if="row.streaming_ack_ms != null">
+                <span class="text-gray-500 dark:text-gray-400" :title="t('usage.streamingACKTooltip')">{{ t('usage.streamingACK') }}</span>
+                <span data-testid="streaming-ack-value" class="font-medium tabular-nums text-gray-600 dark:text-gray-300">{{ formatDuration(row.streaming_ack_ms) }}</span>
+              </template>
             </div>
           </div>
         </template>

@@ -234,6 +234,7 @@ export interface PublicSettings {
   aliyun_captcha_region?: string
   site_name: string
   site_logo: string
+  site_favicon?: string
   site_subtitle: string
   api_base_url: string
   contact_info: string
@@ -1729,6 +1730,7 @@ export interface UsageLog {
   native_compaction_v2: boolean
   duration_ms: number | null
   first_token_ms: number | null
+  streaming_ack_ms?: number | null
 
   // 图片生成字段
   image_count: number

@@ -53,6 +53,29 @@ func (s *settingHandlerPublicRepoStub) Delete(ctx context.Context, key string) e
 	panic("unexpected Delete call")
 }
 
+func TestSettingHandler_GetPublicSettings_ExposesIndependentSiteFavicon(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, favicon := range []string{"/tab-icon.svg", ""} {
+		repo := &settingHandlerPublicRepoStub{values: map[string]string{
+			"site_logo":    "/page-logo.svg",
+			"site_favicon": favicon,
+		}}
+		h := NewSettingHandler(service.NewSettingService(repo, &config.Config{}), "test-version")
+		recorder := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(recorder)
+		c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/settings/public", nil)
+		h.GetPublicSettings(c)
+		require.Equal(t, http.StatusOK, recorder.Code)
+		var body struct {
+			Data map[string]any `json:"data"`
+		}
+		require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &body))
+		require.Contains(t, body.Data, "site_favicon")
+		require.Equal(t, favicon, body.Data["site_favicon"])
+		require.Equal(t, "/page-logo.svg", body.Data["site_logo"])
+	}
+}
+
 func TestSettingHandler_GetPublicSettings_ExposesForceEmailOnThirdPartySignup(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

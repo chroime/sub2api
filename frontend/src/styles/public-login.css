@@ -1,0 +1,42 @@
+/* Login opts in to the public palette without changing the shared auth defaults. */
+.public-login .login-heading { color: var(--public-heading); }
+.public-login .login-muted { color: var(--public-muted); }
+.public-login .login-soft { color: var(--public-soft); }
+.public-login .login-divider { background: var(--public-border); }
+.public-login .input-label { color: var(--public-text); }
+.public-login .input {
+  background: var(--public-surface-raised);
+  color: var(--public-heading);
+}
+.public-login .input:not(.input-error) { border-color: var(--public-border-strong); }
+.public-login .input::placeholder { color: var(--public-soft); }
+.public-login .input:not(.input-error):focus {
+  border-color: var(--public-accent);
+  --tw-ring-color: color-mix(in srgb, var(--public-accent) 25%, transparent);
+}
+.public-login .input:disabled { background: var(--public-surface-soft); color: var(--public-muted); }
+.public-login .btn { --tw-ring-offset-color: var(--public-surface); }
+.public-login .btn:focus { --tw-ring-color: color-mix(in srgb, var(--public-accent) 45%, transparent); }
+.public-login .btn-primary {
+  background: var(--public-cta-bg);
+  color: var(--public-cta-ink);
+  box-shadow: var(--public-shadow);
+}
+.public-login .btn-primary:not(:disabled):hover { background: var(--public-cta-hover); box-shadow: var(--public-shadow); }
+.public-login .btn-secondary {
+  background: var(--public-surface-raised);
+  border-color: var(--public-border);
+  color: var(--public-text);
+  box-shadow: none;
+}
+.public-login .btn-secondary:not(:disabled):hover {
+  background: var(--public-hover);
+  border-color: var(--public-border-strong);
+  color: var(--public-heading);
+}
+.public-login .login-link { color: var(--public-accent); }
+.public-login .login-link:hover { color: var(--public-accent-hover); }
+.public-login .login-password-toggle { color: var(--public-soft); }
+.public-login .login-password-toggle:not(:disabled):hover { color: var(--public-accent); }
+.public-login .login-link:focus-visible,
+.public-login .login-password-toggle:focus-visible { outline: 2px solid var(--public-accent); outline-offset: 3px; border-radius: 4px; }

@@ -5,7 +5,7 @@ package web
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"errors"
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
@@ -116,47 +116,50 @@ func TestInjectSiteTitle(t *testing.T) {
 }
 
 func TestInjectSiteFavicon(t *testing.T) {
-	t.Run("uses_static_mascot_for_default_branding", func(t *testing.T) {
-		html := []byte(`<link rel="icon" href="/logo.svg" />`)
-		for _, logo := range []string{"/xeno-alien-spin.svg", "/xeno-alien-emotions.svg", "/logo.svg"} {
-			settingsJSON, err := json.Marshal(map[string]string{"site_logo": logo})
-			require.NoError(t, err)
-			assert.Contains(t, string(injectSiteFavicon(html, settingsJSON)), `/xeno-alien-spin-still.svg`)
-		}
-	})
+	for _, tt := range []struct {
+		name string
+		json string
+		want string
+	}{
+		{name: "independent_of_logo", json: `{"site_logo":"/page-logo.png","site_favicon":"/tab-icon.svg"}`, want: "/tab-icon.svg"},
+		{name: "missing_uses_bundled_default", json: `{"site_logo":"/page-logo.png"}`, want: "/logo.svg"},
+		{name: "empty_uses_bundled_default", json: `{"site_logo":"/page-logo.png","site_favicon":""}`, want: "/logo.svg"},
+		{name: "invalid_json_uses_bundled_default", json: `{invalid`, want: "/logo.svg"},
+		{name: "https", json: `{"site_favicon":"https://example.com/tab.png"}`, want: "https://example.com/tab.png"},
+		{name: "data_image", json: `{"site_favicon":"data:image/png;base64,YWJj"}`, want: "data:image/png;base64,YWJj"},
+		{name: "unsafe_scheme", json: `{"site_logo":"/page-logo.png","site_favicon":"javascript:alert(1)"}`, want: "/logo.svg"},
+		{name: "non_image_data", json: `{"site_favicon":"data:text/html;base64,YWJj"}`, want: "/logo.svg"},
+		{name: "protocol_relative", json: `{"site_favicon":"//example.com/tab.png"}`, want: "/logo.svg"},
+		{name: "backslash_network_path", json: `{"site_favicon":"/\\example.com/tab.png"}`, want: "/logo.svg"},
+		{name: "control_character", json: `{"site_favicon":"/\n/example.com/tab.png"}`, want: "/logo.svg"},
+		{name: "escaped_query", json: `{"site_favicon":"https://example.com/tab.svg?a=1&b=2"}`, want: "https://example.com/tab.svg?a=1&amp;b=2"},
+		{name: "escaped_attribute", json: `{"site_favicon":"/tab.svg?x=\" onload=\"alert(1)"}`, want: "/tab.svg?x=&#34; onload=&#34;alert(1)"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			html := []byte(`<html><head><link rel="icon" type="image/png" href="/stale.png" /></head><body></body></html>`)
+			result := string(injectSiteFavicon(html, []byte(tt.json)))
+			assert.Contains(t, result, `href="`+tt.want+`"`)
+			assert.NotContains(t, result, "/page-logo.png")
+			assert.NotContains(t, result, "/stale.png")
+			assert.NotContains(t, result, `type="image/png"`, "a stale MIME type must not prevent SVG or ICO icons from loading")
+			assert.Contains(t, result, `<body></body></html>`)
+		})
+	}
+}
 
-	t.Run("replaces_favicon_with_site_logo", func(t *testing.T) {
-		html := []byte(`<html><head><link rel="icon" type="image/png" href="/logo.png" /></head></html>`)
-		settingsJSON := []byte(`{"site_logo":"https://example.com/custom-logo.png"}`)
-
-		result := injectSiteFavicon(html, settingsJSON)
-
-		assert.Contains(t, string(result), `<link rel="icon" href="https://example.com/custom-logo.png" />`)
-		assert.NotContains(t, string(result), `/logo.png`)
-	})
-
-	t.Run("supports_relative_and_data_image_urls", func(t *testing.T) {
-		html := []byte(`<link rel="icon" href="/logo.png" />`)
-
-		assert.Contains(t, string(injectSiteFavicon(html, []byte(`{"site_logo":"/uploads/logo.svg"}`))), `/uploads/logo.svg`)
-		assert.Contains(t, string(injectSiteFavicon(html, []byte(`{"site_logo":"data:image/png;base64,abc"}`))), `data:image/png;base64,abc`)
-	})
-
-	t.Run("rejects_unsafe_logo_urls", func(t *testing.T) {
-		html := []byte(`<link rel="icon" href="/logo.png" />`)
-
-		result := injectSiteFavicon(html, []byte(`{"site_logo":"javascript:alert(1)"}`))
-
-		assert.Equal(t, string(html), string(result))
-	})
-
-	t.Run("escapes_logo_url_for_html", func(t *testing.T) {
-		html := []byte(`<link rel="icon" href="/logo.png" />`)
-
-		result := injectSiteFavicon(html, []byte(`{"site_logo":"https://example.com/logo.png?a=1&b=2"}`))
-
-		assert.Contains(t, string(result), `a=1&amp;b=2`)
-	})
+func TestFrontendServerSiteFaviconDefaultsOnSettingsFailure(t *testing.T) {
+	server := &FrontendServer{
+		baseHTML: []byte(`<html><head><link rel="icon" type="image/png" href="/stale.png" /></head></html>`),
+		cache:    NewHTMLCache(),
+		settings: &mockSettingsProvider{err: errors.New("settings unavailable")},
+	}
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodGet, "/", nil)
+	server.serveIndexHTML(c)
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Contains(t, recorder.Body.String(), `href="/logo.svg"`)
+	require.NotContains(t, recorder.Body.String(), "/stale.png")
 }
 
 func TestReplaceNoncePlaceholder(t *testing.T) {
@@ -379,7 +382,7 @@ func TestFrontendServer_ServeIndexHTML(t *testing.T) {
 		assert.True(t, strings.HasSuffix(etag, `"`))
 	})
 
-	t.Run("returns_304_for_matching_etag", func(t *testing.T) {
+	t.Run("returns_304_for_matching_etag_without_csp_nonce", func(t *testing.T) {
 		provider := &mockSettingsProvider{
 			settings: map[string]string{"test": "value"},
 		}
@@ -389,10 +392,6 @@ func TestFrontendServer_ServeIndexHTML(t *testing.T) {
 
 		// Use a real router for proper 304 handling
 		router := gin.New()
-		router.Use(func(c *gin.Context) {
-			c.Set(middleware.CSPNonceKey, "test-nonce")
-			c.Next()
-		})
 		router.Use(server.Middleware())
 
 		// First request to populate cache and get ETag
@@ -410,6 +409,32 @@ func TestFrontendServer_ServeIndexHTML(t *testing.T) {
 
 		assert.Equal(t, http.StatusNotModified, w2.Code)
 		assert.Empty(t, w2.Body.String())
+	})
+
+	t.Run("refresh_with_csp_nonce_keeps_injected_favicon_executable", func(t *testing.T) {
+		provider := &mockSettingsProvider{settings: map[string]string{"site_favicon": "/custom-tab.svg"}}
+		server, err := NewFrontendServer(provider)
+		require.NoError(t, err)
+		router := gin.New()
+		nonce := "first-nonce"
+		router.Use(func(c *gin.Context) {
+			c.Set(middleware.CSPNonceKey, nonce)
+			c.Header("Content-Security-Policy", "script-src 'nonce-"+nonce+"'")
+			c.Next()
+		})
+		router.Use(server.Middleware())
+		first := httptest.NewRecorder()
+		router.ServeHTTP(first, httptest.NewRequest(http.MethodGet, "/", nil))
+		require.Equal(t, http.StatusOK, first.Code)
+		nonce = "second-nonce"
+		refresh := httptest.NewRecorder()
+		request := httptest.NewRequest(http.MethodGet, "/", nil)
+		request.Header.Set("If-None-Match", first.Header().Get("ETag"))
+		router.ServeHTTP(refresh, request)
+		require.Equal(t, http.StatusOK, refresh.Code)
+		require.Contains(t, refresh.Body.String(), `nonce="second-nonce"`)
+		require.Contains(t, refresh.Body.String(), `href="/custom-tab.svg"`)
+		require.NotContains(t, refresh.Body.String(), `nonce="first-nonce"`)
 	})
 
 	t.Run("sets_cache_control_header", func(t *testing.T) {

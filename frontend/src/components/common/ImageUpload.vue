@@ -5,6 +5,7 @@
       <div
         class="flex items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 dark:border-dark-600 dark:bg-dark-800"
         :class="[previewSizeClass, { 'border-solid': !!modelValue }]"
+        :style="{ background: previewBackground || undefined, borderRadius: previewRadius || undefined }"
       >
         <!-- SVG mode: render inline -->
         <span
@@ -84,6 +85,9 @@ const props = withDefaults(defineProps<{
   removeLabel?: string
   hint?: string
   maxSize?: number // bytes
+  allowIco?: boolean
+  previewBackground?: string
+  previewRadius?: string
 }>(), {
   mode: 'image',
   size: 'md',
@@ -91,6 +95,9 @@ const props = withDefaults(defineProps<{
   removeLabel: '',
   hint: '',
   maxSize: 300 * 1024,
+  allowIco: false,
+  previewBackground: '',
+  previewRadius: '',
 })
 
 const emit = defineEmits<{
@@ -102,7 +109,7 @@ const error = ref('')
 const resolvedUploadLabel = computed(() => props.uploadLabel || t('common.upload'))
 const resolvedRemoveLabel = computed(() => props.removeLabel || t('common.remove'))
 
-const acceptTypes = computed(() => props.mode === 'svg' ? '.svg' : 'image/*')
+const acceptTypes = computed(() => props.mode === 'svg' ? '.svg' : props.allowIco ? 'image/*,.ico' : 'image/*')
 
 const sanitizedValue = computed(() =>
   props.mode === 'svg' ? sanitizeSvg(props.modelValue ?? '') : ''
@@ -129,6 +136,9 @@ function handleUpload(event: Event) {
   }
 
   const reader = new FileReader()
+  reader.onerror = () => {
+    error.value = t('common.fileReadFailed')
+  }
   if (props.mode === 'svg') {
     reader.onload = (e) => {
       const text = e.target?.result as string
@@ -136,6 +146,34 @@ function handleUpload(event: Event) {
     }
     reader.readAsText(file)
   } else {
+    // Windows may not supply an image MIME type for ICO files.
+    const untypedIcon = props.allowIco && /\.ico$/i.test(file.name) &&
+      (!file.type || file.type === 'application/octet-stream')
+    if (untypedIcon) {
+      reader.onload = () => {
+        const bytes = reader.result as ArrayBuffer
+        const header = new DataView(bytes)
+        const count = bytes.byteLength >= 6 ? header.getUint16(4, true) : 0
+        if (!count || bytes.byteLength < 6 + count * 16 ||
+          header.getUint16(0, true) !== 0 || header.getUint16(2, true) !== 1) {
+          error.value = t('common.selectImageFile')
+          return
+        }
+        for (let i = 0; i < count; i++) {
+          const size = header.getUint32(6 + i * 16 + 8, true)
+          const offset = header.getUint32(6 + i * 16 + 12, true)
+          if (!size || offset < 6 + count * 16 || offset + size > bytes.byteLength) {
+            error.value = t('common.selectImageFile')
+            return
+          }
+        }
+        reader.onload = () => emit('update:modelValue', reader.result as string)
+        reader.readAsDataURL(new Blob([bytes], { type: 'image/x-icon' }))
+      }
+      reader.readAsArrayBuffer(file)
+      input.value = ''
+      return
+    }
     if (!file.type.startsWith('image/')) {
       error.value = t('common.selectImageFile')
       input.value = ''
@@ -147,9 +185,6 @@ function handleUpload(event: Event) {
     reader.readAsDataURL(file)
   }
 
-  reader.onerror = () => {
-    error.value = t('common.fileReadFailed')
-  }
   input.value = ''
 }
 </script>

@@ -140,6 +140,8 @@ type SettingService struct {
 	// 面板每个认证请求都会读取，禁止在热路径上直接访问 DB。
 	panelRateLimitCache atomic.Value
 	panelRateLimitSF    singleflight.Group
+	streamingACKCache   atomic.Value // *cachedStreamingACKSettings
+	streamingACKMu      sync.Mutex
 
 	// openAIQuotaAutoPauseSettingsCache holds the most recently observed quota auto-pause
 	// settings. GetOpenAIQuotaAutoPauseSettings reads this atomic.Value on the request hot

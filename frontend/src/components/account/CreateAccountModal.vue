@@ -3249,16 +3249,22 @@
         class="border-t border-gray-200 pt-4 dark:border-dark-600"
       >
         <div class="flex items-center justify-between gap-4">
-          <div>
+          <div class="min-w-0">
             <label class="input-label mb-0">{{ t('admin.accounts.openai.syntheticFirstResponse') }}</label>
             <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
               {{ t('admin.accounts.openai.syntheticFirstResponseDesc') }}
             </p>
+            <StreamingACKStatus
+              :open="show"
+              :enabled="openAISyntheticFirstResponseEnabled"
+              :saved-enabled="null"
+            />
           </div>
           <button
             type="button"
             data-testid="openai-synthetic-first-response-toggle"
             role="switch"
+            :aria-label="t('admin.accounts.openai.syntheticFirstResponse')"
             :aria-checked="openAISyntheticFirstResponseEnabled"
             @click="openAISyntheticFirstResponseEnabled = !openAISyntheticFirstResponseEnabled"
             :class="[
@@ -3960,6 +3966,7 @@ import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import Select from '@/components/common/Select.vue'
 import HelpTooltip from '@/components/common/HelpTooltip.vue'
 import UpstreamRequestIdHeaderField from '@/components/account/UpstreamRequestIdHeaderField.vue'
+import StreamingACKStatus from '@/components/account/StreamingACKStatus.vue'
 import PlatformIcon from '@/components/common/PlatformIcon.vue'
 import Icon from '@/components/icons/Icon.vue'
 import ProxySelector from '@/components/common/ProxySelector.vue'

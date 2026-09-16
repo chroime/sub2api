@@ -58,6 +58,9 @@ const messages: Record<string, string> = {
   'usage.stream': 'Stream',
   'usage.sync': 'Sync',
   'usage.nativeCompactionV2': 'Compaction',
+  'usage.latencyFirstToken': 'First',
+  'usage.latencyDuration': 'Total',
+  'usage.streamingACK': 'ACK',
   'admin.usage.billingModeToken': 'Token',
   'admin.usage.billingModePerRequest': 'Per request',
   'admin.usage.billingModeImage': 'Image',
@@ -127,6 +130,61 @@ const baseImageRow = {
   image_size_source: null,
   image_size_breakdown: null,
 }
+
+describe('UsageTable streaming ACK timing', () => {
+  const latencyStub = {
+    props: ['data'],
+    template: '<div><div v-for="row in data" :key="row.request_id" data-testid="latency-row"><slot name="cell-latency" :row="row" /></div></div>',
+  }
+
+  function mountLatency(rows: Record<string, unknown>[]) {
+    return mount(UsageTable, {
+      props: { data: rows, columns: [], loading: false },
+      global: { stubs: { DataTable: latencyStub, EmptyState: true, Icon: true, Teleport: true } },
+    })
+  }
+
+  it('shows ACK separately without changing first-token timing or severity', () => {
+    const wrapper = mountLatency([{
+      request_id: 'slow-text-fast-ack',
+      first_token_ms: 60_000,
+      duration_ms: 80_000,
+      streaming_ack_ms: 720,
+    }])
+
+    expect(wrapper.get('[data-testid="streaming-ack-value"]').text()).toBe('720ms')
+    expect(wrapper.text()).toContain('ACK')
+    const firstToken = wrapper.findAll('span').find(span => span.text() === '1m 0s')!
+    expect(firstToken.classes()).toContain('text-red-600')
+    expect(wrapper.get('[aria-hidden="true"]').classes()).toContain('from-red-500')
+    expect(wrapper.get('[data-testid="streaming-ack-value"]').classes()).not.toContain('text-emerald-600')
+  })
+
+  it('renders a recorded zero ACK and omits null or absent ACK values', () => {
+    const wrapper = mountLatency([
+      { request_id: 'zero', first_token_ms: 100, duration_ms: 500, streaming_ack_ms: 0 },
+      { request_id: 'null', first_token_ms: 100, duration_ms: 500, streaming_ack_ms: null },
+      { request_id: 'legacy', first_token_ms: 100, duration_ms: 500 },
+    ])
+
+    expect(wrapper.findAll('[data-testid="streaming-ack-value"]')).toHaveLength(1)
+    expect(wrapper.get('[data-testid="streaming-ack-value"]').text()).toBe('0ms')
+  })
+
+  it('does not fill in missing first-token timing from the ACK', () => {
+    const wrapper = mountLatency([{
+      request_id: 'ack-without-text',
+      first_token_ms: null,
+      duration_ms: 2000,
+      streaming_ack_ms: 650,
+    }])
+
+    expect(wrapper.get('.grid').findAll('span').map(span => span.text())).toEqual([
+      'First', '-', 'Total', '2.00s', 'ACK', '650ms',
+    ])
+    expect(wrapper.get('[aria-hidden="true"]').classes()).not.toContain('from-emerald-500')
+  })
+})
 
 describe('admin UsageTable tooltip', () => {
   beforeEach(() => {

@@ -712,6 +712,33 @@ func (_u *UsageLogUpdate) ClearFirstTokenMs() *UsageLogUpdate {
 	return _u
 }
 
+// SetStreamingAckMs sets the "streaming_ack_ms" field.
+func (_u *UsageLogUpdate) SetStreamingAckMs(v int) *UsageLogUpdate {
+	_u.mutation.ResetStreamingAckMs()
+	_u.mutation.SetStreamingAckMs(v)
+	return _u
+}
+
+// SetNillableStreamingAckMs sets the "streaming_ack_ms" field if the given value is not nil.
+func (_u *UsageLogUpdate) SetNillableStreamingAckMs(v *int) *UsageLogUpdate {
+	if v != nil {
+		_u.SetStreamingAckMs(*v)
+	}
+	return _u
+}
+
+// AddStreamingAckMs adds value to the "streaming_ack_ms" field.
+func (_u *UsageLogUpdate) AddStreamingAckMs(v int) *UsageLogUpdate {
+	_u.mutation.AddStreamingAckMs(v)
+	return _u
+}
+
+// ClearStreamingAckMs clears the value of the "streaming_ack_ms" field.
+func (_u *UsageLogUpdate) ClearStreamingAckMs() *UsageLogUpdate {
+	_u.mutation.ClearStreamingAckMs()
+	return _u
+}
+
 // SetUserAgent sets the "user_agent" field.
 func (_u *UsageLogUpdate) SetUserAgent(v string) *UsageLogUpdate {
 	_u.mutation.SetUserAgent(v)
@@ -1308,6 +1335,15 @@ func (_u *UsageLogUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.FirstTokenMsCleared() {
 		_spec.ClearField(usagelog.FieldFirstTokenMs, field.TypeInt)
+	}
+	if value, ok := _u.mutation.StreamingAckMs(); ok {
+		_spec.SetField(usagelog.FieldStreamingAckMs, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedStreamingAckMs(); ok {
+		_spec.AddField(usagelog.FieldStreamingAckMs, field.TypeInt, value)
+	}
+	if _u.mutation.StreamingAckMsCleared() {
+		_spec.ClearField(usagelog.FieldStreamingAckMs, field.TypeInt)
 	}
 	if value, ok := _u.mutation.UserAgent(); ok {
 		_spec.SetField(usagelog.FieldUserAgent, field.TypeString, value)
@@ -2226,6 +2262,33 @@ func (_u *UsageLogUpdateOne) ClearFirstTokenMs() *UsageLogUpdateOne {
 	return _u
 }
 
+// SetStreamingAckMs sets the "streaming_ack_ms" field.
+func (_u *UsageLogUpdateOne) SetStreamingAckMs(v int) *UsageLogUpdateOne {
+	_u.mutation.ResetStreamingAckMs()
+	_u.mutation.SetStreamingAckMs(v)
+	return _u
+}
+
+// SetNillableStreamingAckMs sets the "streaming_ack_ms" field if the given value is not nil.
+func (_u *UsageLogUpdateOne) SetNillableStreamingAckMs(v *int) *UsageLogUpdateOne {
+	if v != nil {
+		_u.SetStreamingAckMs(*v)
+	}
+	return _u
+}
+
+// AddStreamingAckMs adds value to the "streaming_ack_ms" field.
+func (_u *UsageLogUpdateOne) AddStreamingAckMs(v int) *UsageLogUpdateOne {
+	_u.mutation.AddStreamingAckMs(v)
+	return _u
+}
+
+// ClearStreamingAckMs clears the value of the "streaming_ack_ms" field.
+func (_u *UsageLogUpdateOne) ClearStreamingAckMs() *UsageLogUpdateOne {
+	_u.mutation.ClearStreamingAckMs()
+	return _u
+}
+
 // SetUserAgent sets the "user_agent" field.
 func (_u *UsageLogUpdateOne) SetUserAgent(v string) *UsageLogUpdateOne {
 	_u.mutation.SetUserAgent(v)
@@ -2852,6 +2915,15 @@ func (_u *UsageLogUpdateOne) sqlSave(ctx context.Context) (_node *UsageLog, err 
 	}
 	if _u.mutation.FirstTokenMsCleared() {
 		_spec.ClearField(usagelog.FieldFirstTokenMs, field.TypeInt)
+	}
+	if value, ok := _u.mutation.StreamingAckMs(); ok {
+		_spec.SetField(usagelog.FieldStreamingAckMs, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedStreamingAckMs(); ok {
+		_spec.AddField(usagelog.FieldStreamingAckMs, field.TypeInt, value)
+	}
+	if _u.mutation.StreamingAckMsCleared() {
+		_spec.ClearField(usagelog.FieldStreamingAckMs, field.TypeInt)
 	}
 	if value, ok := _u.mutation.UserAgent(); ok {
 		_spec.SetField(usagelog.FieldUserAgent, field.TypeString, value)

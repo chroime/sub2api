@@ -9,6 +9,7 @@ describe('SiteLogo', () => {
       const wrapper = mount(SiteLogo, { props: { src, alt: 'Gateway' } })
 
       expect(wrapper.element.tagName).toBe('PICTURE')
+      expect(wrapper.classes()).toContain('site-logo-default')
       expect(wrapper.get('img').attributes('src')).toBe('/xeno-alien-spin.svg?rev=20260914-round-head-2')
       expect(wrapper.get('img').attributes('alt')).toBe('Gateway')
       expect(wrapper.get('source').attributes('media')).toBe('(prefers-reduced-motion: reduce)')
@@ -24,6 +25,7 @@ describe('SiteLogo', () => {
       const wrapper = mount(SiteLogo, { props: { src, alt: 'Custom gateway' } })
 
       expect(wrapper.get('img').attributes('src')).toBe(src)
+      expect(wrapper.classes()).not.toContain('site-logo-default')
       expect(wrapper.find('source').exists()).toBe(false)
       wrapper.unmount()
     },

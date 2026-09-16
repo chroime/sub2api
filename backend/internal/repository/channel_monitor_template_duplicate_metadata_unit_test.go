@@ -40,10 +40,11 @@ func TestApplyChannelMonitorTemplatePreservesDuplicateOperationMetadataAtomicall
 			service.MonitorAPIModeResponses,
 		).
 		WillReturnResult(sqlmock.NewResult(0, 2))
-	mock.ExpectExec(`(?s)UPDATE channel_monitors\s+SET extra_headers = \$1::jsonb \|\| CASE\s+WHEN COALESCE\(extra_headers, '\{\}'::jsonb\) \? \(\$2::text\)\s+THEN jsonb_build_object\(\$2::text, COALESCE\(extra_headers, '\{\}'::jsonb\) -> \(\$2::text\)\)\s+ELSE '\{\}'::jsonb\s+END\s+WHERE template_id = \$3\s+AND id = ANY\(\$4\)\s+AND provider = \$5\s+AND api_mode = \$6`).
+	mock.ExpectExec(`(?s)UPDATE channel_monitors\s+SET extra_headers = \$1::jsonb \|\| CASE\s+WHEN COALESCE\(extra_headers, '\{\}'::jsonb\) \? \(\$2::text\)\s+THEN jsonb_build_object\(\$2::text, COALESCE\(extra_headers, '\{\}'::jsonb\) -> \(\$2::text\)\)\s+ELSE '\{\}'::jsonb\s+END \|\| CASE\s+WHEN COALESCE\(extra_headers, '\{\}'::jsonb\) \? \(\$3::text\)\s+THEN jsonb_build_object\(\$3::text, COALESCE\(extra_headers, '\{\}'::jsonb\) -> \(\$3::text\)\)\s+ELSE '\{\}'::jsonb\s+END\s+WHERE template_id = \$4\s+AND id = ANY\(\$5\)\s+AND provider = \$6\s+AND api_mode = \$7`).
 		WithArgs(
 			`{"User-Agent":"template-client"}`,
 			service.ChannelMonitorDuplicateOperationIDMetadataKey,
+			service.ChannelMonitorAvailabilityResetMetadataKey,
 			templateID,
 			`{41,42}`,
 			service.MonitorProviderOpenAI,
@@ -73,10 +74,11 @@ func TestApplyChannelMonitorTemplateRollsBackWhenHeaderRowCountDiffers(t *testin
 	expectChannelMonitorTemplateForApply(mock, templateID)
 	mock.ExpectExec(`(?s)UPDATE "channel_monitors" SET .*WHERE `).
 		WillReturnResult(sqlmock.NewResult(0, 2))
-	mock.ExpectExec(`(?s)UPDATE channel_monitors\s+SET extra_headers = \$1::jsonb \|\| CASE.*jsonb_build_object\(\$2::text,.*WHERE template_id = \$3.*AND id = ANY\(\$4\)`).
+	mock.ExpectExec(`(?s)UPDATE channel_monitors\s+SET extra_headers = \$1::jsonb \|\| CASE.*jsonb_build_object\(\$2::text,.*END \|\| CASE.*jsonb_build_object\(\$3::text,.*WHERE template_id = \$4.*AND id = ANY\(\$5\)`).
 		WithArgs(
 			`{"User-Agent":"template-client"}`,
 			service.ChannelMonitorDuplicateOperationIDMetadataKey,
+			service.ChannelMonitorAvailabilityResetMetadataKey,
 			templateID,
 			`{41,42}`,
 			service.MonitorProviderOpenAI,

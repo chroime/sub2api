@@ -1,0 +1,58 @@
+/* Shared palette for the public home, documentation, model plaza, and login.
+   Opt in with .public-theme so other account and administration screens keep their theme. */
+.public-theme {
+  --public-bg: #e6ece3;
+  --public-surface: #eef2ea;
+  --public-surface-raised: #f2f5ef;
+  --public-surface-soft: #dfe7db;
+  --public-hover: #d8e3d6;
+  --public-heading: #24352b;
+  --public-text: #2e3b32;
+  --public-muted: #526458;
+  --public-soft: #5d6c60;
+  --public-border: #c7d2c3;
+  --public-border-strong: #9cafa0;
+  --public-accent: #38694f;
+  --public-accent-hover: #28573f;
+  --public-accent-soft: #d5e2d2;
+  --public-accent-ink: #edf3eb;
+  --public-cta-bg: #38694f;
+  --public-cta-hover: #2c5a42;
+  --public-cta-ink: #edf3eb;
+  --public-code-bg: var(--public-surface);
+  --public-code-text: #304c3a;
+  --public-warning: #805e33;
+  --public-warning-bg: #e9e4d2;
+  --public-response: #876746;
+  --public-shadow: 0 2px 8px rgb(42 62 46 / .04);
+  background: var(--public-bg);
+  color: var(--public-text);
+  color-scheme: light;
+}
+
+html.dark .public-theme {
+  --public-bg: #131617;
+  --public-surface: #1c2220;
+  --public-surface-raised: #222a26;
+  --public-surface-soft: #202921;
+  --public-hover: #29362e;
+  --public-heading: #dfe7df;
+  --public-text: #c9d5cb;
+  --public-muted: #a0b0a4;
+  --public-soft: #8a9d8f;
+  --public-border: #344339;
+  --public-border-strong: #566c5c;
+  --public-accent: #9bc6ac;
+  --public-accent-hover: #bedcc5;
+  --public-accent-soft: #283e31;
+  --public-accent-ink: #17251c;
+  --public-cta-bg: #91bfa2;
+  --public-cta-hover: #a5ceb3;
+  --public-cta-ink: #17251c;
+  --public-code-text: #cadbcb;
+  --public-warning: #c9b18a;
+  --public-warning-bg: #27271f;
+  --public-response: #c4ab8c;
+  --public-shadow: 0 2px 8px rgb(0 0 0 / .1);
+  color-scheme: dark;
+}

@@ -1,22 +1,22 @@
 <template>
-  <div class="min-h-screen bg-[#070c11] text-slate-100">
+  <div class="public-theme public-docs-page min-h-screen">
     <PublicSiteHeader :site-name="siteName" :site-logo="siteLogo" :subtitle="t('publicDocs.title')" :destination="destination" :authenticated="authStore.isAuthenticated">
       <RouterLink to="/home" class="public-nav-link">{{ t('publicDocs.home') }}</RouterLink>
       <RouterLink to="/model-plaza" class="public-nav-link">{{ t('publicDocs.modelPlaza') }}</RouterLink>
     </PublicSiteHeader>
     <main class="mx-auto max-w-7xl px-5 py-8 sm:px-8 sm:py-12 lg:px-10">
-      <div v-if="loading" class="min-h-80 py-20 text-center text-sm text-slate-400" role="status" aria-busy="true">{{ t('publicDocs.loading') }}</div>
+      <div v-if="loading" class="docs-loading min-h-80 py-20 text-center text-sm" role="status" aria-busy="true">{{ t('publicDocs.loading') }}</div>
       <div v-else-if="loadError" class="min-h-80 py-20 text-center" role="alert">
-        <h1 class="text-xl font-semibold text-white">{{ t('publicDocs.loadFailed') }}</h1>
-        <button type="button" class="mt-6 inline-flex items-center gap-2 rounded-lg border border-white/15 px-4 py-2 text-sm text-cyan-200 hover:border-cyan-300" @click="loadSettings">
+        <h1 class="docs-error-title text-xl font-semibold">{{ t('publicDocs.loadFailed') }}</h1>
+        <button type="button" class="docs-retry mt-6 inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm" @click="loadSettings">
           <Icon name="refresh" size="sm" />{{ t('publicDocs.retry') }}
         </button>
       </div>
       <PublicDocsContent v-else :title="settings?.docs_title" :content="documentContent" />
     </main>
-    <footer class="mx-auto mt-10 flex max-w-7xl flex-wrap items-center justify-between gap-4 border-t border-white/10 px-5 py-6 text-xs text-slate-500 sm:px-8 lg:px-10">
+    <footer class="docs-footer mx-auto mt-10 flex max-w-7xl flex-wrap items-center justify-between gap-4 border-t px-5 py-6 text-xs sm:px-8 lg:px-10">
       <span>&copy; {{ new Date().getFullYear() }} {{ siteName }}</span>
-      <RouterLink to="/home" class="inline-flex items-center gap-2 text-cyan-200"><Icon name="arrowLeft" size="xs" />{{ t('publicDocs.home') }}</RouterLink>
+      <RouterLink to="/home" class="docs-footer-link inline-flex items-center gap-2"><Icon name="arrowLeft" size="xs" />{{ t('publicDocs.home') }}</RouterLink>
     </footer>
   </div>
 </template>
@@ -59,3 +59,15 @@ async function loadSettings() {
 
 onMounted(() => { if (!settings.value) void loadSettings() })
 </script>
+
+<style scoped>
+.public-docs-page { background: var(--public-bg); color: var(--public-text); }
+.docs-loading, .docs-footer { color: var(--public-muted); }
+.docs-error-title { color: var(--public-heading); }
+.docs-retry { border-color: var(--public-border); background: var(--public-surface); color: var(--public-accent); transition: border-color 160ms ease, background-color 160ms ease; }
+.docs-retry:hover { border-color: var(--public-accent); background: var(--public-accent-soft); }
+.docs-retry:focus-visible, .docs-footer-link:focus-visible { outline: 2px solid var(--public-accent); outline-offset: 4px; }
+.docs-footer { border-color: var(--public-border); }
+.docs-footer-link { color: var(--public-accent); }
+.docs-footer-link:hover { color: var(--public-accent-hover); }
+</style>

@@ -477,6 +477,16 @@ export default {
         saved: 'Ollama Cloud usage refresh settings saved',
         saveFailed: 'Failed to save Ollama Cloud usage refresh settings'
       },
+      streamingACK: {
+        title: 'Streaming ACK master switch',
+        scope: 'Opted-in OpenAI accounts and matching groups only',
+        enabled: 'Master switch enabled',
+        disabled: 'Master switch disabled',
+        saved: 'Saved; applies to new requests',
+        loadFailed: 'Unable to load the ACK master setting',
+        retry: 'Reload setting',
+        saveFailed: 'Save not confirmed; reload the current setting'
+      },
       gatewayForwarding: {
         title: 'Request Forwarding',
         description: 'Control how requests are forwarded to upstream OAuth accounts',
@@ -662,6 +672,8 @@ export default {
         docsContentPlaceholder: '## Before you connect\n\nDescribe key setup, client configuration, and troubleshooting...',
         docsContentHint: 'Saved content is published at /docs. Leave empty for the built-in guide, or import the template to edit it. Custom content is preserved and Markdown is sanitized.',
         siteLogo: 'Site Logo',
+        siteFavicon: 'Favicon',
+        faviconHint: 'ICO, PNG, or SVG. Max 1MB. Recommended: 32x32px or 64x64px square image.',
         uploadImage: 'Upload Image',
         remove: 'Remove',
         logoHint: 'PNG, JPG, or SVG. Max 1MB. Recommended: 80x80px square image.',

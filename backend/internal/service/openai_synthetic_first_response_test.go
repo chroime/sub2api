@@ -70,7 +70,7 @@ func TestSyntheticFirstResponseWritesOneCommentForSlowStream(t *testing.T) {
 
 	stop := StartOpenAISyntheticFirstResponse(c, cfg, time.Now())
 	t.Cleanup(stop)
-	require.Eventually(t, func() bool { return recorder.Body.String() == ":\n\n" }, time.Second, time.Millisecond)
+	require.Eventually(t, func() bool { return OpenAISyntheticFirstResponseMs(c) != nil }, time.Second, time.Millisecond)
 	time.Sleep(15 * time.Millisecond)
 	require.Equal(t, ":\n\n", recorder.Body.String())
 	require.NotNil(t, OpenAISyntheticFirstResponseMs(c))
@@ -98,10 +98,15 @@ func TestSyntheticFirstResponseDoesNotDelayFastOutput(t *testing.T) {
 	require.NotContains(t, recorder.Body.String(), "\n:\n")
 	require.False(t, strings.HasPrefix(recorder.Body.String(), ":\n\n"))
 	require.Nil(t, OpenAISyntheticFirstResponseMs(c))
+	firstTokenMs := 2
+	result := &OpenAIForwardResult{FirstTokenMs: &firstTokenMs}
+	ApplyOpenAISyntheticFirstResponseResult(c, result)
+	require.Equal(t, 2, *result.FirstTokenMs)
+	require.Nil(t, result.StreamingAckMs)
 }
 
 func TestApplyOpenAISyntheticFirstResponsePreservesUpstreamTTFT(t *testing.T) {
-	c, recorder := syntheticFirstResponseTestContext(t, "result-request")
+	c, _ := syntheticFirstResponseTestContext(t, "result-request")
 	cfg := config.GatewaySyntheticFirstResponseConfig{
 		Enabled:                  true,
 		MinDelayMs:               5,
@@ -111,13 +116,56 @@ func TestApplyOpenAISyntheticFirstResponsePreservesUpstreamTTFT(t *testing.T) {
 	}
 	stop := StartOpenAISyntheticFirstResponse(c, cfg, time.Now())
 	t.Cleanup(stop)
-	require.Eventually(t, func() bool { return recorder.Body.String() == ":\n\n" }, time.Second, time.Millisecond)
+	require.Eventually(t, func() bool { return OpenAISyntheticFirstResponseMs(c) != nil }, time.Second, time.Millisecond)
 	upstream := 22_580
 	result := &OpenAIForwardResult{FirstTokenMs: &upstream}
 
 	ApplyOpenAISyntheticFirstResponseResult(c, result)
 
-	require.Less(t, *result.FirstTokenMs, 100)
+	require.Equal(t, 22_580, *result.FirstTokenMs)
 	require.Equal(t, 22_580, *result.UpstreamFirstTokenMs)
 	require.Equal(t, 22_580, *result.SchedulerFirstTokenMs())
+	require.NotNil(t, result.StreamingAckMs)
+	require.Equal(t, *OpenAISyntheticFirstResponseMs(c), *result.StreamingAckMs)
+}
+
+func TestApplyOpenAISyntheticFirstResponseDoesNotInventTTFT(t *testing.T) {
+	c, _ := syntheticFirstResponseTestContext(t, "ack-without-output")
+	ackMs := 700
+	c.Set(openAISyntheticFirstResponseKey, &openAISyntheticFirstResponse{ackMs: &ackMs})
+	result := &OpenAIForwardResult{}
+
+	ApplyOpenAISyntheticFirstResponseResult(c, result)
+
+	require.Nil(t, result.FirstTokenMs)
+	require.Nil(t, result.UpstreamFirstTokenMs)
+	require.Nil(t, result.SchedulerFirstTokenMs())
+	require.Equal(t, 700, *result.StreamingAckMs)
+}
+
+type syntheticAckFlushTimingWriter struct {
+	gin.ResponseWriter
+	flushedAt time.Time
+}
+
+func (w *syntheticAckFlushTimingWriter) Flush() {
+	w.ResponseWriter.Flush()
+	w.flushedAt = time.Now()
+}
+
+func TestSyntheticFirstResponseRecordsActualFlushLatency(t *testing.T) {
+	c, recorder := syntheticFirstResponseTestContext(t, "actual-flush")
+	startedAt := time.Now().Add(-250 * time.Millisecond)
+	writer := &syntheticAckFlushTimingWriter{ResponseWriter: c.Writer}
+	state := &openAISyntheticFirstResponse{writer: writer, startedAt: startedAt, stop: make(chan struct{})}
+	c.Set(openAISyntheticFirstResponseKey, state)
+
+	state.beat()
+
+	ackMs := OpenAISyntheticFirstResponseMs(c)
+	require.NotNil(t, ackMs)
+	require.False(t, writer.flushedAt.IsZero())
+	require.GreaterOrEqual(t, *ackMs, int(writer.flushedAt.Sub(startedAt).Milliseconds()))
+	require.LessOrEqual(t, *ackMs, int(time.Since(startedAt).Milliseconds()))
+	require.Equal(t, ":\n\n", recorder.Body.String())
 }

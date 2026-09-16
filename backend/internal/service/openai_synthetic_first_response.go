@@ -223,8 +223,8 @@ func openAISyntheticFirstResponseFromContext(c *gin.Context) *openAISyntheticFir
 	return state
 }
 
-// ApplyOpenAISyntheticFirstResponseResult keeps the upstream TTFT intact and
-// exposes the earlier downstream ACK latency through the existing usage field.
+// ApplyOpenAISyntheticFirstResponseResult records the downstream ACK separately
+// from the real model-output latency used by usage logs and the scheduler.
 func ApplyOpenAISyntheticFirstResponseResult(c *gin.Context, result *OpenAIForwardResult) {
 	if result == nil {
 		return
@@ -233,11 +233,7 @@ func ApplyOpenAISyntheticFirstResponseResult(c *gin.Context, result *OpenAIForwa
 		value := *result.FirstTokenMs
 		result.UpstreamFirstTokenMs = &value
 	}
-	ackMs := OpenAISyntheticFirstResponseMs(c)
-	if ackMs != nil && (result.FirstTokenMs == nil || *ackMs < *result.FirstTokenMs) {
-		value := *ackMs
-		result.FirstTokenMs = &value
-	}
+	result.StreamingAckMs = OpenAISyntheticFirstResponseMs(c)
 }
 
 type openAISyntheticFirstResponseWriter struct {

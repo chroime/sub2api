@@ -559,6 +559,9 @@ function mountView() {
         ProxySelector: true,
         ImageUpload: ImageUploadStub,
         BackupSettings: true,
+        StreamingACKSettings: defineComponent({
+          template: '<section data-testid="streaming-ack-settings-panel" />',
+        }),
       },
     },
   });
@@ -627,6 +630,20 @@ describe("admin SettingsView email domain quota copy", () => {
 });
 
 describe("admin SettingsView payment visible method controls", () => {
+  it("opens the gateway tab for the streaming ACK settings link", async () => {
+    const previousURL = window.location.href;
+    window.history.replaceState(null, "", "/admin/settings#streaming-ack-settings");
+    const wrapper = mountView();
+    try {
+      await flushPromises();
+      expect(wrapper.get("#settings-tab-gateway").attributes("aria-selected")).toBe("true");
+      expect(wrapper.get('[data-testid="streaming-ack-settings-panel"]').isVisible()).toBe(true);
+    } finally {
+      wrapper.unmount();
+      window.history.replaceState(null, "", previousURL);
+    }
+  });
+
   beforeEach(() => {
     getSettings.mockReset();
     updateSettings.mockReset();
@@ -1543,6 +1560,76 @@ describe("admin SettingsView payment visible method controls", () => {
     expect(logoUpload?.attributes("max-size")).toBe(String(1024 * 1024));
     expect(zhSettings.settings.site.logoHint).toContain("1MB");
     expect(enSettings.settings.site.logoHint).toContain("1MB");
+    wrapper.unmount();
+  });
+
+  it("places an independent favicon uploader immediately after the site logo", async () => {
+    getSettings.mockResolvedValueOnce({
+      ...baseSettingsResponse,
+      site_logo: "/brand.svg",
+      site_favicon: "/tab-icon.ico",
+    });
+    const wrapper = mountView();
+    await flushPromises();
+    const uploads = wrapper.findAllComponents(ImageUploadStub);
+    const logoIndex = uploads.findIndex((node) => node.attributes("hint") === "admin.settings.site.logoHint");
+    const faviconUpload = uploads[logoIndex + 1];
+    expect(logoIndex).toBeGreaterThanOrEqual(0);
+    expect(faviconUpload?.attributes("hint")).toBe("admin.settings.site.faviconHint");
+    expect(faviconUpload?.props("modelValue")).toBe("/tab-icon.ico");
+    expect(faviconUpload?.attributes("max-size")).toBe(String(1024 * 1024));
+    expect(faviconUpload?.attributes("allow-ico")).toBe("true");
+
+    faviconUpload!.vm.$emit("update:modelValue", "data:image/png;base64,aWNvbg==");
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+    expect(updateSettings).toHaveBeenLastCalledWith(expect.objectContaining({
+      site_logo: "/brand.svg",
+      site_favicon: "data:image/png;base64,aWNvbg==",
+    }));
+    expect(uploads[logoIndex].props("modelValue")).toBe("/brand.svg");
+    wrapper.unmount();
+  });
+
+  it("clears only the favicon when removing its image", async () => {
+    getSettings.mockResolvedValueOnce({
+      ...baseSettingsResponse,
+      site_logo: "/brand.svg",
+      site_favicon: "/tab-icon.ico",
+    });
+    const wrapper = mountView();
+    await flushPromises();
+    const faviconUpload = wrapper.findAllComponents(ImageUploadStub).find(
+      (node) => node.attributes("hint") === "admin.settings.site.faviconHint",
+    );
+    expect(faviconUpload).toBeDefined();
+    faviconUpload!.vm.$emit("update:modelValue", "");
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+    expect(updateSettings).toHaveBeenLastCalledWith(expect.objectContaining({
+      site_logo: "/brand.svg",
+      site_favicon: "",
+    }));
+    wrapper.unmount();
+  });
+
+  it("keeps a missing legacy favicon empty instead of copying the site logo", async () => {
+    getSettings.mockResolvedValueOnce({ ...baseSettingsResponse, site_logo: "/brand.svg" });
+    const wrapper = mountView();
+    await flushPromises();
+    const faviconUpload = wrapper.findAllComponents(ImageUploadStub).find(
+      (node) => node.attributes("hint") === "admin.settings.site.faviconHint",
+    );
+    expect(faviconUpload).toBeDefined();
+    expect(faviconUpload!.props("modelValue")).toBe("");
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+    expect(updateSettings).toHaveBeenLastCalledWith(expect.objectContaining({
+      site_logo: "/brand.svg",
+      site_favicon: "",
+    }));
+    expect(zhSettings.settings.site.faviconHint).toContain("1MB");
+    expect(enSettings.settings.site.faviconHint).toContain("1MB");
     wrapper.unmount();
   });
 

@@ -463,6 +463,20 @@ func (_c *UsageLogCreate) SetNillableFirstTokenMs(v *int) *UsageLogCreate {
 	return _c
 }
 
+// SetStreamingAckMs sets the "streaming_ack_ms" field.
+func (_c *UsageLogCreate) SetStreamingAckMs(v int) *UsageLogCreate {
+	_c.mutation.SetStreamingAckMs(v)
+	return _c
+}
+
+// SetNillableStreamingAckMs sets the "streaming_ack_ms" field if the given value is not nil.
+func (_c *UsageLogCreate) SetNillableStreamingAckMs(v *int) *UsageLogCreate {
+	if v != nil {
+		_c.SetStreamingAckMs(*v)
+	}
+	return _c
+}
+
 // SetUserAgent sets the "user_agent" field.
 func (_c *UsageLogCreate) SetUserAgent(v string) *UsageLogCreate {
 	_c.mutation.SetUserAgent(v)
@@ -1082,6 +1096,10 @@ func (_c *UsageLogCreate) createSpec() (*UsageLog, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.FirstTokenMs(); ok {
 		_spec.SetField(usagelog.FieldFirstTokenMs, field.TypeInt, value)
 		_node.FirstTokenMs = &value
+	}
+	if value, ok := _c.mutation.StreamingAckMs(); ok {
+		_spec.SetField(usagelog.FieldStreamingAckMs, field.TypeInt, value)
+		_node.StreamingAckMs = &value
 	}
 	if value, ok := _c.mutation.UserAgent(); ok {
 		_spec.SetField(usagelog.FieldUserAgent, field.TypeString, value)
@@ -1863,6 +1881,30 @@ func (u *UsageLogUpsert) AddFirstTokenMs(v int) *UsageLogUpsert {
 // ClearFirstTokenMs clears the value of the "first_token_ms" field.
 func (u *UsageLogUpsert) ClearFirstTokenMs() *UsageLogUpsert {
 	u.SetNull(usagelog.FieldFirstTokenMs)
+	return u
+}
+
+// SetStreamingAckMs sets the "streaming_ack_ms" field.
+func (u *UsageLogUpsert) SetStreamingAckMs(v int) *UsageLogUpsert {
+	u.Set(usagelog.FieldStreamingAckMs, v)
+	return u
+}
+
+// UpdateStreamingAckMs sets the "streaming_ack_ms" field to the value that was provided on create.
+func (u *UsageLogUpsert) UpdateStreamingAckMs() *UsageLogUpsert {
+	u.SetExcluded(usagelog.FieldStreamingAckMs)
+	return u
+}
+
+// AddStreamingAckMs adds v to the "streaming_ack_ms" field.
+func (u *UsageLogUpsert) AddStreamingAckMs(v int) *UsageLogUpsert {
+	u.Add(usagelog.FieldStreamingAckMs, v)
+	return u
+}
+
+// ClearStreamingAckMs clears the value of the "streaming_ack_ms" field.
+func (u *UsageLogUpsert) ClearStreamingAckMs() *UsageLogUpsert {
+	u.SetNull(usagelog.FieldStreamingAckMs)
 	return u
 }
 
@@ -2817,6 +2859,34 @@ func (u *UsageLogUpsertOne) UpdateFirstTokenMs() *UsageLogUpsertOne {
 func (u *UsageLogUpsertOne) ClearFirstTokenMs() *UsageLogUpsertOne {
 	return u.Update(func(s *UsageLogUpsert) {
 		s.ClearFirstTokenMs()
+	})
+}
+
+// SetStreamingAckMs sets the "streaming_ack_ms" field.
+func (u *UsageLogUpsertOne) SetStreamingAckMs(v int) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetStreamingAckMs(v)
+	})
+}
+
+// AddStreamingAckMs adds v to the "streaming_ack_ms" field.
+func (u *UsageLogUpsertOne) AddStreamingAckMs(v int) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.AddStreamingAckMs(v)
+	})
+}
+
+// UpdateStreamingAckMs sets the "streaming_ack_ms" field to the value that was provided on create.
+func (u *UsageLogUpsertOne) UpdateStreamingAckMs() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateStreamingAckMs()
+	})
+}
+
+// ClearStreamingAckMs clears the value of the "streaming_ack_ms" field.
+func (u *UsageLogUpsertOne) ClearStreamingAckMs() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearStreamingAckMs()
 	})
 }
 
@@ -3973,6 +4043,34 @@ func (u *UsageLogUpsertBulk) UpdateFirstTokenMs() *UsageLogUpsertBulk {
 func (u *UsageLogUpsertBulk) ClearFirstTokenMs() *UsageLogUpsertBulk {
 	return u.Update(func(s *UsageLogUpsert) {
 		s.ClearFirstTokenMs()
+	})
+}
+
+// SetStreamingAckMs sets the "streaming_ack_ms" field.
+func (u *UsageLogUpsertBulk) SetStreamingAckMs(v int) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetStreamingAckMs(v)
+	})
+}
+
+// AddStreamingAckMs adds v to the "streaming_ack_ms" field.
+func (u *UsageLogUpsertBulk) AddStreamingAckMs(v int) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.AddStreamingAckMs(v)
+	})
+}
+
+// UpdateStreamingAckMs sets the "streaming_ack_ms" field to the value that was provided on create.
+func (u *UsageLogUpsertBulk) UpdateStreamingAckMs() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateStreamingAckMs()
+	})
+}
+
+// ClearStreamingAckMs clears the value of the "streaming_ack_ms" field.
+func (u *UsageLogUpsertBulk) ClearStreamingAckMs() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearStreamingAckMs()
 	})
 }
 

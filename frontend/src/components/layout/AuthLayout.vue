@@ -1,12 +1,12 @@
 <template>
-  <div class="relative flex min-h-screen items-center justify-center overflow-hidden p-4">
+  <div class="relative flex min-h-screen items-center justify-center overflow-hidden p-4" :class="{ 'public-theme': publicTheme, 'auth-layout-public': publicTheme }">
     <!-- Background -->
     <div
-      class="absolute inset-0 bg-gradient-to-br from-gray-50 via-primary-50/30 to-gray-100 dark:from-dark-950 dark:via-dark-900 dark:to-dark-950"
+      class="auth-background absolute inset-0 bg-gradient-to-br from-gray-50 via-primary-50/30 to-gray-100 dark:from-dark-950 dark:via-dark-900 dark:to-dark-950"
     ></div>
 
     <!-- Decorative Elements -->
-    <div class="pointer-events-none absolute inset-0 overflow-hidden">
+    <div v-if="!publicTheme" class="pointer-events-none absolute inset-0 overflow-hidden">
       <!-- Gradient Orbs -->
       <div
         class="absolute -right-40 -top-40 h-80 w-80 rounded-full bg-primary-400/20 blur-3xl"
@@ -38,14 +38,14 @@
           <h1 class="text-gradient mb-2 text-3xl font-bold">
             {{ siteName }}
           </h1>
-          <p class="text-sm text-gray-500 dark:text-dark-400">
+          <p class="auth-subtitle text-sm text-gray-500 dark:text-dark-400">
             {{ siteSubtitle }}
           </p>
         </template>
       </div>
 
       <!-- Card Container -->
-      <div class="card-glass rounded-2xl p-8 shadow-glass">
+      <div class="auth-card card-glass rounded-2xl p-8 shadow-glass">
         <slot />
       </div>
 
@@ -55,7 +55,7 @@
       </div>
 
       <!-- Copyright -->
-      <div class="mt-8 text-center text-xs text-gray-400 dark:text-dark-500">
+      <div class="auth-copyright mt-8 text-center text-xs text-gray-400 dark:text-dark-500">
         &copy; {{ currentYear }} {{ siteName }}. All rights reserved.
       </div>
     </div>
@@ -67,6 +67,8 @@ import { computed, onMounted } from 'vue'
 import { useAppStore } from '@/stores'
 import SiteLogo from '@/components/common/SiteLogo.vue'
 import { sanitizeUrl } from '@/utils/url'
+
+withDefaults(defineProps<{ publicTheme?: boolean }>(), { publicTheme: false })
 
 const appStore = useAppStore()
 
@@ -86,4 +88,9 @@ onMounted(() => {
 .text-gradient {
   @apply bg-gradient-to-r from-primary-600 to-primary-500 bg-clip-text text-transparent;
 }
+.auth-layout-public .auth-background { background: var(--public-bg); }
+.auth-layout-public .text-gradient { background: none; color: var(--public-heading); }
+.auth-layout-public .auth-subtitle { color: var(--public-muted); }
+.auth-layout-public .auth-copyright { color: var(--public-soft); }
+.auth-layout-public .auth-card { background: var(--public-surface); border-color: var(--public-border); box-shadow: var(--public-shadow); }
 </style>

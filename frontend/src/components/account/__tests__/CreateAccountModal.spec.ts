@@ -10,6 +10,7 @@ const {
   importCodexSessionMock,
   createOpenAICodexPATMock,
   authIsSimpleMode,
+  getStreamingACKSettingsMock,
 } = vi.hoisted(() => ({
   createAccountMock: vi.fn(),
   probeUpstreamBillingMock: vi.fn(),
@@ -18,6 +19,11 @@ const {
   importCodexSessionMock: vi.fn(),
   createOpenAICodexPATMock: vi.fn(),
   authIsSimpleMode: { value: true },
+  getStreamingACKSettingsMock: vi.fn().mockResolvedValue({ enabled: true }),
+}))
+
+vi.mock('@/api/admin/settings', () => ({
+  getStreamingACKSettings: getStreamingACKSettingsMock,
 }))
 
 vi.mock('@/stores/app', () => ({
@@ -301,6 +307,13 @@ describe('CreateAccountModal OpenAI long-context billing', () => {
     const toggle = wrapper.get('[data-testid="openai-synthetic-first-response-toggle"]')
     expect(toggle.attributes('aria-checked')).toBe('false')
     await toggle.trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="streaming-ack-status"]').text()).toContain(
+      'admin.accounts.openai.syntheticFirstResponseStatusPending'
+    )
+    expect(wrapper.get('[data-testid="streaming-ack-status"]').text()).not.toContain(
+      'admin.accounts.openai.syntheticFirstResponseStatusEnabled'
+    )
     await wrapper.get('form#create-account-form').trigger('submit.prevent')
     await flushPromises()
 

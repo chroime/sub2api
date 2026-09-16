@@ -3,7 +3,6 @@ import { flushPromises, mount, RouterLinkStub, type VueWrapper } from '@vue/test
 import { createI18n } from 'vue-i18n'
 import PublicHomeB2Header from '../PublicHomeB2Header.vue'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
-import Icon from '@/components/icons/Icon.vue'
 import { setLocale } from '@/i18n'
 
 vi.mock('@/i18n', () => ({
@@ -52,7 +51,7 @@ describe('PublicHomeB2Header', () => {
     vi.restoreAllMocks()
   })
 
-  it('uses the B2 header structure with dynamic branding and plain account navigation', async () => {
+  it('uses the B2 header structure with dynamic branding and account navigation', async () => {
     const { wrapper } = render()
     expect(wrapper.element.tagName).toBe('HEADER')
     expect(wrapper.classes()).toEqual(['site-header', 'shell'])
@@ -85,28 +84,21 @@ describe('PublicHomeB2Header', () => {
   it.each([
     { authenticated: false, destination: '/login', english: 'Log in', translated: 'Sign in' },
     { authenticated: true, destination: '/admin/dashboard', english: 'Dashboard', translated: 'Console' },
-  ])('keeps account navigation and its decorative arrow stable for authenticated=$authenticated', async ({ authenticated, destination, english, translated }) => {
+  ])('keeps text-only account navigation working for authenticated=$authenticated', async ({ authenticated, destination, english, translated }) => {
     const { wrapper, i18n } = render({ authenticated, destination })
     const link = wrapper.get('.login')
     expect(link.get('.login-label').text()).toBe(english)
     expect(link.text()).toBe(english)
     expect(wrapper.findAllComponents(RouterLinkStub).at(-1)?.props('to')).toBe(destination)
 
-    const arrows = wrapper.findAllComponents(Icon).filter(icon => icon.classes().includes('login-arrow'))
-    expect(arrows).toHaveLength(1)
-    const arrow = arrows[0]!
-    expect(arrow.props('name')).toBe('arrowRight')
-    expect(arrow.attributes('aria-hidden')).toBe('true')
-    expect(link.findAll('svg')).toHaveLength(1)
-    const arrowElement = arrow.element
+    expect(link.find('svg').exists()).toBe(false)
 
     i18n.global.locale.value = 'zh'
     await flushPromises()
     expect(link.get('.login-label').text()).toBe(translated)
     expect(link.text()).toBe(translated)
     expect(wrapper.findAllComponents(RouterLinkStub).at(-1)?.props('to')).toBe(destination)
-    expect(link.get('.login-arrow').element).toBe(arrowElement)
-    expect(link.get('.login-arrow').attributes('aria-hidden')).toBe('true')
+    expect(link.find('svg').exists()).toBe(false)
   })
 
   it('toggles both ways with matching document class, saved preference, icon and label', async () => {

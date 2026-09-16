@@ -478,6 +478,7 @@ export interface SystemSettings {
   // OEM settings
   site_name: string;
   site_logo: string;
+  site_favicon?: string;
   site_subtitle: string;
   api_base_url: string;
   contact_info: string;
@@ -824,6 +825,7 @@ export interface UpdateSettingsRequest {
   auth_source_default_dingtalk_platform_quotas?: DefaultPlatformQuotasMap;
   site_name?: string;
   site_logo?: string;
+  site_favicon?: string;
   site_subtitle?: string;
   api_base_url?: string;
   contact_info?: string;
@@ -1570,7 +1572,37 @@ export async function resetWebSearchUsage(payload: {
   );
 }
 
+export interface StreamingACKSettings {
+  enabled: boolean;
+}
+
+function validateStreamingACKSettings(data: StreamingACKSettings): StreamingACKSettings {
+  if (typeof data?.enabled !== "boolean") {
+    throw new Error("Invalid streaming ACK settings");
+  }
+  return data;
+}
+
+export async function getStreamingACKSettings(): Promise<StreamingACKSettings> {
+  const { data } = await apiClient.get<StreamingACKSettings>(
+    "/admin/settings/streaming-ack",
+  );
+  return validateStreamingACKSettings(data);
+}
+
+export async function updateStreamingACKSettings(
+  settings: StreamingACKSettings,
+): Promise<StreamingACKSettings> {
+  const { data } = await apiClient.put<StreamingACKSettings>(
+    "/admin/settings/streaming-ack",
+    settings,
+  );
+  return validateStreamingACKSettings(data);
+}
+
 export const settingsAPI = {
+  getStreamingACKSettings,
+  updateStreamingACKSettings,
   getSettings,
   updateSettings,
   testSmtpConnection,

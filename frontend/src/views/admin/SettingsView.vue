@@ -203,6 +203,8 @@
 
         <!-- Tab: Gateway -->
         <div v-show="activeTab === 'gateway'" class="space-y-6">
+          <StreamingACKSettings v-if="activeTab === 'gateway'" />
+
           <!-- Overload Cooldown (529) Settings -->
           <div class="card">
             <div
@@ -6567,6 +6569,25 @@
                   :remove-label="t('admin.settings.site.remove')"
                   :hint="t('admin.settings.site.logoHint')"
                   :max-size="1024 * 1024"
+                  :preview-background="form.site_logo && resolveSiteLogo(form.site_logo) === DEFAULT_SITE_LOGO ? '#131617' : ''"
+                  :preview-radius="form.site_logo && resolveSiteLogo(form.site_logo) === DEFAULT_SITE_LOGO ? '25%' : ''"
+                />
+              </div>
+
+              <div>
+                <label
+                  class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                >
+                  {{ t("admin.settings.site.siteFavicon") }}
+                </label>
+                <ImageUpload
+                  v-model="form.site_favicon"
+                  mode="image"
+                  :upload-label="t('admin.settings.site.uploadImage')"
+                  :remove-label="t('admin.settings.site.remove')"
+                  :hint="t('admin.settings.site.faviconHint')"
+                  :max-size="1024 * 1024"
+                  :allow-ico="true"
                 />
               </div>
 
@@ -8824,6 +8845,7 @@
 </template>
 
 <script setup lang="ts">
+import { DEFAULT_SITE_LOGO, resolveSiteLogo } from '@/utils/branding';
 import { ref, reactive, computed, onMounted, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { adminAPI } from "@/api";
@@ -8882,6 +8904,7 @@ import ImageUpload from "@/components/common/ImageUpload.vue";
 import BackupSettings from "@/views/admin/BackupView.vue";
 import EmailTemplateEditor from "@/views/admin/settings/EmailTemplateEditor.vue";
 import OpenAIFastPolicyUserSelector from "@/views/admin/settings/OpenAIFastPolicyUserSelector.vue";
+import StreamingACKSettings from "@/views/admin/settings/StreamingACKSettings.vue";
 import { useClipboard } from "@/composables/useClipboard";
 import {
   useStepUp,
@@ -8941,7 +8964,9 @@ type SettingsTab =
   | "payment"
   | "email"
   | "backup";
-const activeTab = ref<SettingsTab>("general");
+const activeTab = ref<SettingsTab>(
+  window.location.hash === "#streaming-ack-settings" ? "gateway" : "general",
+);
 const settingsTabs = [
   { key: "general" as SettingsTab, icon: "home" as const },
   { key: "agreement" as SettingsTab, icon: "document" as const },
@@ -9553,6 +9578,7 @@ type SettingsForm = Omit<
   channel_monitor_hide_throughput: boolean;
   channel_monitor_show_quota: boolean;
   channel_monitor_hide_user_ranking: boolean;
+  site_favicon: string;
   smtp_password: string;
   turnstile_secret_key: string;
   tencent_captcha_app_secret_key: string;
@@ -9630,6 +9656,7 @@ const form = reactive<SettingsForm>({
   default_user_rpm_limit: 0,
   site_name: "Sub2API",
   site_logo: "",
+  site_favicon: "",
   site_subtitle: "Subscription to API Conversion Platform",
   api_base_url: "",
   contact_info: "",
@@ -11289,6 +11316,7 @@ async function saveSettings() {
       default_user_rpm_limit: form.default_user_rpm_limit,
       site_name: form.site_name,
       site_logo: form.site_logo,
+      site_favicon: form.site_favicon,
       site_subtitle: form.site_subtitle,
       api_base_url: form.api_base_url,
       contact_info: form.contact_info,

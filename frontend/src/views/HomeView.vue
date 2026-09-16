@@ -30,7 +30,7 @@
     <footer class="border-t border-gray-200 px-4 py-5 text-center text-sm text-gray-500 dark:border-dark-800 dark:text-dark-400">&copy; {{ currentYear }} {{ siteName }}</footer>
   </div>
 
-  <div v-else class="public-home public-home-b2">
+  <div v-else class="public-home public-home-b2 public-theme">
     <PublicHomeB2Header :site-name="siteName" :site-logo="siteLogo" :subtitle="siteSubtitle" :destination="isAuthenticated ? dashboardPath : '/login'" :authenticated="isAuthenticated" :docs-href="integrationHref" :model-plaza-href="showModelPlazaEntry ? '/model-plaza' : ''" />
 
     <main id="top" class="shell">

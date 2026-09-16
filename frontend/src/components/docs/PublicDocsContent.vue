@@ -15,15 +15,15 @@
     </aside>
     <article class="min-w-0">
       <header class="docs-article-header">
-        <p class="text-xs font-semibold text-cyan-300">{{ t('publicDocs.eyebrow') }}</p>
-        <h1 class="mt-3 break-words text-3xl font-semibold leading-snug text-white">{{ title || t('publicDocs.title') }}</h1>
+        <p class="docs-accent text-xs font-semibold">{{ t('publicDocs.eyebrow') }}</p>
+        <h1 class="docs-heading mt-3 break-words text-3xl font-semibold leading-snug">{{ title || t('publicDocs.title') }}</h1>
       </header>
       <div v-if="content.trim()" ref="body" class="docs-markdown" @click="onContentClick" v-html="rendered.html" />
       <div v-else class="py-14" role="status">
-        <Icon name="book" size="lg" class="text-cyan-300" />
-        <h2 class="mt-5 text-xl font-semibold text-white">{{ t('publicDocs.emptyTitle') }}</h2>
-        <p class="mt-3 text-sm leading-7 text-slate-400">{{ t('publicDocs.emptyDescription') }}</p>
-        <RouterLink to="/model-plaza" class="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-cyan-200">
+        <Icon name="book" size="lg" class="docs-accent" />
+        <h2 class="docs-heading mt-5 text-xl font-semibold">{{ t('publicDocs.emptyTitle') }}</h2>
+        <p class="docs-muted mt-3 text-sm leading-7">{{ t('publicDocs.emptyDescription') }}</p>
+        <RouterLink to="/model-plaza" class="docs-accent mt-6 inline-flex items-center gap-2 text-sm font-semibold">
           {{ t('publicDocs.modelPlaza') }}<Icon name="arrowRight" size="sm" />
         </RouterLink>
       </div>
@@ -101,17 +101,39 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.public-docs-content { color: #cbd5e1; letter-spacing: 0; }
+.public-docs-content {
+  --docs-text: var(--public-text);
+  --docs-heading: var(--public-heading);
+  --docs-strong: var(--public-heading);
+  --docs-muted: var(--public-muted);
+  --docs-border: var(--public-border);
+  --docs-accent: var(--public-accent);
+  --docs-accent-text: var(--public-accent);
+  --docs-accent-bg: var(--public-accent-soft);
+  --docs-code-bg: var(--public-surface-soft);
+  --docs-code-text: var(--public-code-text);
+  --docs-code-panel: var(--public-surface);
+  --docs-code-ink: var(--public-text);
+  --docs-quote-border: var(--public-warning);
+  --docs-quote-bg: var(--public-warning-bg);
+  --docs-table-heading: var(--public-surface);
+  color: var(--docs-text);
+  letter-spacing: 0;
+}
+.docs-heading { color: var(--docs-heading); }
+.docs-accent { color: var(--docs-accent); }
+a.docs-accent:hover { color: var(--public-accent-hover); }
+.docs-muted { color: var(--docs-muted); }
 .docs-sidebar { min-width: 0; margin-bottom: 28px; }
-.docs-directory-toggle { display: flex; width: 100%; align-items: center; gap: 10px; padding: 12px 0; color: #e2e8f0; font-size: 13px; font-weight: 600; }
+.docs-directory-toggle { display: flex; width: 100%; align-items: center; gap: 10px; padding: 12px 0; color: var(--docs-strong); font-size: 13px; font-weight: 600; }
 .docs-directory { display: none; max-height: 55vh; overflow-y: auto; padding: 6px 0; }
 .docs-directory.is-open { display: block; }
-.docs-directory a { display: block; border-left: 1px solid #ffffff18; padding: 9px 14px; color: #94a3b8; font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+.docs-directory a { display: block; border-left: 1px solid var(--docs-border); padding: 9px 14px; color: var(--docs-muted); font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
 .docs-directory a.nested { padding-left: 26px; }
-.docs-directory a:hover, .docs-directory a.active { border-color: #67e8f9; color: #a5f3fc; background: #67e8f908; }
-.docs-article-header { border-bottom: 1px solid #ffffff18; padding-bottom: 28px; margin-bottom: 28px; }
+.docs-directory a:hover, .docs-directory a.active { border-color: var(--docs-accent); color: var(--docs-accent-text); background: var(--docs-accent-bg); }
+.docs-article-header { border-bottom: 1px solid var(--docs-border); padding-bottom: 28px; margin-bottom: 28px; }
 .docs-markdown { font-size: 15px; line-height: 1.85; overflow-wrap: anywhere; }
-.docs-markdown :deep(h1), .docs-markdown :deep(h2), .docs-markdown :deep(h3), .docs-markdown :deep(h4), .docs-markdown :deep(h5), .docs-markdown :deep(h6) { color: #f8fafc; font-weight: 600; line-height: 1.5; margin: 32px 0 14px; scroll-margin-top: 108px; }
+.docs-markdown :deep(h1), .docs-markdown :deep(h2), .docs-markdown :deep(h3), .docs-markdown :deep(h4), .docs-markdown :deep(h5), .docs-markdown :deep(h6) { color: var(--docs-heading); font-weight: 600; line-height: 1.5; margin: 32px 0 14px; scroll-margin-top: 108px; }
 .docs-markdown :deep(h1) { font-size: 26px; }
 .docs-markdown :deep(h2) { font-size: 22px; }
 .docs-markdown :deep(h3) { font-size: 18px; }
@@ -119,21 +141,22 @@ onBeforeUnmount(() => {
 .docs-markdown :deep(ul) { list-style: disc; padding-left: 24px; }
 .docs-markdown :deep(ol) { list-style: decimal; padding-left: 24px; }
 .docs-markdown :deep(li) { margin: 6px 0; }
-.docs-markdown :deep(a) { color: #67e8f9; text-decoration: underline; text-underline-offset: 4px; }
-.docs-markdown :deep(strong) { color: #e2e8f0; font-weight: 600; }
-.docs-markdown :deep(code) { font-size: 13px; background: #ffffff08; padding: 3px 5px; border-radius: 4px; color: #a7f3d0; }
-.docs-markdown :deep(pre) { position: relative; overflow-x: auto; border: 1px solid #ffffff18; border-radius: 8px; background: #10191f; padding: 48px 20px 20px; margin: 24px 0; }
-.docs-markdown :deep(pre code) { padding: 0; background: none; color: #d6e6ed; line-height: 1.85; white-space: pre; }
-.docs-markdown :deep([data-docs-copy]) { position: absolute; right: 12px; top: 10px; border: 1px solid #ffffff20; border-radius: 4px; padding: 2px 10px; color: #a5f3fc; background: #10191f; font-family: sans-serif; font-size: 12px; }
-.docs-markdown :deep([data-docs-copy]:hover) { border-color: #67e8f9; }
-.docs-markdown :deep(blockquote) { border-left: 3px solid #fbbf24; background: #fbbf2408; padding: 14px 20px; margin: 24px 0; color: #cbd5e1; }
+.docs-markdown :deep(a) { color: var(--docs-accent); text-decoration: underline; text-underline-offset: 4px; }
+.docs-markdown :deep(a:hover) { color: var(--public-accent-hover); }
+.docs-markdown :deep(strong) { color: var(--docs-strong); font-weight: 600; }
+.docs-markdown :deep(code) { font-size: 13px; background: var(--docs-code-bg); padding: 3px 5px; border-radius: 4px; color: var(--docs-code-text); }
+.docs-markdown :deep(pre) { position: relative; overflow-x: auto; border: 1px solid var(--docs-border); border-radius: 8px; background: var(--docs-code-panel); padding: 48px 20px 20px; margin: 24px 0; }
+.docs-markdown :deep(pre code) { padding: 0; background: none; color: var(--docs-code-ink); line-height: 1.85; white-space: pre; }
+.docs-markdown :deep([data-docs-copy]) { position: absolute; right: 12px; top: 10px; border: 1px solid var(--docs-border); border-radius: 4px; padding: 2px 10px; color: var(--docs-accent-text); background: var(--docs-code-panel); font-family: sans-serif; font-size: 12px; }
+.docs-markdown :deep([data-docs-copy]:hover) { border-color: var(--docs-accent); background: var(--docs-accent-bg); }
+.docs-markdown :deep(blockquote) { border-left: 3px solid var(--docs-quote-border); background: var(--docs-quote-bg); padding: 14px 20px; margin: 24px 0; color: var(--docs-text); }
 .docs-markdown :deep(blockquote p:last-child) { margin-bottom: 0; }
 .docs-markdown :deep(table) { display: block; width: 100%; overflow-x: auto; border-collapse: collapse; margin: 24px 0; }
-.docs-markdown :deep(th), .docs-markdown :deep(td) { border-bottom: 1px solid #ffffff18; padding: 12px 16px; text-align: left; font-size: 13px; min-width: 120px; }
-.docs-markdown :deep(th) { background: #ffffff05; color: #e2e8f0; }
+.docs-markdown :deep(th), .docs-markdown :deep(td) { border-bottom: 1px solid var(--docs-border); padding: 12px 16px; text-align: left; font-size: 13px; min-width: 120px; }
+.docs-markdown :deep(th) { background: var(--docs-table-heading); color: var(--docs-strong); }
 .docs-markdown :deep(img) { max-width: 100%; height: auto; border-radius: 8px; margin: 24px 0; }
-.docs-markdown :deep(hr) { border-color: #ffffff18; margin: 32px 0; }
-.public-docs-content :deep(:focus-visible) { outline: 2px solid #67e8f9; outline-offset: 4px; }
+.docs-markdown :deep(hr) { border-color: var(--docs-border); margin: 32px 0; }
+.public-docs-content :deep(:focus-visible) { outline: 2px solid var(--docs-accent); outline-offset: 4px; }
 @media (min-width: 768px) {
   .has-chapters { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 48px; }
   .docs-sidebar { position: sticky; top: 104px; align-self: start; margin-bottom: 0; }
