@@ -397,6 +397,7 @@ export default {
     firstToken: '首 Token',
     duration: '耗时',
     latency: '延迟',
+    realLatency: '真实延迟',
     latencyFirstToken: '首字',
     latencyDuration: '总耗时',
     streamingACK: 'ACK',

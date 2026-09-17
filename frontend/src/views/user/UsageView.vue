@@ -178,6 +178,7 @@
 
       <template v-if="activeTab === 'usage'">
         <UsageTable
+          first-token-mode="response"
           :data="usageLogs"
           :loading="loading"
           :columns="visibleColumns"

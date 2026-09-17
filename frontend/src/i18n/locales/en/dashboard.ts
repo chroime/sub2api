@@ -392,6 +392,7 @@ export default {
     firstToken: 'First Token',
     duration: 'Duration',
     latency: 'Latency',
+    realLatency: 'Real latency',
     latencyFirstToken: 'First',
     latencyDuration: 'Total',
     streamingACK: 'ACK',
