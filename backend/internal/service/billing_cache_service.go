@@ -743,14 +743,22 @@ func (s *BillingCacheService) CheckBillingEligibility(ctx context.Context, user 
 
 	// 判断计费模式
 	isSubscriptionMode := group != nil && group.IsSubscriptionType() && subscription != nil
+	atomicAdmission := false
 
 	if isSubscriptionMode {
 		if err := s.checkSubscriptionEligibility(ctx, user.ID, group, subscription); err != nil {
 			return err
 		}
 	} else {
-		if err := s.checkBalanceEligibility(ctx, user.ID); err != nil {
+		var err error
+		atomicAdmission, err = prepareRequestBalancePrecharge(ctx, user, apiKey, s.minimumBalanceReserve())
+		if err != nil {
 			return err
+		}
+		if !atomicAdmission {
+			if err := s.checkBalanceEligibility(ctx, user.ID); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -771,6 +779,27 @@ func (s *BillingCacheService) CheckBillingEligibility(ctx context.Context, user 
 	// RPM 限流：级联回落（Override → Group → User），放在最后以避免为注定失败的请求增加计数。
 	if err := s.checkRPM(ctx, user, group); err != nil {
 		return err
+	}
+	if !isSubscriptionMode {
+		if err := ensureRequestBalancePrecharge(ctx, user, apiKey); err != nil {
+			return err
+		}
+		// A reservation may have waited for other requests to settle. Their
+		// charges can exhaust spending limits while this request is queued.
+		// Recheck read-only limits, but never increment RPM a second time.
+		if atomicAdmission {
+			if err := s.checkUserPlatformQuotaEligibility(ctx, user.ID, platform); err != nil {
+				return err
+			}
+			if apiKey != nil && apiKey.HasRateLimits() {
+				if err := s.checkAPIKeyRateLimits(ctx, apiKey); err != nil {
+					return err
+				}
+			}
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+		}
 	}
 
 	return nil

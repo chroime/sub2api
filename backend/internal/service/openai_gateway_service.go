@@ -237,7 +237,10 @@ type OpenAIForwardResult struct {
 	// UpstreamHeaders 是直接上游的响应头，用于按账户配置解析上游请求标识。
 	UpstreamHeaders http.Header
 	Usage           OpenAIUsage
-	Model           string // 原始模型（用于响应和日志显示）
+	// UsagePresent distinguishes explicit upstream token counts from a default
+	// zero value. HTTP Responses streams set it; nil preserves other protocols.
+	UsagePresent *bool
+	Model        string // 原始模型（用于响应和日志显示）
 	// BillingModel is the model used for cost calculation.
 	// When non-empty, CalculateCost uses this instead of Model.
 	// This is set by the Anthropic Messages conversion path where
@@ -270,7 +273,7 @@ type OpenAIForwardResult struct {
 	Stream                   bool
 	OpenAIWSMode             bool
 	// UpstreamTerminalEvent is the normalized terminal event observed on an
-	// upstream Responses WebSocket turn. Empty preserves legacy/non-WS success.
+	// upstream Responses turn. Empty preserves legacy behavior.
 	UpstreamTerminalEvent string
 	ResponseHeaders       http.Header
 	Duration              time.Duration

@@ -1017,6 +1017,7 @@ func filterSchedulerExtra(extra map[string]any) map[string]any {
 		"openai_passthrough",
 		"openai_oauth_passthrough",
 		service.OpenAISyntheticFirstResponseEnabledExtraKey,
+		service.StreamingACKEnabledExtraKey,
 		"codex_fingerprint_mode",
 		"codex_fingerprint_seed",
 		"codex_5h_used_percent",

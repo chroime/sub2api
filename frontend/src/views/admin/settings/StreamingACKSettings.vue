@@ -1,7 +1,7 @@
 <template>
   <section
     id="streaming-ack-settings"
-    class="card scroll-mt-40 p-6"
+    class="scroll-mt-40 p-6"
     aria-labelledby="streaming-ack-title"
     :aria-busy="loading || saving"
   >

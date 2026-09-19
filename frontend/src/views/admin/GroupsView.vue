@@ -2159,6 +2159,7 @@
           <p class="input-hint">{{ t("admin.groups.platformNotEditable") }}</p>
         </div>
         <template v-if="!authStore.isSimpleMode">
+        <GroupBalancePrechargeSettings :key="editingGroup.id" :group-id="editingGroup.id" />
         <!-- 从分组复制账号（编辑时） -->
         <div v-if="copyAccountsGroupOptionsForEdit.length > 0">
           <div class="mb-1.5 flex items-center gap-1">
@@ -4300,6 +4301,7 @@ import PlatformIcon from "@/components/common/PlatformIcon.vue";
 import Icon from "@/components/icons/Icon.vue";
 import GroupRateMultipliersModal from "@/components/admin/group/GroupRateMultipliersModal.vue";
 import GroupRPMOverridesModal from "@/components/admin/group/GroupRPMOverridesModal.vue";
+import GroupBalancePrechargeSettings from "@/components/admin/group/GroupBalancePrechargeSettings.vue";
 import GroupCapacityBadge from "@/components/common/GroupCapacityBadge.vue";
 import ReasoningEffortPolicyFields from "@/components/admin/group/ReasoningEffortPolicyFields.vue";
 import CodexManifestAccountsField from "@/components/admin/group/CodexManifestAccountsField.vue";

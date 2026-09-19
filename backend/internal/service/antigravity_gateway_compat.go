@@ -511,7 +511,7 @@ func (s *AntigravityGatewayService) writeAntigravityCompatError(
 	message string,
 ) error {
 	MarkResponseCommitted(c)
-	c.JSON(status, gin.H{
+	writeStreamingACKJSONError(c, status, gin.H{
 		"error": gin.H{
 			"message": message,
 			"type":    errType,
@@ -543,7 +543,7 @@ func (s *AntigravityGatewayService) writeMappedAntigravityCompatError(
 		Kind:               "http_error",
 		Message:            message,
 	})
-	c.JSON(mapUpstreamStatusCode(upstreamStatus), gin.H{
+	writeStreamingACKJSONError(c, mapUpstreamStatusCode(upstreamStatus), gin.H{
 		"error": gin.H{
 			"message": getPassthroughOrDefault(message, "Upstream request failed"),
 			"type":    "upstream_error",

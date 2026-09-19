@@ -5,6 +5,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AdminGroup } from '@/types'
 import GroupsView from '@/views/admin/GroupsView.vue'
 import { adminAPI } from '@/api/admin'
+import GroupBalancePrechargeSettings from '@/components/admin/group/GroupBalancePrechargeSettings.vue'
+
+vi.mock('@/api/admin/settings', () => ({
+  getGroupBalancePrechargeSettings: vi.fn(async (groupId: number) => ({
+    group_id: groupId,
+    settings: { mode: 'inherit', threshold: 0, amount: 0 },
+    global: { enabled: false, threshold: 0, amount: 0 },
+    effective: { enabled: false, threshold: 0, amount: 0 },
+  })),
+  updateGroupBalancePrechargeSettings: vi.fn(),
+}))
 
 const {
   listGroups,
@@ -215,6 +226,25 @@ describe('GroupsView duplicate action', () => {
 
   afterEach(() => {
     vi.restoreAllMocks()
+  })
+
+  it('loads precharge settings for the saved group being edited and omits them in simple mode', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.findComponent(GroupBalancePrechargeSettings).exists()).toBe(false)
+    const editButton = wrapper.findAll('button').find((button) => button.text() === 'common.edit')!
+    await editButton.trigger('click')
+    await flushPromises()
+    expect(wrapper.getComponent(GroupBalancePrechargeSettings).props('groupId')).toBe(42)
+    wrapper.unmount()
+
+    authState.isSimpleMode = true
+    const simple = mountView()
+    await flushPromises()
+    await simple.findAll('button').find((button) => button.text() === 'common.edit')!.trigger('click')
+    await flushPromises()
+    expect(simple.findComponent(GroupBalancePrechargeSettings).exists()).toBe(false)
+    simple.unmount()
   })
 
   it('duplicates the selected group, reports success, and refreshes the list', async () => {

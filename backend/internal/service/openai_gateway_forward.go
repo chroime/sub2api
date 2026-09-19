@@ -49,7 +49,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 	logCodexCLIOnlyDetection(ctx, c, account, apiKeyID, restrictionResult, body)
 	if restrictionResult.Enabled && !restrictionResult.Matched {
 		MarkOpsClientBusinessLimited(c, OpsClientBusinessLimitedReasonLocalPolicyDenied)
-		c.JSON(http.StatusForbidden, gin.H{
+		writeStreamingACKJSONError(c, http.StatusForbidden, gin.H{
 			"error": gin.H{
 				"type":    "forbidden_error",
 				"message": CodexClientRestrictionMessage(restrictionResult),
@@ -99,7 +99,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 				param = validationErr.param
 			}
 			setOpsUpstreamError(c, http.StatusBadRequest, liteErr.Error(), "")
-			c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{
+			writeStreamingACKJSONError(c, http.StatusBadRequest, gin.H{"error": gin.H{
 				"type": "invalid_request_error", "message": liteErr.Error(), "param": param,
 			}})
 			return nil, liteErr
@@ -117,7 +117,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		body, err = flattenOpenAIResponsesNamespaces(c, body)
 		if err != nil {
 			setOpsUpstreamError(c, http.StatusBadRequest, err.Error(), "")
-			c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{
+			writeStreamingACKJSONError(c, http.StatusBadRequest, gin.H{"error": gin.H{
 				"type": "invalid_request_error", "message": err.Error(), "param": "tools",
 			}})
 			return nil, err
@@ -130,7 +130,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		body, err = stripOpenAIResponsesInputNamespaces(body, keepToolCallNamespaces)
 		if err != nil {
 			setOpsUpstreamError(c, http.StatusBadRequest, err.Error(), "")
-			c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{
+			writeStreamingACKJSONError(c, http.StatusBadRequest, gin.H{"error": gin.H{
 				"type": "invalid_request_error", "message": err.Error(), "param": "input",
 			}})
 			return nil, err
@@ -251,7 +251,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 	if wsDecision.Transport == OpenAIUpstreamTransportResponsesWebsocket {
 		if c != nil {
 			MarkOpsClientBusinessLimited(c, OpsClientBusinessLimitedReasonLocalFeatureGate)
-			c.JSON(http.StatusBadRequest, gin.H{
+			writeStreamingACKJSONError(c, http.StatusBadRequest, gin.H{
 				"error": gin.H{
 					"type":    "invalid_request_error",
 					"message": "OpenAI WSv1 is temporarily unsupported. Please enable responses_websockets_v2.",
@@ -372,7 +372,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 	}
 	if imageIntent && !imageGenerationAllowed {
 		MarkOpsClientBusinessLimited(c, OpsClientBusinessLimitedReasonLocalFeatureGate)
-		c.JSON(http.StatusForbidden, gin.H{"error": gin.H{"type": "permission_error", "message": ImageGenerationPermissionMessage()}})
+		writeStreamingACKJSONError(c, http.StatusForbidden, gin.H{"error": gin.H{"type": "permission_error", "message": ImageGenerationPermissionMessage()}})
 		return nil, errors.New("image generation disabled for group")
 	}
 
@@ -422,7 +422,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 	imageIntent = imageIntent || IsImageGenerationIntent(openAIResponsesEndpoint, reqModel, nil) || isOpenAIImageGenerationModel(upstreamModel)
 	if imageIntent && !imageGenerationAllowed {
 		MarkOpsClientBusinessLimited(c, OpsClientBusinessLimitedReasonLocalFeatureGate)
-		c.JSON(http.StatusForbidden, gin.H{"error": gin.H{"type": "permission_error", "message": ImageGenerationPermissionMessage()}})
+		writeStreamingACKJSONError(c, http.StatusForbidden, gin.H{"error": gin.H{"type": "permission_error", "message": ImageGenerationPermissionMessage()}})
 		return nil, errors.New("image generation disabled for group")
 	}
 
@@ -454,7 +454,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		}
 		if err := validateOpenAIResponsesImageModel(decoded, upstreamModel); err != nil {
 			setOpsUpstreamError(c, http.StatusBadRequest, err.Error(), "")
-			c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{"type": "invalid_request_error", "message": err.Error(), "param": "model"}})
+			writeStreamingACKJSONError(c, http.StatusBadRequest, gin.H{"error": gin.H{"type": "invalid_request_error", "message": err.Error(), "param": "model"}})
 			return nil, err
 		}
 		if hasOpenAIImageGenerationTool(decoded) {
@@ -477,7 +477,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		}
 		if err := validateCodexSparkInput(decoded, upstreamModel); err != nil {
 			setOpsUpstreamError(c, http.StatusBadRequest, err.Error(), "")
-			c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{"type": "invalid_request_error", "message": err.Error(), "param": "input"}})
+			writeStreamingACKJSONError(c, http.StatusBadRequest, gin.H{"error": gin.H{"type": "invalid_request_error", "message": err.Error(), "param": "input"}})
 			return nil, err
 		}
 	}
@@ -525,7 +525,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 			})
 		}
 		if codexResult.Error != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{"type": "invalid_request_error", "message": codexResult.Error.Error()}})
+			writeStreamingACKJSONError(c, http.StatusBadRequest, gin.H{"error": gin.H{"type": "invalid_request_error", "message": codexResult.Error.Error()}})
 			return nil, codexResult.Error
 		}
 		setCodexToolNameReverse(c, codexResult.ToolNameReverse)
@@ -772,7 +772,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		}
 		if imageCfgErr != nil {
 			setOpsUpstreamError(c, http.StatusBadRequest, imageCfgErr.Error(), "")
-			c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{"type": "invalid_request_error", "message": imageCfgErr.Error(), "param": "size"}})
+			writeStreamingACKJSONError(c, http.StatusBadRequest, gin.H{"error": gin.H{"type": "invalid_request_error", "message": imageCfgErr.Error(), "param": "size"}})
 			return nil, imageCfgErr
 		}
 		imageBillingModel = imageCfg.Model
@@ -909,7 +909,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 			if wsErr == nil {
 				break
 			}
-			if c != nil && c.Writer != nil && c.Writer.Written() {
+			if openAIStreamClientOutputStarted(c, false) {
 				break
 			}
 			var taskRecoveredErr *agentIdentityTaskRecoveredError
@@ -1215,6 +1215,9 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 
 		// Handle normal response
 		var usage *OpenAIUsage
+		var usagePresent *bool
+		var streamErr error
+		terminalEventType := ""
 		var firstTokenMs *int
 		responseID := ""
 		imageCount := 0
@@ -1224,6 +1227,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 			streamResult, err := s.handleStreamingResponseWithReasoning(ctx, resp, c, account, startTime, originalModel, upstreamModel, reasoningEffortValue)
 			if err != nil {
 				if signal, ok := asOpenAICompactFallbackSignal(err); ok {
+					setOpenAIResponsesPrechargeFailureEvidence(ctx, openAIResponsesPrechargeUnsettledRetry, resp.Header.Get("x-request-id"), account, upstreamModel)
 					if retryBody, fallbackModel, retry := s.prepareOpenAICompactFallbackRetry(
 						c, account, requestedModel, body, http.StatusBadRequest, signal.message, signal.payload, compactModelFallbackRetried,
 					); retry {
@@ -1259,9 +1263,20 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 					}
 					return s.handleErrorResponse(ctx, compactResp, c, account, body, resolveOpenAIErrorSchedulingModel(billingModel, upstreamModel))
 				}
-				return nil, err
+				var failoverErr *UpstreamFailoverError
+				if errors.As(err, &failoverErr) || streamResult == nil || !streamResult.usagePresent {
+					reason := openAIResponsesPrechargeUsageMissing
+					if failoverErr != nil {
+						reason = openAIResponsesPrechargeUnsettledRetry
+					}
+					setOpenAIResponsesPrechargeFailureEvidence(ctx, reason, resp.Header.Get("x-request-id"), account, upstreamModel)
+					return nil, err
+				}
+				streamErr = err
 			}
 			usage = streamResult.usage
+			usagePresent = &streamResult.usagePresent
+			terminalEventType = streamResult.terminalEventType
 			firstTokenMs = streamResult.firstTokenMs
 			responseID = strings.TrimSpace(streamResult.responseID)
 			imageCount = streamResult.imageCount
@@ -1312,6 +1327,8 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 			UpstreamHeaders:               resp.Header,
 			ResponseID:                    responseID,
 			Usage:                         *usage,
+			UsagePresent:                  usagePresent,
+			UpstreamTerminalEvent:         terminalEventType,
 			Model:                         originalModel,
 			BillingModel:                  billingModel,
 			UpstreamModel:                 upstreamModel,
@@ -1339,7 +1356,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 			forwardResult.SearchCount = searchCount
 		}
 		stampOpenAIResponsesUpstreamEndpoint(c, forwardResult)
-		return forwardResult, nil
+		return forwardResult, streamErr
 	}
 }
 

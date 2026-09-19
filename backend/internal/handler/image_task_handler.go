@@ -213,6 +213,11 @@ func (h *AsyncImageHandler) executeWithGateway(platform string, c *gin.Context) 
 		imageTaskJSONError(c, http.StatusServiceUnavailable, "api_error", "image gateway is unavailable")
 		return
 	}
+	if h.openAI.gatewayService != nil {
+		ctx := h.openAI.gatewayService.WithBalancePrecharge(c.Request.Context())
+		c.Request = c.Request.WithContext(ctx)
+		defer service.FinishBalancePrecharge(ctx)
+	}
 	if platform == service.PlatformGrok {
 		h.openAI.GrokImages(c)
 		return

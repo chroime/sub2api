@@ -17,10 +17,16 @@ import (
 )
 
 // ValidateOpenAISyntheticFirstResponseExtra validates the account-level
-// opt-in when it is supplied in an OpenAI account's extra map. Other provider
-// extras are intentionally left untouched because their namespaces are
-// provider-owned.
+// opt-in for all supported platforms, including the legacy OpenAI-only key.
 func ValidateOpenAISyntheticFirstResponseExtra(platform string, extra map[string]any) error {
+	if raw, exists := extra[StreamingACKEnabledExtraKey]; exists {
+		if _, ok := raw.(bool); !ok {
+			return infraerrors.BadRequest("STREAMING_ACK_INVALID", "streaming_ack_enabled must be a boolean")
+		}
+		if !SupportsStreamingACKPlatform(platform) {
+			return infraerrors.BadRequest("STREAMING_ACK_INVALID", "streaming ACK is unavailable for this platform")
+		}
+	}
 	if platform != PlatformOpenAI || extra == nil {
 		return nil
 	}
@@ -92,15 +98,15 @@ func syntheticFirstResponseSeed(c *gin.Context) string {
 // first normal response-body write wins the same mutex and cancels the ACK,
 // which guarantees that fast upstream output is never delayed.
 func StartOpenAISyntheticFirstResponse(c *gin.Context, cfg config.GatewaySyntheticFirstResponseConfig, startedAt time.Time) func() {
-	if c == nil || c.Writer == nil || !cfg.Enabled {
+	if c == nil || c.Writer == nil || c.Request == nil || !cfg.Enabled {
 		return func() {}
 	}
 	if existing, ok := c.Get(openAISyntheticFirstResponseKey); ok {
 		if state, valid := existing.(*openAISyntheticFirstResponse); valid && state != nil {
 			state.mu.Lock()
-			active := !state.stopped
+			activeOrCommitted := !state.stopped || state.bytes > 0
 			state.mu.Unlock()
-			if active {
+			if activeOrCommitted {
 				return state.Stop
 			}
 		}
@@ -121,18 +127,19 @@ func StartOpenAISyntheticFirstResponse(c *gin.Context, cfg config.GatewaySynthet
 	header.Set("Connection", "keep-alive")
 	header.Set("X-Accel-Buffering", "no")
 
-	wrapper := &openAISyntheticFirstResponseWriter{ResponseWriter: originalWriter, state: state}
+	wrapper := &openAISyntheticFirstResponseWriter{ResponseWriter: originalWriter, state: state, headers: header.Clone()}
 	c.Writer = wrapper
 	c.Set(openAISyntheticFirstResponseKey, state)
 
 	delay := syntheticFirstResponseDelay(syntheticFirstResponseSeed(c), cfg)
+	requestDone := c.Request.Context().Done()
 	go func() {
 		timer := time.NewTimer(delay)
 		defer timer.Stop()
 		select {
 		case <-state.stop:
 			return
-		case <-c.Request.Context().Done():
+		case <-requestDone:
 			state.Stop()
 			return
 		case <-timer.C:
@@ -143,6 +150,9 @@ func StartOpenAISyntheticFirstResponse(c *gin.Context, cfg config.GatewaySynthet
 	return func() {
 		state.Stop()
 		if current, ok := c.Writer.(*openAISyntheticFirstResponseWriter); ok && current == wrapper {
+			state.mu.Lock()
+			wrapper.syncHeadersLocked()
+			state.mu.Unlock()
 			c.Writer = originalWriter
 		}
 	}
@@ -238,13 +248,34 @@ func ApplyOpenAISyntheticFirstResponseResult(c *gin.Context, result *OpenAIForwa
 
 type openAISyntheticFirstResponseWriter struct {
 	gin.ResponseWriter
-	state *openAISyntheticFirstResponse
+	state   *openAISyntheticFirstResponse
+	headers http.Header
+}
+
+// Header exposes a request-owned staging map. The ACK timer only reads the
+// underlying writer's headers; it must never iterate a map being mutated by
+// forwarding code. Normal writes copy staged headers under the same mutex as
+// the timer. Header arrival alone does not cancel the first-body ACK timer.
+func (w *openAISyntheticFirstResponseWriter) Header() http.Header {
+	return w.headers
+}
+
+func (w *openAISyntheticFirstResponseWriter) syncHeadersLocked() {
+	if w.headers == nil {
+		return
+	}
+	dst := w.ResponseWriter.Header()
+	clear(dst)
+	for key, values := range w.headers {
+		dst[key] = append([]string(nil), values...)
+	}
 }
 
 func (w *openAISyntheticFirstResponseWriter) stopAndWrite(write func() (int, error)) (int, error) {
 	w.state.mu.Lock()
 	defer w.state.mu.Unlock()
 	w.state.stopLocked()
+	w.syncHeadersLocked()
 	return write()
 }
 
@@ -262,13 +293,22 @@ func (w *openAISyntheticFirstResponseWriter) WriteHeader(code int) {
 	if code >= http.StatusMultipleChoices {
 		w.state.stopLocked()
 	}
+	w.syncHeadersLocked()
 	w.ResponseWriter.WriteHeader(code)
 }
 
 func (w *openAISyntheticFirstResponseWriter) Flush() {
 	w.state.mu.Lock()
 	defer w.state.mu.Unlock()
+	w.syncHeadersLocked()
 	w.ResponseWriter.Flush()
+}
+
+func (w *openAISyntheticFirstResponseWriter) WriteHeaderNow() {
+	w.state.mu.Lock()
+	defer w.state.mu.Unlock()
+	w.syncHeadersLocked()
+	w.ResponseWriter.WriteHeaderNow()
 }
 
 func (w *openAISyntheticFirstResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {

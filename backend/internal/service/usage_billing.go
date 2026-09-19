@@ -21,6 +21,10 @@ type UsageBillingCommand struct {
 	APIKeyID           int64
 	RequestFingerprint string
 	RequestPayloadHash string
+	BalancePrechargeID string // Server-generated reservation; excluded from the usage fingerprint.
+	// UsageLogSnapshot is display evidence saved atomically with billing. It is
+	// excluded from the monetary fingerprint and never replays billing effects.
+	UsageLogSnapshot *UsageLog
 
 	UserID              int64
 	AccountID           int64

@@ -510,6 +510,7 @@ export default {
         rateSyncWarning: 'Accounts with upstream rate sync enabled cannot be changed in bulk. Disable sync in the account editor first.',
         rateSyncConflict: 'Cannot change account rates: {count} target account(s) have upstream rate sync enabled.',
         longContextShadowHint: 'Long-context billing belongs to the parent account. Selected shadow accounts keep following their parent, including when targets come from a filter.',
+        streamingACKShadowHint: 'Shadow accounts cannot configure ACK independently. Remove them before applying a bulk ACK setting.',
         longContextParentRequired: 'All selected accounts are shadows. Select the parent account to change long-context billing.',
         mixedPlatformWarning: 'Selected accounts span multiple platforms ({platforms}). Model mapping presets shown are combined — ensure mappings are appropriate for each platform.'
       },
@@ -606,11 +607,11 @@ export default {
         syntheticFirstResponseStatusPending: 'Unsaved changes, not yet applied',
         syntheticFirstResponseStatusAccountOff: 'Account ACK disabled, no intervention',
         syntheticFirstResponseStatusGlobalOff: 'Global setting off, not effective',
-        syntheticFirstResponseStatusEnabled: 'Enabled for matching-group streaming requests only',
+        syntheticFirstResponseStatusEnabled: 'Enabled for matching-group SSE streaming requests only',
         syntheticFirstResponseRefresh: 'Refresh global setting',
         syntheticFirstResponseSettings: 'Global ACK setting',
         syntheticFirstResponseDesc:
-          'Disabled by default. For this account only, emit a non-visible SSE ACK for streaming requests in its assigned group; genuine upstream text is never delayed or changed.',
+          'Disabled by default; the master switch must also be enabled. Supports SSE streams for accounts across platforms in their assigned groups, without delaying or changing upstream content. Native Gemini requires alt=sse. Non-streaming, WebSocket, live voice, and binary responses are excluded.',
         responsesWebsocketsV2: 'Responses WebSocket v2',
         responsesWebsocketsV2Desc:
           'Disabled by default. Enable to allow responses_websockets_v2 capability (still gated by global and account-type switches).',

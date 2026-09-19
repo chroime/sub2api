@@ -4,6 +4,7 @@
  */
 
 import { apiClient } from "../client";
+import { isBalancePrechargeMoney, validBalancePrechargeAmounts } from "@/utils/balancePrecharge";
 import type {
   CustomEndpoint,
   CustomMenuItem,
@@ -1572,6 +1573,66 @@ export async function resetWebSearchUsage(payload: {
   );
 }
 
+export interface BalancePrechargeSettings {
+  enabled: boolean;
+  threshold: number;
+  amount: number;
+}
+
+export interface GroupBalancePrechargeSettings {
+  mode: "inherit" | "custom";
+  threshold: number;
+  amount: number;
+}
+
+export interface GroupBalancePrechargeSettingsResponse {
+  group_id: number;
+  settings: GroupBalancePrechargeSettings;
+  global: BalancePrechargeSettings;
+  effective: BalancePrechargeSettings;
+}
+
+function validateBalancePrechargeSettings(data: BalancePrechargeSettings): BalancePrechargeSettings {
+  if (typeof data?.enabled !== "boolean" || !isBalancePrechargeMoney(data.threshold) ||
+      !isBalancePrechargeMoney(data.amount) ||
+      !validBalancePrechargeAmounts(data.threshold, data.amount, data.enabled)) {
+    throw new Error("Invalid balance precharge settings");
+  }
+  return data;
+}
+
+function validateGroupBalancePrechargeSettings(data: GroupBalancePrechargeSettingsResponse, groupId: number): GroupBalancePrechargeSettingsResponse {
+  const settings = data?.settings;
+  if (data?.group_id !== groupId || !settings || !["inherit", "custom"].includes(settings.mode) ||
+      !isBalancePrechargeMoney(settings.threshold) || !isBalancePrechargeMoney(settings.amount) ||
+      !validBalancePrechargeAmounts(settings.threshold, settings.amount, settings.mode === "custom")) {
+    throw new Error("Invalid group balance precharge settings");
+  }
+  validateBalancePrechargeSettings(data.global);
+  validateBalancePrechargeSettings(data.effective);
+  return data;
+}
+
+export async function getBalancePrechargeSettings(): Promise<BalancePrechargeSettings> {
+  const { data } = await apiClient.get<BalancePrechargeSettings>("/admin/settings/balance-precharge");
+  return validateBalancePrechargeSettings(data);
+}
+
+export async function updateBalancePrechargeSettings(settings: BalancePrechargeSettings): Promise<BalancePrechargeSettings> {
+  const { data } = await apiClient.put<BalancePrechargeSettings>("/admin/settings/balance-precharge", settings);
+  return validateBalancePrechargeSettings(data);
+}
+
+export async function getGroupBalancePrechargeSettings(groupId: number): Promise<GroupBalancePrechargeSettingsResponse> {
+  const { data } = await apiClient.get<GroupBalancePrechargeSettingsResponse>(`/admin/groups/${groupId}/balance-precharge`);
+  return validateGroupBalancePrechargeSettings(data, groupId);
+}
+
+export async function updateGroupBalancePrechargeSettings(groupId: number, settings: GroupBalancePrechargeSettings): Promise<GroupBalancePrechargeSettingsResponse> {
+  const { data } = await apiClient.put<GroupBalancePrechargeSettingsResponse>(`/admin/groups/${groupId}/balance-precharge`, settings);
+  return validateGroupBalancePrechargeSettings(data, groupId);
+}
+
 export interface StreamingACKSettings {
   enabled: boolean;
 }
@@ -1601,6 +1662,10 @@ export async function updateStreamingACKSettings(
 }
 
 export const settingsAPI = {
+  getBalancePrechargeSettings,
+  updateBalancePrechargeSettings,
+  getGroupBalancePrechargeSettings,
+  updateGroupBalancePrechargeSettings,
   getStreamingACKSettings,
   updateStreamingACKSettings,
   getSettings,

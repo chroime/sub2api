@@ -26,6 +26,15 @@ func (r *usageBillingRepository) Apply(ctx context.Context, cmd *service.UsageBi
 	if r == nil || r.db == nil {
 		return nil, errors.New("usage billing repository db is nil")
 	}
+	if cmd.BalancePrechargeID != "" {
+		cmd.BalancePrechargeID = strings.TrimSpace(cmd.BalancePrechargeID)
+		if cmd.BalancePrechargeID == "" || len(cmd.BalancePrechargeID) > 128 {
+			return nil, service.ErrBalancePrechargeInvalid
+		}
+		if _, err := balancePrechargeMoney(cmd.BalanceCost, false, false); err != nil {
+			return nil, err
+		}
+	}
 
 	cmd.Normalize()
 	if cmd.RequestID == "" {
@@ -47,11 +56,25 @@ func (r *usageBillingRepository) Apply(ctx context.Context, cmd *service.UsageBi
 		return nil, err
 	}
 	if !applied {
+		if cmd.BalancePrechargeID != "" {
+			_, balance, err := releaseBalancePrechargeTx(ctx, tx, cmd.BalancePrechargeID, cmd.UserID, cmd.APIKeyID, cmd.RequestID)
+			if err != nil {
+				return nil, err
+			}
+			if err := tx.Commit(); err != nil {
+				return nil, err
+			}
+			tx = nil
+			return &service.UsageBillingApplyResult{Applied: false, NewBalance: balance}, nil
+		}
 		return &service.UsageBillingApplyResult{Applied: false}, nil
 	}
 
 	result := &service.UsageBillingApplyResult{Applied: true}
 	if err := r.applyUsageBillingEffects(ctx, tx, cmd, result); err != nil {
+		return nil, err
+	}
+	if err := enqueueUsageLogOutbox(ctx, tx, cmd); err != nil {
 		return nil, err
 	}
 
@@ -178,7 +201,14 @@ func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, t
 		}
 	}
 
-	if cmd.BalanceCost > 0 {
+	if cmd.BalancePrechargeID != "" {
+		newBalance, sufficient, err := captureBalancePrechargeTx(ctx, tx, cmd)
+		if err != nil {
+			return err
+		}
+		result.NewBalance = &newBalance
+		result.BalanceOverdrafted = !sufficient
+	} else if cmd.BalanceCost > 0 {
 		newBalance, sufficient, err := deductUsageBillingBalance(ctx, tx, cmd.UserID, cmd.BalanceCost)
 		if err != nil {
 			return err

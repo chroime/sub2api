@@ -7,8 +7,38 @@
 # Documentation / 文档: https://github.com/Wei-Shaw/sub2api
 
 # =============================================================================
-# Server Configuration
-# 服务器配置
+# Billing Recovery and Storage Capacity
+# 计费故障恢复与容量监测
+# =============================================================================
+billing_maintenance:
+  # Recovery and archival are bounded batches; pending funds are never deleted.
+  # 故障恢复与归档每30秒检查一次，未完成冻结款始终保留。
+  interval_seconds: 30
+  batch_size: 500
+  # Move terminal records into archive while preserving history/idempotency.
+  # 仅归档超过90天的终态记录，归档不等于删除财务证据。
+  hot_retention_days: 90
+
+billing_storage_monitor:
+  # Informational warnings in application/operations logs; never deletes data.
+  # 仅通过应用/运维日志提示容量，不自动删除数据，也不影响余额或计费。
+  # Environment overrides use BILLING_STORAGE_MONITOR_<UPPERCASE_KEY>.
+  enabled: true
+  interval_seconds: 300
+  probe_timeout_seconds: 5
+  # Check DATA_DIR (or application cwd) and the configured log file's filesystem.
+  # 日志路径遵循 log.output.file_path；未配置时为 DATA_DIR/logs，容器默认 /app/data/logs。
+  # Uncreated directories use their nearest existing parent filesystem.
+  local_used_percent: 85
+  local_min_free_bytes: 2147483648 # 2 GiB
+  # pg_database_size(current_database()), including indexes and archive tables.
+  # 仅表示当前数据库大小，不代表 PostgreSQL 服务器的剩余磁盘空间；远端主机需独立监控。
+  database_warn_bytes: 21474836480 # 20 GiB
+  # Warn on entry, at most hourly while still over threshold, and once on recovery.
+  # 首次超限提示，持续超限最多每小时一次，恢复后提示一次。
+
+# =============================================================================
+# Server Configuration / 服务器配置
 # =============================================================================
 server:
   # Bind address (0.0.0.0 for all interfaces)

@@ -683,7 +683,7 @@ func mergeTextPartsToResponse(response map[string]any, textParts []string) map[s
 
 func (s *AntigravityGatewayService) writeClaudeError(c *gin.Context, status int, errType, message string) error {
 	MarkResponseCommitted(c)
-	c.JSON(status, gin.H{
+	writeStreamingACKJSONError(c, status, gin.H{
 		"type":  "error",
 		"error": gin.H{"type": errType, "message": message},
 	})
@@ -725,7 +725,7 @@ func (s *AntigravityGatewayService) writeMappedClaudeError(c *gin.Context, accou
 		c, account.Platform, upstreamStatus, body,
 		0, "", "",
 	); matched {
-		c.JSON(ptStatus, gin.H{
+		writeStreamingACKJSONError(c, ptStatus, gin.H{
 			"type":  "error",
 			"error": gin.H{"type": ptErrType, "message": ptErrMsg},
 		})
@@ -765,7 +765,7 @@ func (s *AntigravityGatewayService) writeMappedClaudeError(c *gin.Context, accou
 		errMsg = "Upstream request failed"
 	}
 
-	c.JSON(statusCode, gin.H{
+	writeStreamingACKJSONError(c, statusCode, gin.H{
 		"type":  "error",
 		"error": gin.H{"type": errType, "message": errMsg},
 	})
@@ -791,7 +791,7 @@ func (s *AntigravityGatewayService) writeGoogleError(c *gin.Context, status int,
 		statusStr = "UNAVAILABLE"
 	}
 
-	c.JSON(status, gin.H{
+	writeStreamingACKJSONError(c, status, gin.H{
 		"error": gin.H{
 			"code":    status,
 			"message": message,

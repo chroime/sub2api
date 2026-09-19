@@ -216,7 +216,13 @@ func (s *httpUpstreamService) Do(req *http.Request, proxyURL string, accountID i
 	// 执行请求
 	client := s.httpClientForUpstreamRequest(entry.client, req)
 	client = httpClientWithGrokAccessDeniedFallback(client)
+	service.StartBalancePrechargeUpstream(req.Context())
 	resp, err := servertiming.Do(client, req)
+	prechargeStatus := 0
+	if resp != nil {
+		prechargeStatus = resp.StatusCode
+	}
+	service.ObserveBalancePrechargeUpstream(req.Context(), prechargeStatus, err)
 	if err != nil {
 		s.recordOpenAIHTTP2Failure(profile, entry.protocolMode, entry.proxyKey, err)
 		// 请求失败，立即减少计数
@@ -280,7 +286,13 @@ func (s *httpUpstreamService) DoWithTLS(req *http.Request, proxyURL string, acco
 
 	client := s.httpClientForUpstreamRequest(entry.client, req)
 	client = httpClientWithGrokAccessDeniedFallback(client)
+	service.StartBalancePrechargeUpstream(req.Context())
 	resp, err := servertiming.Do(client, req)
+	prechargeStatus := 0
+	if resp != nil {
+		prechargeStatus = resp.StatusCode
+	}
+	service.ObserveBalancePrechargeUpstream(req.Context(), prechargeStatus, err)
 	if err != nil {
 		atomic.AddInt64(&entry.inFlight, -1)
 		atomic.StoreInt64(&entry.lastUsed, time.Now().UnixNano())

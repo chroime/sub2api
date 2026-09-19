@@ -27,6 +27,11 @@ services:
     image: weishaw/sub2api:latest
     container_name: sub2api
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
     security_opt:
       - no-new-privileges:true
     ulimits:

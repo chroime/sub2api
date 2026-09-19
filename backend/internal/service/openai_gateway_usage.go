@@ -175,7 +175,8 @@ func isZeroTokenZeroCostOpenAIUsage(usageLog *UsageLog) bool {
 }
 
 // RecordUsage records usage and deducts balance
-func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRecordUsageInput) error {
+func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRecordUsageInput) (prechargeErr error) {
+	defer finishBalancePrechargeUsage(ctx, &prechargeErr)
 	if input == nil {
 		return errors.New("openai usage input is nil")
 	}

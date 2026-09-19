@@ -3243,9 +3243,9 @@
         </div>
       </div>
 
-      <!-- OpenAI account-scoped synthetic first-response ACK -->
+      <!-- Account-scoped streaming ACK, available across supported platforms -->
       <div
-        v-if="form.platform === 'openai' && (accountCategory === 'oauth-based' || accountCategory === 'apikey')"
+        v-if="supportsStreamingACK(form.platform)"
         class="border-t border-gray-200 pt-4 dark:border-dark-600"
       >
         <div class="flex items-center justify-between gap-4">
@@ -3256,26 +3256,26 @@
             </p>
             <StreamingACKStatus
               :open="show"
-              :enabled="openAISyntheticFirstResponseEnabled"
+              :enabled="streamingACKEnabled"
               :saved-enabled="null"
             />
           </div>
           <button
             type="button"
-            data-testid="openai-synthetic-first-response-toggle"
+            data-testid="streaming-ack-toggle"
             role="switch"
             :aria-label="t('admin.accounts.openai.syntheticFirstResponse')"
-            :aria-checked="openAISyntheticFirstResponseEnabled"
-            @click="openAISyntheticFirstResponseEnabled = !openAISyntheticFirstResponseEnabled"
+            :aria-checked="streamingACKEnabled"
+            @click="toggleStreamingACK"
             :class="[
               'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500',
-              openAISyntheticFirstResponseEnabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
+              streamingACKEnabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
             ]"
           >
             <span
               :class="[
                 'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
-                openAISyntheticFirstResponseEnabled ? 'translate-x-5' : 'translate-x-0'
+                streamingACKEnabled ? 'translate-x-5' : 'translate-x-0'
               ]"
             />
           </button>
@@ -3967,6 +3967,7 @@ import Select from '@/components/common/Select.vue'
 import HelpTooltip from '@/components/common/HelpTooltip.vue'
 import UpstreamRequestIdHeaderField from '@/components/account/UpstreamRequestIdHeaderField.vue'
 import StreamingACKStatus from '@/components/account/StreamingACKStatus.vue'
+import { supportsStreamingACK, withStreamingACKExtra } from '@/components/account/streamingAck'
 import PlatformIcon from '@/components/common/PlatformIcon.vue'
 import Icon from '@/components/icons/Icon.vue'
 import ProxySelector from '@/components/common/ProxySelector.vue'
@@ -4050,10 +4051,11 @@ const oauthStepTitle = computed(() => {
 // Platform-specific hints for API Key type
 // 上游ID：直接上游声明请求标识的响应头名，留空不记录。
 const upstreamRequestIdHeader = ref('')
-const withUpstreamRequestIdHeader = <T extends Record<string, unknown> | undefined>(extra: T): T | Record<string, unknown> => {
+const withAccountRuntimeExtra = (extra: Record<string, unknown> | undefined): Record<string, unknown> => {
+  const next = withStreamingACKExtra(form.platform, extra, streamingACKEnabled.value)
   const name = upstreamRequestIdHeader.value.trim()
-  if (!name) return extra
-  return { ...(extra || {}), upstream_request_id_header: name }
+  if (name) next.upstream_request_id_header = name
+  return next
 }
 
 const baseUrlHint = computed(() => {
@@ -4468,7 +4470,12 @@ const openaiPassthroughEnabled = ref(false)
 // OpenAI Codex namespace 工具摊平兼容开关（仅 OAuth），缺省关闭即原样保留
 const openaiFlattenNamespacesEnabled = ref(false)
 const openAILongContextBillingEnabled = ref(false)
-const openAISyntheticFirstResponseEnabled = ref(false)
+const streamingACKEnabled = ref(false)
+const streamingACKTouched = ref(false)
+const toggleStreamingACK = () => {
+  streamingACKEnabled.value = !streamingACKEnabled.value
+  streamingACKTouched.value = true
+}
 const openAILongContextBillingTouched = ref(false)
 const openAICompactMode = ref<OpenAICompactMode>('auto')
 const openAIResponsesMode = ref<OpenAIResponsesMode>('auto')
@@ -4938,13 +4945,14 @@ watch(
     if (newPlatform !== 'openai') {
       openaiPassthroughEnabled.value = false
       openaiFlattenNamespacesEnabled.value = false
-      openAISyntheticFirstResponseEnabled.value = false
       openAIEndpointCapabilities.value = ['chat_completions', 'embeddings']
       openaiOAuthResponsesWebSocketV2Mode.value = OPENAI_WS_MODE_OFF
       openaiAPIKeyResponsesWebSocketV2Mode.value = OPENAI_WS_MODE_OFF
       codexCLIOnlyEnabled.value = false
       codexCLIOnlyAppServerEnabled.value = false
     }
+    streamingACKEnabled.value = false
+    streamingACKTouched.value = false
     if (newPlatform !== 'anthropic') {
       anthropicPassthroughEnabled.value = false
       anthropicAPIKeyAuthScheme.value = 'x_api_key'
@@ -5393,7 +5401,8 @@ const resetForm = () => {
   openaiPassthroughEnabled.value = false
   openaiFlattenNamespacesEnabled.value = false
   openAILongContextBillingEnabled.value = false
-  openAISyntheticFirstResponseEnabled.value = false
+  streamingACKEnabled.value = false
+  streamingACKTouched.value = false
   openAILongContextBillingTouched.value = false
   openAICompactMode.value = 'auto'
   openAIResponsesMode.value = 'auto'
@@ -5486,11 +5495,6 @@ const buildOpenAIExtra = (base?: Record<string, unknown>): Record<string, unknow
     delete extra.openai_responses_flatten_namespaces
   }
   extra.openai_long_context_billing_enabled = openAILongContextBillingEnabled.value
-  if (openAISyntheticFirstResponseEnabled.value) {
-    extra.openai_synthetic_first_response_enabled = true
-  } else {
-    delete extra.openai_synthetic_first_response_enabled
-  }
 
   if (accountCategory.value === 'oauth-based' && codexCLIOnlyEnabled.value) {
     extra.codex_cli_only = true
@@ -5539,12 +5543,13 @@ const buildOpenAIExtra = (base?: Record<string, unknown>): Record<string, unknow
 }
 
 const buildOpenAICodexImportExtra = (): Record<string, unknown> | undefined => {
-  const extra = buildOpenAIExtra()
-  if (!extra) {
-    return undefined
-  }
+  const extra = withAccountRuntimeExtra(buildOpenAIExtra())
   if (!openAILongContextBillingTouched.value) {
     delete extra.openai_long_context_billing_enabled
+  }
+  // Re-imports can update existing accounts; an untouched default must preserve their opt-in.
+  if (!streamingACKTouched.value) {
+    delete extra.streaming_ack_enabled
   }
   return Object.keys(extra).length > 0 ? extra : undefined
 }
@@ -5918,7 +5923,7 @@ const handleSubmit = async () => {
   await doCreateAccount({
     ...form,
     group_ids: form.group_ids,
-    extra: withUpstreamRequestIdHeader(extra),
+    extra: withAccountRuntimeExtra(extra),
     upstream_billing_probe_enabled: upstreamBillingAutoProbeEnabled.value,
     auto_pause_on_expired: autoPauseOnExpired.value
   })
@@ -5981,7 +5986,7 @@ const createAccountAndFinish = async (
     return
   }
   // Inject quota limits for apikey/bedrock accounts
-  let finalExtra = withUpstreamRequestIdHeader(extra)
+  let finalExtra = withAccountRuntimeExtra(extra)
   if (type === 'apikey' || type === 'bedrock') {
     const quotaExtra: Record<string, unknown> = { ...(finalExtra || {}) }
     if (editQuotaLimit.value != null && editQuotaLimit.value > 0) {
@@ -6107,7 +6112,7 @@ const handleGrokValidateRT = async (refreshTokenInput: string) => {
           platform: 'grok',
           type: 'oauth',
           credentials,
-          extra: withUpstreamRequestIdHeader(extra),
+          extra: withAccountRuntimeExtra(extra),
           proxy_id: form.proxy_id,
           concurrency: form.concurrency,
           load_factor: form.load_factor ?? undefined,
@@ -6284,7 +6289,7 @@ const handleGrokAuthorizePassword = async (emailPasswordInput: string) => {
           platform: 'grok',
           type: 'oauth',
           credentials,
-          extra: withUpstreamRequestIdHeader(extra),
+          extra: withAccountRuntimeExtra(extra),
           proxy_id: form.proxy_id,
           concurrency: form.concurrency,
           load_factor: form.load_factor ?? undefined,
@@ -6383,7 +6388,7 @@ const handleOpenAIExchange = async (authCode: string) => {
         platform: 'openai',
         type: 'oauth',
         credentials,
-        extra: withUpstreamRequestIdHeader(extra),
+        extra: withAccountRuntimeExtra(extra),
         proxy_id: form.proxy_id,
         concurrency: form.concurrency,
         load_factor: form.load_factor ?? undefined,
@@ -6498,7 +6503,7 @@ const handleOpenAIImportCodexSession = async (content: string) => {
       expires_at: form.expires_at,
       auto_pause_on_expired: autoPauseOnExpired.value,
       credential_extras: Object.keys(credentialExtras).length > 0 ? credentialExtras : undefined,
-      extra: withUpstreamRequestIdHeader(extra),
+      extra,
       update_existing: true
     })
 
@@ -6576,7 +6581,7 @@ const handleOpenAIImportCodexPAT = async (accessToken: string) => {
       expires_at: form.expires_at,
       auto_pause_on_expired: autoPauseOnExpired.value,
       credential_extras: Object.keys(credentialExtras).length > 0 ? credentialExtras : undefined,
-      extra: withUpstreamRequestIdHeader(extra)
+      extra
     })
 
     appStore.showSuccess(t('admin.accounts.accountCreated'))
@@ -6664,7 +6669,7 @@ const handleOpenAIBatchRT = async (refreshTokenInput: string, clientId?: string)
             platform: 'openai',
             type: 'oauth',
             credentials,
-            extra: withUpstreamRequestIdHeader(extra),
+            extra: withAccountRuntimeExtra(extra),
             proxy_id: form.proxy_id,
             concurrency: form.concurrency,
             load_factor: form.load_factor ?? undefined,
@@ -6763,7 +6768,7 @@ const handleAntigravityValidateRT = async (refreshTokenInput: string) => {
           platform: 'antigravity',
           type: 'oauth',
           credentials,
-          extra: withUpstreamRequestIdHeader({}),
+          extra: withAccountRuntimeExtra({}),
           proxy_id: form.proxy_id,
           concurrency: form.concurrency,
           load_factor: form.load_factor ?? undefined,
@@ -7144,7 +7149,7 @@ const handleCookieAuth = async (sessionKey: string) => {
           platform: form.platform,
           type: addMethod.value, // Use addMethod as type: 'oauth' or 'setup-token'
           credentials,
-          extra: withUpstreamRequestIdHeader(extra),
+          extra: withAccountRuntimeExtra(extra),
           proxy_id: form.proxy_id,
           concurrency: form.concurrency,
           load_factor: form.load_factor ?? undefined,

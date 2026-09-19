@@ -1799,7 +1799,7 @@ func (s *GeminiMessagesCompatService) writeGeminiNativeUpstreamError(c *gin.Cont
 		contentType = "application/json"
 	}
 	MarkResponseCommitted(c)
-	c.Data(resp.StatusCode, contentType, respBody)
+	writeStreamingACKDataError(c, resp.StatusCode, contentType, respBody)
 	if upstreamMsg == "" {
 		return fmt.Errorf("gemini upstream error: %d", resp.StatusCode)
 	}
@@ -1873,7 +1873,7 @@ func (s *GeminiMessagesCompatService) writeGeminiMappedError(c *gin.Context, acc
 		"upstream_error",
 		"Upstream request failed",
 	); matched {
-		c.JSON(status, gin.H{
+		writeStreamingACKJSONError(c, status, gin.H{
 			"type":  "error",
 			"error": gin.H{"type": errType, "message": errMsg},
 		})
@@ -1993,7 +1993,7 @@ func (s *GeminiMessagesCompatService) writeGeminiMappedError(c *gin.Context, acc
 		}
 	}
 
-	c.JSON(statusCode, gin.H{
+	writeStreamingACKJSONError(c, statusCode, gin.H{
 		"type":  "error",
 		"error": gin.H{"type": errType, "message": errMsg},
 	})
@@ -2413,7 +2413,7 @@ func generateAnthropicMsgID() string {
 
 func (s *GeminiMessagesCompatService) writeClaudeError(c *gin.Context, status int, errType, message string) error {
 	MarkResponseCommitted(c)
-	c.JSON(status, gin.H{
+	writeStreamingACKJSONError(c, status, gin.H{
 		"type":  "error",
 		"error": gin.H{"type": errType, "message": message},
 	})
@@ -2422,7 +2422,7 @@ func (s *GeminiMessagesCompatService) writeClaudeError(c *gin.Context, status in
 
 func (s *GeminiMessagesCompatService) writeGoogleError(c *gin.Context, status int, message string) error {
 	MarkResponseCommitted(c)
-	c.JSON(status, gin.H{
+	writeStreamingACKJSONError(c, status, gin.H{
 		"error": gin.H{
 			"code":    status,
 			"message": message,
@@ -2726,7 +2726,7 @@ func (s *GeminiMessagesCompatService) handleNativeNonStreamingResponse(c *gin.Co
 	if contentType == "" {
 		contentType = "application/json"
 	}
-	c.Data(resp.StatusCode, contentType, respBody)
+	writeStreamingACKDataError(c, resp.StatusCode, contentType, respBody)
 
 	if u := extractGeminiUsage(respBody); u != nil {
 		return u, nil

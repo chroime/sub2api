@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/domain"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/antigravity"
@@ -306,6 +307,12 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 
 	// 1) user concurrency slot
 	streamStarted := false
+	var stopStreamingACK func()
+	defer func() {
+		if stopStreamingACK != nil {
+			stopStreamingACK()
+		}
+	}()
 	if h.errorPassthroughService != nil {
 		service.BindErrorPassthroughService(c, h.errorPassthroughService)
 	}
@@ -322,7 +329,7 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 	}
 
 	// 2) billing eligibility check (after wait)
-	if err := h.billingCacheService.CheckBillingEligibility(c.Request.Context(), apiKey.User, apiKey, apiKey.Group, subscription, service.QuotaPlatform(c.Request.Context(), apiKey)); err != nil {
+	if err := h.billingCacheService.CheckBillingEligibility(balancePrechargeWaitContext(c.Request.Context(), c, geminiStreamingACKEligible(c, stream), &streamStarted), apiKey.User, apiKey, apiKey.Group, subscription, service.QuotaPlatform(c.Request.Context(), apiKey)); err != nil {
 		reqLog.Info("gemini.billing_eligibility_check_failed", zap.Error(err))
 		status, _, message, retryAfter := billingErrorDetails(err)
 		if retryAfter > 0 {
@@ -582,6 +589,10 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 		if fs.SwitchCount > 0 {
 			requestCtx = service.WithAccountSwitchCount(requestCtx, fs.SwitchCount, h.metadataBridgeEnabled())
 		}
+		if stopStreamingACK == nil && !streamStarted && geminiStreamingACKEligible(c, stream) && account.IsStreamingACKEnabled() {
+			stopStreamingACK = h.startStreamingACK(c, true, time.Now(), account, apiKey.GroupID)
+		}
+		writerSizeBeforeForward := service.OpenAICompactKeepaliveAdjustedWrittenSize(c)
 		sessionGroupID := derefGroupID(apiKey.GroupID)
 		if account.Platform == service.PlatformAntigravity && account.Type != service.AccountTypeAPIKey {
 			result, err = h.antigravityGatewayService.ForwardGemini(
@@ -598,12 +609,23 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 		} else {
 			result, err = h.geminiCompatService.ForwardNative(requestCtx, c, account, modelName, action, stream, body)
 		}
+		service.ApplyStreamingACKResult(c, result)
+		if service.StreamingACKCommitted(c) {
+			streamStarted = true
+		}
+		if err != nil {
+			resetSyntheticFirstResponseForRetry(c, &stopStreamingACK, writerSizeBeforeForward)
+		}
 		if accountReleaseFunc != nil {
 			accountReleaseFunc()
 		}
 		if err != nil {
 			var failoverErr *service.UpstreamFailoverError
 			if errors.As(err, &failoverErr) {
+				if service.OpenAICompactKeepaliveAdjustedWrittenSize(c) != writerSizeBeforeForward {
+					h.handleGeminiFailoverExhausted(c, failoverErr)
+					return
+				}
 				failoverAction := fs.HandleFailoverError(c.Request.Context(), h.gatewayService, account.ID, account.Platform, account.GetPoolModeRetryCount(), failoverErr)
 				switch failoverAction {
 				case FailoverContinue:
@@ -615,6 +637,9 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 					failoverClientGone(c)
 					return
 				}
+			}
+			if service.StreamingACKCommitted(c) && !service.IsResponseCommitted(c) {
+				googleError(c, http.StatusBadGateway, "Upstream request failed")
 			}
 			// ForwardNative already wrote the response
 			reqLog.Error("gemini.forward_failed", zap.Int64("account_id", account.ID), zap.Error(err))
@@ -769,13 +794,24 @@ type pathParseError struct{ msg string }
 func (e *pathParseError) Error() string { return e.msg }
 
 func googleError(c *gin.Context, status int, message string) {
-	c.JSON(status, gin.H{
+	body := gin.H{
 		"error": gin.H{
 			"code":    status,
 			"message": message,
 			"status":  googleapi.HTTPStatusToGoogleStatus(status),
 		},
-	})
+	}
+	ackCommitted := service.StopStreamingACKCommitted(c)
+	if ackCommitted || (c.Writer.Written() && strings.Contains(c.Writer.Header().Get("Content-Type"), "text/event-stream")) {
+		service.MarkOpsStreamError(c, "upstream_error", message, status)
+		service.MarkResponseCommitted(c)
+		payload, _ := json.Marshal(body)
+		_, _ = c.Writer.Write(append(append([]byte("data: "), payload...), '\n', '\n'))
+		c.Writer.Flush()
+		return
+	}
+	c.Header("Content-Type", "application/json; charset=utf-8")
+	c.JSON(status, body)
 }
 
 func writeUpstreamResponse(c *gin.Context, res *service.UpstreamHTTPResult) {

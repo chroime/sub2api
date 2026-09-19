@@ -51,17 +51,18 @@ func firstNonEmpty(values ...string) string {
 
 // SettingHandler 系统设置处理器
 type SettingHandler struct {
-	settingService           *service.SettingService
-	emailService             *service.EmailService
-	turnstileService         *service.TurnstileService
-	aliyunCaptchaService     *service.AliyunCaptchaService
-	opsService               *service.OpsService
-	paymentConfigService     *service.PaymentConfigService
-	paymentService           *service.PaymentService
-	userAttributeService     *service.UserAttributeService
-	notificationEmailService *service.NotificationEmailService
-	totpService              *service.TotpService
-	userService              *service.UserService
+	settingService                 *service.SettingService
+	emailService                   *service.EmailService
+	turnstileService               *service.TurnstileService
+	aliyunCaptchaService           *service.AliyunCaptchaService
+	opsService                     *service.OpsService
+	paymentConfigService           *service.PaymentConfigService
+	paymentService                 *service.PaymentService
+	userAttributeService           *service.UserAttributeService
+	notificationEmailService       *service.NotificationEmailService
+	totpService                    *service.TotpService
+	userService                    *service.UserService
+	balancePrechargeReconciliation *service.BalancePrechargeReconciliationService
 }
 
 // NewSettingHandler 创建系统设置处理器

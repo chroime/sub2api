@@ -106,7 +106,7 @@ type SettingRepository interface {
 	Delete(ctx context.Context, key string) error
 }
 
-// DefaultSubscriptionGroupReader validates group references used by default subscriptions.
+// DefaultSubscriptionGroupReader validates persisted group references in settings.
 type DefaultSubscriptionGroupReader interface {
 	GetByID(ctx context.Context, id int64) (*Group, error)
 }
@@ -142,6 +142,10 @@ type SettingService struct {
 	panelRateLimitSF    singleflight.Group
 	streamingACKCache   atomic.Value // *cachedStreamingACKSettings
 	streamingACKMu      sync.Mutex
+
+	balancePrechargeMu     sync.Mutex
+	balancePrechargeGlobal cachedBalancePrechargeSettings
+	balancePrechargeGroups map[int64]cachedGroupBalancePrechargeSettings
 
 	// openAIQuotaAutoPauseSettingsCache holds the most recently observed quota auto-pause
 	// settings. GetOpenAIQuotaAutoPauseSettings reads this atomic.Value on the request hot
@@ -296,7 +300,7 @@ func NewSettingService(settingRepo SettingRepository, cfg *config.Config) *Setti
 	}
 }
 
-// SetDefaultSubscriptionGroupReader injects an optional group reader for default subscription validation.
+// SetDefaultSubscriptionGroupReader injects the reader for default subscriptions and group policies.
 func (s *SettingService) SetDefaultSubscriptionGroupReader(reader DefaultSubscriptionGroupReader) {
 	s.defaultSubGroupReader = reader
 }

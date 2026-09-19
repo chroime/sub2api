@@ -22,6 +22,12 @@ import (
 // upstream, and converts responses back to Responses format.
 func (h *GatewayHandler) Responses(c *gin.Context) {
 	streamStarted := false
+	var stopStreamingACK func()
+	defer func() {
+		if stopStreamingACK != nil {
+			stopStreamingACK()
+		}
+	}()
 
 	requestStart := time.Now()
 
@@ -143,7 +149,7 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 	}
 
 	// 2. Re-check billing
-	if err := h.billingCacheService.CheckBillingEligibility(requestCtx, apiKey.User, apiKey, apiKey.Group, subscription, service.QuotaPlatform(requestCtx, apiKey)); err != nil {
+	if err := h.billingCacheService.CheckBillingEligibility(balancePrechargeWaitContext(requestCtx, c, reqStream, &streamStarted), apiKey.User, apiKey, apiKey.Group, subscription, service.QuotaPlatform(requestCtx, apiKey)); err != nil {
 		reqLog.Info("gateway.responses.billing_check_failed", zap.Error(err))
 		status, code, message, retryAfter := billingErrorDetails(err)
 		if retryAfter > 0 {
@@ -256,7 +262,10 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 		accountReleaseFunc = wrapReleaseOnDone(c.Request.Context(), accountReleaseFunc)
 
 		// 5. Forward request
-		writerSizeBeforeForward := c.Writer.Size()
+		if stopStreamingACK == nil && !streamStarted && account.IsStreamingACKEnabled() {
+			stopStreamingACK = h.startStreamingACK(c, reqStream, time.Now(), account, apiKey.GroupID)
+		}
+		writerSizeBeforeForward := service.OpenAICompactKeepaliveAdjustedWrittenSize(c)
 		forwardBody := body
 		if channelMapping.Mapped {
 			forwardBody = h.gatewayService.ReplaceModelInBody(body, channelMapping.MappedModel)
@@ -276,6 +285,13 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 		} else {
 			result, err = h.gatewayService.ForwardAsResponses(requestCtx, c, account, forwardBody, parsedReq)
 		}
+		service.ApplyStreamingACKResult(c, result)
+		if service.StreamingACKCommitted(c) {
+			streamStarted = true
+		}
+		if err != nil {
+			resetSyntheticFirstResponseForRetry(c, &stopStreamingACK, writerSizeBeforeForward)
+		}
 
 		if accountReleaseFunc != nil {
 			accountReleaseFunc()
@@ -285,7 +301,7 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 			var failoverErr *service.UpstreamFailoverError
 			if errors.As(err, &failoverErr) {
 				// Can't failover if streaming content already sent
-				if c.Writer.Size() != writerSizeBeforeForward {
+				if service.OpenAICompactKeepaliveAdjustedWrittenSize(c) != writerSizeBeforeForward {
 					h.handleResponsesFailoverExhausted(c, failoverErr, true)
 					return
 				}
@@ -355,6 +371,11 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 
 // responsesErrorResponse writes an error in OpenAI Responses API format.
 func (h *GatewayHandler) responsesErrorResponse(c *gin.Context, status int, code, message string) {
+	if service.StopStreamingACKCommitted(c) || gatewaySSEAlreadyStarted(c) {
+		h.handleStreamingAwareError(c, status, code, message, true)
+		return
+	}
+	c.Header("Content-Type", "application/json; charset=utf-8")
 	c.JSON(status, gin.H{
 		"error": gin.H{
 			"code":    code,
@@ -387,7 +408,7 @@ func (h *GatewayHandler) handleResponsesFailoverExhausted(c *gin.Context, lastEr
 	} else if lastErr != nil && statusCode == http.StatusTooManyRequests {
 		status, code, message = http.StatusTooManyRequests, "rate_limit_error", "All available accounts are currently rate-limited. Please retry later."
 	}
-	if streamStarted {
+	if streamStarted || service.StreamingACKCommitted(c) {
 		// A slot-wait heartbeat commits HTTP 200 before any upstream response.
 		// In that case a terminal frame is still required; once any semantic or
 		// official terminal bytes exist, preserve them without appending a second

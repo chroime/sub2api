@@ -537,7 +537,7 @@ func (s *OpenAIGatewayService) handleErrorResponse(
 		if contentType == "" {
 			contentType = "application/json"
 		}
-		c.Data(resp.StatusCode, contentType, body)
+		writeStreamingACKDataError(c, resp.StatusCode, contentType, body)
 		if cyberMsg == "" {
 			return nil, fmt.Errorf("openai cyber_policy: %d", resp.StatusCode)
 		}
@@ -548,7 +548,7 @@ func (s *OpenAIGatewayService) handleErrorResponse(
 		setOpsUpstreamError(c, resp.StatusCode, clientMsg, truncateString(string(body), 2048))
 		writeOpenAIPassthroughResponseHeaders(c.Writer.Header(), resp.Header, s.responseHeaderFilter)
 		MarkResponseCommitted(c)
-		c.JSON(http.StatusForbidden, gin.H{
+		writeStreamingACKJSONError(c, http.StatusForbidden, gin.H{
 			"error": gin.H{
 				"type":    "invalid_request_error",
 				"message": clientMsg,
@@ -614,7 +614,7 @@ func (s *OpenAIGatewayService) handleErrorResponse(
 		"Upstream request failed",
 	); matched {
 		MarkResponseCommitted(c)
-		c.JSON(status, gin.H{
+		writeStreamingACKJSONError(c, status, gin.H{
 			"error": gin.H{
 				"type":    errType,
 				"message": errMsg,
@@ -644,7 +644,7 @@ func (s *OpenAIGatewayService) handleErrorResponse(
 			Detail:             upstreamDetail,
 		})
 		MarkResponseCommitted(c)
-		c.JSON(http.StatusInternalServerError, gin.H{
+		writeStreamingACKJSONError(c, http.StatusInternalServerError, gin.H{
 			"error": gin.H{
 				"type":    "upstream_error",
 				"message": "Upstream gateway error",
@@ -740,7 +740,7 @@ func (s *OpenAIGatewayService) handleErrorResponse(
 		errMsg = upstreamMsg
 	}
 
-	c.JSON(statusCode, gin.H{
+	writeStreamingACKJSONError(c, statusCode, gin.H{
 		"error": gin.H{
 			"type":    errType,
 			"message": errMsg,

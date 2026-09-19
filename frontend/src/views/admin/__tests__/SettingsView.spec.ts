@@ -1,12 +1,14 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { defineComponent, h } from "vue";
-import { flushPromises, mount } from "@vue/test-utils";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { defineComponent, h, type Component } from "vue";
+import { enableAutoUnmount, flushPromises, mount, RouterLinkStub } from "@vue/test-utils";
 
 import enCommon from "@/i18n/locales/en/common";
 import enSettings from "@/i18n/locales/en/admin/settings";
 import zhCommon from "@/i18n/locales/zh/common";
 import zhSettings from "@/i18n/locales/zh/admin/settings";
 import SettingsView from "../SettingsView.vue";
+
+enableAutoUnmount(afterEach);
 
 const {
   getSettings,
@@ -81,6 +83,16 @@ const {
 
 const localeRef = vi.hoisted(() => ({ value: "zh-CN" }));
 
+vi.mock("@/api/admin/settings", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@/api/admin/settings")>(),
+  getBalancePrechargeSettings: vi.fn().mockResolvedValue({ enabled: true, threshold: 1, amount: 0.02 }),
+}));
+
+vi.mock("@/api/admin/balancePrechargeReviews", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@/api/admin/balancePrechargeReviews")>(),
+  getBalancePrechargeReviews: vi.fn().mockResolvedValue({ items: [], total: 0 }),
+}));
+
 vi.mock("@/api", () => ({
   adminAPI: {
     settings: {
@@ -128,6 +140,13 @@ vi.mock("@/stores", () => ({
     fetchPublicSettings,
   }),
 }));
+
+vi.mock("@/api/admin/affiliates", () => {
+  const affiliatesAPI = {
+    listUsers: vi.fn().mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20, pages: 0 }),
+  };
+  return { affiliatesAPI, default: affiliatesAPI };
+});
 
 vi.mock("@/stores/adminSettings", () => ({
   useAdminSettingsStore: () => ({
@@ -543,11 +562,13 @@ const baseSettingsResponse = {
   },
 };
 
-function mountView() {
+function mountView(stubOverrides: Record<string, Component | boolean> = {}, attachTo?: Element) {
   return mount(SettingsView, {
+    attachTo,
     global: {
       stubs: {
         AppLayout: AppLayoutStub,
+        RouterLink: RouterLinkStub,
         Select: SelectStub,
         Toggle: ToggleStub,
         Icon: true,
@@ -559,9 +580,11 @@ function mountView() {
         ProxySelector: true,
         ImageUpload: ImageUploadStub,
         BackupSettings: true,
+        BalancePrechargeSettings: true,
         StreamingACKSettings: defineComponent({
           template: '<section data-testid="streaming-ack-settings-panel" />',
         }),
+        ...stubOverrides,
       },
     },
   });
@@ -630,17 +653,100 @@ describe("admin SettingsView email domain quota copy", () => {
 });
 
 describe("admin SettingsView payment visible method controls", () => {
-  it("opens the gateway tab for the streaming ACK settings link", async () => {
+  it.each(["#streaming-ack-settings", "#balance-precharge-settings", "#precharge-reviews-title", "#extensions"])("opens the extensions tab for the %s deep link", async (hash) => {
     const previousURL = window.location.href;
-    window.history.replaceState(null, "", "/admin/settings#streaming-ack-settings");
+    window.history.replaceState(null, "", `/admin/settings${hash}`);
     const wrapper = mountView();
     try {
       await flushPromises();
-      expect(wrapper.get("#settings-tab-gateway").attributes("aria-selected")).toBe("true");
+      expect(wrapper.get("#settings-tab-extensions").attributes("aria-selected")).toBe("true");
       expect(wrapper.get('[data-testid="streaming-ack-settings-panel"]').isVisible()).toBe(true);
+      expect(wrapper.get('balance-precharge-settings-stub').isVisible()).toBe(true);
     } finally {
       wrapper.unmount();
       window.history.replaceState(null, "", previousURL);
+    }
+  });
+
+  it("mounts custom settings only in extensions and keeps their saves separate", async () => {
+    const wrapper = mountView();
+    await flushPromises();
+    await openGatewayTab(wrapper);
+    expect(wrapper.find('[data-testid="streaming-ack-settings-panel"]').exists()).toBe(false);
+    expect(wrapper.find('balance-precharge-settings-stub').exists()).toBe(false);
+    expect(wrapper.get('button[type="submit"]').isVisible()).toBe(true);
+
+    await wrapper.get('#settings-tab-extensions').trigger('click');
+    expect(wrapper.get('[data-testid="streaming-ack-settings-panel"]').isVisible()).toBe(true);
+    expect(wrapper.get('balance-precharge-settings-stub').isVisible()).toBe(true);
+    expect(wrapper.findAll('button[type="submit"]').filter((button) => button.isVisible())).toHaveLength(0);
+    await wrapper.get('form').trigger('submit');
+    await flushPromises();
+    expect(updateSettings).not.toHaveBeenCalled();
+
+    await wrapper.get('#settings-tab-general').trigger('click');
+    expect(wrapper.find('[data-testid="streaming-ack-settings-panel"]').exists()).toBe(false);
+    await wrapper.get('form').trigger('submit');
+    await flushPromises();
+    expect(updateSettings).toHaveBeenCalledOnce();
+  });
+
+  it("includes extensions in keyboard tab navigation and roving tab order", async () => {
+    const wrapper = mountView();
+    await flushPromises();
+    await openGatewayTab(wrapper);
+    await wrapper.get('#settings-tab-gateway').trigger('keydown', { key: 'ArrowRight' });
+    expect(wrapper.get('#settings-tab-extensions').attributes('aria-selected')).toBe('true');
+    expect(wrapper.get('#settings-tab-extensions').attributes('tabindex')).toBe('0');
+    expect(wrapper.get('#settings-tab-gateway').attributes('tabindex')).toBe('-1');
+    await wrapper.get('#settings-tab-extensions').trigger('keydown', { key: 'ArrowRight' });
+    expect(wrapper.get('#settings-tab-payment').attributes('aria-selected')).toBe('true');
+    await wrapper.get('#settings-tab-payment').trigger('keydown', { key: 'ArrowLeft' });
+    expect(wrapper.get('#settings-tab-extensions').attributes('aria-selected')).toBe('true');
+    await wrapper.get('#settings-tab-extensions').trigger('keydown', { key: 'Home' });
+    expect(wrapper.get('#settings-tab-general').attributes('aria-selected')).toBe('true');
+  });
+
+  it("handles an extension anchor change while the settings page is open", async () => {
+    const previousURL = window.location.href;
+    window.history.replaceState(null, '', '/admin/settings');
+    const wrapper = mountView();
+    try {
+      await flushPromises();
+      expect(wrapper.get('#settings-tab-general').attributes('aria-selected')).toBe('true');
+      window.history.replaceState(null, '', '/admin/settings#precharge-reviews-title');
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
+      await flushPromises();
+      expect(wrapper.get('#settings-tab-extensions').attributes('aria-selected')).toBe('true');
+      expect(wrapper.get('balance-precharge-settings-stub').isVisible()).toBe(true);
+    } finally {
+      wrapper.unmount();
+      window.history.replaceState(null, '', previousURL);
+    }
+  });
+
+  it("scrolls a reconciliation deep link to the real nested review heading after settings load", async () => {
+    const previousURL = window.location.href;
+    const previousScroll = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollIntoView');
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: scrollIntoView });
+    window.history.replaceState(null, '', '/admin/settings#precharge-reviews-title');
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const wrapper = mountView({ BalancePrechargeSettings: false }, container);
+    try {
+      await flushPromises();
+      const heading = wrapper.get('#precharge-reviews-title');
+      expect(heading.isVisible()).toBe(true);
+      expect(wrapper.get('#settings-tab-extensions').attributes('aria-selected')).toBe('true');
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: 'start' });
+      expect(scrollIntoView.mock.contexts).toContain(heading.element);
+    } finally {
+      wrapper.unmount();
+      container.remove();
+      if (previousScroll) Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', previousScroll);
+      else Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView');
+      window.history.replaceState(null, '', previousURL);
     }
   });
 
@@ -1283,24 +1389,7 @@ describe("admin SettingsView payment visible method controls", () => {
       },
     });
 
-    const wrapper = mount(SettingsView, {
-      global: {
-        stubs: {
-          AppLayout: AppLayoutStub,
-          Select: SelectStub,
-          Toggle: ToggleStub,
-          Icon: true,
-          ConfirmDialog: true,
-          PaymentProviderList: PaymentProviderListStub,
-          PaymentProviderDialog: true,
-          GroupBadge: true,
-          GroupOptionItem: true,
-          ProxySelector: true,
-          ImageUpload: ImageUploadStub,
-          BackupSettings: true,
-        },
-      },
-    });
+    const wrapper = mountView({ PaymentProviderList: PaymentProviderListStub });
 
     await flushPromises();
     await openPaymentTab(wrapper);
@@ -1668,24 +1757,7 @@ describe("admin SettingsView payment visible method controls", () => {
       },
     });
 
-    const wrapper = mount(SettingsView, {
-      global: {
-        stubs: {
-          AppLayout: AppLayoutStub,
-          Select: SelectStub,
-          Toggle: ToggleStub,
-          Icon: true,
-          ConfirmDialog: true,
-          PaymentProviderList: PaymentProviderListCapture,
-          PaymentProviderDialog: true,
-          GroupBadge: true,
-          GroupOptionItem: true,
-          ProxySelector: true,
-          ImageUpload: ImageUploadStub,
-          BackupSettings: true,
-        },
-      },
-    });
+    const wrapper = mountView({ PaymentProviderList: PaymentProviderListCapture });
 
     await flushPromises();
     await openPaymentTab(wrapper);

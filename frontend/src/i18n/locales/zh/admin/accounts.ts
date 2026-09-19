@@ -598,6 +598,7 @@ export default {
         rateSyncWarning: '已开启上游倍率同步的账号不能批量手工修改倍率，请先在账号编辑页关闭同步。',
         rateSyncConflict: '无法修改账号倍率：{count} 个目标账号已开启上游倍率同步。',
         longContextShadowHint: '长上下文计费归母账号所有。选中的影子账号仍跟随母账号，筛选全量目标时同样如此。',
+        streamingACKShadowHint: '影子账号不支持独立设置 ACK，批量设置前请先移除影子账号。',
         longContextParentRequired: '选中的账号全部是影子账号，请选择母账号修改长上下文计费。',
         mixedPlatformWarning: '所选账号跨越多个平台（{platforms}）。显示的模型映射预设为合并结果——请确保映射对每个平台都适用。'
       },
@@ -692,11 +693,11 @@ export default {
         syntheticFirstResponseStatusPending: '待保存，尚未应用更改',
         syntheticFirstResponseStatusAccountOff: '账号 ACK 已关闭，不干预',
         syntheticFirstResponseStatusGlobalOff: '总开关关闭，未生效',
-        syntheticFirstResponseStatusEnabled: '已启用，仅限匹配分组的流式请求',
+        syntheticFirstResponseStatusEnabled: '已启用，仅限匹配分组的 SSE 流式请求',
         syntheticFirstResponseRefresh: '刷新总开关状态',
         syntheticFirstResponseSettings: '总开关设置',
         syntheticFirstResponseDesc:
-          '默认关闭。仅对本账号在所属分组中发起的 OpenAI 流式请求发送不可见 SSE ACK；真实上游文本不会被延迟或改写。',
+          '默认关闭，需同时开启总开关。支持各平台账号在所属分组中的 SSE 流式请求，真实上游内容不会被延迟或改写。Gemini 原生接口需使用 alt=sse；不作用于非流式、WebSocket、实时语音或二进制响应。',
         responsesWebsocketsV2: 'Responses WebSocket v2',
         responsesWebsocketsV2Desc:
           '默认关闭。开启后可启用 responses_websockets_v2 协议能力（受网关全局开关与账号类型开关约束）。',

@@ -25,6 +25,7 @@
                 type="button"
                 role="tab"
                 :aria-selected="activeTab === tab.key"
+                :aria-controls="tab.key === 'extensions' ? 'extensions' : undefined"
                 :tabindex="activeTab === tab.key ? 0 : -1"
                 :class="[
                   'settings-tab',
@@ -201,10 +202,26 @@
         </div>
         <!-- /Tab: Security — Admin API Key -->
 
+        <!-- Tab: Extensions — these controls save independently. -->
+        <section
+          v-if="activeTab === 'extensions'"
+          id="extensions"
+          role="tabpanel"
+          aria-labelledby="settings-tab-extensions"
+          class="scroll-mt-40 space-y-6"
+        >
+          <div class="card divide-y divide-gray-100 dark:divide-dark-700">
+            <div class="px-6 py-4">
+              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">{{ t('admin.settings.tabs.extensions') }}</h2>
+              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ t('admin.settings.extensions.description') }}</p>
+            </div>
+            <StreamingACKSettings />
+            <BalancePrechargeSettings />
+          </div>
+        </section>
+
         <!-- Tab: Gateway -->
         <div v-show="activeTab === 'gateway'" class="space-y-6">
-          <StreamingACKSettings v-if="activeTab === 'gateway'" />
-
           <!-- Overload Cooldown (529) Settings -->
           <div class="card">
             <div
@@ -8772,7 +8789,7 @@
         </div>
 
         <!-- Save Button -->
-        <div v-show="activeTab !== 'backup'" class="flex justify-end">
+        <div v-if="activeTab !== 'backup' && activeTab !== 'extensions'" class="flex justify-end">
           <button
             type="submit"
             :disabled="saving || loadFailed"
@@ -8846,7 +8863,7 @@
 
 <script setup lang="ts">
 import { DEFAULT_SITE_LOGO, resolveSiteLogo } from '@/utils/branding';
-import { ref, reactive, computed, onMounted, watch } from "vue";
+import { ref, reactive, computed, onMounted, onUnmounted, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { adminAPI } from "@/api";
 import {
@@ -8905,6 +8922,7 @@ import BackupSettings from "@/views/admin/BackupView.vue";
 import EmailTemplateEditor from "@/views/admin/settings/EmailTemplateEditor.vue";
 import OpenAIFastPolicyUserSelector from "@/views/admin/settings/OpenAIFastPolicyUserSelector.vue";
 import StreamingACKSettings from "@/views/admin/settings/StreamingACKSettings.vue";
+import BalancePrechargeSettings from "@/views/admin/settings/BalancePrechargeSettings.vue";
 import { useClipboard } from "@/composables/useClipboard";
 import {
   useStepUp,
@@ -8961,12 +8979,18 @@ type SettingsTab =
   | "security"
   | "users"
   | "gateway"
+  | "extensions"
   | "payment"
   | "email"
   | "backup";
-const activeTab = ref<SettingsTab>(
-  window.location.hash === "#streaming-ack-settings" ? "gateway" : "general",
-);
+const extensionSettingsHashes = new Set([
+  "#streaming-ack-settings",
+  "#balance-precharge-settings",
+  "#precharge-reviews-title",
+  "#extensions",
+]);
+const settingsHash = ref(window.location.hash);
+const activeTab = ref<SettingsTab>(extensionSettingsHashes.has(settingsHash.value) ? "extensions" : "general");
 const settingsTabs = [
   { key: "general" as SettingsTab, icon: "home" as const },
   { key: "agreement" as SettingsTab, icon: "document" as const },
@@ -8974,6 +8998,7 @@ const settingsTabs = [
   { key: "security" as SettingsTab, icon: "shield" as const },
   { key: "users" as SettingsTab, icon: "user" as const },
   { key: "gateway" as SettingsTab, icon: "server" as const },
+  { key: "extensions" as SettingsTab, icon: "sparkles" as const },
   { key: "payment" as SettingsTab, icon: "creditCard" as const },
   { key: "email" as SettingsTab, icon: "mail" as const },
   { key: "backup" as SettingsTab, icon: "database" as const },
@@ -8990,6 +9015,13 @@ const settingsTabKeyboardActions = {
 
 function selectSettingsTab(tab: SettingsTab): void {
   activeTab.value = tab;
+}
+
+function handleSettingsHashChange(): void {
+  settingsHash.value = window.location.hash;
+  if (extensionSettingsHashes.has(settingsHash.value)) {
+    activeTab.value = "extensions";
+  }
 }
 
 function focusSettingsTab(tab: SettingsTab): void {
@@ -9034,6 +9066,11 @@ const { copyToClipboard } = useClipboard();
 const loading = ref(true);
 const loadFailed = ref(false);
 const saving = ref(false);
+watch([loading, activeTab, settingsHash], () => {
+  if (!loading.value && activeTab.value === "extensions" && extensionSettingsHashes.has(settingsHash.value)) {
+    document.getElementById(settingsHash.value.slice(1))?.scrollIntoView?.({ block: "start" });
+  }
+}, { flush: "post" });
 const testingSmtp = ref(false);
 const sendingTestEmail = ref(false);
 const smtpPasswordManuallyEdited = ref(false);
@@ -11128,6 +11165,7 @@ const siteBillingModeHint = computed(() =>
 );
 
 async function saveSettings() {
+  if (activeTab.value === "extensions") return;
   saving.value = true;
   try {
     const normalizedTableDefaultPageSize = Math.floor(
@@ -12678,6 +12716,8 @@ async function handleDeleteProvider() {
 }
 
 onMounted(() => {
+  window.addEventListener("hashchange", handleSettingsHashChange);
+  handleSettingsHashChange();
   loadSettings();
   loadSubscriptionGroups();
   loadAdminApiKey();
@@ -12690,6 +12730,10 @@ onMounted(() => {
   loadRectifierSettings();
   loadBetaPolicySettings();
   loadProviders();
+});
+
+onUnmounted(() => {
+  window.removeEventListener("hashchange", handleSettingsHashChange);
 });
 
 // =========================

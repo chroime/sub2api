@@ -135,3 +135,19 @@ func (s *OpenAIGatewayService) SyntheticFirstResponseConfig(ctx context.Context)
 	}
 	return cfg
 }
+
+// SyntheticFirstResponseConfig applies the same runtime gate to native and
+// converted non-OpenAI SSE transports.
+func (s *GatewayService) SyntheticFirstResponseConfig(ctx context.Context) config.GatewaySyntheticFirstResponseConfig {
+	var cfg config.GatewaySyntheticFirstResponseConfig
+	if s == nil {
+		return cfg
+	}
+	if s.cfg != nil {
+		cfg = s.cfg.Gateway.SyntheticFirstResponse
+	}
+	if s.settingService != nil {
+		cfg.Enabled = s.settingService.IsStreamingACKEnabled(ctx)
+	}
+	return cfg
+}

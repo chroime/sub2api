@@ -88,9 +88,8 @@ type OpenAIEndpointCapability string
 
 const openAILongContextBillingEnabledKey = "openai_long_context_billing_enabled"
 
-// OpenAISyntheticFirstResponseEnabledExtraKey is the per-account opt-in for
-// the synthetic SSE acknowledgement. The global gateway setting remains the
-// master switch; this key keeps the feature disabled for accounts by default.
+// OpenAISyntheticFirstResponseEnabledExtraKey is the legacy OpenAI opt-in,
+// read only when the generic StreamingACKEnabledExtraKey is absent.
 const OpenAISyntheticFirstResponseEnabledExtraKey = "openai_synthetic_first_response_enabled"
 
 const (
@@ -1309,11 +1308,36 @@ func (a *Account) IsOpenAILongContextBillingEnabled() bool {
 	return ok && enabled
 }
 
-// IsOpenAISyntheticFirstResponseEnabled reports whether this OpenAI account
-// explicitly opted in to the synthetic streaming acknowledgement.
-// Missing, malformed, or false values are all treated as disabled.
+// IsOpenAISyntheticFirstResponseEnabled retains compatibility with existing
+// gateway callers; new code should use IsStreamingACKEnabled.
 func (a *Account) IsOpenAISyntheticFirstResponseEnabled() bool {
-	if a == nil || !a.IsOpenAI() || a.IsShadow() || a.Extra == nil {
+	return a.IsStreamingACKEnabled()
+}
+
+// StreamingACKEnabledExtraKey is the platform-neutral, explicit account opt-in.
+const StreamingACKEnabledExtraKey = "streaming_ack_enabled"
+
+func SupportsStreamingACKPlatform(platform string) bool {
+	switch platform {
+	case PlatformOpenAI, PlatformAnthropic, PlatformGemini, PlatformAntigravity,
+		PlatformGrok, PlatformKimi, PlatformZhipu, PlatformDeepseek, PlatformMiniMax, PlatformOpenCodeGo:
+		return true
+	default:
+		return false
+	}
+}
+
+// IsStreamingACKEnabled reads the generic opt-in first, retaining the legacy
+// OpenAI setting only when no generic value exists. Malformed values fail closed.
+func (a *Account) IsStreamingACKEnabled() bool {
+	if a == nil || !SupportsStreamingACKPlatform(a.Platform) || a.IsShadow() || a.Extra == nil {
+		return false
+	}
+	if raw, exists := a.Extra[StreamingACKEnabledExtraKey]; exists {
+		enabled, ok := raw.(bool)
+		return ok && enabled
+	}
+	if !a.IsOpenAI() {
 		return false
 	}
 	enabled, ok := a.Extra[OpenAISyntheticFirstResponseEnabledExtraKey].(bool)
@@ -1325,7 +1349,11 @@ func (a *Account) IsOpenAISyntheticFirstResponseEnabled() bool {
 // affecting a request routed outside its current group (including the
 // ungrouped pool when groupID is nil).
 func (a *Account) IsOpenAISyntheticFirstResponseEnabledForGroup(groupID *int64) bool {
-	if !a.IsOpenAISyntheticFirstResponseEnabled() {
+	return a.IsStreamingACKEnabledForGroup(groupID)
+}
+
+func (a *Account) IsStreamingACKEnabledForGroup(groupID *int64) bool {
+	if !a.IsStreamingACKEnabled() {
 		return false
 	}
 	if groupID == nil || *groupID <= 0 {

@@ -14,14 +14,14 @@ func (h *OpenAIGatewayHandler) startSyntheticFirstResponse(
 	account *service.Account,
 	groupID *int64,
 ) func() {
-	if !stream || h == nil || h.cfg == nil || !account.IsOpenAISyntheticFirstResponseEnabledForGroup(groupID) {
+	if !stream || h == nil || h.cfg == nil || !account.IsStreamingACKEnabledForGroup(groupID) {
 		return func() {}
 	}
 	cfg := h.cfg.Gateway.SyntheticFirstResponse
 	if h.gatewayService != nil {
 		cfg = h.gatewayService.SyntheticFirstResponseConfig(c.Request.Context())
 	}
-	return service.StartOpenAISyntheticFirstResponse(c, cfg, startedAt)
+	return service.StartStreamingACK(c, cfg, startedAt)
 }
 
 // resetSyntheticFirstResponseForRetry cancels an uncommitted ACK before a
@@ -32,7 +32,9 @@ func resetSyntheticFirstResponseForRetry(c *gin.Context, stop *func(), writerSiz
 	if stop == nil || *stop == nil {
 		return
 	}
-	if service.OpenAISyntheticFirstResponseCommitted(c) {
+	// Stop under the timer's mutex before inspecting commitment. Otherwise an
+	// ACK can land between the check and cleanup and lose its state on retry.
+	if service.StopStreamingACKCommitted(c) {
 		return
 	}
 	if service.OpenAICompactKeepaliveAdjustedWrittenSize(c) != writerSizeBeforeForward {

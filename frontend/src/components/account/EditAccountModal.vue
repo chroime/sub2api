@@ -2196,9 +2196,9 @@
         </div>
       </div>
 
-      <!-- OpenAI account-scoped synthetic first-response ACK -->
+      <!-- Account-scoped streaming ACK, available across supported platforms -->
       <div
-        v-if="account?.platform === 'openai' && !isSparkShadow && (account?.type === 'oauth' || account?.type === 'setup-token' || account?.type === 'apikey')"
+        v-if="supportsStreamingACK(account?.platform) && !isSparkShadow"
         class="border-t border-gray-200 pt-4 dark:border-dark-600"
       >
         <div class="flex items-center justify-between gap-4">
@@ -2209,26 +2209,26 @@
             </p>
             <StreamingACKStatus
               :open="show"
-              :enabled="openAISyntheticFirstResponseEnabled"
-              :saved-enabled="account?.extra?.openai_synthetic_first_response_enabled === true"
+              :enabled="streamingACKEnabled"
+              :saved-enabled="readStreamingACKEnabled(account?.platform, account?.extra)"
             />
           </div>
           <button
             type="button"
-            data-testid="openai-synthetic-first-response-toggle"
+            data-testid="streaming-ack-toggle"
             role="switch"
             :aria-label="t('admin.accounts.openai.syntheticFirstResponse')"
-            :aria-checked="openAISyntheticFirstResponseEnabled"
-            @click="openAISyntheticFirstResponseEnabled = !openAISyntheticFirstResponseEnabled"
+            :aria-checked="streamingACKEnabled"
+            @click="streamingACKEnabled = !streamingACKEnabled"
             :class="[
               'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500',
-              openAISyntheticFirstResponseEnabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
+              streamingACKEnabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
             ]"
           >
             <span
               :class="[
                 'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
-                openAISyntheticFirstResponseEnabled ? 'translate-x-5' : 'translate-x-0'
+                streamingACKEnabled ? 'translate-x-5' : 'translate-x-0'
               ]"
             />
           </button>
@@ -3083,6 +3083,7 @@ import Select from '@/components/common/Select.vue'
 import HelpTooltip from '@/components/common/HelpTooltip.vue'
 import UpstreamRequestIdHeaderField from '@/components/account/UpstreamRequestIdHeaderField.vue'
 import StreamingACKStatus from '@/components/account/StreamingACKStatus.vue'
+import { readStreamingACKEnabled, supportsStreamingACK, withStreamingACKExtra } from '@/components/account/streamingAck'
 import Toggle from '@/components/common/Toggle.vue'
 import Icon from '@/components/icons/Icon.vue'
 import ProxySelector from '@/components/common/ProxySelector.vue'
@@ -3490,7 +3491,7 @@ const autoResetCredit5hThreshold = ref(100)
 const autoResetCredit7dThreshold = ref(100)
 const upstreamBillingAutoProbeEnabled = ref(false)
 const upstreamBillingRateSyncEnabled = ref(false)
-const openAISyntheticFirstResponseEnabled = ref(false)
+const streamingACKEnabled = ref(false)
 const mixedScheduling = ref(false) // For antigravity accounts: enable mixed scheduling
 // 上游ID：直接上游声明请求标识的响应头名，留空不记录。
 const upstreamRequestIdHeader = ref('')
@@ -4042,7 +4043,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
   openaiPassthroughEnabled.value = false
   openaiFlattenNamespacesEnabled.value = false
   openAILongContextBillingEnabled.value = false
-  openAISyntheticFirstResponseEnabled.value = false
+  streamingACKEnabled.value = readStreamingACKEnabled(newAccount.platform, newAccount.extra)
   editPlanType.value = ''
   openAICompactMode.value = 'auto'
   openAIResponsesMode.value = 'auto'
@@ -4063,7 +4064,6 @@ const syncFormFromAccount = (newAccount: Account | null) => {
       newAccount.type === 'oauth' && extra?.openai_responses_flatten_namespaces === true
     const longContextBillingValue = extra?.openai_long_context_billing_enabled
     openAILongContextBillingEnabled.value = longContextBillingValue === true
-    openAISyntheticFirstResponseEnabled.value = extra?.openai_synthetic_first_response_enabled === true
     // plan_type 手动覆盖仅 OAuth 有实际调度语义(IsOpenAIChatGPTSubscription 要求 oauth),故只对 oauth 回填
     editPlanType.value = newAccount.type === 'oauth'
       ? readPlanType(newAccount.credentials as Record<string, unknown> | undefined)
@@ -5557,13 +5557,10 @@ const handleSubmit = async () => {
       }
       if (isSparkShadow.value) {
         delete newExtra.openai_long_context_billing_enabled
+        delete newExtra.streaming_ack_enabled
+        delete newExtra.openai_synthetic_first_response_enabled
       } else {
         newExtra.openai_long_context_billing_enabled = openAILongContextBillingEnabled.value
-      }
-      if (openAISyntheticFirstResponseEnabled.value && !isSparkShadow.value) {
-        newExtra.openai_synthetic_first_response_enabled = true
-      } else {
-        delete newExtra.openai_synthetic_first_response_enabled
       }
       if (openAICompactMode.value === 'auto') {
         delete newExtra.openai_compact_mode
@@ -5715,6 +5712,11 @@ const handleSubmit = async () => {
       // Quota notify config
       writeQuotaNotifyToExtra(newExtra, 'update')
       updatePayload.extra = newExtra
+    }
+
+    if (supportsStreamingACK(props.account.platform) && !isSparkShadow.value) {
+      const currentExtra = (updatePayload.extra as Record<string, unknown>) || props.account.extra || {}
+      updatePayload.extra = withStreamingACKExtra(props.account.platform, currentExtra, streamingACKEnabled.value)
     }
 
     // 上游ID头名只在改动时写回 extra，避免用弹窗打开时的快照覆盖运行态键。

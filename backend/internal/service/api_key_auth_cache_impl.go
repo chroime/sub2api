@@ -14,7 +14,7 @@ import (
 	"github.com/dgraph-io/ristretto"
 )
 
-const apiKeyAuthSnapshotVersion = 24 // v24: group model_allowlist field (renamed from models_list_config, enforcing semantics)
+const apiKeyAuthSnapshotVersion = 26 // v26: complete frozen-balance auth projection for pending admission
 
 type apiKeyAuthCacheConfig struct {
 	l1Size        int
@@ -355,6 +355,7 @@ func (s *APIKeyService) snapshotFromAPIKey(ctx context.Context, apiKey *APIKey) 
 			Status:                     apiKey.User.Status,
 			Role:                       apiKey.User.Role,
 			Balance:                    apiKey.User.Balance,
+			FrozenBalance:              apiKey.User.FrozenBalance,
 			Concurrency:                apiKey.User.Concurrency,
 			AllowedGroups:              apiKey.User.AllowedGroups,
 			Email:                      apiKey.User.Email,
@@ -464,6 +465,7 @@ func (s *APIKeyService) snapshotToAPIKey(key string, snapshot *APIKeyAuthSnapsho
 			Status:                     snapshot.User.Status,
 			Role:                       snapshot.User.Role,
 			Balance:                    snapshot.User.Balance,
+			FrozenBalance:              snapshot.User.FrozenBalance,
 			Concurrency:                snapshot.User.Concurrency,
 			AllowedGroups:              snapshot.User.AllowedGroups,
 			Email:                      snapshot.User.Email,

@@ -86,7 +86,7 @@ func (s *OpenAIGatewayService) forwardAsChatCompletions(
 	logCodexCLIOnlyDetection(ctx, c, account, getAPIKeyIDFromContext(c), restrictionResult, body)
 	if restrictionResult.Enabled && !restrictionResult.Matched {
 		MarkOpsClientBusinessLimited(c, OpsClientBusinessLimitedReasonLocalPolicyDenied)
-		c.JSON(http.StatusForbidden, gin.H{
+		writeStreamingACKJSONError(c, http.StatusForbidden, gin.H{
 			"error": gin.H{
 				"type":    "forbidden_error",
 				"message": "This account only allows Codex official clients",
@@ -305,7 +305,7 @@ func (s *OpenAIGatewayService) forwardAsChatCompletions(
 			OmitPromotedSystemMessagesFromInput: !isResponsesShape && !isJSONObjectFormat,
 		})
 		if codexResult.Error != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{"type": "invalid_request_error", "message": codexResult.Error.Error()}})
+			writeStreamingACKJSONError(c, http.StatusBadRequest, gin.H{"error": gin.H{"type": "invalid_request_error", "message": codexResult.Error.Error()}})
 			return nil, codexResult.Error
 		}
 		setCodexToolNameReverse(c, codexResult.ToolNameReverse)
@@ -925,7 +925,7 @@ func (s *OpenAIGatewayService) handleChatStreamingResponse(
 
 	finalizeStream := func() (*OpenAIForwardResult, error) {
 		if streamFailoverErr != nil {
-			if c == nil || c.Writer == nil || !c.Writer.Written() {
+			if !openAIStreamClientOutputStarted(c, clientOutputStarted) {
 				return nil, streamFailoverErr
 			}
 			return resultWithUsage(), streamFailoverErr
@@ -1185,7 +1185,7 @@ func (s *OpenAIGatewayService) handleChatStreamingResponse(
 // writeChatCompletionsError writes an error response in OpenAI Chat Completions format.
 func writeChatCompletionsError(c *gin.Context, statusCode int, errType, message string) {
 	MarkResponseCommitted(c)
-	c.JSON(statusCode, gin.H{
+	writeStreamingACKJSONError(c, statusCode, gin.H{
 		"error": gin.H{
 			"type":    errType,
 			"message": message,

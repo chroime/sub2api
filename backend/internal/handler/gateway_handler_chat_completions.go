@@ -22,6 +22,12 @@ import (
 // forwards to Anthropic upstream, and converts responses back to Chat Completions format.
 func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 	streamStarted := false
+	var stopStreamingACK func()
+	defer func() {
+		if stopStreamingACK != nil {
+			stopStreamingACK()
+		}
+	}()
 
 	requestStart := time.Now()
 
@@ -134,7 +140,7 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 	}
 
 	// 2. Re-check billing
-	if err := h.billingCacheService.CheckBillingEligibility(c.Request.Context(), apiKey.User, apiKey, apiKey.Group, subscription, service.QuotaPlatform(c.Request.Context(), apiKey)); err != nil {
+	if err := h.billingCacheService.CheckBillingEligibility(balancePrechargeWaitContext(c.Request.Context(), c, reqStream, &streamStarted), apiKey.User, apiKey, apiKey.Group, subscription, service.QuotaPlatform(c.Request.Context(), apiKey)); err != nil {
 		reqLog.Info("gateway.cc.billing_check_failed", zap.Error(err))
 		status, code, message, retryAfter := billingErrorDetails(err)
 		if retryAfter > 0 {
@@ -260,7 +266,10 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 		}
 
 		// 5. Forward request
-		writerSizeBeforeForward := c.Writer.Size()
+		if stopStreamingACK == nil && !streamStarted && account.IsStreamingACKEnabled() {
+			stopStreamingACK = h.startStreamingACK(c, reqStream, time.Now(), account, apiKey.GroupID)
+		}
+		writerSizeBeforeForward := service.OpenAICompactKeepaliveAdjustedWrittenSize(c)
 		forwardBody := body
 		if channelMapping.Mapped {
 			forwardBody = h.gatewayService.ReplaceModelInBody(body, channelMapping.MappedModel)
@@ -289,6 +298,13 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 		} else {
 			result, err = h.gatewayService.ForwardAsChatCompletions(c.Request.Context(), c, account, forwardBody, parsedReq)
 		}
+		service.ApplyStreamingACKResult(c, result)
+		if service.StreamingACKCommitted(c) {
+			streamStarted = true
+		}
+		if err != nil {
+			resetSyntheticFirstResponseForRetry(c, &stopStreamingACK, writerSizeBeforeForward)
+		}
 
 		if accountReleaseFunc != nil {
 			accountReleaseFunc()
@@ -297,7 +313,7 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 		if err != nil {
 			var failoverErr *service.UpstreamFailoverError
 			if errors.As(err, &failoverErr) {
-				if c.Writer.Size() != writerSizeBeforeForward {
+				if service.OpenAICompactKeepaliveAdjustedWrittenSize(c) != writerSizeBeforeForward {
 					h.handleCCFailoverExhausted(c, failoverErr, true)
 					return
 				}
@@ -367,6 +383,11 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 
 // chatCompletionsErrorResponse writes an error in OpenAI Chat Completions format.
 func (h *GatewayHandler) chatCompletionsErrorResponse(c *gin.Context, status int, errType, message string) {
+	if service.StopStreamingACKCommitted(c) || gatewaySSEAlreadyStarted(c) {
+		h.handleStreamingAwareError(c, status, errType, message, true)
+		return
+	}
+	c.Header("Content-Type", "application/json; charset=utf-8")
 	c.JSON(status, gin.H{
 		"error": gin.H{
 			"type":    errType,
@@ -378,6 +399,9 @@ func (h *GatewayHandler) chatCompletionsErrorResponse(c *gin.Context, status int
 // handleCCFailoverExhausted writes a failover-exhausted error in CC format.
 func (h *GatewayHandler) handleCCFailoverExhausted(c *gin.Context, lastErr *service.UpstreamFailoverError, streamStarted bool) {
 	if streamStarted {
+		if gatewayStreamHasOnlyHeartbeats(c) {
+			h.handleStreamingAwareError(c, http.StatusBadGateway, "server_error", "All available accounts exhausted", true)
+		}
 		return
 	}
 	if lastErr != nil {

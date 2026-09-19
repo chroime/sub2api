@@ -153,6 +153,7 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 				user.FieldStatus,
 				user.FieldRole,
 				user.FieldBalance,
+				user.FieldFrozenBalance,
 				user.FieldConcurrency,
 				user.FieldBalanceNotifyEnabled,
 				user.FieldRestrictPublicGroups,

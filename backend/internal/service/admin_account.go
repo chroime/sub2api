@@ -916,6 +916,15 @@ func (s *adminServiceImpl) UpdateAccountExtra(ctx context.Context, id int64, upd
 	delete(updates, OllamaCloudUsageSessionExtraKey)
 	delete(updates, OllamaCloudUsageAutoRefreshExtraKey)
 	delete(updates, OllamaCloudUsageSnapshotExtraKey)
+	if _, provided := updates[StreamingACKEnabledExtraKey]; provided {
+		account, err := s.accountRepo.GetByID(ctx, id)
+		if err != nil {
+			return err
+		}
+		if err := ValidateOpenAISyntheticFirstResponseExtra(account.Platform, updates); err != nil {
+			return err
+		}
+	}
 	if _, longContextProvided := updates[openAILongContextBillingEnabledKey]; longContextProvided {
 		account, err := s.accountRepo.GetByID(ctx, id)
 		if err != nil {

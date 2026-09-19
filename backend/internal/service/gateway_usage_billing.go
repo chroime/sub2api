@@ -288,6 +288,10 @@ func buildUsageBillingCommand(requestID string, usageLog *UsageLog, p *postUsage
 		RequestPayloadHash: strings.TrimSpace(p.RequestPayloadHash),
 	}
 	if usageLog != nil {
+		if usageLog.CreatedAt.IsZero() {
+			usageLog.CreatedAt = time.Now().UTC()
+		}
+		cmd.UsageLogSnapshot = SanitizeUsageLogForRecovery(usageLog)
 		cmd.Model = usageLog.Model
 		cmd.BillingType = usageLog.BillingType
 		cmd.InputTokens = usageLog.InputTokens
@@ -341,6 +345,7 @@ func applyUsageBilling(ctx context.Context, requestID string, usageLog *UsageLog
 		postUsageBilling(ctx, p, deps)
 		return true, nil
 	}
+	cmd.BalancePrechargeID = BalancePrechargeBillingID(ctx, p.User.ID, p.APIKey.ID)
 
 	billingCtx, cancel := detachedBillingContext(ctx)
 	defer cancel()
@@ -348,6 +353,9 @@ func applyUsageBilling(ctx context.Context, requestID string, usageLog *UsageLog
 	result, err := repo.Apply(billingCtx, cmd)
 	if err != nil {
 		return false, err
+	}
+	if cmd.BalancePrechargeID != "" {
+		MarkBalancePrechargeSettled(ctx)
 	}
 
 	if result == nil || !result.Applied {
@@ -375,7 +383,9 @@ func finalizePostUsageBilling(ctx context.Context, p *postUsageBillingParams, de
 			deps.billingCacheService.QueueUpdateSubscriptionUsage(p.User.ID, *p.APIKey.GroupID, p.Cost.ActualCost)
 		}
 	} else if p.Cost.ActualCost > 0 && p.User != nil {
-		syncBalanceCacheAfterDeduction(ctx, p, deps, result)
+		if BalancePrechargeBillingID(ctx, p.User.ID, p.APIKey.ID) == "" {
+			syncBalanceCacheAfterDeduction(ctx, p, deps, result)
+		}
 	}
 
 	if p.Cost.ActualCost > 0 && p.APIKey != nil && p.APIKey.HasRateLimits() {
@@ -570,6 +580,17 @@ func writeUsageLogBestEffort(ctx context.Context, repo UsageLogRepository, usage
 	}
 	usageCtx, cancel := detachedBillingContext(ctx)
 	defer cancel()
+	acknowledge := func(ctx context.Context) {
+		if acknowledger, ok := repo.(interface {
+			AcknowledgeUsageLogOutbox(context.Context, *UsageLog) error
+		}); ok {
+			if err := acknowledger.AcknowledgeUsageLogOutbox(ctx, usageLog); err != nil {
+				// Billing and the usage row are already durable. Recovery will
+				// repeat this acknowledgement without repeating the debit.
+				logger.LegacyPrintf(logKey, "Acknowledge usage recovery record failed: %v", err)
+			}
+		}
+	}
 
 	if writer, ok := repo.(usageLogBestEffortWriter); ok {
 		if err := writer.CreateBestEffort(usageCtx, usageLog); err != nil {
@@ -586,18 +607,25 @@ func writeUsageLogBestEffort(ctx context.Context, repo UsageLogRepository, usage
 			}
 			if _, syncErr := repo.Create(fallbackCtx, usageLog); syncErr != nil {
 				logger.LegacyPrintf(logKey, "Create usage log sync fallback failed: %v", syncErr)
+			} else {
+				acknowledge(fallbackCtx)
 			}
+		} else {
+			acknowledge(usageCtx)
 		}
 		return
 	}
 
 	if _, err := repo.Create(usageCtx, usageLog); err != nil {
 		logger.LegacyPrintf(logKey, "Create usage log failed: %v", err)
+	} else {
+		acknowledge(usageCtx)
 	}
 }
 
 // RecordUsage 记录使用量并扣费（或更新订阅用量）
-func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInput) error {
+func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInput) (prechargeErr error) {
+	defer finishBalancePrechargeUsage(ctx, &prechargeErr)
 	return s.recordUsageCore(ctx, &recordUsageCoreInput{
 		Result:             input.Result,
 		APIKey:             input.APIKey,
@@ -1169,6 +1197,7 @@ func (s *GatewayService) buildRecordUsageLog(
 		Stream:                   result.Stream,
 		DurationMs:               &durationMs,
 		FirstTokenMs:             result.FirstTokenMs,
+		StreamingAckMs:           result.StreamingAckMs,
 		ImageCount:               result.ImageCount,
 		ImageSize:                optionalTrimmedStringPtr(result.ImageSize),
 		ImageInputSize:           optionalTrimmedStringPtr(result.ImageInputSize),

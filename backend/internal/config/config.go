@@ -94,6 +94,8 @@ type Config struct {
 	Dashboard               DashboardCacheConfig          `mapstructure:"dashboard_cache"`
 	DashboardAgg            DashboardAggregationConfig    `mapstructure:"dashboard_aggregation"`
 	UsageCleanup            UsageCleanupConfig            `mapstructure:"usage_cleanup"`
+	BillingMaintenance      BillingMaintenanceConfig      `mapstructure:"billing_maintenance"`
+	BillingStorageMonitor   BillingStorageMonitorConfig   `mapstructure:"billing_storage_monitor"`
 	Concurrency             ConcurrencyConfig             `mapstructure:"concurrency"`
 	TokenRefresh            TokenRefreshConfig            `mapstructure:"token_refresh"`
 	RunMode                 string                        `mapstructure:"run_mode" yaml:"run_mode"`
@@ -2365,6 +2367,10 @@ func setDefaults() {
 	viper.SetDefault("usage_cleanup.batch_size", 5000)
 	viper.SetDefault("usage_cleanup.worker_interval_seconds", 10)
 	viper.SetDefault("usage_cleanup.task_timeout_seconds", 1800)
+	viper.SetDefault("billing_maintenance.interval_seconds", 30)
+	viper.SetDefault("billing_maintenance.batch_size", 500)
+	viper.SetDefault("billing_maintenance.hot_retention_days", 90)
+	setBillingStorageMonitorDefaults()
 
 	// Idempotency
 	viper.SetDefault("idempotency.observe_only", true)
@@ -2669,6 +2675,12 @@ func setEnvReachableDefaults() {
 }
 
 func (c *Config) Validate() error {
+	if err := c.BillingMaintenance.Validate(); err != nil {
+		return err
+	}
+	if err := c.BillingStorageMonitor.Validate(); err != nil {
+		return err
+	}
 	forwardedClientIPHeaders, err := NormalizeForwardedClientIPHeaders(c.Security.ForwardedClientIPHeaders)
 	if err != nil {
 		return fmt.Errorf("security.forwarded_client_ip_headers: %w", err)

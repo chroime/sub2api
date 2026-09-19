@@ -41,6 +41,22 @@ func TestSchedulerMetadataAccountKeepsOpenAISubscriptionIdentity(t *testing.T) {
 	require.True(t, metadata.IsOpenAISyntheticFirstResponseEnabled())
 }
 
+func TestSchedulerMetadataAccountKeepsCrossPlatformStreamingACK(t *testing.T) {
+	groupID := int64(42)
+	for _, platform := range []string{service.PlatformAnthropic, service.PlatformGemini, service.PlatformGrok, service.PlatformDeepseek, service.PlatformOpenAI} {
+		account := service.Account{ID: 24, Platform: platform, GroupIDs: []int64{groupID}, Extra: map[string]any{
+			service.StreamingACKEnabledExtraKey: true,
+		}}
+		metadata := buildSchedulerMetadataAccount(account)
+		require.True(t, metadata.IsStreamingACKEnabledForGroup(&groupID), platform)
+		account.Extra[service.StreamingACKEnabledExtraKey] = false
+		account.Extra[service.OpenAISyntheticFirstResponseEnabledExtraKey] = true
+		metadata = buildSchedulerMetadataAccount(account)
+		require.Contains(t, metadata.Extra, service.StreamingACKEnabledExtraKey)
+		require.False(t, metadata.IsStreamingACKEnabledForGroup(&groupID), platform)
+	}
+}
+
 func TestSchedulerMetadataAccountProjectsUpstreamBillingProbe(t *testing.T) {
 	lastError := strings.Repeat("upstream diagnostic ", 512)
 	probe := map[string]any{

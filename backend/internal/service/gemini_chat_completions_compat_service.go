@@ -911,7 +911,7 @@ func (s *GeminiMessagesCompatService) writeGeminiChatCompletionsMappedError(
 }
 
 func (s *GeminiMessagesCompatService) writeChatCompletionsError(c *gin.Context, status int, errType, message string) error {
-	c.JSON(status, gin.H{
+	writeStreamingACKJSONError(c, status, gin.H{
 		"error": gin.H{
 			"type":    errType,
 			"message": message,

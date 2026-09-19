@@ -34,7 +34,7 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 	attempt int,
 	lastFailureReason string,
 	agentTaskRecoveryTried *bool,
-) (*OpenAIForwardResult, error) {
+) (prechargeResult *OpenAIForwardResult, prechargeErr error) {
 	if s == nil || account == nil {
 		return nil, wrapOpenAIWSFallback("invalid_state", errors.New("service or account is nil"))
 	}
@@ -342,6 +342,17 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 		return nil, err
 	}
 
+	// HTTP ingress may use a WebSocket upstream, bypassing HTTPUpstream.Do.
+	// Start only when sending the generation payload, after local validation and
+	// connection acquisition. A lost response cannot be treated as zero usage.
+	StartBalancePrechargeUpstream(ctx)
+	defer func() {
+		status := 0
+		if prechargeErr == nil && prechargeResult != nil {
+			status = http.StatusOK
+		}
+		ObserveBalancePrechargeUpstream(ctx, status, prechargeErr)
+	}()
 	if err := lease.WriteJSONWithContextTimeout(ctx, payload, s.openAIWSWriteTimeout()); err != nil {
 		lease.MarkBroken()
 		logOpenAIWSModeInfo(
