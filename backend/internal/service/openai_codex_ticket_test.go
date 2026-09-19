@@ -15,10 +15,22 @@ import (
 )
 
 func fakeCodexTicketState(n int) string {
-	if n < len(openAICodexTicketStatePrefix) {
+	if n != 292 && n != 332 {
 		return strings.Repeat("A", n)
 	}
-	return openAICodexTicketStatePrefix + strings.Repeat("B", n-len(openAICodexTicketStatePrefix))
+	return codexTicketStateAt(n, time.Now())
+}
+
+func boundCodexTicketFixture(account *Account, model string, length int) *openAICodexTicket {
+	issued := time.Now().UTC().Truncate(time.Second)
+	return &openAICodexTicket{AccountID: account.ID, Model: model, State: fakeCodexTicketState(length), Length: length, IssuedAt: issued, CredentialHash: codexTicketFixtureHash(account), CapturedAt: issued, ExpiresAt: issued.Add(50 * time.Minute)}
+}
+
+func advanceCodexTicketRetry(t *testing.T, svc *OpenAIGatewayService, account *Account, model string) {
+	t.Helper()
+	state := svc.loadOpenAICodexTicketRuntime(account, OpenAICodexTicketMode(account), model)
+	state.NextAttemptAt = time.Time{}
+	svc.saveOpenAICodexTicketRuntime(context.Background(), account, OpenAICodexTicketMode(account), model, state)
 }
 
 func ticketTestAccount(id int64) *Account {
@@ -105,7 +117,8 @@ func TestLookupOpenAICodexTicket_PrefersNewerExtra(t *testing.T) {
 	svc := ticketTestService(t, config.OpenAICodexTicketConfig{Enabled: true, TargetLength: 292, TTLSeconds: 3600}, nil)
 	account := ticketTestAccount(41)
 	oldState := fakeCodexTicketState(292)
-	newState := openAICodexTicketStatePrefix + strings.Repeat("C", 286)
+	newTicket := boundCodexTicketFixture(account, "gpt-6-astra", 292)
+	newState := newTicket.State
 	svc.storeOpenAICodexTicket(context.Background(), account, &openAICodexTicket{
 		AccountID:  41,
 		Model:      "gpt-6-astra",
@@ -114,14 +127,7 @@ func TestLookupOpenAICodexTicket_PrefersNewerExtra(t *testing.T) {
 		CapturedAt: time.Now().Add(-30 * time.Minute),
 		ExpiresAt:  time.Now().Add(-time.Minute),
 	})
-	account.Extra = map[string]any{openAICodexTicketExtraKey("gpt-6-astra"): &openAICodexTicket{
-		Model:      "gpt-6-astra",
-		State:      newState,
-		Length:     292,
-		CapturedAt: time.Now(),
-		ExpiresAt:  time.Now().Add(time.Hour),
-	},
-	}
+	account.Extra = map[string]any{openAICodexTicketExtraKey("gpt-6-astra"): newTicket}
 	got := svc.lookupOpenAICodexTicket(account, "gpt-6-astra")
 	require.NotNil(t, got)
 	require.Equal(t, newState, got.State)
@@ -228,6 +234,7 @@ func TestHarvestOpenAICodexTicket_StopsAt292AndUsesHarvestProxy(t *testing.T) {
 
 	svc.probeOnceOpenAICodexTicket(context.Background(), account, "gpt-6-astra")
 	require.Nil(t, svc.lookupOpenAICodexTicket(account, "gpt-6-astra"))
+	advanceCodexTicketRetry(t, svc, account, "gpt-6-astra")
 	svc.probeOnceOpenAICodexTicket(context.Background(), account, "gpt-6-astra")
 	ticket := svc.lookupOpenAICodexTicket(account, "gpt-6-astra")
 	require.NotNil(t, ticket)
@@ -272,6 +279,7 @@ func TestHarvestOpenAICodexTicket_HTTP503DoesNotAbortHunt(t *testing.T) {
 	account := ticketTestAccount(41)
 	svc.probeOnceOpenAICodexTicket(context.Background(), account, "gpt-6-astra")
 	require.Nil(t, svc.lookupOpenAICodexTicket(account, "gpt-6-astra"))
+	advanceCodexTicketRetry(t, svc, account, "gpt-6-astra")
 	svc.probeOnceOpenAICodexTicket(context.Background(), account, "gpt-6-astra")
 	ticket := svc.lookupOpenAICodexTicket(account, "gpt-6-astra")
 	require.NotNil(t, ticket)
@@ -281,16 +289,11 @@ func TestHarvestOpenAICodexTicket_HTTP503DoesNotAbortHunt(t *testing.T) {
 
 func TestLookupOpenAICodexTicket_HydratesFromExtra(t *testing.T) {
 	svc := ticketTestService(t, config.OpenAICodexTicketConfig{Enabled: true, TargetLength: 292, TTLSeconds: 3600}, nil)
-	state := fakeCodexTicketState(292)
 	account := ticketTestAccount(9)
+	record := boundCodexTicketFixture(account, "gpt-6-astra", 292)
+	state := record.State
 	account.Extra = map[string]any{
-		openAICodexTicketExtraKey("gpt-6-astra"): map[string]any{
-			"state":       state,
-			"length":      292,
-			"model":       "gpt-6-astra",
-			"captured_at": time.Now().Add(-time.Minute),
-			"expires_at":  time.Now().Add(time.Hour),
-		},
+		openAICodexTicketExtraKey("gpt-6-astra"): record,
 	}
 	got := svc.lookupOpenAICodexTicket(account, "gpt-6-astra")
 	require.NotNil(t, got)
@@ -301,13 +304,7 @@ func TestLookupOpenAICodexTicket_HydratesFromExtra(t *testing.T) {
 func TestOpenAICodexTicketStatuses_ReportsRemainingTTL(t *testing.T) {
 	account := ticketTestAccount(41)
 	account.Extra = map[string]any{
-		openAICodexTicketExtraKey("gpt-6-astra"): map[string]any{
-			"state":       fakeCodexTicketState(292),
-			"length":      292,
-			"model":       "gpt-6-astra",
-			"captured_at": time.Now().Add(-10 * time.Minute),
-			"expires_at":  time.Now().Add(50 * time.Minute),
-		},
+		openAICodexTicketExtraKey("gpt-6-astra"): boundCodexTicketFixture(account, "gpt-6-astra", 292),
 	}
 	now := time.Now()
 	got := OpenAICodexTicketStatuses(account, config.OpenAICodexTicketConfig{Enabled: true, FailClosed: true}, now)
@@ -379,7 +376,8 @@ func TestRefreshOpenAICodexTickets_ConcurrentModelsPreserveAccountSnapshot(t *te
 	svc.refreshOpenAICodexTickets(context.Background())
 	require.Equal(t, int64(2), upstream.started.Load())
 	require.Equal(t, map[string]any{"existing": true}, account.Extra)
-	require.Len(t, repo.updates, 2)
+	require.Contains(t, repo.updates, "codex_turn_ticket:292:gpt-6-astra")
+	require.Contains(t, repo.updates, "codex_turn_ticket:292:gpt-5.6-sol")
 	for _, model := range []string{openAICodexTicketDefaultModel, openAICodexTicketDefaultSolModel} {
 		ticket := svc.lookupOpenAICodexTicket(account, model)
 		require.NotNil(t, ticket)

@@ -1,12 +1,14 @@
 package admin
 
 import (
+	"encoding/base64"
+	"encoding/binary"
+	"testing"
+	"time"
+
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/stretchr/testify/require"
-	"strings"
-	"testing"
-	"time"
 )
 
 func TestAccountResponseCodexTicketsUsesConfiguredPolicy(t *testing.T) {
@@ -45,7 +47,9 @@ func TestAccountResponseCodexTicketsUsesSelected332PolicyAndLiveFailClosed(t *te
 	settings := service.NewSettingService(repo, cfg)
 	h := &AccountHandler{cfg: cfg}
 	h.SetCodexTicketSettings(settings)
-	account := &service.Account{ID: 41, Platform: service.PlatformOpenAI, Type: service.AccountTypeOAuth, Extra: map[string]any{"codex_ticket_mode": "332"}}
+	account := &service.Account{ID: 41, Platform: service.PlatformOpenAI, Type: service.AccountTypeOAuth,
+		Credentials: map[string]any{"access_token": "fixture-token", "chatgpt_account_id": "fixture-account"},
+		Extra:       map[string]any{"codex_ticket_mode": "332"}}
 	statuses := h.accountResponseFromService(account).CodexTurnTickets
 	require.Len(t, statuses, 1)
 	require.Equal(t, "332", statuses[0].Mode)
@@ -54,9 +58,14 @@ func TestAccountResponseCodexTicketsUsesSelected332PolicyAndLiveFailClosed(t *te
 	repo.values[service.SettingKeyOpenAICodexTicket332FailClosed] = "true"
 	settings.InvalidateOpenAICodexTicket332FailClosedCache()
 	require.True(t, h.accountListResponseFromService(account).CodexTurnTickets[0].Blocked)
+	issued := time.Now().Truncate(time.Second)
+	material := make([]byte, 249)
+	material[0] = 0x80
+	binary.BigEndian.PutUint64(material[1:9], uint64(issued.Unix()))
 	account.Extra["codex_turn_ticket:332:gpt-6-astra"] = map[string]any{
-		"state": "gAAAAA" + strings.Repeat("B", 326), "length": 332,
-		"expires_at": time.Now().Add(time.Hour),
+		"state": base64.URLEncoding.EncodeToString(material), "length": 332,
+		"issued_at": issued, "expires_at": issued.Add(50 * time.Minute),
+		"credential_hash": service.OpenAICodexTicketCredentialHash(account),
 	}
 	statuses = h.accountResponseFromService(account).CodexTurnTickets
 	require.True(t, statuses[0].Ready)

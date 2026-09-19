@@ -219,6 +219,7 @@
             <BalancePrechargeSettings />
             <CodexTicketSettings mode="292" />
             <CodexTicketSettings mode="332" />
+            <CodexTicketMonitor />
           </div>
         </section>
 
@@ -8926,6 +8927,7 @@ import OpenAIFastPolicyUserSelector from "@/views/admin/settings/OpenAIFastPolic
 import StreamingACKSettings from "@/views/admin/settings/StreamingACKSettings.vue";
 import BalancePrechargeSettings from "@/views/admin/settings/BalancePrechargeSettings.vue";
 import CodexTicketSettings from "@/views/admin/settings/CodexTicketSettings.vue";
+import CodexTicketMonitor from "@/views/admin/settings/CodexTicketMonitor.vue";
 import { useClipboard } from "@/composables/useClipboard";
 import {
   useStepUp,
@@ -8992,6 +8994,7 @@ const extensionSettingsHashes = new Set([
   "#precharge-reviews-title",
   "#codex-ticket-292-settings",
   "#codex-ticket-332-settings",
+  "#codex-ticket-monitor",
   "#extensions",
 ]);
 const settingsHash = ref(window.location.hash);
@@ -9619,10 +9622,16 @@ type SettingsForm = Omit<
   | "openai_codex_ticket_fail_closed"
   | "openai_codex_ticket_harvest_proxy_url"
   | "openai_codex_ticket_harvest_proxy_configured"
+  | "openai_codex_ticket_verify_enabled"
+  | "openai_codex_ticket_harvest_proxy_ids"
+  | "openai_codex_ticket_harvest_concurrency"
   | "openai_codex_ticket_332_enabled"
   | "openai_codex_ticket_332_fail_closed"
   | "openai_codex_ticket_332_harvest_proxy_url"
   | "openai_codex_ticket_332_harvest_proxy_configured"
+  | "openai_codex_ticket_332_verify_enabled"
+  | "openai_codex_ticket_332_harvest_proxy_ids"
+  | "openai_codex_ticket_332_harvest_concurrency"
 > & {
   /** Form always binds a concrete boolean (SystemSettings marks this optional). */
   channel_monitor_hide_throughput: boolean;

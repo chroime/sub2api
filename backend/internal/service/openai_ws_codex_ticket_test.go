@@ -20,7 +20,7 @@ import (
 
 func codexWSTicketHeaders(t *testing.T, svc *OpenAIGatewayService, account *Account, model, clientState string) http.Header {
 	t.Helper()
-	h, _, err := svc.buildOpenAIWSHeaders(context.Background(), nil, account, "fixture",
+	h, _, err := svc.buildOpenAIWSHeaders(context.Background(), nil, account, account.GetCredential("access_token"),
 		OpenAIWSProtocolDecision{Transport: OpenAIUpstreamTransportResponsesWebsocketV2}, true,
 		clientState, "", "", model, "")
 	require.NoError(t, err)
@@ -41,10 +41,7 @@ func TestCodexWSTicketPoolSeparatesServerTickets(t *testing.T) {
 		if length == 332 {
 			mode = "332"
 		}
-		account.Extra["codex_turn_ticket:"+mode+":gpt-6-astra"] = &openAICodexTicket{
-			AccountID: account.ID, Model: "gpt-6-astra", State: fakeCodexTicketState(length), Length: length,
-			ExpiresAt: time.Now().Add(time.Hour),
-		}
+		account.Extra["codex_turn_ticket:"+mode+":gpt-6-astra"] = boundCodexTicketFixture(account, "gpt-6-astra", length)
 	}
 	pool := newOpenAIWSConnPool(cfg)
 	t.Cleanup(pool.Close)
@@ -160,7 +157,7 @@ func TestCodexWSTicketPrewarmChecksBeforeSending(t *testing.T) {
 	svc.accountRepo = repo
 	err := svc.performOpenAIWSGeneratePrewarm(context.Background(), lease,
 		OpenAIWSProtocolDecision{Transport: OpenAIUpstreamTransportResponsesWebsocketV2},
-		map[string]any{"type": "response.create", "model": "gpt-6-astra"}, "", nil, account, nil, 0)
+		map[string]any{"type": "response.create", "model": "gpt-6-astra"}, "", nil, account, nil, 0, nil)
 	require.ErrorContains(t, err, "reconnect")
 	require.Empty(t, upstream.writes, "generate=false response.create must also respect ticket policy")
 }
@@ -280,6 +277,7 @@ func TestCodexWSTicketLiveConnectionTracksPolicyChanges(t *testing.T) {
 						selectedCfg.Enabled = false
 					}
 					account := ticketTestAccount(41)
+					account.Credentials["access_token"] = "sk-test"
 					account.Status = StatusActive
 					account.Concurrency = 1
 					account.Extra = map[string]any{"codex_ticket_mode": mode, "openai_oauth_responses_websockets_v2_mode": transport}
@@ -290,10 +288,7 @@ func TestCodexWSTicketLiveConnectionTracksPolicyChanges(t *testing.T) {
 							count = 332
 						}
 						for _, model := range []string{"gpt-6-astra", "gpt-5.6-sol"} {
-							account.Extra["codex_turn_ticket:"+ticketMode+":"+model] = &openAICodexTicket{
-								AccountID: account.ID, Model: model, State: fakeCodexTicketState(count), Length: count,
-								CapturedAt: now, ExpiresAt: now.Add(time.Hour),
-							}
+							account.Extra["codex_turn_ticket:"+ticketMode+":"+model] = boundCodexTicketFixture(account, model, count)
 						}
 					}
 					upstream := &codexWSTicketStagedConn{newStagedPassthroughConn()}
@@ -335,7 +330,8 @@ func TestCodexWSTicketLiveConnectionTracksPolicyChanges(t *testing.T) {
 									ticket := *stored
 									ticket.CapturedAt = now.Add(time.Second)
 									if change == "refresh" {
-										ticket.State = "gAAAAA" + strings.Repeat("C", length-6)
+										ticket.IssuedAt = now.Add(time.Second).Truncate(time.Second)
+										ticket.State = codexTicketStateAt(length, ticket.IssuedAt)
 									} else {
 										ticket.ExpiresAt = now.Add(-time.Second)
 										svc.openaiCodexTickets.Delete(openAICodexTicketModeKey(mode, account.ID, "gpt-6-astra"))

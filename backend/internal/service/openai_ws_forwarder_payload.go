@@ -141,9 +141,6 @@ func (s *OpenAIGatewayService) buildOpenAIWSHeaders(
 	if state := strings.TrimSpace(turnState); state != "" {
 		headers.Set(openAIWSTurnStateHeader, state)
 	}
-	if err := s.applyOpenAIWSCodexTicket(ctx, account, routingModel, headers); err != nil {
-		return nil, sessionResolution, err
-	}
 	if metadata := strings.TrimSpace(turnMetadata); metadata != "" {
 		headers.Set(openAIWSTurnMetadataHeader, metadata)
 	}
@@ -185,13 +182,12 @@ func (s *OpenAIGatewayService) buildOpenAIWSHeaders(
 
 	// 账号级请求头覆写（仅 openai api_key 账号启用时生效；OAuth 路径 no-op）。
 	// 覆盖所有 WS 模式（ctx_pool/dedicated/passthrough）的握手头。
-	serverTicketSignature := headers.Get(openAIWSCodexTicketSignatureHeader)
 	account.ApplyHeaderOverrides(headers)
 	clearOpenAIWSCodexTicketSignature(headers)
-	if serverTicketSignature != "" {
-		headers.Set(openAIWSCodexTicketSignatureHeader, serverTicketSignature)
-	}
 	setOpenAICodexRoutingHint(headers, account, routingModel, routingServiceTier)
+	if err := s.applyOpenAIWSCodexTicket(ctx, account, routingModel, headers); err != nil {
+		return nil, sessionResolution, err
+	}
 	logOpenAIRoutingDiagnostics(
 		ctx,
 		account,

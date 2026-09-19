@@ -88,6 +88,12 @@ vi.mock("@/api/admin/settings", async (importOriginal) => ({
   getSettings,
   updateSettings,
   getBalancePrechargeSettings: vi.fn().mockResolvedValue({ enabled: true, threshold: 1, amount: 0.02 }),
+  getCodexTicketMonitor: vi.fn().mockResolvedValue({ updated_at: '2026-09-20T00:00:00Z', states: [], events: [] }),
+}));
+
+vi.mock("@/api/admin/proxies", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@/api/admin/proxies")>(),
+  getAll: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock("@/api/admin/balancePrechargeReviews", async (importOriginal) => ({
@@ -860,6 +866,7 @@ describe("admin SettingsView payment visible method controls", () => {
     await flushPromises();
     expect(wrapper.get('#extensions #codex-ticket-292-settings').exists()).toBe(true);
     expect(wrapper.get('#extensions #codex-ticket-332-settings').exists()).toBe(true);
+    expect(wrapper.get('#extensions #codex-ticket-monitor').exists()).toBe(true);
     await wrapper.get('#codex-ticket-332-enabled').setValue(true);
     await wrapper.get('#codex-ticket-332-save').trigger('click');
     await flushPromises();
@@ -867,6 +874,9 @@ describe("admin SettingsView payment visible method controls", () => {
       openai_codex_ticket_332_enabled: true,
       openai_codex_ticket_332_fail_closed: false,
       openai_codex_ticket_332_harvest_proxy_url: '',
+      openai_codex_ticket_332_verify_enabled: false,
+      openai_codex_ticket_332_harvest_proxy_ids: [],
+      openai_codex_ticket_332_harvest_concurrency: 3,
     });
     await wrapper.get('#codex-ticket-292-enabled').setValue(true);
     await wrapper.get('#codex-ticket-292-save').trigger('click');
@@ -875,6 +885,9 @@ describe("admin SettingsView payment visible method controls", () => {
       openai_codex_ticket_enabled: true,
       openai_codex_ticket_fail_closed: true,
       openai_codex_ticket_harvest_proxy_url: '',
+      openai_codex_ticket_verify_enabled: false,
+      openai_codex_ticket_harvest_proxy_ids: [],
+      openai_codex_ticket_harvest_concurrency: 3,
     });
     updateSettings.mockClear();
     await wrapper.get('#settings-tab-general').trigger('click');
@@ -882,6 +895,8 @@ describe("admin SettingsView payment visible method controls", () => {
     await flushPromises();
     expect(updateSettings.mock.calls[0]?.[0]).not.toHaveProperty('openai_codex_ticket_enabled');
     expect(updateSettings.mock.calls[0]?.[0]).not.toHaveProperty('openai_codex_ticket_332_enabled');
+    expect(updateSettings.mock.calls[0]?.[0]).not.toHaveProperty('openai_codex_ticket_verify_enabled');
+    expect(updateSettings.mock.calls[0]?.[0]).not.toHaveProperty('openai_codex_ticket_332_harvest_proxy_ids');
     wrapper.unmount();
   });
 

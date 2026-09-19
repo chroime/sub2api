@@ -546,7 +546,11 @@ func (s *OpenAIGatewayService) proxyOpenAIWSHTTPBridgeTurn(
 		if buildErr != nil {
 			return nil, buildErr
 		}
+		ticketUse := s.snapshotOpenAICodexTicketUse(ctx, account, actualModel, upstreamReq.Header)
 		resp, err = s.doOpenAIUpstream(upstreamReq, proxyURL, account)
+		if resp != nil {
+			s.observeOpenAICodexTicketUse(ctx, ticketUse, resp.StatusCode, resp.Header)
+		}
 		if err != nil {
 			if turn == 1 {
 				return nil, s.handleOpenAIUpstreamTransportError(ctx, c, account, err, true)

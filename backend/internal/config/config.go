@@ -1247,6 +1247,9 @@ type OpenAICodexTicketConfig struct {
 	TTLSeconds                   int      `mapstructure:"ttl_seconds"`
 	RefreshBeforeSeconds         int      `mapstructure:"refresh_before_seconds"`
 	HarvestProxyURL              string   `mapstructure:"harvest_proxy_url"`
+	VerifyEnabled                bool     `mapstructure:"verify_enabled"`
+	HarvestProxyIDs              []int64  `mapstructure:"harvest_proxy_ids"`
+	HarvestConcurrency           int      `mapstructure:"harvest_concurrency"`
 	HarvestProbeIntervalSeconds  int      `mapstructure:"harvest_probe_interval_seconds"`
 	HarvestAttemptTimeoutSeconds int      `mapstructure:"harvest_attempt_timeout_seconds"`
 	FailClosed                   bool     `mapstructure:"fail_closed"`
@@ -2430,6 +2433,9 @@ func setDefaults() {
 	viper.SetDefault("gateway.openai_codex_ticket.ttl_seconds", 3600)
 	viper.SetDefault("gateway.openai_codex_ticket.refresh_before_seconds", 600)
 	viper.SetDefault("gateway.openai_codex_ticket.harvest_proxy_url", "")
+	viper.SetDefault("gateway.openai_codex_ticket.verify_enabled", false)
+	viper.SetDefault("gateway.openai_codex_ticket.harvest_proxy_ids", []int64{})
+	viper.SetDefault("gateway.openai_codex_ticket.harvest_concurrency", 3)
 	viper.SetDefault("gateway.openai_codex_ticket.harvest_probe_interval_seconds", 6)
 	viper.SetDefault("gateway.openai_codex_ticket.harvest_attempt_timeout_seconds", 25)
 	viper.SetDefault("gateway.openai_codex_ticket.fail_closed", true)
@@ -2439,6 +2445,9 @@ func setDefaults() {
 	viper.SetDefault("gateway.openai_codex_ticket_332.ttl_seconds", 3600)
 	viper.SetDefault("gateway.openai_codex_ticket_332.refresh_before_seconds", 600)
 	viper.SetDefault("gateway.openai_codex_ticket_332.harvest_proxy_url", "")
+	viper.SetDefault("gateway.openai_codex_ticket_332.verify_enabled", false)
+	viper.SetDefault("gateway.openai_codex_ticket_332.harvest_proxy_ids", []int64{})
+	viper.SetDefault("gateway.openai_codex_ticket_332.harvest_concurrency", 3)
 	viper.SetDefault("gateway.openai_codex_ticket_332.harvest_probe_interval_seconds", 6)
 	viper.SetDefault("gateway.openai_codex_ticket_332.harvest_attempt_timeout_seconds", 25)
 	viper.SetDefault("gateway.openai_codex_ticket_332.fail_closed", false)
@@ -2713,6 +2722,14 @@ func setEnvReachableDefaults() {
 }
 
 func (c *Config) Validate() error {
+	for _, profile := range []struct {
+		name string
+		cfg  OpenAICodexTicketConfig
+	}{{"openai_codex_ticket", c.Gateway.OpenAICodexTicket}, {"openai_codex_ticket_332", c.Gateway.OpenAICodexTicket332}} {
+		if err := ValidateCodexTicketHarvestOptions(profile.cfg.HarvestProxyIDs, profile.cfg.HarvestConcurrency); err != nil {
+			return fmt.Errorf("gateway.%s: %w", profile.name, err)
+		}
+	}
 	if err := c.BillingMaintenance.Validate(); err != nil {
 		return err
 	}

@@ -528,12 +528,30 @@ type OpenAIGatewayService struct {
 	openaiCodexTurnStateOrigins sync.Map
 	openaiCodexTurnStateWrites  atomic.Uint64
 	// openaiCodexTickets: mode\x00accountID\x00model → *openAICodexTicket.
-	openaiCodexTickets           sync.Map
-	openaiCodexTicketFlight      singleflight.Group
-	openaiCodexTicketLifecycleMu sync.Mutex
-	openaiCodexTicketCancel      context.CancelFunc
-	openaiCodexTicketDone        chan struct{}
-	openaiCodexTicketStopped     bool
+	openaiCodexTickets                  sync.Map
+	openaiCodexTicketFlight             singleflight.Group
+	openaiCodexTicketLifecycleMu        sync.Mutex
+	openaiCodexTicketCancel             context.CancelFunc
+	openaiCodexTicketDone               chan struct{}
+	openaiCodexTicketStopped            bool
+	openaiCodexTicketRuntimeMu          sync.Mutex
+	openaiCodexTicketProxyRepo          ProxyRepository
+	openaiCodexTicketRuntime            map[string]openAICodexTicketRuntime
+	openaiCodexTicketMonitorStates      map[string]OpenAICodexTicketMonitorState
+	openaiCodexTicketEvents             []OpenAICodexTicketMonitorEvent
+	openaiCodexTicketEventID            uint64
+	openaiCodexTicketRevocations        map[string]openAICodexTicketRevocation
+	openaiCodexTicketRejectIssuedBefore time.Time
+	openaiCodexTicketObserveSlots       chan struct{}
+	openaiCodexTicketPersistLocks       [32]sync.Mutex
+	openaiCodexTicketDirty              map[string]bool
+	openaiCodexTicketPendingRevocations map[string]*openAICodexTicketUse
+	openaiCodexTicketWritesInFlight     map[string]bool
+	openaiCodexTicketInjectedUses       map[string]*openAICodexTicketUse
+	openaiCodexTicketWriteContext       context.Context
+	openaiCodexTicketWriteCancel        context.CancelFunc
+	openaiCodexTicketWritesStopping     bool
+	openaiCodexTicketWriteWG            sync.WaitGroup
 }
 
 // NewOpenAIGatewayService creates a new OpenAIGatewayService

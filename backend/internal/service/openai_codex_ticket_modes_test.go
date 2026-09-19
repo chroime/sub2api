@@ -139,16 +139,16 @@ func TestCodexTicket332HarvestRequiresCompletedStream(t *testing.T) {
 		name, body string
 		accepted   bool
 	}{
-		{"completed", "event: response.completed\ndata: {\"type\":\"response.completed\"}\n\n", true},
+		{"completed", "event: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{\"model\":\"gpt-6-astra\"}}\n\n", true},
 		{"empty", "", false},
 		{"truncated", "data: {\"type\":\"response.output_text.delta\"}\n\n", false},
-		{"failed before completion", "data: {\"type\":\"response.failed\"}\n\ndata: {\"type\":\"response.completed\"}\n\n", false},
-		{"failed after completion", "data: {\"type\":\"response.completed\"}\n\ndata: {\"type\":\"error\"}\n\n", false},
+		{"failed before completion", "data: {\"type\":\"response.failed\"}\n\ndata: {\"type\":\"response.completed\",\"response\":{\"model\":\"gpt-6-astra\"}}\n\n", false},
+		{"failed after completion", "data: {\"type\":\"response.completed\",\"response\":{\"model\":\"gpt-6-astra\"}}\n\ndata: {\"type\":\"error\"}\n\n", false},
 		{"incomplete", "data: {\"type\":\"response.incomplete\"}\n\n", false},
 		{"done with failure", "data: {\"type\":\"response.done\",\"response\":{\"status\":\"failed\"}}\n\n", false},
 		{"event failure overrides payload", "event: response.failed\ndata: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\"}}\n\n", false},
-		{"event incomplete overrides payload", "event: response.incomplete\ndata: {\"type\":\"response.completed\"}\n\n", false},
-		{"event error overrides payload", "event: error\ndata: {\"type\":\"response.completed\"}\n\n", false},
+		{"event incomplete overrides payload", "event: response.incomplete\ndata: {\"type\":\"response.completed\",\"response\":{\"model\":\"gpt-6-astra\"}}\n\n", false},
+		{"event error overrides payload", "event: error\ndata: {\"type\":\"response.completed\",\"response\":{\"model\":\"gpt-6-astra\"}}\n\n", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			upstream := &codexTicketFuncUpstream{do: func(*http.Request) (*http.Response, error) {
@@ -172,7 +172,7 @@ func TestCodexTicket332HarvestRequiresCompletedStream(t *testing.T) {
 }
 
 func TestCodexTicket332OnlyHarvestResumesAfterRateLimit(t *testing.T) {
-	upstream := &httpUpstreamRecorder{responses: []*http.Response{{StatusCode: 200, Header: http.Header{"X-Codex-Turn-State": []string{fakeCodexTicketState(332)}}, Body: io.NopCloser(strings.NewReader("data: {\"type\":\"response.completed\"}\n\n"))}}}
+	upstream := &httpUpstreamRecorder{responses: []*http.Response{{StatusCode: 200, Header: http.Header{"X-Codex-Turn-State": []string{fakeCodexTicketState(332)}}, Body: io.NopCloser(strings.NewReader("data: {\"type\":\"response.completed\",\"response\":{\"model\":\"gpt-6-astra\"}}\n\n"))}}}
 	svc := dualTicketTestService(t, upstream)
 	svc.cfg.Gateway.OpenAICodexTicket.Enabled = false
 	reset := time.Now().Add(time.Hour)
@@ -269,7 +269,7 @@ func TestCodexTicketConcurrentModesUseSeparateFlights(t *testing.T) {
 		}
 		h := http.Header{}
 		h.Set(openAICodexTurnStateHeader, fakeCodexTicketState(length))
-		return &http.Response{StatusCode: 200, Header: h, Body: io.NopCloser(strings.NewReader("data: {\"type\":\"response.completed\"}\n\n"))}, nil
+		return &http.Response{StatusCode: 200, Header: h, Body: io.NopCloser(strings.NewReader("data: {\"type\":\"response.completed\",\"response\":{\"model\":\"gpt-6-astra\"}}\n\n"))}, nil
 	}}
 	svc := dualTicketTestService(t, upstream)
 	svc.cfg.Gateway.OpenAICodexTicket.HarvestProxyURL = "http://292.example:8080"
@@ -342,9 +342,7 @@ func TestCodexTicketRefreshHydratesPersistedTicketsBeforeAnyProbe(t *testing.T) 
 	for i := range accounts {
 		accounts[i].Status = StatusActive
 	}
-	accounts[1].Extra = map[string]any{"codex_turn_ticket:292:gpt-6-astra": map[string]any{
-		"state": fakeCodexTicketState(292), "length": 292, "expires_at": time.Now().Add(time.Hour),
-	}}
+	accounts[1].Extra = map[string]any{"codex_turn_ticket:292:gpt-6-astra": boundCodexTicketFixture(&accounts[1], "gpt-6-astra", 292)}
 	svc := ticketTestService(t, config.OpenAICodexTicketConfig{Enabled: true, FailClosed: true, HarvestProxyURL: "http://292.example", Models: []string{"gpt-6-astra"}}, nil)
 	svc.accountRepo = &codexTicketRefreshRepo{accounts: accounts}
 	metadata := ticketTestAccount(42)
@@ -366,8 +364,7 @@ func TestCodexTicketLegacyHydrationNeverCrossesModes(t *testing.T) {
 			account.Extra = map[string]any{"codex_ticket_mode": mode, "codex_turn_ticket:gpt-6-astra": map[string]any{
 				"state": fakeCodexTicketState(length), "length": length, "expires_at": time.Now().Add(time.Hour),
 			}}
-			wantReady := mode == "292" && length == 292 || mode == "332" && length == 332
-			require.Equal(t, !wantReady, svc.openAICodexTicketBlocksAccount(account, "gpt-6-astra"), "mode %s length %d", mode, length)
+			require.True(t, svc.openAICodexTicketBlocksAccount(account, "gpt-6-astra"), "unbound legacy requires recapture: mode %s length %d", mode, length)
 		}
 	}
 }

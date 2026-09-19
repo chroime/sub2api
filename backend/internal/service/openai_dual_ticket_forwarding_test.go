@@ -21,12 +21,10 @@ func TestCodexDualTicketForwardingUsesSelectedMechanism(t *testing.T) {
 					OpenAICodexTicket332: config.OpenAICodexTicketConfig{Enabled: true, FailClosed: true},
 				}}}
 				account := ticketTestAccount(41)
+				account.Credentials["access_token"] = "test-token"
 				account.Extra = map[string]any{"codex_ticket_mode": mode}
 				for _, length := range []int{292, 332} {
-					account.Extra["codex_turn_ticket:"+strconv.Itoa(length)+":gpt-6-astra"] = &openAICodexTicket{
-						AccountID: account.ID, Model: "gpt-6-astra", State: fakeCodexTicketState(length),
-						Length: length, CapturedAt: time.Now(), ExpiresAt: time.Now().Add(time.Hour),
-					}
+					account.Extra["codex_turn_ticket:"+strconv.Itoa(length)+":gpt-6-astra"] = boundCodexTicketFixture(account, "gpt-6-astra", length)
 				}
 				length, err := strconv.Atoi(mode)
 				require.NoError(t, err)

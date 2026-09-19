@@ -871,14 +871,17 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 	var upstreamConn openAIWSClientConn
 	statusCode := 0
 	var handshakeHeaders http.Header
+	var sessionTicketUse *openAICodexTicketUse
 	for {
 		headers, err = s.refreshOpenAIAgentIdentityHeaders(ctx, account, headers)
 		if err != nil {
 			return fmt.Errorf("refresh ws authentication headers: %w", err)
 		}
+		sessionTicketUse = s.snapshotOpenAICodexTicketUse(ctx, account, initialUpstreamModel, headers)
 		dialCtx, cancelDial := context.WithTimeout(ctx, s.openAIWSDialTimeout())
 		upstreamConn, statusCode, handshakeHeaders, err = dialer.Dial(dialCtx, wsURL, openAIWSHeadersForUpstream(headers), proxyURL)
 		cancelDial()
+		s.observeOpenAICodexTicketUse(ctx, sessionTicketUse, statusCode, handshakeHeaders)
 		if err == nil {
 			break
 		}
@@ -1288,6 +1291,7 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 					return nil
 				}
 				eventType, _, _ := parseOpenAIWSEventEnvelope(payload)
+				s.observeOpenAICodexTicketWSError(ctx, sessionTicketUse, handshakeHeaders, payload)
 				if eventType == "response.created" {
 					failureAccountSideEffectsApplied = false
 				}

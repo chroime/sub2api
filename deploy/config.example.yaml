@@ -362,6 +362,13 @@ gateway:
     # 后台「系统设置 → 扩展功能 → Codex 292」可覆盖此值，无需重启。
     # 后台值的读取缓存为 5 秒，下个探测周期使用新代理；代理服务商自行负责轮换 IP。
     harvest_proxy_url: ""
+    # 可选二次回放验证；关闭时 292 保留原有仅捕获响应头的方式。
+    verify_enabled: false
+    # IP 管理中的代理 ID，最多 32 个不重复正整数；与上面的独立代理 URL 组成采集线路池。
+    # 空数组不使用 IP 管理代理；停用、过期或不存在的代理会跳过。捕获与验证使用同一线路。
+    harvest_proxy_ids: []
+    # 此模式的后台采集并发上限（1..16）；独立于账号/分组的业务请求并发。
+    harvest_concurrency: 3
     harvest_probe_interval_seconds: 6
     harvest_attempt_timeout_seconds: 25
     fail_closed: true
@@ -373,13 +380,21 @@ gateway:
   # 332 票据须完成 SSE 验证；缺票默认继续请求，管理员可独立开启 fail_closed。
   # Env: GATEWAY_OPENAI_CODEX_TICKET_332_ENABLED
   #      GATEWAY_OPENAI_CODEX_TICKET_332_HARVEST_PROXY_URL
-  # 后台「系统设置 → 扩展功能 → Codex 332」可热更新开关、缺票策略及代理。
+  # 两套模式的 VERIFY_ENABLED、HARVEST_PROXY_IDS、HARVEST_CONCURRENCY 环境变量也相互独立。
+  # HARVEST_PROXY_IDS 环境变量使用逗号分隔，例如 "7,9"。
+  # 后台「系统设置 → 扩展功能」可独立热更新两套模式的开关、缺票策略、验证、代理池和采集并发。
   openai_codex_ticket_332:
     enabled: false
     target_length: 332
     ttl_seconds: 3600
     refresh_before_seconds: 600
     harvest_proxy_url: ""
+    # 可选二次回放验证；332 捕获始终要求完整 SSE 成功结束并匹配实际模型。
+    verify_enabled: false
+    # 最多 32 个不重复正整数；与 harvest_proxy_url 组成线路池，不与 292 共享选择。
+    harvest_proxy_ids: []
+    # 此模式的后台采集并发上限（1..16），默认 3。
+    harvest_concurrency: 3
     harvest_probe_interval_seconds: 6
     harvest_attempt_timeout_seconds: 25
     fail_closed: false

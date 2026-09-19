@@ -63,6 +63,7 @@ type SettingHandler struct {
 	totpService                    *service.TotpService
 	userService                    *service.UserService
 	balancePrechargeReconciliation *service.BalancePrechargeReconciliationService
+	codexTicketMonitor             codexTicketMonitorSource
 }
 
 // NewSettingHandler 创建系统设置处理器
@@ -308,6 +309,12 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		OpenAICodexClientVersionSynced:                         settings.OpenAICodexClientVersionSynced,
 		OpenAICodexVersionAutoSyncEnabled:                      settings.OpenAICodexVersionAutoSyncEnabled,
 		OpenAICodexTicketEnabled:                               settings.OpenAICodexTicketEnabled,
+		OpenAICodexTicketVerifyEnabled:                         settings.OpenAICodexTicketVerifyEnabled,
+		OpenAICodexTicketHarvestConcurrency:                    settings.OpenAICodexTicketHarvestConcurrency,
+		OpenAICodexTicketHarvestProxyIDs:                       settings.OpenAICodexTicketHarvestProxyIDs,
+		OpenAICodexTicket332VerifyEnabled:                      settings.OpenAICodexTicket332VerifyEnabled,
+		OpenAICodexTicket332HarvestConcurrency:                 settings.OpenAICodexTicket332HarvestConcurrency,
+		OpenAICodexTicket332HarvestProxyIDs:                    settings.OpenAICodexTicket332HarvestProxyIDs,
 		OpenAICodexTicketFailClosed:                            settings.OpenAICodexTicketFailClosed,
 		OpenAICodexTicket332Enabled:                            settings.OpenAICodexTicket332Enabled,
 		OpenAICodexTicket332FailClosed:                         settings.OpenAICodexTicket332FailClosed,

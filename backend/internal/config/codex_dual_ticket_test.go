@@ -16,11 +16,13 @@ func TestCodexDualTicketConfigDefaultsAndIndependentEnvironment(t *testing.T) {
 	require.NoError(t, viper.Unmarshal(&cfg))
 	require.Equal(t, OpenAICodexTicketConfig{
 		TargetLength: 292, TTLSeconds: 3600, RefreshBeforeSeconds: 600,
+		HarvestProxyIDs: []int64{}, HarvestConcurrency: 3,
 		HarvestProbeIntervalSeconds: 6, HarvestAttemptTimeoutSeconds: 25,
 		FailClosed: true, Models: []string{"gpt-6-astra", "gpt-5.6-sol"},
 	}, cfg.Gateway.OpenAICodexTicket)
 	require.Equal(t, OpenAICodexTicketConfig{
 		TargetLength: 332, TTLSeconds: 3600, RefreshBeforeSeconds: 600,
+		HarvestProxyIDs: []int64{}, HarvestConcurrency: 3,
 		HarvestProbeIntervalSeconds: 6, HarvestAttemptTimeoutSeconds: 25,
 		Models: []string{"gpt-6-astra", "gpt-5.6-sol"},
 	}, cfg.Gateway.OpenAICodexTicket332)

@@ -919,6 +919,16 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 		}
 	}
 	result.OpenAICodexTicket332HarvestProxyURL = strings.TrimSpace(settings[SettingKeyOpenAICodexTicket332HarvestProxyURL])
+	keys292, _ := codexTicketHarvestOptionKeys("292")
+	options292 := parseCodexTicketHarvestOptions(settings, keys292, s.codexTicketHarvestConfigOptions("292"))
+	result.OpenAICodexTicketVerifyEnabled = options292.VerifyEnabled
+	result.OpenAICodexTicketHarvestProxyIDs = options292.ProxyIDs
+	result.OpenAICodexTicketHarvestConcurrency = options292.Concurrency
+	keys332, _ := codexTicketHarvestOptionKeys("332")
+	options332 := parseCodexTicketHarvestOptions(settings, keys332, s.codexTicketHarvestConfigOptions("332"))
+	result.OpenAICodexTicket332VerifyEnabled = options332.VerifyEnabled
+	result.OpenAICodexTicket332HarvestProxyIDs = options332.ProxyIDs
+	result.OpenAICodexTicket332HarvestConcurrency = options332.Concurrency
 	// codex_cli_only 加固
 	result.MinCodexVersion = settings[SettingKeyMinCodexVersion]
 	result.MaxCodexVersion = settings[SettingKeyMaxCodexVersion]

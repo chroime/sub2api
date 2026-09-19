@@ -97,6 +97,10 @@ func (r *codexTicketLifecycleSettings) GetValue(ctx context.Context, key string)
 	return r.get(ctx, key)
 }
 
+func (r *codexTicketLifecycleSettings) GetMultiple(context.Context, []string) (map[string]string, error) {
+	return map[string]string{}, nil
+}
+
 func TestCodexTicketHarvesterStopCancelsInFlightWork(t *testing.T) {
 	for _, stage := range []string{"settings-enabled", "settings-proxy", "accounts", "upstream", "persist"} {
 		t.Run(stage, func(t *testing.T) {
@@ -255,7 +259,6 @@ func TestCodexTicket332StopCancelsStreamRead(t *testing.T) {
 func TestCodexTicket332OnlyLoopUsesItsOwnInterval(t *testing.T) {
 	started := make(chan struct{}, 4)
 	upstream := &codexTicketFuncUpstream{do: func(*http.Request) (*http.Response, error) {
-		started <- struct{}{}
 		return &http.Response{StatusCode: 503, Body: http.NoBody}, nil
 	}}
 	svc := dualTicketTestService(t, upstream)
@@ -265,7 +268,7 @@ func TestCodexTicket332OnlyLoopUsesItsOwnInterval(t *testing.T) {
 	account := ticketTestAccount(41)
 	account.Status = StatusActive
 	account.Extra = map[string]any{"codex_ticket_mode": "332"}
-	svc.accountRepo = &codexTicketRefreshRepo{accounts: []Account{*account}}
+	svc.accountRepo = &codexTicketLifecycleRepo{list: func(context.Context) ([]Account, error) { started <- struct{}{}; return []Account{*account}, nil }}
 	svc.StartOpenAICodexTicketHarvester()
 	t.Cleanup(svc.StopOpenAICodexTicketHarvester)
 	for i := 0; i < 2; i++ {

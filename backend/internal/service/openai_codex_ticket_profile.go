@@ -82,6 +82,9 @@ func (s *OpenAIGatewayService) openAICodexTicketConfigForMode(mode string) confi
 	if len(cfg.Models) == 0 {
 		cfg.Models = []string{openAICodexTicketDefaultModel, openAICodexTicketDefaultSolModel}
 	}
+	if cfg.HarvestConcurrency < 1 || cfg.HarvestConcurrency > 16 {
+		cfg.HarvestConcurrency = 3
+	}
 	return cfg
 }
 
@@ -99,6 +102,18 @@ func (s *OpenAIGatewayService) openAICodexTicketRuntimeConfig(ctx context.Contex
 			cfg.Enabled = s.settingService.GetOpenAICodexTicketEnabled(ctx, cfg.Enabled)
 			cfg.FailClosed = s.settingService.GetOpenAICodexTicketFailClosed(ctx, cfg.FailClosed)
 		}
+	}
+	return cfg
+}
+
+func (s *OpenAIGatewayService) openAICodexTicketHarvestConfig(ctx context.Context, mode string) config.OpenAICodexTicketConfig {
+	cfg := s.openAICodexTicketRuntimeConfig(ctx, mode)
+	if s != nil && s.settingService != nil && cfg.Enabled {
+		options := s.settingService.GetOpenAICodexTicketHarvestOptions(ctx, mode, CodexTicketHarvestOptions{VerifyEnabled: cfg.VerifyEnabled, ProxyIDs: cfg.HarvestProxyIDs, Concurrency: cfg.HarvestConcurrency})
+		cfg.VerifyEnabled, cfg.HarvestProxyIDs, cfg.HarvestConcurrency = options.VerifyEnabled, options.ProxyIDs, options.Concurrency
+	}
+	if cfg.HarvestConcurrency < 1 || cfg.HarvestConcurrency > 16 {
+		cfg.HarvestConcurrency = 3
 	}
 	return cfg
 }

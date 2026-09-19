@@ -202,6 +202,7 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 	acquireCtx, acquireCancel := context.WithTimeout(ctx, s.openAIWSAcquireTimeout())
 	defer acquireCancel()
 
+	ticketUse := s.snapshotOpenAICodexTicketUse(ctx, account, openAIWSPayloadString(payload, "model"), wsHeaders)
 	lease, err := s.getOpenAIWSConnPool().Acquire(acquireCtx, openAIWSAcquireRequest{
 		Account: account,
 		WSURL:   wsURL,
@@ -220,6 +221,9 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 	})
 	if err != nil {
 		var agentDialErr *openAIWSDialError
+		if errors.As(err, &agentDialErr) && agentDialErr != nil {
+			s.observeOpenAICodexTicketUse(ctx, ticketUse, agentDialErr.StatusCode, agentDialErr.ResponseHeaders)
+		}
 		if s.isAgentIdentityAccount(ctx, account) && errors.As(err, &agentDialErr) && isAgentIdentityTaskInvalidWSDialError(agentDialErr) && agentTaskRecoveryTried != nil && !*agentTaskRecoveryTried {
 			*agentTaskRecoveryTried = true
 			if recoveryErr := s.recoverAgentIdentityTask(ctx, account, account.GetCredential("task_id")); recoveryErr != nil {
@@ -338,6 +342,7 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 		account,
 		stateStore,
 		groupID,
+		ticketUse,
 	); err != nil {
 		return nil, err
 	}
@@ -681,6 +686,7 @@ readLoop:
 		imageCounter.AddSSEData(message)
 
 		if eventType == "error" || eventType == "response.failed" {
+			s.observeOpenAICodexTicketWSError(ctx, ticketUse, lease.HandshakeHeaders(), message)
 			markOpenAICyberPolicyEvent(c, message, http.StatusOK, usage)
 		}
 

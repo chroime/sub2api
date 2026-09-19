@@ -647,10 +647,16 @@ export interface SystemSettings {
   openai_codex_ticket_fail_closed: boolean;
   openai_codex_ticket_harvest_proxy_url: string;
   openai_codex_ticket_harvest_proxy_configured: boolean;
+  openai_codex_ticket_verify_enabled: boolean;
+  openai_codex_ticket_harvest_proxy_ids: number[];
+  openai_codex_ticket_harvest_concurrency: number;
   openai_codex_ticket_332_enabled: boolean;
   openai_codex_ticket_332_fail_closed: boolean;
   openai_codex_ticket_332_harvest_proxy_url: string;
   openai_codex_ticket_332_harvest_proxy_configured: boolean;
+  openai_codex_ticket_332_verify_enabled: boolean;
+  openai_codex_ticket_332_harvest_proxy_ids: number[];
+  openai_codex_ticket_332_harvest_concurrency: number;
   // codex_cli_only 加固
   min_codex_version: string;
   max_codex_version: string;
@@ -976,9 +982,15 @@ export interface UpdateSettingsRequest {
   openai_codex_ticket_enabled?: boolean;
   openai_codex_ticket_fail_closed?: boolean;
   openai_codex_ticket_harvest_proxy_url?: string;
+  openai_codex_ticket_verify_enabled?: boolean;
+  openai_codex_ticket_harvest_proxy_ids?: number[];
+  openai_codex_ticket_harvest_concurrency?: number;
   openai_codex_ticket_332_enabled?: boolean;
   openai_codex_ticket_332_fail_closed?: boolean;
   openai_codex_ticket_332_harvest_proxy_url?: string;
+  openai_codex_ticket_332_verify_enabled?: boolean;
+  openai_codex_ticket_332_harvest_proxy_ids?: number[];
+  openai_codex_ticket_332_harvest_concurrency?: number;
   // codex_cli_only 加固
   min_codex_version?: string;
   max_codex_version?: string;
@@ -1675,7 +1687,59 @@ export async function updateStreamingACKSettings(
   return validateStreamingACKSettings(data);
 }
 
+export interface CodexTicketMonitorState {
+  mode: string;
+  account_id: number;
+  account_name: string;
+  model: string;
+  status: string;
+  phase: string;
+  proxy_id?: number;
+  proxy_name: string;
+  length: number;
+  expires_at?: string;
+  next_attempt_at?: string;
+  last_error: string;
+  updated_at: string;
+  uses: number;
+  last_used_at?: string;
+}
+
+export interface CodexTicketMonitorEvent {
+  id: number | string;
+  time: string;
+  mode: string;
+  account_id: number;
+  account_name: string;
+  model: string;
+  phase: string;
+  status: string;
+  proxy_id?: number;
+  proxy_name: string;
+  http_status: number;
+  length: number;
+  error_code: string;
+  next_attempt_at?: string;
+}
+
+export interface CodexTicketMonitorSnapshot {
+  updated_at: string;
+  states: CodexTicketMonitorState[];
+  events: CodexTicketMonitorEvent[];
+}
+
+export async function getCodexTicketMonitor(options?: { signal?: AbortSignal }): Promise<CodexTicketMonitorSnapshot> {
+  const { data } = await apiClient.get<CodexTicketMonitorSnapshot>("/admin/settings/codex-tickets/monitor", {
+    signal: options?.signal,
+  });
+  if (!data || !Array.isArray(data.states) || !Array.isArray(data.events) || typeof data.updated_at !== "string") {
+    throw new Error("Invalid Codex ticket monitor response");
+  }
+  return data;
+}
+
 export const settingsAPI = {
+  getCodexTicketMonitor,
   getBalancePrechargeSettings,
   updateBalancePrechargeSettings,
   getGroupBalancePrechargeSettings,

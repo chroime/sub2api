@@ -30,6 +30,7 @@ func (s *OpenAIGatewayService) performOpenAIWSGeneratePrewarm(
 	account *Account,
 	stateStore OpenAIWSStateStore,
 	groupID int64,
+	ticketUse *openAICodexTicketUse,
 ) error {
 	if s == nil {
 		return nil
@@ -115,6 +116,7 @@ func (s *OpenAIGatewayService) performOpenAIWSGeneratePrewarm(
 		}
 
 		eventType, eventResponseID, _ := parseOpenAIWSEventEnvelope(message)
+		s.observeOpenAICodexTicketWSError(ctx, ticketUse, lease.HandshakeHeaders(), message)
 		if eventType == "" {
 			continue
 		}
@@ -161,6 +163,10 @@ func (s *OpenAIGatewayService) performOpenAIWSGeneratePrewarm(
 			return wrapOpenAIWSFallback("prewarm_error_event", errors.New(errMsg))
 		}
 
+		if eventType == "response.failed" || eventType == "response.incomplete" {
+			lease.MarkBroken()
+			return wrapOpenAIWSFallback("prewarm_failed", errors.New("upstream prewarm did not complete successfully"))
+		}
 		if isOpenAIWSTerminalEvent(eventType) {
 			prewarmTerminalCount++
 			break

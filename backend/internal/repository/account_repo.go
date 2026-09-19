@@ -61,6 +61,7 @@ var schedulerNeutralExtraKeyPrefixes = []string{
 	// 因此 bucket 重建事件永远搬不动门票状态，续期时开事务+发 outbox 是白干。
 	// 归为观测型后仍会同步单账号快照（见 UpdateExtra），不丢任何新鲜度。
 	"codex_turn_ticket:",
+	"codex_ticket_runtime:",
 	"passive_usage_",
 	"upstream_billing_probe",
 	"upstream_billing_rate_sync",
@@ -2659,6 +2660,33 @@ func (r *accountRepository) AutoPauseExpiredAccounts(ctx context.Context, now ti
 		}
 	}
 	return int64(len(accountIDs)), nil
+}
+
+// InvalidateCodexTicket removes only the credential-bound ticket used by the
+// failed request. A late upstream error must not delete a newer replacement.
+func (r *accountRepository) InvalidateCodexTicket(ctx context.Context, accountID int64, mode, model, state, credentialHash string) (bool, error) {
+	if accountID <= 0 || (mode != "292" && mode != "332") || strings.TrimSpace(model) == "" || state == "" || credentialHash == "" {
+		return false, nil
+	}
+	key := "codex_turn_ticket:" + mode + ":" + strings.TrimSpace(model)
+	result, err := clientFromContext(ctx, r.client).ExecContext(ctx,
+		`UPDATE accounts SET extra = COALESCE(extra, '{}'::jsonb) - $1, updated_at = NOW()
+		 WHERE id = $2 AND deleted_at IS NULL
+		 AND extra -> $1 ->> 'state' = $3
+		 AND extra -> $1 ->> 'credential_hash' = $4`,
+		key, accountID, state, credentialHash,
+	)
+	if err != nil {
+		return false, err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	if affected > 0 && dbent.TxFromContext(ctx) == nil {
+		r.syncSchedulerAccountSnapshot(ctx, accountID)
+	}
+	return affected > 0, nil
 }
 
 func (r *accountRepository) UpdateExtra(ctx context.Context, id int64, updates map[string]any) error {

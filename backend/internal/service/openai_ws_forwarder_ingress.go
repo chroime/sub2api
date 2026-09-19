@@ -789,6 +789,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		return fmt.Errorf("build ws headers: %w", buildHdrErr)
 	}
 	sessionTicketSignature := wsHeaders.Get(openAIWSCodexTicketSignatureHeader)
+	sessionTicketUse := s.snapshotOpenAICodexTicketUse(ctx, account, firstRoutingFields[0].String(), wsHeaders)
 	baseAcquireReq := openAIWSAcquireRequest{
 		Account: account,
 		WSURL:   wsURL,
@@ -872,6 +873,9 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		lease, acquireErr := pool.Acquire(acquireCtx, req)
 		acquireCancel()
 		var dialErr *openAIWSDialError
+		if errors.As(acquireErr, &dialErr) && dialErr != nil {
+			s.observeOpenAICodexTicketUse(ctx, sessionTicketUse, dialErr.StatusCode, dialErr.ResponseHeaders)
+		}
 		if acquireErr != nil && s.isAgentIdentityAccount(ctx, account) && errors.As(acquireErr, &dialErr) && isAgentIdentityTaskInvalidWSDialError(dialErr) && !agentTaskRecoveryTried {
 			agentTaskRecoveryTried = true
 			if recoveryErr := s.recoverAgentIdentityTask(ctx, account, account.GetCredential("task_id")); recoveryErr != nil {
@@ -1047,6 +1051,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 				parseOpenAIWSResponseUsageFromCompletedEvent(upstreamMessage, &usage)
 			}
 			if eventType == "error" || eventType == "response.failed" {
+				s.observeOpenAICodexTicketWSError(ctx, sessionTicketUse, lease.HandshakeHeaders(), upstreamMessage)
 				markOpenAICyberPolicyEvent(c, upstreamMessage, http.StatusOK, &usage)
 			}
 			if eventType == "error" {
