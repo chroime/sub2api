@@ -299,6 +299,7 @@ describe('admin GroupsView column settings', () => {
       'account_count',
       'capacity',
       'usage',
+      'streaming_ack_enabled',
       'status',
       'actions',
     ])
@@ -323,6 +324,7 @@ describe('admin GroupsView column settings', () => {
       'rate_multiplier',
       'is_exclusive',
       'account_count',
+      'streaming_ack_enabled',
       'status',
       'actions',
     ])
@@ -342,6 +344,7 @@ describe('admin GroupsView column settings', () => {
       'is_exclusive',
       'account_count',
       'capacity',
+      'streaming_ack_enabled',
       'status',
       'actions',
     ])
@@ -365,6 +368,7 @@ describe('admin GroupsView column settings', () => {
       'is_exclusive',
       'account_count',
       'capacity',
+      'streaming_ack_enabled',
       'status',
       'actions',
     ])
@@ -389,10 +393,24 @@ describe('admin GroupsView column settings', () => {
       'account_count',
       'capacity',
       'usage',
+      'streaming_ack_enabled',
       'status',
       'actions',
     ])
     expect(localStorage.getItem('group-hidden-columns')).toBe(JSON.stringify([]))
+  })
+
+  it('can hide and restore the ACK column without changing other columns', async () => {
+    const wrapper = await mountView()
+    const originalColumns = columnKeys(wrapper)
+    await openColumnSettings(wrapper)
+    await clickColumnToggle(wrapper, 'ACK')
+    expect(columnKeys(wrapper)).toEqual(originalColumns.filter((key) => key !== 'streaming_ack_enabled'))
+    expect(JSON.parse(localStorage.getItem('group-hidden-columns')!)).toContain('streaming_ack_enabled')
+
+    await clickColumnToggle(wrapper, 'ACK')
+    expect(columnKeys(wrapper)).toEqual(originalColumns)
+    expect(JSON.parse(localStorage.getItem('group-hidden-columns')!)).not.toContain('streaming_ack_enabled')
   })
 
   it('skips usage and capacity fetches until consuming columns are shown', async () => {

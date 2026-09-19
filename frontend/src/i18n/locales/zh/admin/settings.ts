@@ -550,7 +550,7 @@ export default {
       },
       streamingACK: {
         title: '流式首响 ACK 总开关',
-        scope: '适用于各平台已开启 ACK 的账号及其匹配分组，仅处理 SSE 流式请求；Gemini 原生接口需使用 alt=sse',
+        scope: '开启后按各平台分组的 ACK 设置执行；尚未设置的旧分组沿用账号配置。仅处理 SSE 流式请求，Gemini 原生接口需使用 alt=sse。',
         enabled: '总开关已开启',
         disabled: '总开关已关闭',
         saved: '已保存，对新请求生效',

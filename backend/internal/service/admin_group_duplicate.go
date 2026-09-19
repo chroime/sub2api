@@ -95,6 +95,7 @@ func cloneGroupMessagesDispatchModelConfig(value OpenAIMessagesDispatchModelConf
 
 func cloneGroupForDuplicate(source *Group, operationID string) *Group {
 	return &Group{
+		StreamingACKEnabled:             cloneGroupValuePointer(source.StreamingACKEnabled),
 		Name:                            duplicateGroupName(source.Name, 1),
 		Description:                     source.Description,
 		Platform:                        source.Platform,

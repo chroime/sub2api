@@ -102,6 +102,7 @@ func createGroupRecord(ctx context.Context, client *dbent.Client, groupIn *servi
 		SetSortOrder(groupIn.SortOrder).
 		SetIsExclusive(groupIn.IsExclusive).
 		SetStatus(groupIn.Status).
+		SetNillableStreamingAckEnabled(groupIn.StreamingACKEnabled).
 		SetSubscriptionType(groupIn.SubscriptionType).
 		SetNillableDailyLimitUsd(groupIn.DailyLimitUSD).
 		SetNillableWeeklyLimitUsd(groupIn.WeeklyLimitUSD).
@@ -337,6 +338,11 @@ func (r *groupRepository) Update(ctx context.Context, groupIn *service.Group) er
 		SetProfitSafetyBuffer(groupIn.ProfitSafetyBuffer)
 
 	// 显式处理可空字段：nil 需要 clear，非 nil 需要 set。
+	if groupIn.StreamingACKEnabled != nil {
+		builder = builder.SetStreamingAckEnabled(*groupIn.StreamingACKEnabled)
+	} else {
+		builder = builder.ClearStreamingAckEnabled()
+	}
 	if groupIn.DailyLimitUSD != nil {
 		builder = builder.SetDailyLimitUsd(*groupIn.DailyLimitUSD)
 	} else {

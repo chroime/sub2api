@@ -190,6 +190,20 @@ func (_c *GroupCreate) SetNillableStatus(v *string) *GroupCreate {
 	return _c
 }
 
+// SetStreamingAckEnabled sets the "streaming_ack_enabled" field.
+func (_c *GroupCreate) SetStreamingAckEnabled(v bool) *GroupCreate {
+	_c.mutation.SetStreamingAckEnabled(v)
+	return _c
+}
+
+// SetNillableStreamingAckEnabled sets the "streaming_ack_enabled" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableStreamingAckEnabled(v *bool) *GroupCreate {
+	if v != nil {
+		_c.SetStreamingAckEnabled(*v)
+	}
+	return _c
+}
+
 // SetDuplicateOperationID sets the "duplicate_operation_id" field.
 func (_c *GroupCreate) SetDuplicateOperationID(v string) *GroupCreate {
 	_c.mutation.SetDuplicateOperationID(v)
@@ -1493,6 +1507,10 @@ func (_c *GroupCreate) createSpec() (*Group, *sqlgraph.CreateSpec) {
 		_spec.SetField(group.FieldStatus, field.TypeString, value)
 		_node.Status = value
 	}
+	if value, ok := _c.mutation.StreamingAckEnabled(); ok {
+		_spec.SetField(group.FieldStreamingAckEnabled, field.TypeBool, value)
+		_node.StreamingAckEnabled = &value
+	}
 	if value, ok := _c.mutation.DuplicateOperationID(); ok {
 		_spec.SetField(group.FieldDuplicateOperationID, field.TypeString, value)
 		_node.DuplicateOperationID = &value
@@ -2018,6 +2036,24 @@ func (u *GroupUpsert) SetStatus(v string) *GroupUpsert {
 // UpdateStatus sets the "status" field to the value that was provided on create.
 func (u *GroupUpsert) UpdateStatus() *GroupUpsert {
 	u.SetExcluded(group.FieldStatus)
+	return u
+}
+
+// SetStreamingAckEnabled sets the "streaming_ack_enabled" field.
+func (u *GroupUpsert) SetStreamingAckEnabled(v bool) *GroupUpsert {
+	u.Set(group.FieldStreamingAckEnabled, v)
+	return u
+}
+
+// UpdateStreamingAckEnabled sets the "streaming_ack_enabled" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateStreamingAckEnabled() *GroupUpsert {
+	u.SetExcluded(group.FieldStreamingAckEnabled)
+	return u
+}
+
+// ClearStreamingAckEnabled clears the value of the "streaming_ack_enabled" field.
+func (u *GroupUpsert) ClearStreamingAckEnabled() *GroupUpsert {
+	u.SetNull(group.FieldStreamingAckEnabled)
 	return u
 }
 
@@ -3148,6 +3184,27 @@ func (u *GroupUpsertOne) SetStatus(v string) *GroupUpsertOne {
 func (u *GroupUpsertOne) UpdateStatus() *GroupUpsertOne {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateStatus()
+	})
+}
+
+// SetStreamingAckEnabled sets the "streaming_ack_enabled" field.
+func (u *GroupUpsertOne) SetStreamingAckEnabled(v bool) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetStreamingAckEnabled(v)
+	})
+}
+
+// UpdateStreamingAckEnabled sets the "streaming_ack_enabled" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateStreamingAckEnabled() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateStreamingAckEnabled()
+	})
+}
+
+// ClearStreamingAckEnabled clears the value of the "streaming_ack_enabled" field.
+func (u *GroupUpsertOne) ClearStreamingAckEnabled() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.ClearStreamingAckEnabled()
 	})
 }
 
@@ -4594,6 +4651,27 @@ func (u *GroupUpsertBulk) SetStatus(v string) *GroupUpsertBulk {
 func (u *GroupUpsertBulk) UpdateStatus() *GroupUpsertBulk {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateStatus()
+	})
+}
+
+// SetStreamingAckEnabled sets the "streaming_ack_enabled" field.
+func (u *GroupUpsertBulk) SetStreamingAckEnabled(v bool) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetStreamingAckEnabled(v)
+	})
+}
+
+// UpdateStreamingAckEnabled sets the "streaming_ack_enabled" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateStreamingAckEnabled() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateStreamingAckEnabled()
+	})
+}
+
+// ClearStreamingAckEnabled clears the value of the "streaming_ack_enabled" field.
+func (u *GroupUpsertBulk) ClearStreamingAckEnabled() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.ClearStreamingAckEnabled()
 	})
 }
 

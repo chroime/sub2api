@@ -479,7 +479,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 				requestCtx = service.WithAccountSwitchCount(requestCtx, fs.SwitchCount, h.metadataBridgeEnabled())
 			}
 			// 记录 Forward 前已写入字节数，Forward 后若增加则说明 SSE 内容已发，禁止 failover
-			if stopStreamingACK == nil && !streamStarted && account.IsStreamingACKEnabled() {
+			if stopStreamingACK == nil && !streamStarted && account.SupportsStreamingACK() {
 				stopStreamingACK = h.startStreamingACK(c, reqStream, time.Now(), account, apiKey.GroupID)
 			}
 			writerSizeBeforeForward := service.OpenAICompactKeepaliveAdjustedWrittenSize(c)
@@ -906,7 +906,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 				requestCtx = service.WithForceCacheBilling(requestCtx)
 			}
 			// 记录 Forward 前已写入字节数，Forward 后若增加则说明 SSE 内容已发，禁止 failover
-			if stopStreamingACK == nil && !streamStarted && account.IsStreamingACKEnabled() {
+			if stopStreamingACK == nil && !streamStarted && account.SupportsStreamingACK() {
 				stopStreamingACK = h.startStreamingACK(c, reqStream, time.Now(), account, currentAPIKey.GroupID)
 			}
 			writerSizeBeforeForward := service.OpenAICompactKeepaliveAdjustedWrittenSize(c)

@@ -557,7 +557,7 @@ export default {
       },
       streamingACK: {
         title: 'Streaming ACK master switch',
-        scope: 'Opted-in accounts across platforms and their matching groups; SSE streams only. Native Gemini requires alt=sse.',
+        scope: 'Uses each platform group’s ACK setting when enabled. Existing groups without a choice retain account settings. SSE streams only; native Gemini requires alt=sse.',
         enabled: 'Master switch enabled',
         disabled: 'Master switch disabled',
         saved: 'Saved; applies to new requests',

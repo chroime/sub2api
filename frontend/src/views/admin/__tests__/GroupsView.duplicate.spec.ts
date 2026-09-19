@@ -153,7 +153,7 @@ const DataTableStub = defineComponent({
     columns: { type: Array, default: () => [] },
     loading: { type: Boolean, default: false }
   },
-  template: '<div><div v-for="row in data" :key="row.id"><slot name="cell-actions" :row="row" /></div></div>'
+  template: '<div><div v-for="row in data" :key="row.id"><slot name="cell-streaming_ack_enabled" :value="row.streaming_ack_enabled" :row="row" /><slot name="cell-actions" :row="row" /></div></div>'
 })
 
 const BaseDialogStub = defineComponent({
@@ -228,6 +228,82 @@ describe('GroupsView duplicate action', () => {
     vi.restoreAllMocks()
   })
 
+  it.each([
+    { value: null, label: 'admin.groups.streamingACK.legacy' },
+    { value: false, label: 'admin.groups.streamingACK.disabled' },
+    { value: true, label: 'admin.groups.streamingACK.enabled' }
+  ])('shows group ACK status for $value', async ({ value, label }) => {
+    listGroups.mockResolvedValue({ items: [{ ...sourceGroup, streaming_ack_enabled: value }], total: 1, page: 1, page_size: 20, pages: 1 })
+    const wrapper = mountView()
+    try {
+      await flushPromises()
+      expect(wrapper.text()).toContain(label)
+    } finally { wrapper.unmount() }
+  })
+
+  it.each(['openai', 'anthropic', 'gemini', 'antigravity', 'grok', 'kimi', 'zhipu', 'deepseek', 'minimax', 'opencode_go', 'composite'])('saves group ACK independently for %s', async (platform) => {
+    listGroups.mockResolvedValue({ items: [{ ...sourceGroup, platform, streaming_ack_enabled: null }], total: 1, page: 1, page_size: 20, pages: 1 })
+    updateGroup.mockResolvedValue(sourceGroup)
+    const wrapper = mountView()
+    try {
+      await flushPromises()
+      await wrapper.findAll('button').find((button) => button.text() === 'common.edit')!.trigger('click')
+      await flushPromises()
+      const control = wrapper.get('[data-testid="group-streaming-ack"]')
+      expect(control.text()).toContain('admin.groups.streamingACK.legacyHint')
+      await control.get('[data-testid="group-ack-enabled"]').trigger('click')
+      await wrapper.get('#edit-group-form').trigger('submit')
+      await flushPromises()
+      expect(updateGroup).toHaveBeenCalledWith(42, expect.objectContaining({ streaming_ack_enabled: true }))
+    } finally { wrapper.unmount() }
+  })
+
+  it('keeps legacy group ACK omitted when saving unrelated settings', async () => {
+    updateGroup.mockResolvedValue(sourceGroup)
+    const wrapper = mountView()
+    try {
+      await flushPromises()
+      await wrapper.findAll('button').find((button) => button.text() === 'common.edit')!.trigger('click')
+      await flushPromises()
+      expect(wrapper.get('[data-testid="group-streaming-ack"]').text()).toContain('admin.groups.streamingACK.legacyHint')
+      await wrapper.get('#edit-group-form').trigger('submit')
+      await flushPromises()
+      expect(updateGroup).toHaveBeenCalledTimes(1)
+      expect(updateGroup.mock.calls[0]![1]).not.toHaveProperty('streaming_ack_enabled')
+    } finally { wrapper.unmount() }
+  })
+
+  it('retains an explicit group ACK choice after save fails', async () => {
+    updateGroup.mockRejectedValue(new Error('save failed'))
+    const wrapper = mountView()
+    try {
+      await flushPromises()
+      await wrapper.findAll('button').find((button) => button.text() === 'common.edit')!.trigger('click')
+      await flushPromises()
+      await wrapper.get('[data-testid="group-ack-disabled"]').trigger('click')
+      await wrapper.get('#edit-group-form').trigger('submit')
+      await flushPromises()
+      expect(updateGroup).toHaveBeenCalledWith(42, expect.objectContaining({ streaming_ack_enabled: false }))
+      expect(wrapper.get('[data-testid="group-ack-disabled"]').attributes('aria-pressed')).toBe('true')
+      expect(showError).toHaveBeenCalledWith('save failed')
+    } finally { wrapper.unmount() }
+  })
+
+  it('defaults newly created groups to ACK disabled', async () => {
+    vi.mocked(adminAPI.groups.create).mockResolvedValue(sourceGroup)
+    const wrapper = mountView()
+    try {
+      await flushPromises()
+      await wrapper.get('[data-tour="groups-create-btn"]').trigger('click')
+      await flushPromises()
+      expect(wrapper.get('[data-testid="group-ack-disabled"]').attributes('aria-pressed')).toBe('true')
+      await wrapper.get('#create-group-form input').setValue('New group')
+      await wrapper.get('#create-group-form').trigger('submit')
+      await flushPromises()
+      expect(adminAPI.groups.create).toHaveBeenCalledWith(expect.objectContaining({ streaming_ack_enabled: false }))
+    } finally { wrapper.unmount() }
+  })
+
   it('loads precharge settings for the saved group being edited and omits them in simple mode', async () => {
     const wrapper = mountView()
     await flushPromises()
@@ -244,6 +320,7 @@ describe('GroupsView duplicate action', () => {
     await simple.findAll('button').find((button) => button.text() === 'common.edit')!.trigger('click')
     await flushPromises()
     expect(simple.findComponent(GroupBalancePrechargeSettings).exists()).toBe(false)
+    expect(simple.find('[data-testid="group-streaming-ack"]').exists()).toBe(true)
     simple.unmount()
   })
 

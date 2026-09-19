@@ -626,6 +626,8 @@ export interface Group {
 }
 
 export interface AdminGroup extends Group {
+  // Missing/null retains the pre-migration account preference.
+  streaming_ack_enabled?: boolean | null
   force_openai_fast: boolean
   free_openai_fast: boolean
   model_pricing: import('@/api/admin/channels').ChannelModelPricing[]
@@ -790,6 +792,7 @@ export interface UpdateApiKeyRequest {
 }
 
 export interface CreateGroupRequest {
+  streaming_ack_enabled?: boolean
   name: string
   description?: string | null
   platform?: GroupPlatform
@@ -855,6 +858,7 @@ export interface CreateGroupRequest {
 }
 
 export interface UpdateGroupRequest {
+  streaming_ack_enabled?: boolean
   name?: string
   description?: string | null
   platform?: GroupPlatform

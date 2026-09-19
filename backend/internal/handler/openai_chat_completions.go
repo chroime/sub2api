@@ -241,7 +241,7 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 
 		service.SetOpsLatencyMs(c, service.OpsRoutingLatencyMsKey, time.Since(routingStart).Milliseconds())
 		forwardStart := time.Now()
-		if stopSyntheticFirstResponse == nil && !streamStarted && account.IsOpenAISyntheticFirstResponseEnabledForGroup(apiKey.GroupID) {
+		if stopSyntheticFirstResponse == nil && !streamStarted && account.SupportsStreamingACK() {
 			stopSyntheticFirstResponse = h.startSyntheticFirstResponse(c, reqStream, forwardStart, account, apiKey.GroupID)
 		}
 

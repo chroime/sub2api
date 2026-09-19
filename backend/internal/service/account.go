@@ -1330,7 +1330,7 @@ func SupportsStreamingACKPlatform(platform string) bool {
 // IsStreamingACKEnabled reads the generic opt-in first, retaining the legacy
 // OpenAI setting only when no generic value exists. Malformed values fail closed.
 func (a *Account) IsStreamingACKEnabled() bool {
-	if a == nil || !SupportsStreamingACKPlatform(a.Platform) || a.IsShadow() || a.Extra == nil {
+	if !a.SupportsStreamingACK() || a.Extra == nil {
 		return false
 	}
 	if raw, exists := a.Extra[StreamingACKEnabledExtraKey]; exists {
@@ -1344,6 +1344,12 @@ func (a *Account) IsStreamingACKEnabled() bool {
 	return ok && enabled
 }
 
+// SupportsStreamingACK describes transport capability independently of the
+// legacy account preference, which an explicit group policy may override.
+func (a *Account) SupportsStreamingACK() bool {
+	return a != nil && SupportsStreamingACKPlatform(a.Platform) && !a.IsShadow()
+}
+
 // IsOpenAISyntheticFirstResponseEnabledForGroup combines the account opt-in
 // with the request's effective group. This keeps an enabled account from
 // affecting a request routed outside its current group (including the
@@ -1353,7 +1359,11 @@ func (a *Account) IsOpenAISyntheticFirstResponseEnabledForGroup(groupID *int64) 
 }
 
 func (a *Account) IsStreamingACKEnabledForGroup(groupID *int64) bool {
-	if !a.IsStreamingACKEnabled() {
+	return a.IsStreamingACKEnabled() && a.belongsToStreamingACKGroup(groupID)
+}
+
+func (a *Account) belongsToStreamingACKGroup(groupID *int64) bool {
+	if a == nil {
 		return false
 	}
 	if groupID == nil || *groupID <= 0 {

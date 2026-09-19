@@ -262,7 +262,7 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 		accountReleaseFunc = wrapReleaseOnDone(c.Request.Context(), accountReleaseFunc)
 
 		// 5. Forward request
-		if stopStreamingACK == nil && !streamStarted && account.IsStreamingACKEnabled() {
+		if stopStreamingACK == nil && !streamStarted && account.SupportsStreamingACK() {
 			stopStreamingACK = h.startStreamingACK(c, reqStream, time.Now(), account, apiKey.GroupID)
 		}
 		writerSizeBeforeForward := service.OpenAICompactKeepaliveAdjustedWrittenSize(c)

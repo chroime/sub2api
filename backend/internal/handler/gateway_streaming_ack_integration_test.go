@@ -107,8 +107,9 @@ func TestGatewayStreamingACKRealForwardingRoutes(t *testing.T) {
 				cfg := gatewayACKTestConfig(20)
 				cfg.RunMode = config.RunModeSimple
 				groupID := int64(7)
-				group := &service.Group{ID: groupID, Hydrated: true, Platform: tc.platform, Status: service.StatusActive, RateMultiplier: 1}
-				account := gatewayACKTestAccount(tc.platform, true, groupID)
+				ackEnabled := true
+				group := &service.Group{ID: groupID, Hydrated: true, Platform: tc.platform, Status: service.StatusActive, RateMultiplier: 1, StreamingACKEnabled: &ackEnabled}
+				account := gatewayACKTestAccount(tc.platform, false, groupID)
 				account.ID, account.Concurrency, account.Priority = 10, 1, 1
 				account.Status, account.Schedulable = service.StatusActive, true
 				account.Credentials = map[string]any{"api_key": "fixture-key"}

@@ -601,17 +601,17 @@ export default {
         longContextBilling: 'API long-context pricing',
         longContextBillingDesc:
           'Disabled by default. Enable only when this account\'s upstream charges OpenAI API long-context rates above the model threshold.',
-        syntheticFirstResponse: 'Streaming first-response ACK',
+        syntheticFirstResponse: 'Streaming ACK (legacy groups)',
         syntheticFirstResponseStatusLoading: 'Loading global setting',
         syntheticFirstResponseStatusUnavailable: 'Global setting unavailable',
         syntheticFirstResponseStatusPending: 'Unsaved changes, not yet applied',
-        syntheticFirstResponseStatusAccountOff: 'Account ACK disabled, no intervention',
+        syntheticFirstResponseStatusAccountOff: 'Legacy account preference off; explicit group settings take priority',
         syntheticFirstResponseStatusGlobalOff: 'Global setting off, not effective',
-        syntheticFirstResponseStatusEnabled: 'Enabled for matching-group SSE streaming requests only',
+        syntheticFirstResponseStatusEnabled: 'Legacy account preference on; explicit group settings take priority',
         syntheticFirstResponseRefresh: 'Refresh global setting',
         syntheticFirstResponseSettings: 'Global ACK setting',
         syntheticFirstResponseDesc:
-          'Disabled by default; the master switch must also be enabled. Supports SSE streams for accounts across platforms in their assigned groups, without delaying or changing upstream content. Native Gemini requires alt=sse. Non-streaming, WebSocket, live voice, and binary responses are excluded.',
+          'Applies only to existing groups without an ACK choice. Explicit group settings take priority; the system master switch must still be on. Compatible SSE streams only, with alt=sse required for native Gemini. Non-streaming, WebSocket, live voice and binary responses are excluded.',
         responsesWebsocketsV2: 'Responses WebSocket v2',
         responsesWebsocketsV2Desc:
           'Disabled by default. Enable to allow responses_websockets_v2 capability (still gated by global and account-type switches).',

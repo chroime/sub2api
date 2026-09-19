@@ -40,6 +40,8 @@ const (
 	FieldIsExclusive = "is_exclusive"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
+	// FieldStreamingAckEnabled holds the string denoting the streaming_ack_enabled field in the database.
+	FieldStreamingAckEnabled = "streaming_ack_enabled"
 	// FieldDuplicateOperationID holds the string denoting the duplicate_operation_id field in the database.
 	FieldDuplicateOperationID = "duplicate_operation_id"
 	// FieldPlatform holds the string denoting the platform field in the database.
@@ -235,6 +237,7 @@ var Columns = []string{
 	FieldPeakRateMultiplier,
 	FieldIsExclusive,
 	FieldStatus,
+	FieldStreamingAckEnabled,
 	FieldDuplicateOperationID,
 	FieldPlatform,
 	FieldSubscriptionType,
@@ -502,6 +505,11 @@ func ByIsExclusive(opts ...sql.OrderTermOption) OrderOption {
 // ByStatus orders the results by the status field.
 func ByStatus(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldStatus, opts...).ToFunc()
+}
+
+// ByStreamingAckEnabled orders the results by the streaming_ack_enabled field.
+func ByStreamingAckEnabled(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldStreamingAckEnabled, opts...).ToFunc()
 }
 
 // ByDuplicateOperationID orders the results by the duplicate_operation_id field.

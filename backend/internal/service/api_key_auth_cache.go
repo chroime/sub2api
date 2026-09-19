@@ -63,6 +63,7 @@ type APIKeyAuthGroupSnapshot struct {
 	Platform                        string                        `json:"platform"`
 	IsExclusive                     bool                          `json:"is_exclusive"`
 	Status                          string                        `json:"status"`
+	StreamingACKEnabled             *bool                         `json:"streaming_ack_enabled"`
 	SubscriptionType                string                        `json:"subscription_type"`
 	RateMultiplier                  float64                       `json:"rate_multiplier"`
 	DailyLimitUSD                   *float64                      `json:"daily_limit_usd,omitempty"`

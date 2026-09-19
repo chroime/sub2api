@@ -30,6 +30,9 @@ type Group struct {
 	IsExclusive        bool
 	Status             string
 	Hydrated           bool // indicates the group was loaded from a trusted repository source
+	// StreamingACKEnabled overrides the account ACK preference when configured.
+	// Nil preserves the legacy account policy for groups created before migration.
+	StreamingACKEnabled *bool
 	// DuplicateOperationID is internal persistence metadata used only to recover
 	// an already committed one-click copy. It must never be mapped to API DTOs.
 	DuplicateOperationID string

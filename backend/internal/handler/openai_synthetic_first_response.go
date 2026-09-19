@@ -14,7 +14,10 @@ func (h *OpenAIGatewayHandler) startSyntheticFirstResponse(
 	account *service.Account,
 	groupID *int64,
 ) func() {
-	if !stream || h == nil || h.cfg == nil || !account.IsStreamingACKEnabledForGroup(groupID) {
+	if !stream || h == nil || h.cfg == nil || c == nil || c.Request == nil || !account.SupportsStreamingACK() {
+		return func() {}
+	}
+	if !h.gatewayService.IsStreamingACKEnabledForRequest(c.Request.Context(), account, groupID) {
 		return func() {}
 	}
 	cfg := h.cfg.Gateway.SyntheticFirstResponse

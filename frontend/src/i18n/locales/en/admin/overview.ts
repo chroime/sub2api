@@ -786,6 +786,14 @@ export default {
 
     // Groups
     groups: {
+      streamingACK: {
+        title: 'Streaming first-response ACK',
+        description: 'Controls compatible streams in this group when the system master switch is on. An explicit choice overrides account settings.',
+        enabled: 'Enabled',
+        disabled: 'Disabled',
+        legacy: 'Account settings',
+        legacyHint: 'This group currently uses legacy account settings. Choose enabled or disabled and save to apply one policy for the group.'
+      },
       title: 'Group Management',
       description: 'Manage API key groups and rate multipliers',
       searchGroups: 'Search groups...',

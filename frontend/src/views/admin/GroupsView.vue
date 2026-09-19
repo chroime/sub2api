@@ -368,6 +368,18 @@
             </div>
           </template>
 
+          <template #cell-streaming_ack_enabled="{ value }">
+            <span
+              class="inline-flex whitespace-nowrap rounded-md px-2 py-1 text-xs font-medium"
+              :class="value === true
+                ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300'
+                : value === false
+                  ? 'bg-gray-100 text-gray-500 dark:bg-dark-700 dark:text-gray-400'
+                  : 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300'"
+            >
+              {{ t(value === true ? 'admin.groups.streamingACK.enabled' : value === false ? 'admin.groups.streamingACK.disabled' : 'admin.groups.streamingACK.legacy') }}
+            </span>
+          </template>
           <template #cell-status="{ value }">
             <span
               :class="[
@@ -521,6 +533,7 @@
           />
           <p class="input-hint">{{ t("admin.groups.platformHint") }}</p>
         </div>
+        <GroupStreamingACKSettings v-model="createForm.streaming_ack_enabled" />
         <!-- 从分组复制账号 -->
         <div v-if="!authStore.isSimpleMode && copyAccountsGroupOptions.length > 0">
           <div class="mb-1.5 flex items-center gap-1">
@@ -2158,6 +2171,7 @@
           />
           <p class="input-hint">{{ t("admin.groups.platformNotEditable") }}</p>
         </div>
+        <GroupStreamingACKSettings v-model="editForm.streaming_ack_enabled" />
         <template v-if="!authStore.isSimpleMode">
         <GroupBalancePrechargeSettings :key="editingGroup.id" :group-id="editingGroup.id" />
         <!-- 从分组复制账号（编辑时） -->
@@ -4302,6 +4316,7 @@ import Icon from "@/components/icons/Icon.vue";
 import GroupRateMultipliersModal from "@/components/admin/group/GroupRateMultipliersModal.vue";
 import GroupRPMOverridesModal from "@/components/admin/group/GroupRPMOverridesModal.vue";
 import GroupBalancePrechargeSettings from "@/components/admin/group/GroupBalancePrechargeSettings.vue";
+import GroupStreamingACKSettings from "@/components/admin/group/GroupStreamingACKSettings.vue";
 import GroupCapacityBadge from "@/components/common/GroupCapacityBadge.vue";
 import ReasoningEffortPolicyFields from "@/components/admin/group/ReasoningEffortPolicyFields.vue";
 import CodexManifestAccountsField from "@/components/admin/group/CodexManifestAccountsField.vue";
@@ -4466,7 +4481,8 @@ const allColumns = computed<Column[]>(() => {
     { key: "status", label: t("admin.groups.columns.status"), sortable: true },
     { key: "actions", label: t("admin.groups.columns.actions"), sortable: false },
   ];
-  if (authStore.isSimpleMode) return basic;
+  const ackColumn = { key: "streaming_ack_enabled", label: "ACK", sortable: false };
+  if (authStore.isSimpleMode) return [...basic.slice(0, -1), ackColumn, basic[basic.length - 1]];
   return [
     ...basic.slice(0, 3),
     { key: "billing_type", label: t("admin.groups.columns.billingType"), sortable: true },
@@ -4475,6 +4491,7 @@ const allColumns = computed<Column[]>(() => {
     basic[3],
     { key: "capacity", label: t("admin.groups.columns.capacity"), sortable: false },
     { key: "usage", label: t("admin.groups.columns.usage"), sortable: false },
+    ackColumn,
     ...basic.slice(4),
   ];
 });
@@ -4931,6 +4948,7 @@ const submitEditAllowlistCustomEntry = () => {
 };
 
 const createForm = reactive({
+  streaming_ack_enabled: false,
   name: "",
   description: "",
   platform: "anthropic" as GroupPlatform,
@@ -5295,6 +5313,7 @@ const convertApiFormatToRoutingRules = async (
 };
 
 const editForm = reactive({
+  streaming_ack_enabled: null as boolean | null,
   name: "",
   description: "",
   platform: "anthropic" as GroupPlatform,
@@ -5784,6 +5803,7 @@ const closeCreateModal = () => {
   createForm.video_model_prices = createVideoModelPricesForm();
   createForm.long_context_pricing_enabled = true;
   createForm.force_openai_fast = false;
+  createForm.streaming_ack_enabled = false;
   createForm.free_openai_fast = false;
   createForm.model_pricing = [];
   createForm.web_search_price_per_call = null;
@@ -6004,6 +6024,7 @@ const handleCreateGroup = async () => {
           name: createForm.name,
           description: createForm.description,
           platform: createForm.platform,
+          streaming_ack_enabled: createForm.streaming_ack_enabled,
         }
       : requestData;
     await adminAPI.groups.create(payload);
@@ -6040,6 +6061,7 @@ const handleEdit = async (group: AdminGroup) => {
   editForm.long_context_pricing_enabled =
     group.long_context_pricing_enabled ?? true;
   editForm.force_openai_fast = group.force_openai_fast ?? false;
+  editForm.streaming_ack_enabled = group.streaming_ack_enabled ?? null;
   editForm.free_openai_fast = group.free_openai_fast ?? false;
   editForm.model_pricing = groupPricingFromAPI(group.model_pricing);
   editForm.allow_image_generation = group.allow_image_generation ?? false;
@@ -6174,6 +6196,7 @@ const closeEditModal = () => {
   editForm.video_model_prices = createVideoModelPricesForm();
   editForm.long_context_pricing_enabled = true;
   editForm.force_openai_fast = false;
+  editForm.streaming_ack_enabled = null;
   editForm.free_openai_fast = false;
   editForm.model_pricing = [];
   editForm.web_search_price_per_call = null;
@@ -6227,8 +6250,10 @@ const handleUpdateGroup = async () => {
   submitting.value = true;
   try {
     // 转换 fallback_group_id: null -> 0 (后端使用 0 表示清除)
+    const { streaming_ack_enabled: ackPolicy, ...groupEditFields } = editForm;
     const payload = {
-      ...editForm,
+      ...groupEditFields,
+      ...(ackPolicy === null ? {} : { streaming_ack_enabled: ackPolicy }),
       force_openai_fast: normalizeGroupOpenAIFast(
         editForm.platform,
         editForm.force_openai_fast,
@@ -6353,6 +6378,7 @@ const handleUpdateGroup = async () => {
       ? {
           name: editForm.name,
           description: editForm.description,
+          ...(ackPolicy === null ? {} : { streaming_ack_enabled: ackPolicy }),
         }
       : payload;
     await adminAPI.groups.update(editingGroup.value.id, requestData);

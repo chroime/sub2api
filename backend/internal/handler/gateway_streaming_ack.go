@@ -11,17 +11,15 @@ import (
 // startStreamingACK is called only after account admission and immediately
 // before forwarding a request whose downstream transport is known to be SSE.
 func (h *GatewayHandler) startStreamingACK(c *gin.Context, stream bool, startedAt time.Time, account *service.Account, groupID *int64) func() {
-	if !stream || h == nil || h.cfg == nil || c == nil || c.Request == nil || !account.IsStreamingACKEnabled() {
+	if !stream || h == nil || h.cfg == nil || c == nil || c.Request == nil || !account.SupportsStreamingACK() {
+		return func() {}
+	}
+	if !h.gatewayService.IsStreamingACKEnabledForRequest(c.Request.Context(), account, groupID) {
 		return func() {}
 	}
 	cfg := h.cfg.Gateway.SyntheticFirstResponse
 	if h.gatewayService != nil {
-		if !h.gatewayService.IsStreamingACKEnabledForRequest(c.Request.Context(), account, groupID) {
-			return func() {}
-		}
 		cfg = h.gatewayService.SyntheticFirstResponseConfig(c.Request.Context())
-	} else if !account.IsStreamingACKEnabledForGroup(groupID) {
-		return func() {}
 	}
 	return service.StartStreamingACK(c, cfg, startedAt)
 }

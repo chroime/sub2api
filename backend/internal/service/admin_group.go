@@ -364,6 +364,7 @@ func normalizeCreateGroupInputForSimpleMode(input *CreateGroupInput) {
 	*input = CreateGroupInput{
 		Name: input.Name, Description: input.Description, Platform: input.Platform,
 		RateMultiplier: 1, SubscriptionType: SubscriptionTypeStandard,
+		StreamingACKEnabled: input.StreamingACKEnabled,
 	}
 }
 
@@ -371,7 +372,7 @@ func normalizeUpdateGroupInputForSimpleMode(input *UpdateGroupInput) {
 	if input == nil {
 		return
 	}
-	*input = UpdateGroupInput{Name: input.Name, Description: input.Description}
+	*input = UpdateGroupInput{Name: input.Name, Description: input.Description, StreamingACKEnabled: input.StreamingACKEnabled}
 }
 
 func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupInput) (*Group, error) {
@@ -552,7 +553,9 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 		return nil, err
 	}
 
+	streamingACKEnabled := input.StreamingACKEnabled
 	group := &Group{
+		StreamingACKEnabled:             &streamingACKEnabled,
 		Name:                            input.Name,
 		Description:                     input.Description,
 		Platform:                        platform,
@@ -760,6 +763,9 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 	// 渠道缓存里存了 groupID → platform 的映射，改了平台要让它失效（见函数末尾）
 	previousPlatform := group.Platform
 
+	if input.StreamingACKEnabled != nil {
+		group.StreamingACKEnabled = cloneGroupValuePointer(input.StreamingACKEnabled)
+	}
 	if input.Name != "" {
 		group.Name = input.Name
 	}

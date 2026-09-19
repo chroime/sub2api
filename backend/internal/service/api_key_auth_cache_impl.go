@@ -14,7 +14,7 @@ import (
 	"github.com/dgraph-io/ristretto"
 )
 
-const apiKeyAuthSnapshotVersion = 26 // v26: complete frozen-balance auth projection for pending admission
+const apiKeyAuthSnapshotVersion = 27 // v27: preserve nullable group streaming ACK policy
 
 type apiKeyAuthCacheConfig struct {
 	l1Size        int
@@ -437,6 +437,10 @@ func (s *APIKeyService) snapshotFromAPIKey(ctx context.Context, apiKey *APIKey) 
 			ProfitMinMargin:                 apiKey.Group.ProfitMinMargin,
 			ProfitSafetyBuffer:              apiKey.Group.ProfitSafetyBuffer,
 		}
+		if apiKey.Group.StreamingACKEnabled != nil {
+			enabled := *apiKey.Group.StreamingACKEnabled
+			snapshot.Group.StreamingACKEnabled = &enabled
+		}
 	}
 	return snapshot
 }
@@ -539,6 +543,10 @@ func (s *APIKeyService) snapshotToAPIKey(key string, snapshot *APIKeyAuthSnapsho
 			ProfitControlEnabled:            snapshot.Group.ProfitControlEnabled,
 			ProfitMinMargin:                 snapshot.Group.ProfitMinMargin,
 			ProfitSafetyBuffer:              snapshot.Group.ProfitSafetyBuffer,
+		}
+		if snapshot.Group.StreamingACKEnabled != nil {
+			enabled := *snapshot.Group.StreamingACKEnabled
+			apiKey.Group.StreamingACKEnabled = &enabled
 		}
 	}
 	s.compileAPIKeyIPRules(apiKey)

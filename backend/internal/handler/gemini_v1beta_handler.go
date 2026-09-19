@@ -589,7 +589,7 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 		if fs.SwitchCount > 0 {
 			requestCtx = service.WithAccountSwitchCount(requestCtx, fs.SwitchCount, h.metadataBridgeEnabled())
 		}
-		if stopStreamingACK == nil && !streamStarted && geminiStreamingACKEligible(c, stream) && account.IsStreamingACKEnabled() {
+		if stopStreamingACK == nil && !streamStarted && geminiStreamingACKEligible(c, stream) && account.SupportsStreamingACK() {
 			stopStreamingACK = h.startStreamingACK(c, true, time.Now(), account, apiKey.GroupID)
 		}
 		writerSizeBeforeForward := service.OpenAICompactKeepaliveAdjustedWrittenSize(c)

@@ -22095,6 +22095,7 @@ type GroupMutation struct {
 	addpeak_rate_multiplier                 *float64
 	is_exclusive                            *bool
 	status                                  *string
+	streaming_ack_enabled                   *bool
 	duplicate_operation_id                  *string
 	platform                                *string
 	subscription_type                       *string
@@ -22795,6 +22796,55 @@ func (m *GroupMutation) OldStatus(ctx context.Context) (v string, err error) {
 // ResetStatus resets all changes to the "status" field.
 func (m *GroupMutation) ResetStatus() {
 	m.status = nil
+}
+
+// SetStreamingAckEnabled sets the "streaming_ack_enabled" field.
+func (m *GroupMutation) SetStreamingAckEnabled(b bool) {
+	m.streaming_ack_enabled = &b
+}
+
+// StreamingAckEnabled returns the value of the "streaming_ack_enabled" field in the mutation.
+func (m *GroupMutation) StreamingAckEnabled() (r bool, exists bool) {
+	v := m.streaming_ack_enabled
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStreamingAckEnabled returns the old "streaming_ack_enabled" field's value of the Group entity.
+// If the Group object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupMutation) OldStreamingAckEnabled(ctx context.Context) (v *bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStreamingAckEnabled is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStreamingAckEnabled requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStreamingAckEnabled: %w", err)
+	}
+	return oldValue.StreamingAckEnabled, nil
+}
+
+// ClearStreamingAckEnabled clears the value of the "streaming_ack_enabled" field.
+func (m *GroupMutation) ClearStreamingAckEnabled() {
+	m.streaming_ack_enabled = nil
+	m.clearedFields[group.FieldStreamingAckEnabled] = struct{}{}
+}
+
+// StreamingAckEnabledCleared returns if the "streaming_ack_enabled" field was cleared in this mutation.
+func (m *GroupMutation) StreamingAckEnabledCleared() bool {
+	_, ok := m.clearedFields[group.FieldStreamingAckEnabled]
+	return ok
+}
+
+// ResetStreamingAckEnabled resets all changes to the "streaming_ack_enabled" field.
+func (m *GroupMutation) ResetStreamingAckEnabled() {
+	m.streaming_ack_enabled = nil
+	delete(m.clearedFields, group.FieldStreamingAckEnabled)
 }
 
 // SetDuplicateOperationID sets the "duplicate_operation_id" field.
@@ -25921,7 +25971,7 @@ func (m *GroupMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *GroupMutation) Fields() []string {
-	fields := make([]string, 0, 66)
+	fields := make([]string, 0, 67)
 	if m.created_at != nil {
 		fields = append(fields, group.FieldCreatedAt)
 	}
@@ -25957,6 +26007,9 @@ func (m *GroupMutation) Fields() []string {
 	}
 	if m.status != nil {
 		fields = append(fields, group.FieldStatus)
+	}
+	if m.streaming_ack_enabled != nil {
+		fields = append(fields, group.FieldStreamingAckEnabled)
 	}
 	if m.duplicate_operation_id != nil {
 		fields = append(fields, group.FieldDuplicateOperationID)
@@ -26152,6 +26205,8 @@ func (m *GroupMutation) Field(name string) (ent.Value, bool) {
 		return m.IsExclusive()
 	case group.FieldStatus:
 		return m.Status()
+	case group.FieldStreamingAckEnabled:
+		return m.StreamingAckEnabled()
 	case group.FieldDuplicateOperationID:
 		return m.DuplicateOperationID()
 	case group.FieldPlatform:
@@ -26293,6 +26348,8 @@ func (m *GroupMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldIsExclusive(ctx)
 	case group.FieldStatus:
 		return m.OldStatus(ctx)
+	case group.FieldStreamingAckEnabled:
+		return m.OldStreamingAckEnabled(ctx)
 	case group.FieldDuplicateOperationID:
 		return m.OldDuplicateOperationID(ctx)
 	case group.FieldPlatform:
@@ -26493,6 +26550,13 @@ func (m *GroupMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetStatus(v)
+		return nil
+	case group.FieldStreamingAckEnabled:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStreamingAckEnabled(v)
 		return nil
 	case group.FieldDuplicateOperationID:
 		v, ok := value.(string)
@@ -27235,6 +27299,9 @@ func (m *GroupMutation) ClearedFields() []string {
 	if m.FieldCleared(group.FieldDescription) {
 		fields = append(fields, group.FieldDescription)
 	}
+	if m.FieldCleared(group.FieldStreamingAckEnabled) {
+		fields = append(fields, group.FieldStreamingAckEnabled)
+	}
 	if m.FieldCleared(group.FieldDuplicateOperationID) {
 		fields = append(fields, group.FieldDuplicateOperationID)
 	}
@@ -27314,6 +27381,9 @@ func (m *GroupMutation) ClearField(name string) error {
 		return nil
 	case group.FieldDescription:
 		m.ClearDescription()
+		return nil
+	case group.FieldStreamingAckEnabled:
+		m.ClearStreamingAckEnabled()
 		return nil
 	case group.FieldDuplicateOperationID:
 		m.ClearDuplicateOperationID()
@@ -27418,6 +27488,9 @@ func (m *GroupMutation) ResetField(name string) error {
 		return nil
 	case group.FieldStatus:
 		m.ResetStatus()
+		return nil
+	case group.FieldStreamingAckEnabled:
+		m.ResetStreamingAckEnabled()
 		return nil
 	case group.FieldDuplicateOperationID:
 		m.ResetDuplicateOperationID()
