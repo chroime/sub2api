@@ -260,6 +260,12 @@ type UpdateSettingsRequest struct {
 	OpenAICodexUserAgent                   *string `json:"openai_codex_user_agent"`
 	OpenAICodexClientVersion               *string `json:"openai_codex_client_version"`
 	OpenAICodexVersionAutoSyncEnabled      *bool   `json:"openai_codex_version_auto_sync_enabled"`
+	OpenAICodexTicketEnabled               *bool   `json:"openai_codex_ticket_enabled"`
+	OpenAICodexTicketFailClosed            *bool   `json:"openai_codex_ticket_fail_closed"`
+	OpenAICodexTicketHarvestProxyURL       string  `json:"openai_codex_ticket_harvest_proxy_url"`
+	OpenAICodexTicket332Enabled            *bool   `json:"openai_codex_ticket_332_enabled"`
+	OpenAICodexTicket332FailClosed         *bool   `json:"openai_codex_ticket_332_fail_closed"`
+	OpenAICodexTicket332HarvestProxyURL    string  `json:"openai_codex_ticket_332_harvest_proxy_url"`
 
 	// codex_cli_only 加固（global-only）
 	MinCodexVersion                      string `json:"min_codex_version"`
@@ -479,6 +485,8 @@ func omittedSettingKeys(sentFields map[string]json.RawMessage) service.OmittedSe
 }
 
 func settingsAuditRequest(req UpdateSettingsRequest) UpdateSettingsRequest {
+	req.OpenAICodexTicketHarvestProxyURL = service.MaskProxyURL(req.OpenAICodexTicketHarvestProxyURL)
+	req.OpenAICodexTicket332HarvestProxyURL = service.MaskProxyURL(req.OpenAICodexTicket332HarvestProxyURL)
 	req.TencentCaptchaAppSecretKey = strings.TrimSpace(req.TencentCaptchaAppSecretKey)
 	req.TencentCaptchaCloudSecretID = strings.TrimSpace(req.TencentCaptchaCloudSecretID)
 	req.TencentCaptchaCloudSecretKey = strings.TrimSpace(req.TencentCaptchaCloudSecretKey)
@@ -1786,6 +1794,44 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 			}
 			return previousSettings.OpenAICodexVersionAutoSyncEnabled
 		}(),
+		OpenAICodexTicketEnabled: func() bool {
+			if req.OpenAICodexTicketEnabled != nil {
+				return *req.OpenAICodexTicketEnabled
+			}
+			return previousSettings.OpenAICodexTicketEnabled
+		}(),
+		OpenAICodexTicketHarvestProxyURL: func() string {
+			next := strings.TrimSpace(req.OpenAICodexTicketHarvestProxyURL)
+			if service.IsMaskedProxyURL(next) {
+				return previousSettings.OpenAICodexTicketHarvestProxyURL
+			}
+			return next
+		}(),
+		OpenAICodexTicketFailClosed: func() bool {
+			if req.OpenAICodexTicketFailClosed != nil {
+				return *req.OpenAICodexTicketFailClosed
+			}
+			return previousSettings.OpenAICodexTicketFailClosed
+		}(),
+		OpenAICodexTicket332Enabled: func() bool {
+			if req.OpenAICodexTicket332Enabled != nil {
+				return *req.OpenAICodexTicket332Enabled
+			}
+			return previousSettings.OpenAICodexTicket332Enabled
+		}(),
+		OpenAICodexTicket332FailClosed: func() bool {
+			if req.OpenAICodexTicket332FailClosed != nil {
+				return *req.OpenAICodexTicket332FailClosed
+			}
+			return previousSettings.OpenAICodexTicket332FailClosed
+		}(),
+		OpenAICodexTicket332HarvestProxyURL: func() string {
+			next := strings.TrimSpace(req.OpenAICodexTicket332HarvestProxyURL)
+			if service.IsMaskedProxyURL(next) {
+				return previousSettings.OpenAICodexTicket332HarvestProxyURL
+			}
+			return next
+		}(),
 		MinCodexVersion:       strings.TrimSpace(req.MinCodexVersion),
 		MaxCodexVersion:       strings.TrimSpace(req.MaxCodexVersion),
 		CodexCLIOnlyBlacklist: strings.TrimSpace(req.CodexCLIOnlyBlacklist),
@@ -2331,6 +2377,14 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		OpenAICodexClientVersion:                               updatedSettings.OpenAICodexClientVersion,
 		OpenAICodexClientVersionSynced:                         updatedSettings.OpenAICodexClientVersionSynced,
 		OpenAICodexVersionAutoSyncEnabled:                      updatedSettings.OpenAICodexVersionAutoSyncEnabled,
+		OpenAICodexTicketEnabled:                               updatedSettings.OpenAICodexTicketEnabled,
+		OpenAICodexTicketFailClosed:                            updatedSettings.OpenAICodexTicketFailClosed,
+		OpenAICodexTicket332Enabled:                            updatedSettings.OpenAICodexTicket332Enabled,
+		OpenAICodexTicket332FailClosed:                         updatedSettings.OpenAICodexTicket332FailClosed,
+		OpenAICodexTicket332HarvestProxyURL:                    service.MaskProxyURL(updatedSettings.OpenAICodexTicket332HarvestProxyURL),
+		OpenAICodexTicket332HarvestProxyConfigured:             strings.TrimSpace(updatedSettings.OpenAICodexTicket332HarvestProxyURL) != "",
+		OpenAICodexTicketHarvestProxyURL:                       service.MaskProxyURL(updatedSettings.OpenAICodexTicketHarvestProxyURL),
+		OpenAICodexTicketHarvestProxyConfigured:                strings.TrimSpace(updatedSettings.OpenAICodexTicketHarvestProxyURL) != "",
 		MinCodexVersion:                                        updatedSettings.MinCodexVersion,
 		MaxCodexVersion:                                        updatedSettings.MaxCodexVersion,
 		CodexCLIOnlyBlacklist:                                  updatedSettings.CodexCLIOnlyBlacklist,

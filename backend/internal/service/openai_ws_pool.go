@@ -84,13 +84,14 @@ type openAIWSAcquireRequest struct {
 }
 
 type openAIWSHandshakeCompatibilityKey struct {
-	betaFeatures        string
-	codexInstallationID string
-	sessionIDHyphen     string
-	sessionIDUnderscore string
-	threadID            string
-	clientRequestID     string
-	codexWindowID       string
+	betaFeatures         string
+	codexTicketSignature string
+	codexInstallationID  string
+	sessionIDHyphen      string
+	sessionIDUnderscore  string
+	threadID             string
+	clientRequestID      string
+	codexWindowID        string
 }
 
 type openAIWSConnLease struct {
@@ -2126,7 +2127,7 @@ func (p *openAIWSConnPool) dialConn(ctx context.Context, req openAIWSAcquireRequ
 			return nil, err
 		}
 	}
-	conn, status, handshakeHeaders, err := p.clientDialer.Dial(ctx, req.WSURL, headers, req.ProxyURL)
+	conn, status, handshakeHeaders, err := p.clientDialer.Dial(ctx, req.WSURL, openAIWSHeadersForUpstream(headers), req.ProxyURL)
 	if err != nil {
 		var handshakeErr *openAIWSHandshakeError
 		var responseBody []byte
@@ -2363,7 +2364,8 @@ func normalizeOpenAIWSBetaFeatures(headers http.Header) string {
 
 func normalizeOpenAIWSHandshakeCompatibility(account *Account, headers http.Header) openAIWSHandshakeCompatibilityKey {
 	key := openAIWSHandshakeCompatibilityKey{
-		betaFeatures: normalizeOpenAIWSBetaFeatures(headers),
+		betaFeatures:         normalizeOpenAIWSBetaFeatures(headers),
+		codexTicketSignature: headers.Get(openAIWSCodexTicketSignatureHeader),
 	}
 	mode := activeCodexFingerprintMode(account)
 	if mode == codexFingerprintOff {

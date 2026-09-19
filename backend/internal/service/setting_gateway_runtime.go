@@ -261,6 +261,244 @@ func (s *SettingService) GetAntigravityUserAgentVersion(ctx context.Context) str
 	return fallback
 }
 
+type cachedOpenAICodexTicketEnabled struct {
+	value         bool
+	expiresAt     int64
+	uninitialized bool
+}
+
+const openAICodexTicketEnabledCacheTTL = 5 * time.Second
+
+// GetOpenAICodexTicketEnabled 返回后台 292 打票总开关。
+// 设置键存在时以后台为准；缺失则回退 yaml/env。
+func (s *SettingService) GetOpenAICodexTicketEnabled(ctx context.Context, fallback bool) bool {
+	if s == nil {
+		return fallback
+	}
+	return s.getOpenAICodexTicketBoolSetting(ctx, SettingKeyOpenAICodexTicketEnabled, fallback, &s.openAICodexTicketEnabledCache, &s.openAICodexTicketEnabledSF)
+}
+
+func (s *SettingService) GetOpenAICodexTicket332Enabled(ctx context.Context, fallback bool) bool {
+	if s == nil {
+		return fallback
+	}
+	return s.getOpenAICodexTicketBoolSetting(ctx, SettingKeyOpenAICodexTicket332Enabled, fallback, &s.openAICodexTicket332EnabledCache, &s.openAICodexTicket332EnabledSF)
+}
+
+func (s *SettingService) GetOpenAICodexTicketFailClosed(ctx context.Context, fallback bool) bool {
+	if s == nil {
+		return fallback
+	}
+	return s.getOpenAICodexTicketBoolSetting(ctx, SettingKeyOpenAICodexTicketFailClosed, fallback, &s.openAICodexTicketFailClosedCache, &s.openAICodexTicketFailClosedSF)
+}
+
+func (s *SettingService) GetOpenAICodexTicket332FailClosed(ctx context.Context, fallback bool) bool {
+	if s == nil {
+		return fallback
+	}
+	return s.getOpenAICodexTicketBoolSetting(ctx, SettingKeyOpenAICodexTicket332FailClosed, fallback, &s.openAICodexTicket332FailClosedCache, &s.openAICodexTicket332FailClosedSF)
+}
+
+func (s *SettingService) getOpenAICodexTicketBoolSetting(ctx context.Context, key string, fallback bool, cache *atomic.Value, sf *singleflight.Group) bool {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if ctx.Err() != nil {
+		return fallback
+	}
+	if s == nil || s.settingRepo == nil {
+		return fallback
+	}
+	if cached, ok := cache.Load().(*cachedOpenAICodexTicketEnabled); ok && cached != nil {
+		if time.Now().UnixNano() < cached.expiresAt {
+			return cached.value
+		}
+	}
+	resultCh := sf.DoChan(key, func() (any, error) {
+		snapshot := cache.Load()
+		if cached, ok := snapshot.(*cachedOpenAICodexTicketEnabled); ok && cached != nil {
+			if time.Now().UnixNano() < cached.expiresAt {
+				return cached.value, nil
+			}
+		}
+		dbCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		value, err := s.settingRepo.GetValue(dbCtx, key)
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		if err != nil && !errors.Is(err, ErrSettingNotFound) {
+			if cached, ok := cache.Load().(*cachedOpenAICodexTicketEnabled); ok && cached != nil && !cached.uninitialized {
+				return cached.value, nil
+			}
+			return fallback, nil
+		}
+		enabled := fallback
+		if err == nil && strings.TrimSpace(value) != "" {
+			enabled = value == "true"
+		}
+		// A save replaces the snapshot before forgetting this flight. An old
+		// database read may finish, but must not overwrite the new cache.
+		cache.CompareAndSwap(snapshot, &cachedOpenAICodexTicketEnabled{
+			value:     enabled,
+			expiresAt: time.Now().Add(openAICodexTicketEnabledCacheTTL).UnixNano(),
+		})
+		return enabled, nil
+	})
+	select {
+	case <-ctx.Done():
+		return fallback
+	case result := <-resultCh:
+		if v, ok := result.Val.(bool); ok && result.Err == nil {
+			return v
+		}
+		return fallback
+	}
+}
+
+func (s *SettingService) InvalidateOpenAICodexTicketEnabledCache() {
+	if s == nil {
+		return
+	}
+	invalidateCodexTicketBoolCache(&s.openAICodexTicketEnabledCache, &s.openAICodexTicketEnabledSF, SettingKeyOpenAICodexTicketEnabled)
+}
+
+type cachedOpenAICodexTicketHarvestProxy struct {
+	value     string
+	expiresAt int64
+}
+
+const openAICodexTicketHarvestProxyCacheTTL = 5 * time.Second
+
+// GetOpenAICodexTicketHarvestProxyURL 返回后台配置的 292 打票代理。空则调用方回退 yaml/env。
+func (s *SettingService) GetOpenAICodexTicketHarvestProxyURL(ctx context.Context) string {
+	if s == nil {
+		return ""
+	}
+	return s.getOpenAICodexTicketProxySetting(ctx, SettingKeyOpenAICodexTicketHarvestProxyURL, &s.openAICodexTicketHarvestProxyCache, &s.openAICodexTicketHarvestProxySF)
+}
+
+func (s *SettingService) GetOpenAICodexTicket332HarvestProxyURL(ctx context.Context) string {
+	if s == nil {
+		return ""
+	}
+	return s.getOpenAICodexTicketProxySetting(ctx, SettingKeyOpenAICodexTicket332HarvestProxyURL, &s.openAICodexTicket332HarvestProxyCache, &s.openAICodexTicket332HarvestProxySF)
+}
+
+func (s *SettingService) getOpenAICodexTicketProxySetting(ctx context.Context, key string, cache *atomic.Value, sf *singleflight.Group) string {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if ctx.Err() != nil {
+		return ""
+	}
+	if s == nil || s.settingRepo == nil {
+		return ""
+	}
+	if cached, ok := cache.Load().(*cachedOpenAICodexTicketHarvestProxy); ok && cached != nil {
+		if time.Now().UnixNano() < cached.expiresAt {
+			return cached.value
+		}
+	}
+	resultCh := sf.DoChan(key, func() (any, error) {
+		snapshot := cache.Load()
+		if cached, ok := snapshot.(*cachedOpenAICodexTicketHarvestProxy); ok && cached != nil {
+			if time.Now().UnixNano() < cached.expiresAt {
+				return cached.value, nil
+			}
+		}
+		dbCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		value, err := s.settingRepo.GetValue(dbCtx, key)
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		if err != nil && !errors.Is(err, ErrSettingNotFound) {
+			// Keep the last known proxy during transient storage failures.
+			if cached, ok := cache.Load().(*cachedOpenAICodexTicketHarvestProxy); ok && cached != nil {
+				value = cached.value
+			}
+			cache.CompareAndSwap(snapshot, &cachedOpenAICodexTicketHarvestProxy{
+				value:     value,
+				expiresAt: time.Now().Add(time.Second).UnixNano(),
+			})
+			return value, nil
+		}
+		value = strings.TrimSpace(value)
+		cache.CompareAndSwap(snapshot, &cachedOpenAICodexTicketHarvestProxy{
+			value:     value,
+			expiresAt: time.Now().Add(openAICodexTicketHarvestProxyCacheTTL).UnixNano(),
+		})
+		return value, nil
+	})
+	select {
+	case <-ctx.Done():
+		return ""
+	case result := <-resultCh:
+		if v, ok := result.Val.(string); ok && result.Err == nil {
+			return v
+		}
+		return ""
+	}
+}
+
+func (s *SettingService) InvalidateOpenAICodexTicketHarvestProxyCache() {
+	if s == nil {
+		return
+	}
+	invalidateCodexTicketProxyCache(&s.openAICodexTicketHarvestProxyCache, &s.openAICodexTicketHarvestProxySF, SettingKeyOpenAICodexTicketHarvestProxyURL)
+}
+
+func (s *SettingService) InvalidateOpenAICodexTicketFailClosedCache() {
+	if s == nil {
+		return
+	}
+	invalidateCodexTicketBoolCache(&s.openAICodexTicketFailClosedCache, &s.openAICodexTicketFailClosedSF, SettingKeyOpenAICodexTicketFailClosed)
+}
+
+func (s *SettingService) InvalidateOpenAICodexTicket332EnabledCache() {
+	if s == nil {
+		return
+	}
+	invalidateCodexTicketBoolCache(&s.openAICodexTicket332EnabledCache, &s.openAICodexTicket332EnabledSF, SettingKeyOpenAICodexTicket332Enabled)
+}
+
+func (s *SettingService) InvalidateOpenAICodexTicket332FailClosedCache() {
+	if s == nil {
+		return
+	}
+	invalidateCodexTicketBoolCache(&s.openAICodexTicket332FailClosedCache, &s.openAICodexTicket332FailClosedSF, SettingKeyOpenAICodexTicket332FailClosed)
+}
+
+func (s *SettingService) InvalidateOpenAICodexTicket332HarvestProxyCache() {
+	if s == nil {
+		return
+	}
+	invalidateCodexTicketProxyCache(&s.openAICodexTicket332HarvestProxyCache, &s.openAICodexTicket332HarvestProxySF, SettingKeyOpenAICodexTicket332HarvestProxyURL)
+}
+
+func invalidateCodexTicketBoolCache(cache *atomic.Value, sf *singleflight.Group, key string) {
+	previous, _ := cache.Load().(*cachedOpenAICodexTicketEnabled)
+	next := &cachedOpenAICodexTicketEnabled{uninitialized: true}
+	if previous != nil {
+		*next = *previous
+	}
+	next.expiresAt = 0
+	cache.Store(next)
+	sf.Forget(key)
+}
+
+func invalidateCodexTicketProxyCache(cache *atomic.Value, sf *singleflight.Group, key string) {
+	previous, _ := cache.Load().(*cachedOpenAICodexTicketHarvestProxy)
+	next := &cachedOpenAICodexTicketHarvestProxy{}
+	if previous != nil {
+		*next = *previous
+	}
+	next.expiresAt = 0
+	cache.Store(next)
+	sf.Forget(key)
+}
+
 // GetOpenAICodexUserAgent 返回 OpenAI Codex 上游请求使用的 User-Agent。
 // 后台设置优先；为空时回退到内置默认值。
 func (s *SettingService) GetOpenAICodexUserAgent(ctx context.Context) string {

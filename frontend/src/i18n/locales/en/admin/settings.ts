@@ -15,7 +15,25 @@ export default {
         payment: 'Payment',
       },
       extensions: {
-        description: 'Manage streaming ACK, low-balance precharges and frozen-fund reconciliation. Each setting saves independently.',
+        description: 'Manage streaming ACK, low-balance precharges, frozen-fund reconciliation and Codex tickets. Each setting saves independently.',
+      },
+      codexTickets: {
+        title292: 'Codex 292 · Official 0.2.6',
+        title332: 'Codex 332 · Imported version',
+        scope: 'Applies to OpenAI OAuth / SetupToken accounts that select this mechanism. The two ticket stores remain separate.',
+        enabled: 'Enable this ticket mechanism',
+        failClosed: 'Pause model requests when a ticket is missing',
+        failClosedHint: 'When enabled, requests for a model pause without a valid ticket for this mechanism. When disabled, requests may continue without one.',
+        proxy: 'Dedicated harvest proxy',
+        proxyHint: 'Used for this mechanism’s background harvest. Business requests keep the account proxy. Empty input or a masked password preserves the stored proxy.',
+        proxyPlaceholder: "socks5h://user:pass{'@'}proxy.example.com:1080",
+        proxyConfigured: 'A proxy is saved; its password is hidden. Paste a complete new proxy URL to replace it.',
+        save: 'Save Codex {mode}',
+        saveHint: 'This panel saves independently and does not change the other mechanism.',
+        saved: 'Settings for this mechanism are saved.',
+        loadFailed: 'Unable to load ticket settings. Reload before editing.',
+        saveFailed: 'Save failed. These changes are not confirmed; retry to save.',
+        retry: 'Reload',
       },
       features: {
         channelMonitor: {
@@ -631,6 +649,14 @@ export default {
         openaiCodexVersionAutoSyncHint: 'Fetches the latest stable client version from the official repository every 6 hours, so you never need to upgrade this service just to keep the version current. When disabled, only the version above or the built-in default is used.',
         openaiCodexVersionSyncedValue: 'Currently synced: {version}',
         codexHardeningTitle: "Codex Settings",
+        codexTicketEnabled: "292 ticket harvest",
+        codexTicketEnabledDesc:
+          "When off, the gateway neither harvests nor injects x-codex-turn-state and forwards traffic as usual. When on, it harvests tickets in the background and overwrites that header on production requests.",
+        codexTicketHarvestProxy: "292 harvest proxy",
+        codexTicketHarvestProxyDesc:
+          "Used only for minting 292 tickets when the ticket feature is enabled. Changes apply to subsequent probes without a restart. Production traffic still uses each account's residential proxy. Paste a full HTTP or SOCKS5h proxy URL including username and password. The proxy provider must handle IP rotation. Leave blank when saving to keep the stored value.",
+        codexTicketHarvestProxyPlaceholder: "http://user:pass{'@'}proxy.example.com:1080",
+        codexTicketHarvestProxyConfigured: "Configured (password hidden). Paste a full new proxy URL to replace it.",
         codexClientRestrictionTitle: "Codex client restriction",
         codexHardeningDesc:
           "Only affects OpenAI OAuth accounts with 'Codex official clients only' enabled (global). Beyond User-Agent/Originator, harden the decision with a version range, an engine-fingerprint gate, and black/whitelists.",

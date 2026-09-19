@@ -247,6 +247,8 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyOpenAICodexClientVersion:                           "",
 		SettingKeyOpenAICodexClientVersionSynced:                     "",
 		SettingKeyOpenAICodexVersionAutoSyncEnabled:                  "true",
+		SettingKeyOpenAICodexTicketHarvestProxyURL:                   "",
+		SettingKeyOpenAICodexTicket332HarvestProxyURL:                "",
 		SettingPaymentVisibleMethodAlipaySource:                      "",
 		SettingPaymentVisibleMethodWxpaySource:                       "",
 		SettingPaymentVisibleMethodAlipayEnabled:                     "false",
@@ -895,6 +897,28 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	} else {
 		result.OpenAICodexVersionAutoSyncEnabled = true
 	}
+	if v, ok := settings[SettingKeyOpenAICodexTicketEnabled]; ok && v != "" {
+		result.OpenAICodexTicketEnabled = v == "true"
+	} else if s != nil && s.cfg != nil {
+		result.OpenAICodexTicketEnabled = s.cfg.Gateway.OpenAICodexTicket.Enabled
+	}
+	result.OpenAICodexTicketHarvestProxyURL = strings.TrimSpace(settings[SettingKeyOpenAICodexTicketHarvestProxyURL])
+	result.OpenAICodexTicketFailClosed = true
+	if s != nil && s.cfg != nil {
+		result.OpenAICodexTicketFailClosed = s.cfg.Gateway.OpenAICodexTicket.FailClosed
+		result.OpenAICodexTicket332Enabled = s.cfg.Gateway.OpenAICodexTicket332.Enabled
+		result.OpenAICodexTicket332FailClosed = s.cfg.Gateway.OpenAICodexTicket332.FailClosed
+	}
+	for key, target := range map[string]*bool{
+		SettingKeyOpenAICodexTicketFailClosed:    &result.OpenAICodexTicketFailClosed,
+		SettingKeyOpenAICodexTicket332Enabled:    &result.OpenAICodexTicket332Enabled,
+		SettingKeyOpenAICodexTicket332FailClosed: &result.OpenAICodexTicket332FailClosed,
+	} {
+		if value, ok := settings[key]; ok && strings.TrimSpace(value) != "" {
+			*target = value == "true"
+		}
+	}
+	result.OpenAICodexTicket332HarvestProxyURL = strings.TrimSpace(settings[SettingKeyOpenAICodexTicket332HarvestProxyURL])
 	// codex_cli_only 加固
 	result.MinCodexVersion = settings[SettingKeyMinCodexVersion]
 	result.MaxCodexVersion = settings[SettingKeyMaxCodexVersion]

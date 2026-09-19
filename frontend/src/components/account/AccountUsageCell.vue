@@ -116,8 +116,9 @@
       </div>
     </template>
 
-    <!-- OpenAI OAuth accounts: single source from /usage API -->
-    <template v-else-if="account.platform === 'openai' && account.type === 'oauth'">
+    <!-- OpenAI Codex accounts: ticket status; usage querying remains OAuth-only. -->
+    <template v-else-if="account.platform === 'openai' && (account.type === 'oauth' || account.type === 'setup-token')">
+      <CodexTicketStatusList v-if="codexTurnTickets.length" :tickets="codexTurnTickets" compact class="mb-1" />
       <div v-if="hasOpenAIUsageFallback" class="space-y-1">
         <UsageProgressBar
           v-if="usageInfo?.five_hour"
@@ -186,6 +187,7 @@
         <div class="text-xs text-gray-400">-</div>
         <!-- Always allow on-demand upstream quota query, even before local data exists. -->
         <OpenAIQuotaResetCell
+          v-if="account.type === 'oauth'"
           :account="account"
           class="mt-1"
           @account-updated="handleQuotaResetAccountUpdated"
@@ -657,6 +659,7 @@ import { formatCompactNumber } from '@/utils/format'
 import UsageProgressBar from './UsageProgressBar.vue'
 import AccountQuotaInfo from './AccountQuotaInfo.vue'
 import OpenAIQuotaResetCell from './OpenAIQuotaResetCell.vue'
+import CodexTicketStatusList from './CodexTicketStatusList.vue'
 import GrokQuotaProbeCell from './GrokQuotaProbeCell.vue'
 import CNProviderQuotaCell from './CNProviderQuotaCell.vue'
 import CNProviderBalanceCell from './CNProviderBalanceCell.vue'
@@ -786,6 +789,8 @@ const hasOpenAIUsageFallback = computed(() => {
   if (props.account.platform !== 'openai' || props.account.type !== 'oauth') return false
   return !!usageInfo.value?.five_hour || !!usageInfo.value?.seven_day
 })
+
+const codexTurnTickets = computed(() => props.account.codex_turn_tickets ?? [])
 
 const openAISevenDayEstimatedTotalCost = computed(() => {
   const sevenDay = usageInfo.value?.seven_day

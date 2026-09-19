@@ -2290,6 +2290,22 @@
         </div>
       </div>
 
+      <!-- Each OpenAI Codex account selects one ticket mechanism. -->
+      <div
+        v-if="canSelectCodexTicketMode"
+        class="border-t border-gray-200 pt-4 dark:border-dark-600"
+      >
+        <label for="codex-ticket-mode" class="input-label">{{ t('admin.accounts.openai.codexTicketMode') }}</label>
+        <Select id="codex-ticket-mode" v-model="codexTicketMode" :options="codexTicketModeOptions" @update:model-value="codexTicketModeChanged = true" />
+        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          {{ t('admin.accounts.openai.codexTicketModeHint') }}
+        </p>
+        <p v-if="codexTicketUnknownMode && !codexTicketModeChanged" class="mt-1 text-xs text-amber-600 dark:text-amber-400">{{ t('admin.accounts.openai.codexTicketUnknownMode') }}</p>
+        <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">{{ t('admin.accounts.openai.codexTurnTicketDesc') }}</p>
+        <CodexTicketStatusList v-if="codexTurnTickets.length" :tickets="codexTurnTickets" class="mt-3" />
+        <p v-else-if="codexTicketMode !== 'off'" class="mt-3 text-xs text-gray-500 dark:text-gray-400">{{ t('admin.accounts.openai.codexTicketStatusUnavailable') }}</p>
+      </div>
+
       <!-- Codex 指纹收敛模式（仅 OpenAI OAuth） -->
       <div
         v-if="account?.platform === 'openai' && account?.type === 'oauth'"
@@ -3134,6 +3150,8 @@ import {
 } from '@/utils/format'
 import { createStableObjectKeyResolver } from '@/utils/stableObjectKey'
 import { getAccountExpiryTimestamp } from '@/components/account/accountExpiry'
+import CodexTicketStatusList from './CodexTicketStatusList.vue'
+import type { CodexTicketMode } from '@/types'
 import { allSelectedGroupsEnableLongContextPricing } from '@/components/account/longContextBilling'
 import { VERTEX_LOCATION_OPTIONS } from '@/constants/account'
 import {
@@ -3185,6 +3203,18 @@ const selectableGroups = computed(() => {
 // Spark 影子账号(parent_account_id 非空):代理恒继承母账号,不可独立编辑(外审 B/P1),
 // 故隐藏代理选择器。
 const isSparkShadow = computed(() => props.account?.parent_account_id != null)
+
+const canSelectCodexTicketMode = computed(() => props.account?.platform === 'openai' &&
+  (props.account.type === 'oauth' || props.account.type === 'setup-token') && !isSparkShadow.value)
+const codexTicketMode = ref<CodexTicketMode>('292')
+const codexTicketModeChanged = ref(false)
+const codexTicketUnknownMode = ref(false)
+const codexTicketModeOptions = computed(() => [
+  { value: '292', label: t('admin.accounts.openai.codexTicketMode292') },
+  { value: '332', label: t('admin.accounts.openai.codexTicketMode332') },
+  { value: 'off', label: t('admin.accounts.openai.codexTicketModeOff') },
+])
+const codexTurnTickets = computed(() => (props.account?.codex_turn_tickets ?? []).filter(ticket => ticket.mode === codexTicketMode.value))
 
 const hideAccountLongContextBilling = computed(() => {
   return allSelectedGroupsEnableLongContextPricing(form.group_ids, props.groups)
@@ -4023,6 +4053,10 @@ const syncFormFromAccount = (newAccount: Account | null) => {
   mixedScheduling.value = false
   allowOverages.value = false
 	const extra = newAccount.extra as Record<string, unknown> | undefined
+  const savedTicketMode = extra?.codex_ticket_mode
+  codexTicketMode.value = savedTicketMode === undefined ? '292' : savedTicketMode === '292' || savedTicketMode === '332' ? savedTicketMode : 'off'
+  codexTicketUnknownMode.value = savedTicketMode !== undefined && savedTicketMode !== '292' && savedTicketMode !== '332' && savedTicketMode !== 'off'
+  codexTicketModeChanged.value = false
 	mixedScheduling.value = extra?.mixed_scheduling === true
 	allowOverages.value = extra?.allow_overages === true
 	upstreamRequestIdHeader.value = readUpstreamRequestIdHeader(extra)
@@ -5535,6 +5569,9 @@ const handleSubmit = async () => {
       const currentExtra = (props.account.extra as Record<string, unknown>) || {}
       const newExtra: Record<string, unknown> = { ...currentExtra }
       const hadCodexCLIOnlyEnabled = currentExtra.codex_cli_only === true
+      if (canSelectCodexTicketMode.value && codexTicketModeChanged.value) {
+        newExtra.codex_ticket_mode = codexTicketMode.value
+      }
       if (props.account.type === 'oauth' || props.account.type === 'setup-token') {
         newExtra.openai_oauth_responses_websockets_v2_mode = openaiOAuthResponsesWebSocketV2Mode.value
         newExtra.openai_oauth_responses_websockets_v2_enabled = isOpenAIWSModeEnabled(openaiOAuthResponsesWebSocketV2Mode.value)

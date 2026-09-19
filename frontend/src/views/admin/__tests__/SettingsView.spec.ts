@@ -85,6 +85,8 @@ const localeRef = vi.hoisted(() => ({ value: "zh-CN" }));
 
 vi.mock("@/api/admin/settings", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/api/admin/settings")>(),
+  getSettings,
+  updateSettings,
   getBalancePrechargeSettings: vi.fn().mockResolvedValue({ enabled: true, threshold: 1, amount: 0.02 }),
 }));
 
@@ -841,6 +843,67 @@ describe("admin SettingsView payment visible method controls", () => {
     });
     fetchPublicSettings.mockResolvedValue(undefined);
     adminSettingsFetch.mockResolvedValue(undefined);
+  });
+
+  it("saves the two Codex ticket mechanisms independently inside extensions", async () => {
+    getSettings.mockResolvedValue({
+      ...baseSettingsResponse,
+      openai_codex_ticket_enabled: false,
+      openai_codex_ticket_fail_closed: true,
+      openai_codex_ticket_332_enabled: false,
+      openai_codex_ticket_332_fail_closed: false,
+    });
+    const wrapper = mountView();
+    await flushPromises();
+    expect(wrapper.find('#codex-ticket-292-settings').exists()).toBe(false);
+    await wrapper.get('#settings-tab-extensions').trigger('click');
+    await flushPromises();
+    expect(wrapper.get('#extensions #codex-ticket-292-settings').exists()).toBe(true);
+    expect(wrapper.get('#extensions #codex-ticket-332-settings').exists()).toBe(true);
+    await wrapper.get('#codex-ticket-332-enabled').setValue(true);
+    await wrapper.get('#codex-ticket-332-save').trigger('click');
+    await flushPromises();
+    expect(updateSettings).toHaveBeenLastCalledWith({
+      openai_codex_ticket_332_enabled: true,
+      openai_codex_ticket_332_fail_closed: false,
+      openai_codex_ticket_332_harvest_proxy_url: '',
+    });
+    await wrapper.get('#codex-ticket-292-enabled').setValue(true);
+    await wrapper.get('#codex-ticket-292-save').trigger('click');
+    await flushPromises();
+    expect(updateSettings).toHaveBeenLastCalledWith({
+      openai_codex_ticket_enabled: true,
+      openai_codex_ticket_fail_closed: true,
+      openai_codex_ticket_harvest_proxy_url: '',
+    });
+    updateSettings.mockClear();
+    await wrapper.get('#settings-tab-general').trigger('click');
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+    expect(updateSettings.mock.calls[0]?.[0]).not.toHaveProperty('openai_codex_ticket_enabled');
+    expect(updateSettings.mock.calls[0]?.[0]).not.toHaveProperty('openai_codex_ticket_332_enabled');
+    wrapper.unmount();
+  });
+
+  it("loads the masked Codex harvest proxy and submits a replacement URL", async () => {
+    getSettings.mockResolvedValue({
+      ...baseSettingsResponse,
+      openai_codex_ticket_harvest_proxy_url: "http://user:***@old.example.com:8080",
+      openai_codex_ticket_harvest_proxy_configured: true,
+    });
+    const wrapper = mountView();
+    await flushPromises();
+    await wrapper.get('#settings-tab-extensions').trigger('click');
+    await flushPromises();
+    const input = wrapper.get<HTMLInputElement>("#codex-ticket-292-harvest-proxy");
+    expect(input.element.value).toBe("http://user:***@old.example.com:8080");
+    await input.setValue("socks5h://user:new-secret@new.example.com:1080");
+    await wrapper.get('#codex-ticket-292-save').trigger('click');
+    await flushPromises();
+    expect(updateSettings.mock.calls[0]?.[0].openai_codex_ticket_harvest_proxy_url)
+      .toBe("socks5h://user:new-secret@new.example.com:1080");
+    expect(updateSettings.mock.calls[0]?.[0]).not.toHaveProperty("openai_codex_ticket_harvest_proxy_configured");
+    wrapper.unmount();
   });
 
   it("loads and saves the open button visibility for each custom menu", async () => {

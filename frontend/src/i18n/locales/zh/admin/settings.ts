@@ -15,7 +15,25 @@ export default {
         payment: '支付设置',
       },
       extensions: {
-        description: '集中管理流式首响 ACK、低余额预扣费与冻结款对账，各项设置单独保存。',
+        description: '集中管理流式首响 ACK、低余额预扣费、冻结款对账和 Codex 门票，各项设置单独保存。',
+      },
+      codexTickets: {
+        title292: 'Codex 292 · 官方 0.2.6',
+        title332: 'Codex 332 · 导入版本',
+        scope: '仅作用于选择本机制的 OpenAI OAuth / SetupToken 账号。两套门票独立保存，不会互用。',
+        enabled: '启用此门票机制',
+        failClosed: '缺票时暂停该模型请求',
+        failClosedHint: '开启后，没有本机制有效门票的模型会暂停请求；关闭后，缺票仍可继续请求。',
+        proxy: '独立打票代理',
+        proxyHint: '用于本机制的后台取票，业务请求仍使用账号代理。留空或保留密码掩码不会清除已存代理。',
+        proxyPlaceholder: "socks5h://user:pass{'@'}proxy.example.com:1080",
+        proxyConfigured: '已保存代理，密码已隐藏。更换时请粘贴完整的新代理地址。',
+        save: '保存 Codex {mode}',
+        saveHint: '此面板单独保存，修改不影响另一套机制。',
+        saved: '此机制的设置已保存。',
+        loadFailed: '票据设置加载失败，请重试后编辑。',
+        saveFailed: '保存失败，修改尚未确认，请重试。',
+        retry: '重新加载',
       },
       features: {
         channelMonitor: {
@@ -624,6 +642,14 @@ export default {
         openaiCodexVersionAutoSyncHint: '每 6 小时从官方仓库获取最新稳定版客户端版本号，无需为了跟版本而升级本服务。关闭后仅使用上方手填版本或内置版本。',
         openaiCodexVersionSyncedValue: '当前同步到：{version}',
         codexHardeningTitle: 'Codex 设置',
+        codexTicketEnabled: '292 打票',
+        codexTicketEnabledDesc:
+          '关闭后不打票、不注入 x-codex-turn-state，按原链路转发。开启后后台打票，并在业务请求中覆盖该头。',
+        codexTicketHarvestProxy: '292 打票代理',
+        codexTicketHarvestProxyDesc:
+          '仅在门票功能开启时用于打票，保存后后续探测会使用新代理，无需重启。日常业务仍走账号自己的住宅代理。填写完整代理 URL（http 或 socks5h，含用户名和密码）。代理服务商需自行负责出口 IP 轮换。留空并保存表示不改已保存的值。',
+        codexTicketHarvestProxyPlaceholder: "http://user:pass{'@'}proxy.example.com:1080",
+        codexTicketHarvestProxyConfigured: '已配置（密码已隐藏）。要更换请整段粘贴新的代理 URL。',
         codexClientRestrictionTitle: 'Codex 客户端限制',
         codexHardeningDesc:
           '仅对已开启「仅允许 Codex 官方客户端」的 OpenAI OAuth 账号生效（全局）。在 User-Agent/Originator 之外，用版本区间、引擎指纹门与黑/白名单巩固判定。',

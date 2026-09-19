@@ -329,6 +329,29 @@ func TestBuildSchedulerMetadataAccount_KeepsOpenAIWSFlags(t *testing.T) {
 	require.Nil(t, got.Extra["unused_large_field"])
 }
 
+func TestBuildSchedulerMetadataAccount_KeepsCodexTicketModeWithoutTicketMaterial(t *testing.T) {
+	for _, mode := range []string{"292", "332", "off"} {
+		t.Run(mode, func(t *testing.T) {
+			account := service.Account{
+				ID: 42, Platform: service.PlatformOpenAI, Type: service.AccountTypeOAuth,
+				Extra: map[string]any{
+					"codex_ticket_mode":                 mode,
+					"codex_turn_ticket:292:gpt-6-astra": map[string]any{"state": "private-292"},
+					"codex_turn_ticket:332:gpt-6-astra": map[string]any{"state": "private-332"},
+					"codex_turn_ticket:gpt-6-astra":     map[string]any{"state": "private-legacy"},
+				},
+			}
+			projected := buildSchedulerMetadataAccount(account)
+			require.Equal(t, mode, projected.Extra["codex_ticket_mode"], "account mode must survive candidate projection")
+			require.Len(t, projected.Extra, 1, "full ticket material belongs only in the account payload")
+			full, metadata, err := marshalSchedulerCacheAccount(account)
+			require.NoError(t, err)
+			require.Contains(t, string(full), "private-332")
+			require.NotContains(t, string(metadata), "private-")
+		})
+	}
+}
+
 func TestBuildSchedulerMetadataAccount_KeepsGrokMediaEligibility(t *testing.T) {
 	t.Run("explicit override", func(t *testing.T) {
 		account := service.Account{

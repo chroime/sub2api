@@ -336,6 +336,65 @@ describe('EditAccountModal', () => {
 
   afterEach(() => vi.useRealTimers())
 
+  it.each(['oauth', 'setup-token'])('selects Codex ticket mode explicitly for %s while preserving other extra fields', async (type) => {
+    const account = { ...buildOpenAIOAuthParentAccount(), type, extra: { retained: 'value' } }
+    updateAccountMock.mockReset().mockResolvedValue(account)
+    checkMixedChannelRiskMock.mockReset().mockResolvedValue({ has_risk: false })
+    const wrapper = mountModal(account)
+    await flushPromises()
+    expect(wrapper.get<HTMLSelectElement>('#codex-ticket-mode').element.value).toBe('292')
+    await wrapper.get('#codex-ticket-mode').setValue('332')
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+    await flushPromises()
+    expect(updateAccountMock.mock.calls[0]?.[1]?.extra).toMatchObject({ retained: 'value', codex_ticket_mode: '332' })
+    wrapper.unmount()
+  })
+
+  it.each([undefined, '332', 'off', 'future-mode'])('preserves the existing Codex ticket mode %s on unrelated edits', async (mode) => {
+    const extra = mode === undefined ? {} : { codex_ticket_mode: mode }
+    const account = { ...buildOpenAIOAuthParentAccount(), extra }
+    updateAccountMock.mockReset().mockResolvedValue(account)
+    checkMixedChannelRiskMock.mockReset().mockResolvedValue({ has_risk: false })
+    const wrapper = mountModal(account)
+    await flushPromises()
+    expect(wrapper.get<HTMLSelectElement>('#codex-ticket-mode').element.value).toBe(mode === undefined ? '292' : mode === 'future-mode' ? 'off' : mode)
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+    await flushPromises()
+    expect(updateAccountMock.mock.calls[0]?.[1]?.extra?.codex_ticket_mode).toBe(mode)
+    wrapper.unmount()
+  })
+
+  it('hides Codex ticket selection for shadow and API key accounts', async () => {
+    for (const account of [buildOpenAISparkShadowAccount(), buildAccount()]) {
+      const wrapper = mountModal(account)
+      await flushPromises()
+      expect(wrapper.find('#codex-ticket-mode').exists()).toBe(false)
+      wrapper.unmount()
+    }
+  })
+
+  it('shows only the selected ticket mechanism and keeps paused text accurate', async () => {
+    const account = {
+      ...buildOpenAIOAuthParentAccount(),
+      extra: { codex_ticket_mode: '332' },
+      codex_turn_tickets: [
+        { mode: '292', model: 'official-model', ready: true, length: 292, blocked: false, remaining_seconds: 30 },
+        { mode: '332', model: 'imported-model', ready: false, blocked: true, remaining_seconds: 0 },
+      ],
+    }
+    const wrapper = mountModal(account)
+    await flushPromises()
+    const status = wrapper.get('[data-testid="codex-ticket-status-list"]')
+    expect(status.text()).toContain('Codex 332')
+    expect(status.text()).toContain('imported-model')
+    expect(status.text()).not.toContain('official-model')
+    expect(status.text()).toContain('admin.accounts.openai.codexTurnTicketPaused')
+    expect(status.text()).not.toContain('admin.accounts.openai.codexTurnTicketMissing')
+    await wrapper.get('#codex-ticket-mode').setValue('off')
+    expect(wrapper.find('[data-testid="codex-ticket-status-list"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
   it('sets expiry presets from now instead of extending the saved expiry', async () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(new Date('2028-02-29T12:34:00'))

@@ -345,6 +345,9 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 	// HTTP ingress may use a WebSocket upstream, bypassing HTTPUpstream.Do.
 	// Start only when sending the generation payload, after local validation and
 	// connection acquisition. A lost response cannot be treated as zero usage.
+	if err := s.checkOpenAIWSCodexTicket(ctx, account, openAIWSPayloadString(payload, "model"), wsHeaders.Get(openAIWSCodexTicketSignatureHeader)); err != nil {
+		return nil, err
+	}
 	StartBalancePrechargeUpstream(ctx)
 	defer func() {
 		status := 0
