@@ -52,13 +52,13 @@ func (r *usageBillingRepository) RecoverBalancePrecharges(ctx context.Context, l
 	for rows.Next() {
 		var c candidate
 		if err = rows.Scan(&c.id, &c.user); err != nil {
-			rows.Close()
+			_ = rows.Close()
 			return 0, err
 		}
 		candidates = append(candidates, c)
 	}
 	err = rows.Err()
-	rows.Close()
+	_ = rows.Close()
 	if err != nil {
 		return 0, err
 	}
@@ -78,7 +78,7 @@ func (r *usageBillingRepository) recoverBalancePrecharge(ctx context.Context, id
 	if err != nil {
 		return 0, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	// A soft-deleted user's money still requires review evidence.
 	var locked int64
 	if err = tx.QueryRowContext(ctx, `SELECT id FROM users WHERE id=$1 FOR UPDATE`, user).Scan(&locked); err != nil && !errors.Is(err, sql.ErrNoRows) {

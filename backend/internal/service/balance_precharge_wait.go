@@ -64,7 +64,11 @@ func (w *balancePrechargeWaiter) enqueue(userID int64) (<-chan struct{}, func())
 		if queue.requests.Len() == 0 {
 			delete(w.users, userID)
 		} else if first {
-			close(queue.requests.Front().Value.(chan struct{}))
+			next, ok := queue.requests.Front().Value.(chan struct{})
+			if !ok {
+				panic("balance precharge wait queue contains a non-channel entry")
+			}
+			close(next)
 		}
 	}
 }

@@ -62,7 +62,7 @@ func (r *usageLogOutboxRepository) ClaimUsageLogOutbox(ctx context.Context, limi
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := make([]service.UsageLogOutboxItem, 0, limit)
 	for rows.Next() {
 		var item service.UsageLogOutboxItem

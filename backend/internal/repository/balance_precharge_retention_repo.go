@@ -17,7 +17,7 @@ func (r *usageBillingRepository) ArchiveBalancePrecharges(ctx context.Context, c
 	if err != nil {
 		return 0, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	rows, err := tx.QueryContext(ctx, `SELECT p.id FROM balance_precharges p
  WHERE p.state<>'reserved' AND p.updated_at<$1
  AND (p.lease_expires_at IS NULL OR p.lease_expires_at<=NOW())
@@ -31,13 +31,13 @@ func (r *usageBillingRepository) ArchiveBalancePrecharges(ctx context.Context, c
 	for rows.Next() {
 		var id string
 		if err = rows.Scan(&id); err != nil {
-			rows.Close()
+			_ = rows.Close()
 			return 0, err
 		}
 		ids = append(ids, id)
 	}
 	err = rows.Err()
-	rows.Close()
+	_ = rows.Close()
 	if err != nil {
 		return 0, err
 	}

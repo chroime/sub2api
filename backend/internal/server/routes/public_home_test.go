@@ -76,12 +76,25 @@ func TestPublicHome_AnonymousSafeSummary(t *testing.T) {
 				require.NotContains(t, w.Body.String(), private)
 			}
 			if path == "/api/v1/public/home/channels" {
-				require.Len(t, body["data"].([]any), 1)
-			} else {
-				rows := body["data"].(map[string]any)["groups"].([]any)
+				rows, ok := body["data"].([]any)
+				require.True(t, ok)
 				require.Len(t, rows, 1)
-				model := rows[0].(map[string]any)["models"].([]any)[0].(map[string]any)
-				require.Equal(t, price, model["pricing"].(map[string]any)["input_price"])
+			} else {
+				data, ok := body["data"].(map[string]any)
+				require.True(t, ok)
+				rows, ok := data["groups"].([]any)
+				require.True(t, ok)
+				require.Len(t, rows, 1)
+				group, ok := rows[0].(map[string]any)
+				require.True(t, ok)
+				models, ok := group["models"].([]any)
+				require.True(t, ok)
+				require.NotEmpty(t, models)
+				model, ok := models[0].(map[string]any)
+				require.True(t, ok)
+				pricing, ok := model["pricing"].(map[string]any)
+				require.True(t, ok)
+				require.Equal(t, price, pricing["input_price"])
 			}
 		})
 	}

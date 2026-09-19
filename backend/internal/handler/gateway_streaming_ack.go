@@ -25,7 +25,8 @@ func (h *GatewayHandler) startStreamingACK(c *gin.Context, stream bool, startedA
 }
 
 // Native Gemini also exposes a JSON-array streaming transport. Only explicit
-// alt=sse requests may receive an SSE comment before the upstream responds.
+// alt=sse requests from clients that accept comments may receive ACKs or
+// precharge-wait heartbeats before the upstream responds.
 func geminiStreamingACKEligible(c *gin.Context, stream bool) bool {
-	return stream && c != nil && strings.EqualFold(c.Query("alt"), "sse")
+	return stream && c != nil && strings.EqualFold(c.Query("alt"), "sse") && !service.DownstreamRejectsSSEComments(c)
 }

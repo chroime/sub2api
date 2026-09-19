@@ -67,7 +67,7 @@ func TestOpenAIWSRetryAfterGatewayWaitHeartbeat(t *testing.T) {
 			t.Error(err)
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 		var request map[string]any
 		if err := conn.ReadJSON(&request); err != nil {
 			t.Error(err)

@@ -117,7 +117,7 @@ func TestGatewayStreamingACKAcrossSSEProtocolsOverHTTP(t *testing.T) {
 				if err != nil {
 					return
 				}
-				defer resp.Body.Close()
+				defer func() { _ = resp.Body.Close() }()
 				_, _ = io.Copy(c.Writer, resp.Body)
 				c.Writer.Flush()
 				realTTFT := 450
@@ -131,7 +131,7 @@ func TestGatewayStreamingACKAcrossSSEProtocolsOverHTTP(t *testing.T) {
 			client.Timeout = 2 * time.Second
 			resp, err := client.Post(server.URL+tc.path, "application/json", strings.NewReader(`{"stream":true}`))
 			require.NoError(t, err)
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 			reader := bufio.NewReader(resp.Body)
 			line, err := reader.ReadString('\n')
 			require.NoError(t, err)

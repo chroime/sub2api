@@ -142,7 +142,7 @@ func TestStreamingACKRuntimeSwitchOverHTTP(t *testing.T) {
 			c.Status(http.StatusBadGateway)
 			return
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		_, _ = io.Copy(c.Writer, resp.Body)
 		c.Writer.Flush()
 	})
@@ -158,7 +158,7 @@ func TestStreamingACKRuntimeSwitchOverHTTP(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		resp, err := client.Do(req)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		body, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -174,7 +174,7 @@ func TestStreamingACKRuntimeSwitchOverHTTP(t *testing.T) {
 		start := time.Now()
 		resp, err := client.Post(server.URL+path, "application/json", strings.NewReader(`{"stream":true}`))
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 		reader := bufio.NewReader(resp.Body)
 		line, err := reader.ReadString('\n')

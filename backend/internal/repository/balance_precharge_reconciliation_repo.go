@@ -129,7 +129,7 @@ func (r *usageBillingRepository) ListBalancePrechargeReviews(ctx context.Context
 	if err != nil {
 		return nil, 0, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	reviews := make([]*service.BalancePrechargeReview, 0)
 	for rows.Next() {
 		review, err := scanBalancePrechargeReview(rows)

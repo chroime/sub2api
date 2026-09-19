@@ -9,14 +9,15 @@ import (
 )
 
 func TestAPIKeyAuthSnapshotGroupStreamingACKRoundtrip(t *testing.T) {
+	enabled, disabled := true, false
 	for _, tc := range []struct {
 		name     string
 		policy   *bool
 		wantJSON string
 	}{
 		{name: "legacy", wantJSON: "null"},
-		{name: "enabled", policy: testPtrBool(true), wantJSON: "true"},
-		{name: "disabled", policy: testPtrBool(false), wantJSON: "false"},
+		{name: "enabled", policy: &enabled, wantJSON: "true"},
+		{name: "disabled", policy: &disabled, wantJSON: "false"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			groupID := int64(51)
@@ -59,9 +60,10 @@ func TestAPIKeyAuthSnapshotGroupStreamingACKIsolatesPointers(t *testing.T) {
 			name = "enabled"
 		}
 		t.Run(name, func(t *testing.T) {
+			sourcePolicy := policy
 			apiKey := &APIKey{
 				User:  &User{ID: 41, Status: StatusActive},
-				Group: &Group{ID: 51, StreamingACKEnabled: testPtrBool(policy)},
+				Group: &Group{ID: 51, StreamingACKEnabled: &sourcePolicy},
 			}
 			svc := &APIKeyService{}
 			entry := &APIKeyAuthCacheEntry{Snapshot: svc.snapshotFromAPIKey(context.Background(), apiKey)}
