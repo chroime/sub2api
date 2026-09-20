@@ -8,6 +8,7 @@
     <h3 :id="`${id}-title`" class="text-base font-semibold text-gray-900 dark:text-white">
       {{ t(`admin.settings.codexTickets.title${mode}`) }}
     </h3>
+    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ t(`admin.settings.codexTickets.description${mode}`) }}</p>
     <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ t('admin.settings.codexTickets.scope') }}</p>
     <div class="mt-4 space-y-4">
       <div class="flex items-center justify-between gap-4">
