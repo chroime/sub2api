@@ -19,7 +19,20 @@
       </div>
       <div>
         <label for="codex-ticket-monitor-account" class="input-label">{{ t('admin.settings.codexTickets.monitor.accountFilter') }}</label>
-        <input id="codex-ticket-monitor-account" v-model="accountSearch" type="search" class="input" :placeholder="t('admin.settings.codexTickets.monitor.accountPlaceholder')" />
+        <!-- Keep this transient filter out of the parent settings form and credential autofill. -->
+        <input
+          id="codex-ticket-monitor-account"
+          v-model="accountSearch"
+          name="codex-ticket-monitor-query"
+          type="search"
+          form=""
+          autocomplete="off"
+          data-1p-ignore
+          data-lpignore="true"
+          data-bwignore="true"
+          class="input"
+          :placeholder="t('admin.settings.codexTickets.monitor.accountPlaceholder')"
+        />
       </div>
     </div>
     <p v-if="error" role="alert" class="text-sm text-red-600 dark:text-red-400">{{ t('admin.settings.codexTickets.monitor.loadFailed') }}</p>
