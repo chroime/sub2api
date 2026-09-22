@@ -1,7 +1,5 @@
 import { flushPromises, shallowMount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { UserMonitorView } from '@/api/channelMonitor'
-import MonitorCard from '@/components/user/monitor/MonitorCard.vue'
 import ChannelStatusV1View from '../ChannelStatusV1View.vue'
 
 const { list } = vi.hoisted(() => ({ list: vi.fn() }))
@@ -14,8 +12,6 @@ vi.mock('vue-i18n', async () => ({
 const mountView = () => shallowMount(ChannelStatusV1View, {
   global: { stubs: {
     AppLayout: { template: '<div><slot /></div>' },
-    MonitorCardGrid: false,
-    MonitorCard: false,
     MonitorHero: { props: ['autoRefresh'], emits: ['refresh'], template: `<div>
       <button class="interval" @click="autoRefresh.setInterval(120)">120 seconds</button>
       <button class="refresh" @click="$emit('refresh')">Refresh</button>
@@ -28,46 +24,23 @@ beforeEach(() => { vi.useFakeTimers(); localStorage.clear(); list.mockReset().mo
 afterEach(() => { wrapper?.unmount(); vi.useRealTimers(); localStorage.clear() })
 
 describe('channel monitor refresh interval', () => {
-  it.each(['manual', 'automatic'] as const)('renders the server monitor order after a %s refresh', async (refreshMode) => {
-    const monitor = (id: number, name: string, status: UserMonitorView['primary_status'], latency: number): UserMonitorView => ({
-      id,
-      name,
-      provider: 'openai',
-      group_name: '',
-      primary_model: 'gpt-test',
-      primary_status: status,
-      primary_latency_ms: latency,
-      primary_ping_latency_ms: null,
-      availability_7d: 100,
-      extra_models: [],
-      timeline: [],
-    })
-    // Deliberately independent of ID, name, status, and latency order.
-    const items = [
-      monitor(40, 'Zulu gateway', 'degraded', 850),
-      monitor(7, 'Alpha gateway', 'operational', 150),
-      monitor(65, 'Omega gateway', 'failed', 400),
-      monitor(22, 'Beta gateway', 'error', 1000),
-    ]
-    list
-      .mockResolvedValueOnce({ items })
-      .mockResolvedValueOnce({ items: [items[2], items[0], items[3], items[1]] })
+  it('keeps automatic refresh disabled after reopening the page', async () => {
+    wrapper = mountView(); await flushPromises()
+    await wrapper.get('.disable').trigger('click')
+    wrapper.unmount()
+    wrapper = mountView(); await flushPromises()
+    const calls = list.mock.calls.length
+    await vi.advanceTimersByTimeAsync(240000)
+    expect(list).toHaveBeenCalledTimes(calls)
+    expect(JSON.parse(localStorage.getItem('channel-status-auto-refresh')!).enabled).toBe(false)
+    await wrapper.get('.refresh').trigger('click'); await flushPromises()
+    expect(list).toHaveBeenCalledTimes(calls + 1)
+  })
 
-    wrapper = mountView()
-    await flushPromises()
-    const renderedNames = () => wrapper.findAllComponents(MonitorCard).map(card => card.get('.text-base').text())
-    expect(renderedNames()).toEqual(['Zulu gateway', 'Alpha gateway', 'Omega gateway', 'Beta gateway'])
-
-    if (refreshMode === 'manual') {
-      await wrapper.get('.refresh').trigger('click')
-    } else {
-      await wrapper.get('.interval').trigger('click')
-      await vi.advanceTimersByTimeAsync(120000)
-    }
-    await flushPromises()
-
-    expect(list).toHaveBeenCalledTimes(2)
-    expect(renderedNames()).toEqual(['Omega gateway', 'Zulu gateway', 'Beta gateway', 'Alpha gateway'])
+  it('starts automatic refresh for a first visit', async () => {
+    wrapper = mountView(); await flushPromises()
+    await vi.advanceTimersByTimeAsync(120000)
+    expect(list.mock.calls.length).toBeGreaterThan(1)
   })
 
   it('refreshes at the selected interval on successive automatic refreshes', async () => {
