@@ -77,6 +77,9 @@ func (ChannelMonitor) Fields() []ent.Field {
 			MaxLen(100),
 		field.Bool("enabled").
 			Default(true),
+		field.Int("sort_order").
+			Default(0).
+			NonNegative(),
 		field.Int("interval_seconds").
 			Range(15, 3600),
 		field.Int("jitter_seconds").
@@ -133,5 +136,6 @@ func (ChannelMonitor) Indexes() []ent.Index {
 		index.Fields("group_name"),
 		index.Fields("template_id"),
 		index.Fields("account_id"),
+		index.Fields("sort_order"),
 	}
 }

@@ -120,6 +120,20 @@ export interface ListParams {
   search?: string
 }
 
+/** Safe, unpaginated entries for the display-order dialog. */
+export interface ChannelMonitorSortItem {
+  id: number
+  name: string
+  provider: Provider
+  enabled: boolean
+  sort_order: number
+}
+
+export interface ChannelMonitorSortUpdate {
+  id: number
+  sort_order: number
+}
+
 export interface ListResponse {
   items: ChannelMonitor[]
   total: number
@@ -213,6 +227,26 @@ export async function list(
     params,
     signal: options?.signal,
   })
+  return data
+}
+
+export async function getSortOrder(
+  options?: { signal?: AbortSignal }
+): Promise<ChannelMonitorSortItem[]> {
+  const { data } = await apiClient.get<ChannelMonitorSortItem[]>(
+    '/admin/channel-monitors/sort-order',
+    { signal: options?.signal }
+  )
+  return data
+}
+
+export async function updateSortOrder(
+  updates: ChannelMonitorSortUpdate[]
+): Promise<{ message: string }> {
+  const { data } = await apiClient.put<{ message: string }>(
+    '/admin/channel-monitors/sort-order',
+    { updates }
+  )
   return data
 }
 
@@ -374,6 +408,8 @@ export async function listHistory(
 
 export const channelMonitorAPI = {
   list,
+  getSortOrder,
+  updateSortOrder,
   get,
   create,
   duplicate,

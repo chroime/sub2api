@@ -42,6 +42,7 @@ type ChannelMonitor struct {
 	ExtraModels     []string
 	GroupName       string
 	Enabled         bool
+	SortOrder       int
 	IntervalSeconds int
 	JitterSeconds   int // 每次调度 ± [0, jitter] 的随机偏移（秒），0 = 固定间隔
 	LastCheckedAt   *time.Time
@@ -97,6 +98,21 @@ type ChannelMonitorListParams struct {
 	Provider string
 	Enabled  *bool
 	Search   string
+}
+
+// ChannelMonitorSortOrderItem is the safe, unpaginated projection used to
+// reorder monitors without fetching credentials or status history.
+type ChannelMonitorSortOrderItem struct {
+	ID        int64  `json:"id"`
+	Name      string `json:"name"`
+	Provider  string `json:"provider"`
+	Enabled   bool   `json:"enabled"`
+	SortOrder int    `json:"sort_order"`
+}
+
+type ChannelMonitorSortOrderUpdate struct {
+	ID        int64 `json:"id"`
+	SortOrder int   `json:"sort_order"`
 }
 
 // ChannelMonitorCreateParams 创建参数。

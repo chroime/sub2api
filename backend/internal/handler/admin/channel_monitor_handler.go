@@ -103,6 +103,7 @@ type channelMonitorResponse struct {
 	ExtraModels             []string                             `json:"extra_models"`
 	GroupName               string                               `json:"group_name"`
 	Enabled                 bool                                 `json:"enabled"`
+	SortOrder               int                                  `json:"sort_order"`
 	IntervalSeconds         int                                  `json:"interval_seconds"`
 	JitterSeconds           int                                  `json:"jitter_seconds"`
 	LastCheckedAt           *string                              `json:"last_checked_at"`
@@ -170,6 +171,7 @@ func channelMonitorToResponse(m *service.ChannelMonitor) *channelMonitorResponse
 	}
 	resp := &channelMonitorResponse{
 		ID:                      m.ID,
+		SortOrder:               m.SortOrder,
 		Name:                    m.Name,
 		Provider:                m.Provider,
 		APIMode:                 m.APIMode,

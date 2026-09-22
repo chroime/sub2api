@@ -58,6 +58,7 @@
           :loading="loading"
           @reload="reload"
           @create="openCreateDialog"
+          @sort="showSortDialog = true"
           @manage-templates="showTemplateManager = true"
           @search-input="handleSearch"
         />
@@ -146,6 +147,12 @@
       @saved="reload"
     />
 
+    <MonitorSortDialog
+      :show="showSortDialog"
+      @close="showSortDialog = false"
+      @saved="reload"
+    />
+
     <MonitorTemplateManagerDialog
       :show="showTemplateManager"
       @close="showTemplateManager = false"
@@ -203,6 +210,7 @@ import HelpTooltip from '@/components/common/HelpTooltip.vue'
 import Icon from '@/components/icons/Icon.vue'
 import Toggle from '@/components/common/Toggle.vue'
 import MonitorFiltersBar from '@/components/admin/monitor/MonitorFiltersBar.vue'
+import MonitorSortDialog from '@/components/admin/monitor/MonitorSortDialog.vue'
 import MonitorFormDialog from '@/components/admin/monitor/MonitorFormDialog.vue'
 import MonitorTemplateManagerDialog from '@/components/admin/monitor/MonitorTemplateManagerDialog.vue'
 import MonitorRunResultDialog from '@/components/admin/monitor/MonitorRunResultDialog.vue'
@@ -236,6 +244,7 @@ const enabledFilter = ref<'' | 'true' | 'false'>('')
 const pagination = reactive({ page: 1, page_size: getPersistedPageSize(), total: 0 })
 
 const showDialog = ref(false)
+const showSortDialog = ref(false)
 const showTemplateManager = ref(false)
 const editing = ref<ChannelMonitor | null>(null)
 const showDeleteDialog = ref(false)
