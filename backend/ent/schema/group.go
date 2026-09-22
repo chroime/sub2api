@@ -68,6 +68,10 @@ func (Group) Fields() []ent.Field {
 		field.String("status").
 			MaxLen(20).
 			Default(domain.StatusActive),
+		field.Bool("streaming_ack_enabled").
+			Optional().
+			Nillable().
+			Comment("NULL preserves the legacy account ACK policy; explicit values override it"),
 		field.String("duplicate_operation_id").
 			MaxLen(64).
 			Optional().

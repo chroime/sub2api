@@ -14,7 +14,7 @@ import (
 	"github.com/dgraph-io/ristretto"
 )
 
-const apiKeyAuthSnapshotVersion = 24 // v24: group model_allowlist field (renamed from models_list_config, enforcing semantics)
+const apiKeyAuthSnapshotVersion = 27 // v27: preserve nullable group streaming ACK policy
 
 type apiKeyAuthCacheConfig struct {
 	l1Size        int
@@ -355,6 +355,7 @@ func (s *APIKeyService) snapshotFromAPIKey(ctx context.Context, apiKey *APIKey) 
 			Status:                     apiKey.User.Status,
 			Role:                       apiKey.User.Role,
 			Balance:                    apiKey.User.Balance,
+			FrozenBalance:              apiKey.User.FrozenBalance,
 			Concurrency:                apiKey.User.Concurrency,
 			AllowedGroups:              apiKey.User.AllowedGroups,
 			Email:                      apiKey.User.Email,
@@ -436,6 +437,10 @@ func (s *APIKeyService) snapshotFromAPIKey(ctx context.Context, apiKey *APIKey) 
 			ProfitMinMargin:                 apiKey.Group.ProfitMinMargin,
 			ProfitSafetyBuffer:              apiKey.Group.ProfitSafetyBuffer,
 		}
+		if apiKey.Group.StreamingACKEnabled != nil {
+			enabled := *apiKey.Group.StreamingACKEnabled
+			snapshot.Group.StreamingACKEnabled = &enabled
+		}
 	}
 	return snapshot
 }
@@ -464,6 +469,7 @@ func (s *APIKeyService) snapshotToAPIKey(key string, snapshot *APIKeyAuthSnapsho
 			Status:                     snapshot.User.Status,
 			Role:                       snapshot.User.Role,
 			Balance:                    snapshot.User.Balance,
+			FrozenBalance:              snapshot.User.FrozenBalance,
 			Concurrency:                snapshot.User.Concurrency,
 			AllowedGroups:              snapshot.User.AllowedGroups,
 			Email:                      snapshot.User.Email,
@@ -537,6 +543,10 @@ func (s *APIKeyService) snapshotToAPIKey(key string, snapshot *APIKeyAuthSnapsho
 			ProfitControlEnabled:            snapshot.Group.ProfitControlEnabled,
 			ProfitMinMargin:                 snapshot.Group.ProfitMinMargin,
 			ProfitSafetyBuffer:              snapshot.Group.ProfitSafetyBuffer,
+		}
+		if snapshot.Group.StreamingACKEnabled != nil {
+			enabled := *snapshot.Group.StreamingACKEnabled
+			apiKey.Group.StreamingACKEnabled = &enabled
 		}
 	}
 	s.compileAPIKeyIPRules(apiKey)

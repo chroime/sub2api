@@ -2196,33 +2196,39 @@
         </div>
       </div>
 
-      <!-- OpenAI account-scoped synthetic first-response ACK -->
+      <!-- Account-scoped streaming ACK, available across supported platforms -->
       <div
-        v-if="account?.platform === 'openai' && !isSparkShadow && (account?.type === 'oauth' || account?.type === 'setup-token' || account?.type === 'apikey')"
+        v-if="supportsStreamingACK(account?.platform) && !isSparkShadow"
         class="border-t border-gray-200 pt-4 dark:border-dark-600"
       >
         <div class="flex items-center justify-between gap-4">
-          <div>
+          <div class="min-w-0">
             <label class="input-label mb-0">{{ t('admin.accounts.openai.syntheticFirstResponse') }}</label>
             <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
               {{ t('admin.accounts.openai.syntheticFirstResponseDesc') }}
             </p>
+            <StreamingACKStatus
+              :open="show"
+              :enabled="streamingACKEnabled"
+              :saved-enabled="readStreamingACKEnabled(account?.platform, account?.extra)"
+            />
           </div>
           <button
             type="button"
-            data-testid="openai-synthetic-first-response-toggle"
+            data-testid="streaming-ack-toggle"
             role="switch"
-            :aria-checked="openAISyntheticFirstResponseEnabled"
-            @click="openAISyntheticFirstResponseEnabled = !openAISyntheticFirstResponseEnabled"
+            :aria-label="t('admin.accounts.openai.syntheticFirstResponse')"
+            :aria-checked="streamingACKEnabled"
+            @click="streamingACKEnabled = !streamingACKEnabled"
             :class="[
               'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500',
-              openAISyntheticFirstResponseEnabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
+              streamingACKEnabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
             ]"
           >
             <span
               :class="[
                 'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
-                openAISyntheticFirstResponseEnabled ? 'translate-x-5' : 'translate-x-0'
+                streamingACKEnabled ? 'translate-x-5' : 'translate-x-0'
               ]"
             />
           </button>
@@ -2282,6 +2288,22 @@
             />
           </button>
         </div>
+      </div>
+
+      <!-- Each OpenAI Codex account selects one ticket mechanism. -->
+      <div
+        v-if="canSelectCodexTicketMode"
+        class="border-t border-gray-200 pt-4 dark:border-dark-600"
+      >
+        <label for="codex-ticket-mode" class="input-label">{{ t('admin.accounts.openai.codexTicketMode') }}</label>
+        <Select id="codex-ticket-mode" v-model="codexTicketMode" :options="codexTicketModeOptions" @update:model-value="codexTicketModeChanged = true" />
+        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          {{ t('admin.accounts.openai.codexTicketModeHint') }}
+        </p>
+        <p v-if="codexTicketUnknownMode && !codexTicketModeChanged" class="mt-1 text-xs text-amber-600 dark:text-amber-400">{{ t('admin.accounts.openai.codexTicketUnknownMode') }}</p>
+        <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">{{ t('admin.accounts.openai.codexTurnTicketDesc') }}</p>
+        <CodexTicketStatusList v-if="codexTurnTickets.length" :tickets="codexTurnTickets" class="mt-3" />
+        <p v-else-if="codexTicketMode !== 'off'" class="mt-3 text-xs text-gray-500 dark:text-gray-400">{{ t('admin.accounts.openai.codexTicketStatusUnavailable') }}</p>
       </div>
 
       <!-- Codex 指纹收敛模式（仅 OpenAI OAuth） -->
@@ -3076,6 +3098,8 @@ import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import Select from '@/components/common/Select.vue'
 import HelpTooltip from '@/components/common/HelpTooltip.vue'
 import UpstreamRequestIdHeaderField from '@/components/account/UpstreamRequestIdHeaderField.vue'
+import StreamingACKStatus from '@/components/account/StreamingACKStatus.vue'
+import { readStreamingACKEnabled, supportsStreamingACK, withStreamingACKExtra } from '@/components/account/streamingAck'
 import Toggle from '@/components/common/Toggle.vue'
 import Icon from '@/components/icons/Icon.vue'
 import ProxySelector from '@/components/common/ProxySelector.vue'
@@ -3126,6 +3150,8 @@ import {
 } from '@/utils/format'
 import { createStableObjectKeyResolver } from '@/utils/stableObjectKey'
 import { getAccountExpiryTimestamp } from '@/components/account/accountExpiry'
+import CodexTicketStatusList from './CodexTicketStatusList.vue'
+import type { CodexTicketMode } from '@/types'
 import { allSelectedGroupsEnableLongContextPricing } from '@/components/account/longContextBilling'
 import { VERTEX_LOCATION_OPTIONS } from '@/constants/account'
 import {
@@ -3177,6 +3203,18 @@ const selectableGroups = computed(() => {
 // Spark 影子账号(parent_account_id 非空):代理恒继承母账号,不可独立编辑(外审 B/P1),
 // 故隐藏代理选择器。
 const isSparkShadow = computed(() => props.account?.parent_account_id != null)
+
+const canSelectCodexTicketMode = computed(() => props.account?.platform === 'openai' &&
+  (props.account.type === 'oauth' || props.account.type === 'setup-token') && !isSparkShadow.value)
+const codexTicketMode = ref<CodexTicketMode>('292')
+const codexTicketModeChanged = ref(false)
+const codexTicketUnknownMode = ref(false)
+const codexTicketModeOptions = computed(() => [
+  { value: '292', label: t('admin.accounts.openai.codexTicketMode292') },
+  { value: '332', label: t('admin.accounts.openai.codexTicketMode332') },
+  { value: 'off', label: t('admin.accounts.openai.codexTicketModeOff') },
+])
+const codexTurnTickets = computed(() => (props.account?.codex_turn_tickets ?? []).filter(ticket => ticket.mode === codexTicketMode.value))
 
 const hideAccountLongContextBilling = computed(() => {
   return allSelectedGroupsEnableLongContextPricing(form.group_ids, props.groups)
@@ -3483,7 +3521,7 @@ const autoResetCredit5hThreshold = ref(100)
 const autoResetCredit7dThreshold = ref(100)
 const upstreamBillingAutoProbeEnabled = ref(false)
 const upstreamBillingRateSyncEnabled = ref(false)
-const openAISyntheticFirstResponseEnabled = ref(false)
+const streamingACKEnabled = ref(false)
 const mixedScheduling = ref(false) // For antigravity accounts: enable mixed scheduling
 // 上游ID：直接上游声明请求标识的响应头名，留空不记录。
 const upstreamRequestIdHeader = ref('')
@@ -3717,16 +3755,17 @@ const openAITextEndpointCapabilityLabel = computed(() => {
 })
 const openAIEndpointCapabilityOptions = computed<{ value: OpenAIEndpointCapability; label: string }[]>(() => [
   { value: 'chat_completions', label: openAITextEndpointCapabilityLabel.value },
-  { value: 'embeddings', label: t('admin.accounts.openai.capabilityEmbeddings') }
+  { value: 'embeddings', label: t('admin.accounts.openai.capabilityEmbeddings') },
+  { value: 'seedance', label: 'Seedance (Ark)' }
 ])
 const openAITextGenerationCapabilityEnabled = computed(() =>
   openAIEndpointCapabilities.value.includes('chat_completions')
 )
 
 const normalizeOpenAIEndpointCapabilities = (values: OpenAIEndpointCapability[]) => {
-  const allowed: OpenAIEndpointCapability[] = ['chat_completions', 'embeddings']
+  const allowed: OpenAIEndpointCapability[] = ['chat_completions', 'embeddings', 'seedance']
   const selected = allowed.filter((value) => values.includes(value))
-  return selected.length > 0 ? selected : allowed
+  return selected.length > 0 ? selected : ['chat_completions', 'embeddings'] as OpenAIEndpointCapability[]
 }
 
 const readOpenAIEndpointCapabilities = (credentials?: Record<string, unknown>): OpenAIEndpointCapability[] => {
@@ -3734,7 +3773,7 @@ const readOpenAIEndpointCapabilities = (credentials?: Record<string, unknown>): 
   if (Array.isArray(raw)) {
     return normalizeOpenAIEndpointCapabilities(
       raw.filter((value): value is OpenAIEndpointCapability =>
-        value === 'chat_completions' || value === 'embeddings'
+        value === 'chat_completions' || value === 'embeddings' || value === 'seedance'
       )
     )
   }
@@ -3772,7 +3811,7 @@ const toggleOpenAIEndpointCapability = (capability: OpenAIEndpointCapability, ev
 
 const applyOpenAIEndpointCapabilities = (credentials: Record<string, unknown>) => {
   const capabilities = normalizeOpenAIEndpointCapabilities(openAIEndpointCapabilities.value)
-  if (capabilities.length === 2) {
+  if (capabilities.length === 2 && !capabilities.includes('seedance')) {
     delete credentials.openai_capabilities
     return
   }
@@ -4014,6 +4053,10 @@ const syncFormFromAccount = (newAccount: Account | null) => {
   mixedScheduling.value = false
   allowOverages.value = false
 	const extra = newAccount.extra as Record<string, unknown> | undefined
+  const savedTicketMode = extra?.codex_ticket_mode
+  codexTicketMode.value = savedTicketMode === undefined ? '292' : savedTicketMode === '292' || savedTicketMode === '332' ? savedTicketMode : 'off'
+  codexTicketUnknownMode.value = savedTicketMode !== undefined && savedTicketMode !== '292' && savedTicketMode !== '332' && savedTicketMode !== 'off'
+  codexTicketModeChanged.value = false
 	mixedScheduling.value = extra?.mixed_scheduling === true
 	allowOverages.value = extra?.allow_overages === true
 	upstreamRequestIdHeader.value = readUpstreamRequestIdHeader(extra)
@@ -4035,7 +4078,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
   openaiPassthroughEnabled.value = false
   openaiFlattenNamespacesEnabled.value = false
   openAILongContextBillingEnabled.value = false
-  openAISyntheticFirstResponseEnabled.value = false
+  streamingACKEnabled.value = readStreamingACKEnabled(newAccount.platform, newAccount.extra)
   editPlanType.value = ''
   openAICompactMode.value = 'auto'
   openAIResponsesMode.value = 'auto'
@@ -4056,7 +4099,6 @@ const syncFormFromAccount = (newAccount: Account | null) => {
       newAccount.type === 'oauth' && extra?.openai_responses_flatten_namespaces === true
     const longContextBillingValue = extra?.openai_long_context_billing_enabled
     openAILongContextBillingEnabled.value = longContextBillingValue === true
-    openAISyntheticFirstResponseEnabled.value = extra?.openai_synthetic_first_response_enabled === true
     // plan_type 手动覆盖仅 OAuth 有实际调度语义(IsOpenAIChatGPTSubscription 要求 oauth),故只对 oauth 回填
     editPlanType.value = newAccount.type === 'oauth'
       ? readPlanType(newAccount.credentials as Record<string, unknown> | undefined)
@@ -5527,6 +5569,9 @@ const handleSubmit = async () => {
       const currentExtra = (props.account.extra as Record<string, unknown>) || {}
       const newExtra: Record<string, unknown> = { ...currentExtra }
       const hadCodexCLIOnlyEnabled = currentExtra.codex_cli_only === true
+      if (canSelectCodexTicketMode.value && codexTicketModeChanged.value) {
+        newExtra.codex_ticket_mode = codexTicketMode.value
+      }
       if (props.account.type === 'oauth' || props.account.type === 'setup-token') {
         newExtra.openai_oauth_responses_websockets_v2_mode = openaiOAuthResponsesWebSocketV2Mode.value
         newExtra.openai_oauth_responses_websockets_v2_enabled = isOpenAIWSModeEnabled(openaiOAuthResponsesWebSocketV2Mode.value)
@@ -5550,13 +5595,10 @@ const handleSubmit = async () => {
       }
       if (isSparkShadow.value) {
         delete newExtra.openai_long_context_billing_enabled
+        delete newExtra.streaming_ack_enabled
+        delete newExtra.openai_synthetic_first_response_enabled
       } else {
         newExtra.openai_long_context_billing_enabled = openAILongContextBillingEnabled.value
-      }
-      if (openAISyntheticFirstResponseEnabled.value && !isSparkShadow.value) {
-        newExtra.openai_synthetic_first_response_enabled = true
-      } else {
-        delete newExtra.openai_synthetic_first_response_enabled
       }
       if (openAICompactMode.value === 'auto') {
         delete newExtra.openai_compact_mode
@@ -5708,6 +5750,11 @@ const handleSubmit = async () => {
       // Quota notify config
       writeQuotaNotifyToExtra(newExtra, 'update')
       updatePayload.extra = newExtra
+    }
+
+    if (supportsStreamingACK(props.account.platform) && !isSparkShadow.value) {
+      const currentExtra = (updatePayload.extra as Record<string, unknown>) || props.account.extra || {}
+      updatePayload.extra = withStreamingACKExtra(props.account.platform, currentExtra, streamingACKEnabled.value)
     }
 
     // 上游ID头名只在改动时写回 extra，避免用弹窗打开时的快照覆盖运行态键。

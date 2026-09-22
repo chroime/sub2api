@@ -236,6 +236,34 @@
           <div class="flex items-stretch gap-2">
             <span
               class="w-1 shrink-0 rounded-full"
+              :class="displayFirstTokenMs(row) != null
+                ? ['bg-gradient-to-b from-40% to-60%', LATENCY_BAR_FROM_CLASSES[firstTokenSeverity(displayFirstTokenMs(row)!)], LATENCY_BAR_TO_CLASSES[durationSeverity(row.duration_ms ?? 0)]]
+                : LATENCY_BAR_CLASSES[durationSeverity(row.duration_ms ?? 0)]"
+              aria-hidden="true"
+            ></span>
+            <div class="grid grid-cols-[max-content_max-content] items-baseline gap-x-2 gap-y-0.5 text-xs">
+              <span class="text-gray-400 dark:text-gray-500">{{ t('usage.latencyFirstToken') }}</span>
+              <span
+                v-if="displayFirstTokenMs(row) != null"
+                data-testid="first-token-value"
+                class="font-medium tabular-nums"
+                :class="LATENCY_TEXT_CLASSES[firstTokenSeverity(displayFirstTokenMs(row)!)]"
+              >{{ formatDuration(displayFirstTokenMs(row)) }}</span>
+              <span v-else data-testid="first-token-value" class="text-gray-400 dark:text-gray-500">-</span>
+              <span class="text-gray-400 dark:text-gray-500">{{ t('usage.latencyDuration') }}</span>
+              <span class="font-medium tabular-nums" :class="LATENCY_TEXT_CLASSES[durationSeverity(row.duration_ms ?? 0)]">{{ formatDuration(row.duration_ms) }}</span>
+              <template v-if="firstTokenMode === 'model' && row.streaming_ack_ms != null">
+                <span class="text-gray-500 dark:text-gray-400" :title="t('usage.streamingACKTooltip')">{{ t('usage.streamingACK') }}</span>
+                <span data-testid="streaming-ack-value" class="font-medium tabular-nums text-gray-600 dark:text-gray-300">{{ formatDuration(row.streaming_ack_ms) }}</span>
+              </template>
+            </div>
+          </div>
+        </template>
+
+        <template #cell-real_latency="{ row }">
+          <div data-testid="real-latency" class="flex items-stretch gap-2">
+            <span
+              class="w-1 shrink-0 rounded-full"
               :class="row.first_token_ms != null
                 ? ['bg-gradient-to-b from-40% to-60%', LATENCY_BAR_FROM_CLASSES[firstTokenSeverity(row.first_token_ms)], LATENCY_BAR_TO_CLASSES[durationSeverity(row.duration_ms ?? 0)]]
                 : LATENCY_BAR_CLASSES[durationSeverity(row.duration_ms ?? 0)]"
@@ -243,8 +271,8 @@
             ></span>
             <div class="grid grid-cols-[max-content_max-content] items-baseline gap-x-2 gap-y-0.5 text-xs">
               <span class="text-gray-400 dark:text-gray-500">{{ t('usage.latencyFirstToken') }}</span>
-              <span v-if="row.first_token_ms != null" class="font-medium tabular-nums" :class="LATENCY_TEXT_CLASSES[firstTokenSeverity(row.first_token_ms)]">{{ formatDuration(row.first_token_ms) }}</span>
-              <span v-else class="text-gray-400 dark:text-gray-500">-</span>
+              <span v-if="row.first_token_ms != null" data-testid="real-first-token-value" class="font-medium tabular-nums" :class="LATENCY_TEXT_CLASSES[firstTokenSeverity(row.first_token_ms)]">{{ formatDuration(row.first_token_ms) }}</span>
+              <span v-else data-testid="real-first-token-value" class="text-gray-400 dark:text-gray-500">-</span>
               <span class="text-gray-400 dark:text-gray-500">{{ t('usage.latencyDuration') }}</span>
               <span class="font-medium tabular-nums" :class="LATENCY_TEXT_CLASSES[durationSeverity(row.duration_ms ?? 0)]">{{ formatDuration(row.duration_ms) }}</span>
             </div>
@@ -595,6 +623,8 @@ interface Props {
   defaultSortOrder?: 'asc' | 'desc'
   showAccountBilling?: boolean
   showUpstreamEndpoint?: boolean
+  /** First-response mode uses ACK when present; model mode preserves the real token timing. */
+  firstTokenMode?: 'model' | 'response'
   /** 嵌入统一卡片内使用：去掉自身卡片外观 */
   flat?: boolean
 }
@@ -606,6 +636,7 @@ const props = withDefaults(defineProps<Props>(), {
   defaultSortOrder: 'asc',
   showAccountBilling: true,
   showUpstreamEndpoint: true,
+  firstTokenMode: 'model',
   flat: false
 })
 const emit = defineEmits<{
@@ -621,6 +652,11 @@ const showUpstreamEndpoint = props.showUpstreamEndpoint
 const ipGeoBatchLoading = ref(false)
 
 const showIpGeoToolbar = computed(() => props.columns.some((col) => col.key === 'ip_address'))
+
+const displayFirstTokenMs = (row: AdminUsageLog): number | null | undefined =>
+  props.firstTokenMode === 'response'
+    ? row.streaming_ack_ms ?? row.first_token_ms
+    : row.first_token_ms
 
 const hasReasoningEffortMapping = (row: AdminUsageLog): boolean => {
   const requested = row.reasoning_effort?.trim() || ''

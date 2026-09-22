@@ -51,17 +51,19 @@ func firstNonEmpty(values ...string) string {
 
 // SettingHandler 系统设置处理器
 type SettingHandler struct {
-	settingService           *service.SettingService
-	emailService             *service.EmailService
-	turnstileService         *service.TurnstileService
-	aliyunCaptchaService     *service.AliyunCaptchaService
-	opsService               *service.OpsService
-	paymentConfigService     *service.PaymentConfigService
-	paymentService           *service.PaymentService
-	userAttributeService     *service.UserAttributeService
-	notificationEmailService *service.NotificationEmailService
-	totpService              *service.TotpService
-	userService              *service.UserService
+	settingService                 *service.SettingService
+	emailService                   *service.EmailService
+	turnstileService               *service.TurnstileService
+	aliyunCaptchaService           *service.AliyunCaptchaService
+	opsService                     *service.OpsService
+	paymentConfigService           *service.PaymentConfigService
+	paymentService                 *service.PaymentService
+	userAttributeService           *service.UserAttributeService
+	notificationEmailService       *service.NotificationEmailService
+	totpService                    *service.TotpService
+	userService                    *service.UserService
+	balancePrechargeReconciliation *service.BalancePrechargeReconciliationService
+	codexTicketMonitor             codexTicketMonitorSource
 }
 
 // NewSettingHandler 创建系统设置处理器
@@ -248,10 +250,13 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		GoogleOAuthFrontendRedirectURL:                         settings.GoogleOAuthFrontendRedirectURL,
 		SiteName:                                               settings.SiteName,
 		SiteLogo:                                               settings.SiteLogo,
+		SiteFavicon:                                            settings.SiteFavicon,
 		SiteSubtitle:                                           settings.SiteSubtitle,
 		APIBaseURL:                                             settings.APIBaseURL,
 		ContactInfo:                                            settings.ContactInfo,
 		DocURL:                                                 settings.DocURL,
+		DocsTitle:                                              settings.DocsTitle,
+		DocsContent:                                            settings.DocsContent,
 		HomeContent:                                            settings.HomeContent,
 		CompactHomeEnabled:                                     settings.CompactHomeEnabled,
 		HideCcsImportButton:                                    settings.HideCcsImportButton,
@@ -303,6 +308,20 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		OpenAICodexClientVersion:                               settings.OpenAICodexClientVersion,
 		OpenAICodexClientVersionSynced:                         settings.OpenAICodexClientVersionSynced,
 		OpenAICodexVersionAutoSyncEnabled:                      settings.OpenAICodexVersionAutoSyncEnabled,
+		OpenAICodexTicketEnabled:                               settings.OpenAICodexTicketEnabled,
+		OpenAICodexTicketVerifyEnabled:                         settings.OpenAICodexTicketVerifyEnabled,
+		OpenAICodexTicketHarvestConcurrency:                    settings.OpenAICodexTicketHarvestConcurrency,
+		OpenAICodexTicketHarvestProxyIDs:                       settings.OpenAICodexTicketHarvestProxyIDs,
+		OpenAICodexTicket332VerifyEnabled:                      settings.OpenAICodexTicket332VerifyEnabled,
+		OpenAICodexTicket332HarvestConcurrency:                 settings.OpenAICodexTicket332HarvestConcurrency,
+		OpenAICodexTicket332HarvestProxyIDs:                    settings.OpenAICodexTicket332HarvestProxyIDs,
+		OpenAICodexTicketFailClosed:                            settings.OpenAICodexTicketFailClosed,
+		OpenAICodexTicket332Enabled:                            settings.OpenAICodexTicket332Enabled,
+		OpenAICodexTicket332FailClosed:                         settings.OpenAICodexTicket332FailClosed,
+		OpenAICodexTicket332HarvestProxyURL:                    service.MaskProxyURL(settings.OpenAICodexTicket332HarvestProxyURL),
+		OpenAICodexTicket332HarvestProxyConfigured:             strings.TrimSpace(settings.OpenAICodexTicket332HarvestProxyURL) != "",
+		OpenAICodexTicketHarvestProxyURL:                       service.MaskProxyURL(settings.OpenAICodexTicketHarvestProxyURL),
+		OpenAICodexTicketHarvestProxyConfigured:                strings.TrimSpace(settings.OpenAICodexTicketHarvestProxyURL) != "",
 		MinCodexVersion:                                        settings.MinCodexVersion,
 		MaxCodexVersion:                                        settings.MaxCodexVersion,
 		CodexCLIOnlyBlacklist:                                  settings.CodexCLIOnlyBlacklist,

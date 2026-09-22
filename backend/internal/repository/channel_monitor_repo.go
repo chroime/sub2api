@@ -38,7 +38,23 @@ func NewChannelMonitorRepository(client *dbent.Client, db *sql.DB) service.Chann
 // ---------- CRUD ----------
 
 func (r *channelMonitorRepository) Create(ctx context.Context, m *service.ChannelMonitor) error {
-	client := clientFromContext(ctx, r.client)
+	return r.withChannelMonitorSortTransaction(ctx, func(txCtx context.Context, client *dbent.Client) error {
+		return createChannelMonitorWithClient(txCtx, client, m)
+	})
+}
+
+func createChannelMonitorWithClient(ctx context.Context, client *dbent.Client, m *service.ChannelMonitor) error {
+	maxSortOrder, err := client.ChannelMonitor.Query().Aggregate(func(selector *entsql.Selector) string {
+		return "COALESCE(MAX(" + selector.C(channelmonitor.FieldSortOrder) + "), -1)"
+	}).Int(ctx)
+	if err != nil {
+		return fmt.Errorf("get last channel monitor sort order: %w", err)
+	}
+	sortOrder := maxSortOrder + 1
+	if maxSortOrder >= service.MaxChannelMonitorSortOrder+1 {
+		// A saturated custom order must not prevent creating another monitor.
+		sortOrder = maxSortOrder
+	}
 	builder := client.ChannelMonitor.Create().
 		SetName(m.Name).
 		SetProvider(channelmonitor.Provider(m.Provider)).
@@ -49,6 +65,7 @@ func (r *channelMonitorRepository) Create(ctx context.Context, m *service.Channe
 		SetExtraModels(emptySliceIfNil(m.ExtraModels)).
 		SetGroupName(m.GroupName).
 		SetEnabled(m.Enabled).
+		SetSortOrder(sortOrder).
 		SetIntervalSeconds(m.IntervalSeconds).
 		SetJitterSeconds(m.JitterSeconds).
 		SetCreatedBy(m.CreatedBy).
@@ -70,6 +87,7 @@ func (r *channelMonitorRepository) Create(ctx context.Context, m *service.Channe
 		return translatePersistenceError(err, service.ErrChannelMonitorNotFound, nil)
 	}
 	m.ID = created.ID
+	m.SortOrder = created.SortOrder
 	m.CreatedAt = created.CreatedAt
 	m.UpdatedAt = created.UpdatedAt
 	return nil
@@ -189,7 +207,7 @@ func (r *channelMonitorRepository) List(ctx context.Context, params service.Chan
 	}
 
 	rows, err := q.
-		Order(dbent.Desc(channelmonitor.FieldID)).
+		Order(dbent.Asc(channelmonitor.FieldSortOrder), dbent.Asc(channelmonitor.FieldID)).
 		Offset((page - 1) * pageSize).
 		Limit(pageSize).
 		All(ctx)
@@ -209,6 +227,7 @@ func (r *channelMonitorRepository) List(ctx context.Context, params service.Chan
 func (r *channelMonitorRepository) ListEnabled(ctx context.Context) ([]*service.ChannelMonitor, error) {
 	rows, err := r.client.ChannelMonitor.Query().
 		Where(channelmonitor.EnabledEQ(true)).
+		Order(dbent.Asc(channelmonitor.FieldSortOrder), dbent.Asc(channelmonitor.FieldID)).
 		All(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list enabled monitors: %w", err)
@@ -854,6 +873,7 @@ func entToServiceMonitor(row *dbent.ChannelMonitor) *service.ChannelMonitor {
 		ExtraModels:          extras,
 		GroupName:            row.GroupName,
 		Enabled:              row.Enabled,
+		SortOrder:            row.SortOrder,
 		IntervalSeconds:      row.IntervalSeconds,
 		JitterSeconds:        row.JitterSeconds,
 		LastCheckedAt:        row.LastCheckedAt,

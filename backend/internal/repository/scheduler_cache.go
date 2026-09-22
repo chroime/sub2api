@@ -863,6 +863,15 @@ func (c *schedulerCache) mgetChunked(ctx context.Context, keys []string) ([]any,
 }
 
 func buildSchedulerMetadataAccount(account service.Account) service.Account {
+	extra := filterSchedulerExtra(account.Extra)
+	// Derive the scheduling identity from the full account, never an injected
+	// extra value. The compact projection must not carry OAuth credentials.
+	if account.IsOpenAIOAuthLike() && account.GetCredential("access_token") != "" {
+		if extra == nil {
+			extra = make(map[string]any)
+		}
+		extra["_codex_ticket_credential_hash"] = service.OpenAICodexTicketCredentialHash(&account)
+	}
 	return service.Account{
 		ID:                      account.ID,
 		Name:                    account.Name,
@@ -890,7 +899,7 @@ func buildSchedulerMetadataAccount(account service.Account) service.Account {
 		AccountGroups:           filterSchedulerAccountGroups(account.AccountGroups),
 		GroupIDs:                filterSchedulerGroupIDs(account.GroupIDs, account.AccountGroups),
 		Credentials:             filterSchedulerCredentials(account.Credentials),
-		Extra:                   filterSchedulerExtra(account.Extra),
+		Extra:                   extra,
 	}
 }
 
@@ -1017,8 +1026,11 @@ func filterSchedulerExtra(extra map[string]any) map[string]any {
 		"openai_passthrough",
 		"openai_oauth_passthrough",
 		service.OpenAISyntheticFirstResponseEnabledExtraKey,
+		service.StreamingACKEnabledExtraKey,
 		"codex_fingerprint_mode",
 		"codex_fingerprint_seed",
+		// Mode selection participates in ticket gating before the full account is loaded.
+		"codex_ticket_mode",
 		"codex_5h_used_percent",
 		"codex_7d_used_percent",
 		"codex_5h_reset_at",

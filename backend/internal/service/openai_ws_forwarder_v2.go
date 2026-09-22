@@ -34,7 +34,7 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 	attempt int,
 	lastFailureReason string,
 	agentTaskRecoveryTried *bool,
-) (*OpenAIForwardResult, error) {
+) (prechargeResult *OpenAIForwardResult, prechargeErr error) {
 	if s == nil || account == nil {
 		return nil, wrapOpenAIWSFallback("invalid_state", errors.New("service or account is nil"))
 	}
@@ -202,6 +202,7 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 	acquireCtx, acquireCancel := context.WithTimeout(ctx, s.openAIWSAcquireTimeout())
 	defer acquireCancel()
 
+	ticketUse := s.snapshotOpenAICodexTicketUse(ctx, account, openAIWSPayloadString(payload, "model"), wsHeaders)
 	lease, err := s.getOpenAIWSConnPool().Acquire(acquireCtx, openAIWSAcquireRequest{
 		Account: account,
 		WSURL:   wsURL,
@@ -220,6 +221,9 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 	})
 	if err != nil {
 		var agentDialErr *openAIWSDialError
+		if errors.As(err, &agentDialErr) && agentDialErr != nil {
+			s.observeOpenAICodexTicketUse(ctx, ticketUse, agentDialErr.StatusCode, agentDialErr.ResponseHeaders)
+		}
 		if s.isAgentIdentityAccount(ctx, account) && errors.As(err, &agentDialErr) && isAgentIdentityTaskInvalidWSDialError(agentDialErr) && agentTaskRecoveryTried != nil && !*agentTaskRecoveryTried {
 			*agentTaskRecoveryTried = true
 			if recoveryErr := s.recoverAgentIdentityTask(ctx, account, account.GetCredential("task_id")); recoveryErr != nil {
@@ -338,10 +342,25 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 		account,
 		stateStore,
 		groupID,
+		ticketUse,
 	); err != nil {
 		return nil, err
 	}
 
+	// HTTP ingress may use a WebSocket upstream, bypassing HTTPUpstream.Do.
+	// Start only when sending the generation payload, after local validation and
+	// connection acquisition. A lost response cannot be treated as zero usage.
+	if err := s.checkOpenAIWSCodexTicket(ctx, account, openAIWSPayloadString(payload, "model"), wsHeaders.Get(openAIWSCodexTicketSignatureHeader)); err != nil {
+		return nil, err
+	}
+	StartBalancePrechargeUpstream(ctx)
+	defer func() {
+		status := 0
+		if prechargeErr == nil && prechargeResult != nil {
+			status = http.StatusOK
+		}
+		ObserveBalancePrechargeUpstream(ctx, status, prechargeErr)
+	}()
 	if err := lease.WriteJSONWithContextTimeout(ctx, payload, s.openAIWSWriteTimeout()); err != nil {
 		lease.MarkBroken()
 		logOpenAIWSModeInfo(
@@ -667,6 +686,7 @@ readLoop:
 		imageCounter.AddSSEData(message)
 
 		if eventType == "error" || eventType == "response.failed" {
+			s.observeOpenAICodexTicketWSError(ctx, ticketUse, lease.HandshakeHeaders(), message)
 			markOpenAICyberPolicyEvent(c, message, http.StatusOK, usage)
 		}
 

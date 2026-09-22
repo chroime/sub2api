@@ -16,7 +16,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-const gatewayStreamHeartbeatBytesKey = "gateway_stream_heartbeat_bytes"
+const gatewayStreamHeartbeatBytesKey = service.GatewayStreamHeartbeatBytesKey
 
 func recordGatewayStreamHeartbeat(c *gin.Context, written int) {
 	if c == nil || written <= 0 {
@@ -31,12 +31,13 @@ func gatewayStreamHasOnlyHeartbeats(c *gin.Context) bool {
 	if c == nil || c.Writer == nil {
 		return false
 	}
-	value, ok := c.Get(gatewayStreamHeartbeatBytesKey)
-	if !ok {
-		return false
-	}
+	value, _ := c.Get(gatewayStreamHeartbeatBytesKey)
 	heartbeatBytes, _ := value.(int)
-	return heartbeatBytes > 0 && c.Writer.Size() == heartbeatBytes
+	semanticSize := service.OpenAICompactKeepaliveAdjustedWrittenSize(c)
+	if heartbeatBytes > 0 {
+		return semanticSize <= 0
+	}
+	return service.StreamingACKCommitted(c) && semanticSize <= 0
 }
 
 // claudeCodeValidator is a singleton validator for Claude Code client detection

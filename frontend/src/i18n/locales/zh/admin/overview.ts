@@ -783,6 +783,14 @@ export default {
 
     // Groups Management
     groups: {
+      streamingACK: {
+        title: '流式首响 ACK',
+        description: '系统总开关开启后，按此分组控制兼容的流式请求；明确设置后优先于账号配置。',
+        enabled: '开启',
+        disabled: '关闭',
+        legacy: '沿用账号',
+        legacyHint: '此分组暂时沿用旧账号设置。选择开启或关闭并保存后，将统一按分组设置执行。'
+      },
       title: '分组管理',
       description: '管理 API 密钥分组和费率配置',
       searchGroups: '搜索分组...',

@@ -25,6 +25,7 @@
                 type="button"
                 role="tab"
                 :aria-selected="activeTab === tab.key"
+                :aria-controls="tab.key === 'extensions' ? 'extensions' : undefined"
                 :tabindex="activeTab === tab.key ? 0 : -1"
                 :class="[
                   'settings-tab',
@@ -200,6 +201,27 @@
           </div>
         </div>
         <!-- /Tab: Security — Admin API Key -->
+
+        <!-- Tab: Extensions — these controls save independently. -->
+        <section
+          v-if="activeTab === 'extensions'"
+          id="extensions"
+          role="tabpanel"
+          aria-labelledby="settings-tab-extensions"
+          class="scroll-mt-40 space-y-6"
+        >
+          <div class="card divide-y divide-gray-100 dark:divide-dark-700">
+            <div class="px-6 py-4">
+              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">{{ t('admin.settings.tabs.extensions') }}</h2>
+              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ t('admin.settings.extensions.description') }}</p>
+            </div>
+            <StreamingACKSettings />
+            <BalancePrechargeSettings />
+            <CodexTicketSettings mode="292" />
+            <CodexTicketSettings mode="332" />
+            <CodexTicketMonitor />
+          </div>
+        </section>
 
         <!-- Tab: Gateway -->
         <div v-show="activeTab === 'gateway'" class="space-y-6">
@@ -6518,12 +6540,12 @@
                 >
                   {{ t("admin.settings.site.contactInfo") }}
                 </label>
-                <input
+                <textarea
                   v-model="form.contact_info"
-                  type="text"
-                  class="input"
+                  rows="3"
+                  class="input resize-y"
                   :placeholder="t('admin.settings.site.contactInfoPlaceholder')"
-                />
+                ></textarea>
                 <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
                   {{ t("admin.settings.site.contactInfoHint") }}
                 </p>
@@ -6547,6 +6569,12 @@
                 </p>
               </div>
 
+              <PublicDocsEditor
+                v-model:title="form.docs_title"
+                v-model:content="form.docs_content"
+                :base-url="form.api_base_url"
+              />
+
               <!-- Site Logo Upload -->
               <div>
                 <label
@@ -6560,7 +6588,26 @@
                   :upload-label="t('admin.settings.site.uploadImage')"
                   :remove-label="t('admin.settings.site.remove')"
                   :hint="t('admin.settings.site.logoHint')"
-                  :max-size="300 * 1024"
+                  :max-size="1024 * 1024"
+                  :preview-background="form.site_logo && resolveSiteLogo(form.site_logo) === DEFAULT_SITE_LOGO ? '#131617' : ''"
+                  :preview-radius="form.site_logo && resolveSiteLogo(form.site_logo) === DEFAULT_SITE_LOGO ? '25%' : ''"
+                />
+              </div>
+
+              <div>
+                <label
+                  class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                >
+                  {{ t("admin.settings.site.siteFavicon") }}
+                </label>
+                <ImageUpload
+                  v-model="form.site_favicon"
+                  mode="image"
+                  :upload-label="t('admin.settings.site.uploadImage')"
+                  :remove-label="t('admin.settings.site.remove')"
+                  :hint="t('admin.settings.site.faviconHint')"
+                  :max-size="1024 * 1024"
+                  :allow-ico="true"
                 />
               </div>
 
@@ -8745,7 +8792,7 @@
         </div>
 
         <!-- Save Button -->
-        <div v-show="activeTab !== 'backup'" class="flex justify-end">
+        <div v-if="activeTab !== 'backup' && activeTab !== 'extensions'" class="flex justify-end">
           <button
             type="submit"
             :disabled="saving || loadFailed"
@@ -8818,7 +8865,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, watch } from "vue";
+import { DEFAULT_SITE_LOGO, resolveSiteLogo } from '@/utils/branding';
+import { ref, reactive, computed, onMounted, onUnmounted, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { adminAPI } from "@/api";
 import {
@@ -8864,6 +8912,7 @@ import {
   resolveSiteBillingMode,
   type SiteBillingMode,
 } from "@/utils/siteBillingMode";
+import PublicDocsEditor from "@/components/docs/PublicDocsEditor.vue";
 import ConfirmDialog from "@/components/common/ConfirmDialog.vue";
 import PaymentProviderList from "@/components/payment/PaymentProviderList.vue";
 import PaymentProviderDialog from "@/components/payment/PaymentProviderDialog.vue";
@@ -8875,6 +8924,10 @@ import ImageUpload from "@/components/common/ImageUpload.vue";
 import BackupSettings from "@/views/admin/BackupView.vue";
 import EmailTemplateEditor from "@/views/admin/settings/EmailTemplateEditor.vue";
 import OpenAIFastPolicyUserSelector from "@/views/admin/settings/OpenAIFastPolicyUserSelector.vue";
+import StreamingACKSettings from "@/views/admin/settings/StreamingACKSettings.vue";
+import BalancePrechargeSettings from "@/views/admin/settings/BalancePrechargeSettings.vue";
+import CodexTicketSettings from "@/views/admin/settings/CodexTicketSettings.vue";
+import CodexTicketMonitor from "@/views/admin/settings/CodexTicketMonitor.vue";
 import { useClipboard } from "@/composables/useClipboard";
 import {
   useStepUp,
@@ -8931,10 +8984,21 @@ type SettingsTab =
   | "security"
   | "users"
   | "gateway"
+  | "extensions"
   | "payment"
   | "email"
   | "backup";
-const activeTab = ref<SettingsTab>("general");
+const extensionSettingsHashes = new Set([
+  "#streaming-ack-settings",
+  "#balance-precharge-settings",
+  "#precharge-reviews-title",
+  "#codex-ticket-292-settings",
+  "#codex-ticket-332-settings",
+  "#codex-ticket-monitor",
+  "#extensions",
+]);
+const settingsHash = ref(window.location.hash);
+const activeTab = ref<SettingsTab>(extensionSettingsHashes.has(settingsHash.value) ? "extensions" : "general");
 const settingsTabs = [
   { key: "general" as SettingsTab, icon: "home" as const },
   { key: "agreement" as SettingsTab, icon: "document" as const },
@@ -8942,6 +9006,7 @@ const settingsTabs = [
   { key: "security" as SettingsTab, icon: "shield" as const },
   { key: "users" as SettingsTab, icon: "user" as const },
   { key: "gateway" as SettingsTab, icon: "server" as const },
+  { key: "extensions" as SettingsTab, icon: "sparkles" as const },
   { key: "payment" as SettingsTab, icon: "creditCard" as const },
   { key: "email" as SettingsTab, icon: "mail" as const },
   { key: "backup" as SettingsTab, icon: "database" as const },
@@ -8958,6 +9023,13 @@ const settingsTabKeyboardActions = {
 
 function selectSettingsTab(tab: SettingsTab): void {
   activeTab.value = tab;
+}
+
+function handleSettingsHashChange(): void {
+  settingsHash.value = window.location.hash;
+  if (extensionSettingsHashes.has(settingsHash.value)) {
+    activeTab.value = "extensions";
+  }
 }
 
 function focusSettingsTab(tab: SettingsTab): void {
@@ -9002,6 +9074,11 @@ const { copyToClipboard } = useClipboard();
 const loading = ref(true);
 const loadFailed = ref(false);
 const saving = ref(false);
+watch([loading, activeTab, settingsHash], () => {
+  if (!loading.value && activeTab.value === "extensions" && extensionSettingsHashes.has(settingsHash.value)) {
+    document.getElementById(settingsHash.value.slice(1))?.scrollIntoView?.({ block: "start" });
+  }
+}, { flush: "post" });
 const testingSmtp = ref(false);
 const sendingTestEmail = ref(false);
 const smtpPasswordManuallyEdited = ref(false);
@@ -9541,11 +9618,26 @@ type SettingsForm = Omit<
   | "wechat_connect_open_enabled"
   | "wechat_connect_mp_enabled"
   | "wechat_connect_mobile_enabled"
+  | "openai_codex_ticket_enabled"
+  | "openai_codex_ticket_fail_closed"
+  | "openai_codex_ticket_harvest_proxy_url"
+  | "openai_codex_ticket_harvest_proxy_configured"
+  | "openai_codex_ticket_verify_enabled"
+  | "openai_codex_ticket_harvest_proxy_ids"
+  | "openai_codex_ticket_harvest_concurrency"
+  | "openai_codex_ticket_332_enabled"
+  | "openai_codex_ticket_332_fail_closed"
+  | "openai_codex_ticket_332_harvest_proxy_url"
+  | "openai_codex_ticket_332_harvest_proxy_configured"
+  | "openai_codex_ticket_332_verify_enabled"
+  | "openai_codex_ticket_332_harvest_proxy_ids"
+  | "openai_codex_ticket_332_harvest_concurrency"
 > & {
   /** Form always binds a concrete boolean (SystemSettings marks this optional). */
   channel_monitor_hide_throughput: boolean;
   channel_monitor_show_quota: boolean;
   channel_monitor_hide_user_ranking: boolean;
+  site_favicon: string;
   smtp_password: string;
   turnstile_secret_key: string;
   tencent_captcha_app_secret_key: string;
@@ -9623,10 +9715,13 @@ const form = reactive<SettingsForm>({
   default_user_rpm_limit: 0,
   site_name: "Sub2API",
   site_logo: "",
+  site_favicon: "",
   site_subtitle: "Subscription to API Conversion Platform",
   api_base_url: "",
   contact_info: "",
   doc_url: "",
+  docs_title: "",
+  docs_content: "",
   home_content: "",
   compact_home_enabled: false,
   backend_mode_enabled: false,
@@ -11092,6 +11187,7 @@ const siteBillingModeHint = computed(() =>
 );
 
 async function saveSettings() {
+  if (activeTab.value === "extensions") return;
   saving.value = true;
   try {
     const normalizedTableDefaultPageSize = Math.floor(
@@ -11280,10 +11376,13 @@ async function saveSettings() {
       default_user_rpm_limit: form.default_user_rpm_limit,
       site_name: form.site_name,
       site_logo: form.site_logo,
+      site_favicon: form.site_favicon,
       site_subtitle: form.site_subtitle,
       api_base_url: form.api_base_url,
       contact_info: form.contact_info,
       doc_url: form.doc_url,
+      docs_title: form.docs_title,
+      docs_content: form.docs_content,
       home_content: form.home_content,
       compact_home_enabled: form.compact_home_enabled,
       backend_mode_enabled: form.backend_mode_enabled,
@@ -12639,6 +12738,8 @@ async function handleDeleteProvider() {
 }
 
 onMounted(() => {
+  window.addEventListener("hashchange", handleSettingsHashChange);
+  handleSettingsHashChange();
   loadSettings();
   loadSubscriptionGroups();
   loadAdminApiKey();
@@ -12651,6 +12752,10 @@ onMounted(() => {
   loadRectifierSettings();
   loadBetaPolicySettings();
   loadProviders();
+});
+
+onUnmounted(() => {
+  window.removeEventListener("hashchange", handleSettingsHashChange);
 });
 
 // =========================

@@ -209,6 +209,26 @@ func (_u *GroupUpdate) SetNillableStatus(v *string) *GroupUpdate {
 	return _u
 }
 
+// SetStreamingAckEnabled sets the "streaming_ack_enabled" field.
+func (_u *GroupUpdate) SetStreamingAckEnabled(v bool) *GroupUpdate {
+	_u.mutation.SetStreamingAckEnabled(v)
+	return _u
+}
+
+// SetNillableStreamingAckEnabled sets the "streaming_ack_enabled" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableStreamingAckEnabled(v *bool) *GroupUpdate {
+	if v != nil {
+		_u.SetStreamingAckEnabled(*v)
+	}
+	return _u
+}
+
+// ClearStreamingAckEnabled clears the value of the "streaming_ack_enabled" field.
+func (_u *GroupUpdate) ClearStreamingAckEnabled() *GroupUpdate {
+	_u.mutation.ClearStreamingAckEnabled()
+	return _u
+}
+
 // SetPlatform sets the "platform" field.
 func (_u *GroupUpdate) SetPlatform(v string) *GroupUpdate {
 	_u.mutation.SetPlatform(v)
@@ -1608,6 +1628,12 @@ func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(group.FieldStatus, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.StreamingAckEnabled(); ok {
+		_spec.SetField(group.FieldStreamingAckEnabled, field.TypeBool, value)
+	}
+	if _u.mutation.StreamingAckEnabledCleared() {
+		_spec.ClearField(group.FieldStreamingAckEnabled, field.TypeBool)
+	}
 	if _u.mutation.DuplicateOperationIDCleared() {
 		_spec.ClearField(group.FieldDuplicateOperationID, field.TypeString)
 	}
@@ -2400,6 +2426,26 @@ func (_u *GroupUpdateOne) SetNillableStatus(v *string) *GroupUpdateOne {
 	if v != nil {
 		_u.SetStatus(*v)
 	}
+	return _u
+}
+
+// SetStreamingAckEnabled sets the "streaming_ack_enabled" field.
+func (_u *GroupUpdateOne) SetStreamingAckEnabled(v bool) *GroupUpdateOne {
+	_u.mutation.SetStreamingAckEnabled(v)
+	return _u
+}
+
+// SetNillableStreamingAckEnabled sets the "streaming_ack_enabled" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableStreamingAckEnabled(v *bool) *GroupUpdateOne {
+	if v != nil {
+		_u.SetStreamingAckEnabled(*v)
+	}
+	return _u
+}
+
+// ClearStreamingAckEnabled clears the value of the "streaming_ack_enabled" field.
+func (_u *GroupUpdateOne) ClearStreamingAckEnabled() *GroupUpdateOne {
+	_u.mutation.ClearStreamingAckEnabled()
 	return _u
 }
 
@@ -3831,6 +3877,12 @@ func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error)
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(group.FieldStatus, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.StreamingAckEnabled(); ok {
+		_spec.SetField(group.FieldStreamingAckEnabled, field.TypeBool, value)
+	}
+	if _u.mutation.StreamingAckEnabledCleared() {
+		_spec.ClearField(group.FieldStreamingAckEnabled, field.TypeBool)
 	}
 	if _u.mutation.DuplicateOperationIDCleared() {
 		_spec.ClearField(group.FieldDuplicateOperationID, field.TypeString)

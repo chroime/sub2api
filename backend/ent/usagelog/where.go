@@ -225,6 +225,11 @@ func FirstTokenMs(v int) predicate.UsageLog {
 	return predicate.UsageLog(sql.FieldEQ(FieldFirstTokenMs, v))
 }
 
+// StreamingAckMs applies equality check predicate on the "streaming_ack_ms" field. It's identical to StreamingAckMsEQ.
+func StreamingAckMs(v int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldEQ(FieldStreamingAckMs, v))
+}
+
 // UserAgent applies equality check predicate on the "user_agent" field. It's identical to UserAgentEQ.
 func UserAgent(v string) predicate.UsageLog {
 	return predicate.UsageLog(sql.FieldEQ(FieldUserAgent, v))
@@ -1783,6 +1788,56 @@ func FirstTokenMsIsNil() predicate.UsageLog {
 // FirstTokenMsNotNil applies the NotNil predicate on the "first_token_ms" field.
 func FirstTokenMsNotNil() predicate.UsageLog {
 	return predicate.UsageLog(sql.FieldNotNull(FieldFirstTokenMs))
+}
+
+// StreamingAckMsEQ applies the EQ predicate on the "streaming_ack_ms" field.
+func StreamingAckMsEQ(v int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldEQ(FieldStreamingAckMs, v))
+}
+
+// StreamingAckMsNEQ applies the NEQ predicate on the "streaming_ack_ms" field.
+func StreamingAckMsNEQ(v int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldNEQ(FieldStreamingAckMs, v))
+}
+
+// StreamingAckMsIn applies the In predicate on the "streaming_ack_ms" field.
+func StreamingAckMsIn(vs ...int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldIn(FieldStreamingAckMs, vs...))
+}
+
+// StreamingAckMsNotIn applies the NotIn predicate on the "streaming_ack_ms" field.
+func StreamingAckMsNotIn(vs ...int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldNotIn(FieldStreamingAckMs, vs...))
+}
+
+// StreamingAckMsGT applies the GT predicate on the "streaming_ack_ms" field.
+func StreamingAckMsGT(v int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldGT(FieldStreamingAckMs, v))
+}
+
+// StreamingAckMsGTE applies the GTE predicate on the "streaming_ack_ms" field.
+func StreamingAckMsGTE(v int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldGTE(FieldStreamingAckMs, v))
+}
+
+// StreamingAckMsLT applies the LT predicate on the "streaming_ack_ms" field.
+func StreamingAckMsLT(v int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldLT(FieldStreamingAckMs, v))
+}
+
+// StreamingAckMsLTE applies the LTE predicate on the "streaming_ack_ms" field.
+func StreamingAckMsLTE(v int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldLTE(FieldStreamingAckMs, v))
+}
+
+// StreamingAckMsIsNil applies the IsNil predicate on the "streaming_ack_ms" field.
+func StreamingAckMsIsNil() predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldIsNull(FieldStreamingAckMs))
+}
+
+// StreamingAckMsNotNil applies the NotNil predicate on the "streaming_ack_ms" field.
+func StreamingAckMsNotNil() predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldNotNull(FieldStreamingAckMs))
 }
 
 // UserAgentEQ applies the EQ predicate on the "user_agent" field.

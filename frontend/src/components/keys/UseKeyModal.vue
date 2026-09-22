@@ -44,7 +44,7 @@
               ]"
             >
               <span class="flex items-center gap-2">
-                <component :is="tab.icon" class="w-4 h-4" />
+                <component :is="tab.icon" v-bind="tab.iconProps" class="w-4 h-4" />
                 {{ tab.label }}
               </span>
             </button>
@@ -260,6 +260,7 @@ import { useI18n } from 'vue-i18n'
 import { saveAs } from 'file-saver'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import Icon from '@/components/icons/Icon.vue'
+import ProviderIcon from '@/components/user/monitor/ProviderIcon.vue'
 import { useClipboard } from '@/composables/useClipboard'
 import { fetchCodexModelsManifest } from '@/api/codex'
 import type { GroupPlatform } from '@/types'
@@ -286,6 +287,7 @@ interface TabConfig {
   id: string
   label: string
   icon: Component
+  iconProps?: Record<string, unknown>
 }
 
 interface FileConfig {
@@ -396,42 +398,8 @@ const WindowsIcon = {
   }
 }
 
-// Terminal icon for Claude Code
-const TerminalIcon = {
-  render() {
-    return h('svg', {
-      fill: 'none',
-      stroke: 'currentColor',
-      viewBox: '0 0 24 24',
-      'stroke-width': '1.5',
-      class: 'w-4 h-4'
-    }, [
-      h('path', {
-        'stroke-linecap': 'round',
-        'stroke-linejoin': 'round',
-        d: 'm6.75 7.5 3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0 0 21 17.25V6.75A2.25 2.25 0 0 0 18.75 4.5H5.25A2.25 2.25 0 0 0 3 6.75v10.5A2.25 2.25 0 0 0 5.25 20.25Z'
-      })
-    ])
-  }
-}
-
-// Sparkle icon for Gemini
-const SparkleIcon = {
-  render() {
-    return h('svg', {
-      fill: 'none',
-      stroke: 'currentColor',
-      viewBox: '0 0 24 24',
-      'stroke-width': '1.5',
-      class: 'w-4 h-4'
-    }, [
-      h('path', {
-        'stroke-linecap': 'round',
-        'stroke-linejoin': 'round',
-        d: 'M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z'
-      })
-    ])
-  }
+function platformTab(id: string, label: string, provider: string): TabConfig {
+  return { id, label, icon: ProviderIcon, iconProps: { provider, size: 18 } }
 }
 
 const clientTabs = computed((): TabConfig[] => {
@@ -439,48 +407,48 @@ const clientTabs = computed((): TabConfig[] => {
   switch (props.platform) {
     case 'openai': {
       const tabs: TabConfig[] = [
-        { id: 'codex', label: t('keys.useKeyModal.cliTabs.codexCli'), icon: TerminalIcon },
-        { id: 'codex-ws', label: t('keys.useKeyModal.cliTabs.codexCliWs'), icon: TerminalIcon },
+        platformTab('codex', t('keys.useKeyModal.cliTabs.codexCli'), 'openai'),
+        platformTab('codex-ws', t('keys.useKeyModal.cliTabs.codexCliWs'), 'openai'),
       ]
       if (props.allowMessagesDispatch) {
-        tabs.push({ id: 'claude', label: t('keys.useKeyModal.cliTabs.claudeCode'), icon: TerminalIcon })
+        tabs.push(platformTab('claude', t('keys.useKeyModal.cliTabs.claudeCode'), 'anthropic'))
       }
-      tabs.push({ id: 'opencode', label: t('keys.useKeyModal.cliTabs.opencode'), icon: TerminalIcon })
+      tabs.push(platformTab('opencode', t('keys.useKeyModal.cliTabs.opencode'), 'openai'))
       return tabs
     }
     case 'gemini':
       return [
-        { id: 'gemini', label: t('keys.useKeyModal.cliTabs.geminiCli'), icon: SparkleIcon },
-        { id: 'codex', label: t('keys.useKeyModal.cliTabs.codexCli'), icon: TerminalIcon },
-        { id: 'opencode', label: t('keys.useKeyModal.cliTabs.opencode'), icon: TerminalIcon }
+        platformTab('gemini', t('keys.useKeyModal.cliTabs.geminiCli'), 'gemini'),
+        platformTab('codex', t('keys.useKeyModal.cliTabs.codexCli'), 'openai'),
+        platformTab('opencode', t('keys.useKeyModal.cliTabs.opencode'), 'openai')
       ]
     case 'antigravity':
       return [
-        { id: 'claude', label: t('keys.useKeyModal.cliTabs.claudeCode'), icon: TerminalIcon },
-        { id: 'gemini', label: t('keys.useKeyModal.cliTabs.geminiCli'), icon: SparkleIcon },
-        { id: 'codex', label: t('keys.useKeyModal.cliTabs.codexCli'), icon: TerminalIcon },
-        { id: 'opencode', label: t('keys.useKeyModal.cliTabs.opencode'), icon: TerminalIcon }
+        platformTab('claude', t('keys.useKeyModal.cliTabs.claudeCode'), 'anthropic'),
+        platformTab('gemini', t('keys.useKeyModal.cliTabs.geminiCli'), 'gemini'),
+        platformTab('codex', t('keys.useKeyModal.cliTabs.codexCli'), 'openai'),
+        platformTab('opencode', t('keys.useKeyModal.cliTabs.opencode'), 'openai')
       ]
     case 'grok':
       return [
-        { id: 'grok', label: t('keys.useKeyModal.cliTabs.grokCli'), icon: TerminalIcon },
-        { id: 'claude', label: t('keys.useKeyModal.cliTabs.claudeCode'), icon: TerminalIcon },
-        { id: 'codex', label: t('keys.useKeyModal.cliTabs.codexCli'), icon: TerminalIcon },
-        { id: 'opencode', label: t('keys.useKeyModal.cliTabs.opencode'), icon: TerminalIcon }
+        platformTab('grok', t('keys.useKeyModal.cliTabs.grokCli'), 'grok'),
+        platformTab('claude', t('keys.useKeyModal.cliTabs.claudeCode'), 'anthropic'),
+        platformTab('codex', t('keys.useKeyModal.cliTabs.codexCli'), 'openai'),
+        platformTab('opencode', t('keys.useKeyModal.cliTabs.opencode'), 'openai')
       ]
     case 'deepseek':
     case 'minimax':
     case 'composite':
       return [
-        { id: 'claude', label: t('keys.useKeyModal.cliTabs.claudeCode'), icon: TerminalIcon },
-        { id: 'codex', label: t('keys.useKeyModal.cliTabs.codexCli'), icon: TerminalIcon },
-        { id: 'opencode', label: t('keys.useKeyModal.cliTabs.opencode'), icon: TerminalIcon }
+        platformTab('claude', t('keys.useKeyModal.cliTabs.claudeCode'), 'anthropic'),
+        platformTab('codex', t('keys.useKeyModal.cliTabs.codexCli'), 'openai'),
+        platformTab('opencode', t('keys.useKeyModal.cliTabs.opencode'), 'openai')
       ]
     default:
       return [
-        { id: 'claude', label: t('keys.useKeyModal.cliTabs.claudeCode'), icon: TerminalIcon },
-        { id: 'codex', label: t('keys.useKeyModal.cliTabs.codexCli'), icon: TerminalIcon },
-        { id: 'opencode', label: t('keys.useKeyModal.cliTabs.opencode'), icon: TerminalIcon }
+        platformTab('claude', t('keys.useKeyModal.cliTabs.claudeCode'), 'anthropic'),
+        platformTab('codex', t('keys.useKeyModal.cliTabs.codexCli'), 'openai'),
+        platformTab('opencode', t('keys.useKeyModal.cliTabs.opencode'), 'openai')
       ]
   }
 })

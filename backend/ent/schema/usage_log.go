@@ -132,6 +132,10 @@ func (UsageLog) Fields() []ent.Field {
 		field.Int("first_token_ms").
 			Optional().
 			Nillable(),
+		field.Int("streaming_ack_ms").
+			Optional().
+			Nillable().
+			Comment("Server-side SSE comment ACK flush latency, not model TTFT"),
 		field.String("user_agent").
 			MaxLen(512).
 			Optional().

@@ -378,10 +378,13 @@ const (
 	// OEM设置
 	SettingKeySiteName                    = "site_name"                     // 网站名称
 	SettingKeySiteLogo                    = "site_logo"                     // 网站Logo (base64)
+	SettingKeySiteFavicon                 = "site_favicon"                  // Browser tab icon, independent of the site logo
 	SettingKeySiteSubtitle                = "site_subtitle"                 // 网站副标题
 	SettingKeyAPIBaseURL                  = "api_base_url"                  // API端点地址（用于客户端配置和导入）
 	SettingKeyContactInfo                 = "contact_info"                  // 客服联系方式
 	SettingKeyDocURL                      = "doc_url"                       // 文档链接
+	SettingKeyDocsTitle                   = "docs_title"                    // 内置 API 文档标题
+	SettingKeyDocsContent                 = "docs_content"                  // 内置 API 文档 Markdown 内容
 	SettingKeyHomeContent                 = "home_content"                  // 首页内容（支持 Markdown/HTML，或 URL 作为 iframe src）
 	SettingKeyCompactHomeEnabled          = "compact_home_enabled"          // 是否启用内置简洁首页
 	SettingKeyHideCcsImportButton         = "hide_ccs_import_button"        // 是否隐藏 API Keys 页面的导入 CCS 按钮
@@ -707,6 +710,22 @@ const (
 	SettingKeyOpenAICodexClientVersionSynced = "openai_codex_client_version_synced"
 	// SettingKeyOpenAICodexVersionAutoSyncEnabled 是否启用 Codex 客户端版本号自动同步（默认 true）。
 	SettingKeyOpenAICodexVersionAutoSyncEnabled = "openai_codex_version_auto_sync_enabled"
+	// SettingKeyOpenAICodexTicketEnabled Codex 292 打票总开关（后台可改、热更新）。
+	// 关闭：不打票、不注入 x-codex-turn-state，按原链路转发。
+	// 开启：后台打票并在业务请求中覆盖该头。
+	SettingKeyOpenAICodexTicketEnabled               = "openai_codex_ticket_enabled"
+	SettingKeyOpenAICodexTicketVerifyEnabled         = "openai_codex_ticket_verify_enabled"
+	SettingKeyOpenAICodexTicketHarvestProxyIDs       = "openai_codex_ticket_harvest_proxy_ids"
+	SettingKeyOpenAICodexTicketHarvestConcurrency    = "openai_codex_ticket_harvest_concurrency"
+	SettingKeyOpenAICodexTicket332VerifyEnabled      = "openai_codex_ticket_332_verify_enabled"
+	SettingKeyOpenAICodexTicket332HarvestProxyIDs    = "openai_codex_ticket_332_harvest_proxy_ids"
+	SettingKeyOpenAICodexTicket332HarvestConcurrency = "openai_codex_ticket_332_harvest_concurrency"
+	// SettingKeyOpenAICodexTicketHarvestProxyURL Codex 292 打票出口（socks5h/http），后台可改、热更新。
+	SettingKeyOpenAICodexTicketHarvestProxyURL    = "openai_codex_ticket_harvest_proxy_url"
+	SettingKeyOpenAICodexTicketFailClosed         = "openai_codex_ticket_fail_closed"
+	SettingKeyOpenAICodexTicket332Enabled         = "openai_codex_ticket_332_enabled"
+	SettingKeyOpenAICodexTicket332FailClosed      = "openai_codex_ticket_332_fail_closed"
+	SettingKeyOpenAICodexTicket332HarvestProxyURL = "openai_codex_ticket_332_harvest_proxy_url"
 	// SettingKeyOpenAIAllowClaudeCodeCodexPlugin 已废弃：历史全局开关只作为升级迁移输入读取。
 	// 迁移后等价规则写入 SettingKeyCodexCLIOnlyWhitelist，不再参与运行时判定。
 	SettingKeyOpenAIAllowClaudeCodeCodexPlugin = "openai_allow_claude_code_codex_plugin"

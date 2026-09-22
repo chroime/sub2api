@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 func TestMaskAuditCredential(t *testing.T) {
@@ -148,6 +149,25 @@ func TestRedactAuditBody_NonJSONOmitted(t *testing.T) {
 func TestRedactAuditBody_Empty(t *testing.T) {
 	if got := RedactAuditBody(nil, "application/json"); got != "" {
 		t.Fatalf("expected empty for nil body, got %q", got)
+	}
+}
+
+func TestRedactAuditBody_TruncationPreservesUTF8(t *testing.T) {
+	// Keep a multi-byte value across the 16 KiB storage boundary. Byte slicing
+	// here would leave PostgreSQL with an invalid UTF-8 string.
+	for prefixLen := 0; prefixLen < 8; prefixLen++ {
+		raw, err := json.Marshal(map[string]string{"description": strings.Repeat("x", prefixLen) + strings.Repeat("中", 6000)})
+		if err != nil {
+			t.Fatalf("marshal body: %v", err)
+		}
+
+		out := RedactAuditBody(raw, "application/json")
+		if !strings.Contains(out, "<truncated>") {
+			t.Fatalf("expected truncation marker, got output length %d", len(out))
+		}
+		if !utf8.ValidString(out) {
+			t.Fatalf("redacted body contains invalid UTF-8 at the truncation boundary (prefix length %d)", prefixLen)
+		}
 	}
 }
 

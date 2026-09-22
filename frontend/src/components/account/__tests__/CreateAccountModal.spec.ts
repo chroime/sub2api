@@ -10,6 +10,7 @@ const {
   importCodexSessionMock,
   createOpenAICodexPATMock,
   authIsSimpleMode,
+  getStreamingACKSettingsMock,
 } = vi.hoisted(() => ({
   createAccountMock: vi.fn(),
   probeUpstreamBillingMock: vi.fn(),
@@ -18,6 +19,11 @@ const {
   importCodexSessionMock: vi.fn(),
   createOpenAICodexPATMock: vi.fn(),
   authIsSimpleMode: { value: true },
+  getStreamingACKSettingsMock: vi.fn().mockResolvedValue({ enabled: true }),
+}))
+
+vi.mock('@/api/admin/settings', () => ({
+  getStreamingACKSettings: getStreamingACKSettingsMock,
 }))
 
 vi.mock('@/stores/app', () => ({
@@ -183,11 +189,14 @@ async function submitApiKeyAccount(
   return wrapper
 }
 
-async function openCodexImportStep(toggleClicks = 0) {
+async function openCodexImportStep(toggleClicks = 0, ackToggleClicks = 0) {
   const wrapper = mountModal()
   await selectButtonByText(wrapper, 'OpenAI')
   for (let click = 0; click < toggleClicks; click += 1) {
     await wrapper.get('[data-testid="openai-long-context-billing-toggle"]').trigger('click')
+  }
+  for (let click = 0; click < ackToggleClicks; click += 1) {
+    await wrapper.get('[data-testid="streaming-ack-toggle"]').trigger('click')
   }
   await wrapper.get('form#create-account-form input[type="text"]').setValue('Codex import')
   await wrapper.get('form#create-account-form').trigger('submit.prevent')
@@ -291,35 +300,114 @@ describe('CreateAccountModal OpenAI long-context billing', () => {
     expect(createAccountMock.mock.calls[0]?.[0]?.extra?.openai_long_context_billing_enabled).toBe(false)
   })
 
-  it('writes the synthetic first-response opt-in only when enabled', async () => {
+  it('writes the generic streaming ACK opt-in when enabled', async () => {
     const wrapper = mountModal()
     await selectButtonByText(wrapper, 'OpenAI')
     await selectButtonByText(wrapper, 'API Key')
     await wrapper.get('form#create-account-form input[type="text"]').setValue('OpenAI ACK account')
     await wrapper.get('form#create-account-form input[type="password"]').setValue('test-api-key')
 
-    const toggle = wrapper.get('[data-testid="openai-synthetic-first-response-toggle"]')
+    const toggle = wrapper.get('[data-testid="streaming-ack-toggle"]')
     expect(toggle.attributes('aria-checked')).toBe('false')
     await toggle.trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="streaming-ack-status"]').text()).toContain(
+      'admin.accounts.openai.syntheticFirstResponseStatusPending'
+    )
+    expect(wrapper.get('[data-testid="streaming-ack-status"]').text()).not.toContain(
+      'admin.accounts.openai.syntheticFirstResponseStatusEnabled'
+    )
     await wrapper.get('form#create-account-form').trigger('submit.prevent')
     await flushPromises()
 
     expect(createAccountMock).toHaveBeenCalledTimes(1)
-    expect(createAccountMock.mock.calls[0]?.[0]?.extra?.openai_synthetic_first_response_enabled).toBe(true)
+    expect(createAccountMock.mock.calls[0]?.[0]?.extra?.streaming_ack_enabled).toBe(true)
+    expect(createAccountMock.mock.calls[0]?.[0]?.extra).not.toHaveProperty('openai_synthetic_first_response_enabled')
   })
 
-  it('resets the synthetic first-response opt-in when switching away from OpenAI', async () => {
+  it.each([
+    ['anthropic', 'Anthropic', 'admin.accounts.claudeConsole'],
+    ['gemini', 'Gemini', 'admin.accounts.gemini.accountType.apiKeyTitle'],
+    ['grok', 'Grok', 'API Key'],
+    ['kimi', 'Kimi', null],
+    ['zhipu', 'Zhipu GLM', null],
+    ['deepseek', 'DeepSeek', null],
+    ['minimax', 'MiniMax', null],
+    ['opencode_go', 'OpenCode', null],
+  ])('persists streaming ACK when creating a %s API key account', async (platform, label, typeLabel) => {
+    const wrapper = mountModal()
+    await selectButtonByText(wrapper, label!)
+    if (typeLabel) await selectButtonByText(wrapper, typeLabel)
+    await wrapper.get('form#create-account-form input[type="text"]').setValue(`${platform} ACK`)
+    await wrapper.get('form#create-account-form input[type="password"]').setValue('test-api-key')
+    await wrapper.get('[data-testid="streaming-ack-toggle"]').trigger('click')
+    await wrapper.get('[data-testid="upstream-request-id-header"]').setValue('X-Request-Id')
+
+    await wrapper.get('form#create-account-form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(createAccountMock).toHaveBeenCalledTimes(1)
+    expect(createAccountMock.mock.calls[0]?.[0]).toMatchObject({
+      platform,
+      extra: { streaming_ack_enabled: true, upstream_request_id_header: 'X-Request-Id' },
+    })
+    wrapper.unmount()
+  })
+
+  it('resets the streaming ACK opt-in when switching platforms', async () => {
     const wrapper = mountModal()
     await selectButtonByText(wrapper, 'OpenAI')
-    const toggle = wrapper.get('[data-testid="openai-synthetic-first-response-toggle"]')
+    const toggle = wrapper.get('[data-testid="streaming-ack-toggle"]')
     await toggle.trigger('click')
     expect(toggle.attributes('aria-checked')).toBe('true')
 
     await selectButtonByText(wrapper, 'Anthropic')
+    expect(wrapper.get('[data-testid="streaming-ack-toggle"]').attributes('aria-checked')).toBe('false')
     await selectButtonByText(wrapper, 'OpenAI')
 
-    expect(wrapper.get('[data-testid="openai-synthetic-first-response-toggle"]').attributes('aria-checked')).toBe('false')
+    expect(wrapper.get('[data-testid="streaming-ack-toggle"]').attributes('aria-checked')).toBe('false')
   })
+
+  it('persists streaming ACK for Bedrock account creation', async () => {
+    const wrapper = mountModal()
+    await selectButtonByText(wrapper, 'admin.accounts.bedrockLabel')
+    await wrapper.get('form#create-account-form input[type="text"]').setValue('Bedrock ACK')
+    await wrapper.get('input[placeholder="AKIA..."]').setValue('test-access-key')
+    await wrapper.get('form#create-account-form input[type="password"]').setValue('test-secret')
+    await wrapper.get('[data-testid="streaming-ack-toggle"]').trigger('click')
+    await wrapper.get('form#create-account-form').trigger('submit.prevent')
+    await flushPromises()
+    expect(createAccountMock).toHaveBeenCalledTimes(1)
+    expect(createAccountMock.mock.calls[0]?.[0]).toMatchObject({
+      platform: 'anthropic', type: 'bedrock', extra: { streaming_ack_enabled: true },
+    })
+    wrapper.unmount()
+  })
+
+  it.each([['anthropic', 'Anthropic'], ['gemini', 'Gemini']])(
+    'persists streaming ACK for %s Vertex service-account creation', async (platform, label) => {
+      const wrapper = mountModal()
+      await selectButtonByText(wrapper, label)
+      await selectButtonByText(wrapper, 'Vertex')
+      await wrapper.get('form#create-account-form input[type="text"]').setValue('Vertex ACK')
+      const fileInput = wrapper.get<HTMLInputElement>('input[type="file"]')
+      Object.defineProperty(fileInput.element, 'files', {
+        value: [{ text: async () => JSON.stringify({
+          project_id: 'test-project', client_email: 'test@example.com', private_key: 'test-private-key',
+        }) }],
+      })
+      await fileInput.trigger('change')
+      await flushPromises()
+      await wrapper.get('[data-testid="streaming-ack-toggle"]').trigger('click')
+      await wrapper.get('form#create-account-form').trigger('submit.prevent')
+      await flushPromises()
+      expect(createAccountMock).toHaveBeenCalledTimes(1)
+      expect(createAccountMock.mock.calls[0]?.[0]).toMatchObject({
+        platform, type: 'service_account', extra: { streaming_ack_enabled: true },
+      })
+      wrapper.unmount()
+    }
+  )
 
   it('omits the upstream request id header from extra when left empty', async () => {
     await submitApiKeyAccount('openai')
@@ -680,6 +768,7 @@ describe('CreateAccountModal OpenAI long-context billing', () => {
     expect(baseInput).toBeDefined()
     await baseInput?.setValue('https://relay.example')
     await wrapper.get('form#create-account-form input[type="password"]').setValue('sk-upstream')
+    await wrapper.get('[data-testid="streaming-ack-toggle"]').trigger('click')
     await wrapper.get('form#create-account-form').trigger('submit.prevent')
     await flushPromises()
 
@@ -688,6 +777,7 @@ describe('CreateAccountModal OpenAI long-context billing', () => {
     expect(payload?.platform).toBe('antigravity')
     expect(payload?.type).toBe('apikey')
     expect(payload?.upstream_billing_probe_enabled).toBe(true)
+    expect(payload?.extra?.streaming_ack_enabled).toBe(true)
     // 创建成功后前端立即发起一次首探（与其他 apikey 平台一致）。
     expect(probeUpstreamBillingMock).toHaveBeenCalledWith(42)
   })
@@ -699,6 +789,7 @@ describe('CreateAccountModal OpenAI long-context billing', () => {
 
     expect(importCodexSessionMock).toHaveBeenCalledTimes(1)
     expect(importCodexSessionMock.mock.calls[0]?.[0]?.extra?.openai_long_context_billing_enabled).toBeUndefined()
+    expect(importCodexSessionMock.mock.calls[0]?.[0]?.extra).not.toHaveProperty('streaming_ack_enabled')
   })
 
   it('leaves Codex PAT import billing ownership to the backend', async () => {
@@ -708,6 +799,15 @@ describe('CreateAccountModal OpenAI long-context billing', () => {
 
     expect(createOpenAICodexPATMock).toHaveBeenCalledTimes(1)
     expect(createOpenAICodexPATMock.mock.calls[0]?.[0]?.extra?.openai_long_context_billing_enabled).toBeUndefined()
+    expect(createOpenAICodexPATMock.mock.calls[0]?.[0]?.extra).not.toHaveProperty('streaming_ack_enabled')
+  })
+
+  it.each([1, 2])('only changes existing imported account ACK after an explicit choice (%s clicks)', async (clicks) => {
+    const wrapper = await openCodexImportStep(0, clicks)
+    await wrapper.get('[data-testid="import-codex-session"]').trigger('click')
+    await flushPromises()
+    expect(importCodexSessionMock.mock.calls[0]?.[0]?.extra?.streaming_ack_enabled).toBe(clicks === 1)
+    wrapper.unmount()
   })
 
   it('sends explicit true for Codex session import after the toggle is enabled', async () => {

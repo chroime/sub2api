@@ -149,8 +149,9 @@ func (s *FrontendServer) serveIndexHTML(c *gin.Context) {
 	// Check cache first
 	cached := s.cache.Get()
 	if cached != nil {
-		// Check If-None-Match for 304 response
-		if match := c.GetHeader("If-None-Match"); match == cached.ETag {
+		// A fresh CSP nonce requires a matching HTML body; a 304 would reuse a
+		// script with the previous nonce and prevent initial branding from loading.
+		if match := c.GetHeader("If-None-Match"); nonce == "" && match == cached.ETag {
 			c.Status(http.StatusNotModified)
 			c.Abort()
 			return
@@ -173,7 +174,7 @@ func (s *FrontendServer) serveIndexHTML(c *gin.Context) {
 	settings, err := s.settings.GetPublicSettingsForInjection(ctx)
 	if err != nil {
 		// Fallback: serve without injection
-		c.Data(http.StatusOK, "text/html; charset=utf-8", s.baseHTML)
+		c.Data(http.StatusOK, "text/html; charset=utf-8", injectSiteFavicon(s.baseHTML, nil))
 		c.Abort()
 		return
 	}
@@ -181,7 +182,7 @@ func (s *FrontendServer) serveIndexHTML(c *gin.Context) {
 	settingsJSON, err := json.Marshal(settings)
 	if err != nil {
 		// Fallback: serve without injection
-		c.Data(http.StatusOK, "text/html; charset=utf-8", s.baseHTML)
+		c.Data(http.StatusOK, "text/html; charset=utf-8", injectSiteFavicon(s.baseHTML, nil))
 		c.Abort()
 		return
 	}
@@ -220,15 +221,13 @@ func (s *FrontendServer) injectSettings(settingsJSON []byte) []byte {
 // injectSiteFavicon replaces the static favicon with a configured, browser-safe image URL.
 func injectSiteFavicon(html, settingsJSON []byte) []byte {
 	var cfg struct {
-		SiteLogo string `json:"site_logo"`
+		SiteFavicon string `json:"site_favicon"`
 	}
-	if err := json.Unmarshal(settingsJSON, &cfg); err != nil {
-		return html
-	}
-
-	logoURL := safeImageURL(cfg.SiteLogo)
-	if logoURL == "" {
-		return html
+	faviconURL := "/logo.svg"
+	if err := json.Unmarshal(settingsJSON, &cfg); err == nil {
+		if configured := safeImageURL(cfg.SiteFavicon); configured != "" {
+			faviconURL = configured
+		}
 	}
 
 	linkStart := bytes.Index(html, []byte(`<link rel="icon"`))
@@ -240,7 +239,8 @@ func injectSiteFavicon(html, settingsJSON []byte) []byte {
 		return html
 	}
 	linkEnd := linkStart + linkEndOffset + 1
-	replacement := []byte(`<link rel="icon" href="` + htmlpkg.EscapeString(logoURL) + `" />`)
+	// Leave MIME detection to the browser instead of retaining the bundled icon's type.
+	replacement := []byte(`<link rel="icon" href="` + htmlpkg.EscapeString(faviconURL) + `" />`)
 
 	var buf bytes.Buffer
 	buf.Write(html[:linkStart])
@@ -251,7 +251,9 @@ func injectSiteFavicon(html, settingsJSON []byte) []byte {
 
 func safeImageURL(value string) string {
 	trimmed := strings.TrimSpace(value)
-	if trimmed == "" {
+	if trimmed == "" || strings.ContainsRune(trimmed, '\\') || strings.ContainsFunc(trimmed, func(r rune) bool {
+		return r < 0x20 || r == 0x7f
+	}) {
 		return ""
 	}
 	if strings.HasPrefix(trimmed, "/") && !strings.HasPrefix(trimmed, "//") {

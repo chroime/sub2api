@@ -116,6 +116,7 @@ vi.mock('vue-i18n', async () => {
 
 const simpleStub = { template: '<div><slot /></div>' }
 const chartStub = { template: '<div />' }
+const usageTableStub = { props: ['firstTokenMode', 'data', 'columns'], template: '<div />' }
 
 const usageLog = {
   id: 1,
@@ -159,7 +160,7 @@ function mountUsageView() {
         DateRangePicker: true,
         Icon: true,
         UsageStatsCards: chartStub,
-        UsageTable: chartStub,
+        UsageTable: usageTableStub,
         UserErrorRequestsTable: chartStub,
         ModelDistributionChart: chartStub,
         GroupDistributionChart: chartStub,
@@ -364,7 +365,22 @@ describe('user UsageView', () => {
     expect(getDashboardSnapshotV2).toHaveBeenCalledWith(expect.objectContaining({ native_compaction_v2: null }))
   })
 
-  it('exports csv with current filters and without admin-only fields', async () => {
+  it('selects first-response timing without exposing the admin real-latency column', async () => {
+    const row = { ...usageLog, first_token_ms: 60_000, streaming_ack_ms: 720 }
+    query.mockResolvedValue({ items: [row], total: 1, pages: 1 })
+    const wrapper = mountUsageView()
+    await flushPromises()
+
+    const table = wrapper.findComponent(UsageTable)
+    expect(table.props('firstTokenMode')).toBe('response')
+    expect(table.props('data')[0]).toMatchObject({ first_token_ms: 60_000, streaming_ack_ms: 720 })
+    expect(table.props('columns')).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: 'real_latency' }),
+    ]))
+  })
+
+  it.each([720, 0, null, undefined])('exports csv with separate ACK %s and without admin-only fields', async (ack) => {
+    query.mockResolvedValue({ items: [{ ...usageLog, streaming_ack_ms: ack }], total: 1, pages: 1 })
     const wrapper = mountUsageView()
     await flushPromises()
     ;(wrapper.vm as any).filters.native_compaction_v2 = true
@@ -398,8 +414,8 @@ describe('user UsageView', () => {
     expect(showSuccess).toHaveBeenCalled()
     expect(csvContent.startsWith('\uFEFF')).toBe(true)
     expect(csvContent.slice(1)).toBe([
-      'Time,API Key Name,Model,Reasoning Effort,Inbound Endpoint,IP Address,Type,Billing Mode,Input Tokens,Output Tokens,Cache Read Tokens,Cache Creation Tokens,Rate Multiplier,Billed Cost,Original Cost,First Token (ms),Duration (ms)',
-      '2026-03-08T00:00:00Z,demo-key,gpt-5.4,"\'-",,203.0.113.10,Sync,Token,4057,101,278272,4,1,0.09288300,0.09288300,12,345',
+      'Time,API Key Name,Model,Reasoning Effort,Inbound Endpoint,IP Address,Type,Billing Mode,Input Tokens,Output Tokens,Cache Read Tokens,Cache Creation Tokens,Rate Multiplier,Billed Cost,Original Cost,First Token (ms),Duration (ms),Streaming ACK (ms)',
+      `2026-03-08T00:00:00Z,demo-key,gpt-5.4,"'-",,203.0.113.10,Sync,Token,4057,101,278272,4,1,0.09288300,0.09288300,12,345,${ack ?? ''}`,
     ].join('\n'))
     expect(csvContent).toContain('IP Address')
     expect(csvContent).toContain('203.0.113.10')

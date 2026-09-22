@@ -155,10 +155,13 @@ type UpdateSettingsRequest struct {
 	// OEM设置
 	SiteName                    string                `json:"site_name"`
 	SiteLogo                    string                `json:"site_logo"`
+	SiteFavicon                 string                `json:"site_favicon"`
 	SiteSubtitle                string                `json:"site_subtitle"`
 	APIBaseURL                  string                `json:"api_base_url"`
 	ContactInfo                 string                `json:"contact_info"`
 	DocURL                      string                `json:"doc_url"`
+	DocsTitle                   string                `json:"docs_title"`
+	DocsContent                 string                `json:"docs_content"`
 	HomeContent                 string                `json:"home_content"`
 	CompactHomeEnabled          bool                  `json:"compact_home_enabled"`
 	HideCcsImportButton         bool                  `json:"hide_ccs_import_button"`
@@ -243,20 +246,32 @@ type UpdateSettingsRequest struct {
 	BackendModeEnabled bool `json:"backend_mode_enabled"`
 
 	// Gateway forwarding behavior
-	OpenAITTFTMode                         *string `json:"openai_ttft_mode"`
-	EnableFingerprintUnification           *bool   `json:"enable_fingerprint_unification"`
-	EnableMetadataPassthrough              *bool   `json:"enable_metadata_passthrough"`
-	EnableCCHSigning                       *bool   `json:"enable_cch_signing"`
-	EnableClaudeOAuthSystemPromptInjection *bool   `json:"enable_claude_oauth_system_prompt_injection"`
-	ClaudeOAuthSystemPrompt                *string `json:"claude_oauth_system_prompt"`
-	ClaudeOAuthSystemPromptBlocks          *string `json:"claude_oauth_system_prompt_blocks"`
-	EnableAnthropicCacheTTL1hInjection     *bool   `json:"enable_anthropic_cache_ttl_1h_injection"`
-	RewriteMessageCacheControl             *bool   `json:"rewrite_message_cache_control"`
-	EnableClientDatelineNormalization      *bool   `json:"enable_client_dateline_normalization"`
-	AntigravityUserAgentVersion            *string `json:"antigravity_user_agent_version"`
-	OpenAICodexUserAgent                   *string `json:"openai_codex_user_agent"`
-	OpenAICodexClientVersion               *string `json:"openai_codex_client_version"`
-	OpenAICodexVersionAutoSyncEnabled      *bool   `json:"openai_codex_version_auto_sync_enabled"`
+	OpenAITTFTMode                         *string  `json:"openai_ttft_mode"`
+	EnableFingerprintUnification           *bool    `json:"enable_fingerprint_unification"`
+	EnableMetadataPassthrough              *bool    `json:"enable_metadata_passthrough"`
+	EnableCCHSigning                       *bool    `json:"enable_cch_signing"`
+	EnableClaudeOAuthSystemPromptInjection *bool    `json:"enable_claude_oauth_system_prompt_injection"`
+	ClaudeOAuthSystemPrompt                *string  `json:"claude_oauth_system_prompt"`
+	ClaudeOAuthSystemPromptBlocks          *string  `json:"claude_oauth_system_prompt_blocks"`
+	EnableAnthropicCacheTTL1hInjection     *bool    `json:"enable_anthropic_cache_ttl_1h_injection"`
+	RewriteMessageCacheControl             *bool    `json:"rewrite_message_cache_control"`
+	EnableClientDatelineNormalization      *bool    `json:"enable_client_dateline_normalization"`
+	AntigravityUserAgentVersion            *string  `json:"antigravity_user_agent_version"`
+	OpenAICodexUserAgent                   *string  `json:"openai_codex_user_agent"`
+	OpenAICodexClientVersion               *string  `json:"openai_codex_client_version"`
+	OpenAICodexVersionAutoSyncEnabled      *bool    `json:"openai_codex_version_auto_sync_enabled"`
+	OpenAICodexTicketEnabled               *bool    `json:"openai_codex_ticket_enabled"`
+	OpenAICodexTicketVerifyEnabled         *bool    `json:"openai_codex_ticket_verify_enabled"`
+	OpenAICodexTicketHarvestProxyIDs       *[]int64 `json:"openai_codex_ticket_harvest_proxy_ids"`
+	OpenAICodexTicketHarvestConcurrency    *int     `json:"openai_codex_ticket_harvest_concurrency"`
+	OpenAICodexTicket332VerifyEnabled      *bool    `json:"openai_codex_ticket_332_verify_enabled"`
+	OpenAICodexTicket332HarvestProxyIDs    *[]int64 `json:"openai_codex_ticket_332_harvest_proxy_ids"`
+	OpenAICodexTicket332HarvestConcurrency *int     `json:"openai_codex_ticket_332_harvest_concurrency"`
+	OpenAICodexTicketFailClosed            *bool    `json:"openai_codex_ticket_fail_closed"`
+	OpenAICodexTicketHarvestProxyURL       string   `json:"openai_codex_ticket_harvest_proxy_url"`
+	OpenAICodexTicket332Enabled            *bool    `json:"openai_codex_ticket_332_enabled"`
+	OpenAICodexTicket332FailClosed         *bool    `json:"openai_codex_ticket_332_fail_closed"`
+	OpenAICodexTicket332HarvestProxyURL    string   `json:"openai_codex_ticket_332_harvest_proxy_url"`
 
 	// codex_cli_only 加固（global-only）
 	MinCodexVersion                      string `json:"min_codex_version"`
@@ -467,6 +482,11 @@ func buildSettingKeyByJSONName() map[string]string {
 // only the one field it cares about resets every other field to a zero value.
 func omittedSettingKeys(sentFields map[string]json.RawMessage) service.OmittedSettingKeys {
 	omitted := make(service.OmittedSettingKeys, len(settingKeyByJSONName))
+	for _, key := range codexTicketHarvestSettingsJSONKeys {
+		if raw, exists := sentFields[key]; !exists || strings.TrimSpace(string(raw)) == "null" {
+			omitted[key] = struct{}{}
+		}
+	}
 	for jsonName, settingKey := range settingKeyByJSONName {
 		if _, sent := sentFields[jsonName]; !sent {
 			omitted[settingKey] = struct{}{}
@@ -476,6 +496,8 @@ func omittedSettingKeys(sentFields map[string]json.RawMessage) service.OmittedSe
 }
 
 func settingsAuditRequest(req UpdateSettingsRequest) UpdateSettingsRequest {
+	req.OpenAICodexTicketHarvestProxyURL = service.MaskProxyURL(req.OpenAICodexTicketHarvestProxyURL)
+	req.OpenAICodexTicket332HarvestProxyURL = service.MaskProxyURL(req.OpenAICodexTicket332HarvestProxyURL)
 	req.TencentCaptchaAppSecretKey = strings.TrimSpace(req.TencentCaptchaAppSecretKey)
 	req.TencentCaptchaCloudSecretID = strings.TrimSpace(req.TencentCaptchaCloudSecretID)
 	req.TencentCaptchaCloudSecretKey = strings.TrimSpace(req.TencentCaptchaCloudSecretKey)
@@ -492,6 +514,22 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 	var req UpdateSettingsRequest
 	if err := c.ShouldBindBodyWith(&req, binding.JSON); err != nil {
 		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	if err := validateCodexTicketHarvestOptionsRequest(req); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	if len([]rune(req.DocsTitle)) > 120 {
+		response.BadRequest(c, "Documentation title is too long (max 120 characters)")
+		return
+	}
+	if len(req.DocsContent) > 2<<20 {
+		response.BadRequest(c, "Documentation content is too large (max 2MB)")
+		return
+	}
+	if err := validateSiteFaviconSize(req.SiteFavicon); err != nil {
+		response.BadRequest(c, err.Error())
 		return
 	}
 	auditReq := settingsAuditRequest(req)
@@ -1619,10 +1657,13 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		GoogleOAuthFrontendRedirectURL:         req.GoogleOAuthFrontendRedirectURL,
 		SiteName:                               req.SiteName,
 		SiteLogo:                               req.SiteLogo,
+		SiteFavicon:                            req.SiteFavicon,
 		SiteSubtitle:                           req.SiteSubtitle,
 		APIBaseURL:                             req.APIBaseURL,
 		ContactInfo:                            req.ContactInfo,
 		DocURL:                                 req.DocURL,
+		DocsTitle:                              req.DocsTitle,
+		DocsContent:                            req.DocsContent,
 		HomeContent:                            req.HomeContent,
 		CompactHomeEnabled:                     req.CompactHomeEnabled,
 		HideCcsImportButton:                    req.HideCcsImportButton,
@@ -1767,6 +1808,80 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 				return *req.OpenAICodexVersionAutoSyncEnabled
 			}
 			return previousSettings.OpenAICodexVersionAutoSyncEnabled
+		}(),
+		OpenAICodexTicketVerifyEnabled: func() bool {
+			if req.OpenAICodexTicketVerifyEnabled != nil {
+				return *req.OpenAICodexTicketVerifyEnabled
+			}
+			return previousSettings.OpenAICodexTicketVerifyEnabled
+		}(),
+		OpenAICodexTicketHarvestConcurrency: func() int {
+			if req.OpenAICodexTicketHarvestConcurrency != nil {
+				return *req.OpenAICodexTicketHarvestConcurrency
+			}
+			return previousSettings.OpenAICodexTicketHarvestConcurrency
+		}(),
+		OpenAICodexTicketHarvestProxyIDs: func() []int64 {
+			if req.OpenAICodexTicketHarvestProxyIDs != nil {
+				return *req.OpenAICodexTicketHarvestProxyIDs
+			}
+			return previousSettings.OpenAICodexTicketHarvestProxyIDs
+		}(),
+		OpenAICodexTicket332VerifyEnabled: func() bool {
+			if req.OpenAICodexTicket332VerifyEnabled != nil {
+				return *req.OpenAICodexTicket332VerifyEnabled
+			}
+			return previousSettings.OpenAICodexTicket332VerifyEnabled
+		}(),
+		OpenAICodexTicket332HarvestConcurrency: func() int {
+			if req.OpenAICodexTicket332HarvestConcurrency != nil {
+				return *req.OpenAICodexTicket332HarvestConcurrency
+			}
+			return previousSettings.OpenAICodexTicket332HarvestConcurrency
+		}(),
+		OpenAICodexTicket332HarvestProxyIDs: func() []int64 {
+			if req.OpenAICodexTicket332HarvestProxyIDs != nil {
+				return *req.OpenAICodexTicket332HarvestProxyIDs
+			}
+			return previousSettings.OpenAICodexTicket332HarvestProxyIDs
+		}(),
+		OpenAICodexTicketEnabled: func() bool {
+			if req.OpenAICodexTicketEnabled != nil {
+				return *req.OpenAICodexTicketEnabled
+			}
+			return previousSettings.OpenAICodexTicketEnabled
+		}(),
+		OpenAICodexTicketHarvestProxyURL: func() string {
+			next := strings.TrimSpace(req.OpenAICodexTicketHarvestProxyURL)
+			if service.IsMaskedProxyURL(next) {
+				return previousSettings.OpenAICodexTicketHarvestProxyURL
+			}
+			return next
+		}(),
+		OpenAICodexTicketFailClosed: func() bool {
+			if req.OpenAICodexTicketFailClosed != nil {
+				return *req.OpenAICodexTicketFailClosed
+			}
+			return previousSettings.OpenAICodexTicketFailClosed
+		}(),
+		OpenAICodexTicket332Enabled: func() bool {
+			if req.OpenAICodexTicket332Enabled != nil {
+				return *req.OpenAICodexTicket332Enabled
+			}
+			return previousSettings.OpenAICodexTicket332Enabled
+		}(),
+		OpenAICodexTicket332FailClosed: func() bool {
+			if req.OpenAICodexTicket332FailClosed != nil {
+				return *req.OpenAICodexTicket332FailClosed
+			}
+			return previousSettings.OpenAICodexTicket332FailClosed
+		}(),
+		OpenAICodexTicket332HarvestProxyURL: func() string {
+			next := strings.TrimSpace(req.OpenAICodexTicket332HarvestProxyURL)
+			if service.IsMaskedProxyURL(next) {
+				return previousSettings.OpenAICodexTicket332HarvestProxyURL
+			}
+			return next
 		}(),
 		MinCodexVersion:       strings.TrimSpace(req.MinCodexVersion),
 		MaxCodexVersion:       strings.TrimSpace(req.MaxCodexVersion),
@@ -2259,10 +2374,13 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		GoogleOAuthFrontendRedirectURL:                         updatedSettings.GoogleOAuthFrontendRedirectURL,
 		SiteName:                                               updatedSettings.SiteName,
 		SiteLogo:                                               updatedSettings.SiteLogo,
+		SiteFavicon:                                            updatedSettings.SiteFavicon,
 		SiteSubtitle:                                           updatedSettings.SiteSubtitle,
 		APIBaseURL:                                             updatedSettings.APIBaseURL,
 		ContactInfo:                                            updatedSettings.ContactInfo,
 		DocURL:                                                 updatedSettings.DocURL,
+		DocsTitle:                                              updatedSettings.DocsTitle,
+		DocsContent:                                            updatedSettings.DocsContent,
 		HomeContent:                                            updatedSettings.HomeContent,
 		CompactHomeEnabled:                                     updatedSettings.CompactHomeEnabled,
 		HideCcsImportButton:                                    updatedSettings.HideCcsImportButton,
@@ -2310,6 +2428,20 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		OpenAICodexClientVersion:                               updatedSettings.OpenAICodexClientVersion,
 		OpenAICodexClientVersionSynced:                         updatedSettings.OpenAICodexClientVersionSynced,
 		OpenAICodexVersionAutoSyncEnabled:                      updatedSettings.OpenAICodexVersionAutoSyncEnabled,
+		OpenAICodexTicketEnabled:                               updatedSettings.OpenAICodexTicketEnabled,
+		OpenAICodexTicketVerifyEnabled:                         updatedSettings.OpenAICodexTicketVerifyEnabled,
+		OpenAICodexTicketHarvestConcurrency:                    updatedSettings.OpenAICodexTicketHarvestConcurrency,
+		OpenAICodexTicketHarvestProxyIDs:                       updatedSettings.OpenAICodexTicketHarvestProxyIDs,
+		OpenAICodexTicket332VerifyEnabled:                      updatedSettings.OpenAICodexTicket332VerifyEnabled,
+		OpenAICodexTicket332HarvestConcurrency:                 updatedSettings.OpenAICodexTicket332HarvestConcurrency,
+		OpenAICodexTicket332HarvestProxyIDs:                    updatedSettings.OpenAICodexTicket332HarvestProxyIDs,
+		OpenAICodexTicketFailClosed:                            updatedSettings.OpenAICodexTicketFailClosed,
+		OpenAICodexTicket332Enabled:                            updatedSettings.OpenAICodexTicket332Enabled,
+		OpenAICodexTicket332FailClosed:                         updatedSettings.OpenAICodexTicket332FailClosed,
+		OpenAICodexTicket332HarvestProxyURL:                    service.MaskProxyURL(updatedSettings.OpenAICodexTicket332HarvestProxyURL),
+		OpenAICodexTicket332HarvestProxyConfigured:             strings.TrimSpace(updatedSettings.OpenAICodexTicket332HarvestProxyURL) != "",
+		OpenAICodexTicketHarvestProxyURL:                       service.MaskProxyURL(updatedSettings.OpenAICodexTicketHarvestProxyURL),
+		OpenAICodexTicketHarvestProxyConfigured:                strings.TrimSpace(updatedSettings.OpenAICodexTicketHarvestProxyURL) != "",
 		MinCodexVersion:                                        updatedSettings.MinCodexVersion,
 		MaxCodexVersion:                                        updatedSettings.MaxCodexVersion,
 		CodexCLIOnlyBlacklist:                                  updatedSettings.CodexCLIOnlyBlacklist,

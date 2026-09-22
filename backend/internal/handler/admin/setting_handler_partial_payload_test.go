@@ -3,10 +3,15 @@
 package admin
 
 import (
+	"bytes"
+	"encoding/json"
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/gin-gonic/gin"
 
 	"github.com/stretchr/testify/require"
 )
@@ -37,6 +42,58 @@ func TestUpdateSettingsPartialPayloadKeepsUnsentKeys(t *testing.T) {
 	require.Equal(t, "smtp.example.com", repo.values[service.SettingKeySMTPHost])
 	require.Equal(t, "noreply@example.com", repo.values[service.SettingKeySMTPFrom])
 	require.Equal(t, "true", repo.values[service.SettingKeyTurnstileEnabled])
+}
+
+func TestUpdateSettingsPartialPayloadKeepsUnsentDocumentation(t *testing.T) {
+	h, repo := newStepUpSwitchTestHandler(t, map[string]string{
+		service.SettingKeyDocsTitle:   "Stored docs",
+		service.SettingKeyDocsContent: "# Stored docs",
+	})
+
+	rec := doUpdateSettings(t, h, map[string]any{"risk_control_enabled": true}, nil)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, "Stored docs", repo.values[service.SettingKeyDocsTitle])
+	require.Equal(t, "# Stored docs", repo.values[service.SettingKeyDocsContent])
+}
+
+func TestGetSettingsReturnsDocumentation(t *testing.T) {
+	h, _ := newStepUpSwitchTestHandler(t, map[string]string{
+		service.SettingKeyDocsTitle:   "Stored docs",
+		service.SettingKeyDocsContent: "# Stored docs",
+	})
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/admin/settings", bytes.NewReader(nil))
+	h.GetSettings(c)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var body struct {
+		Data struct {
+			DocsTitle   string `json:"docs_title"`
+			DocsContent string `json:"docs_content"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	require.Equal(t, "Stored docs", body.Data.DocsTitle)
+	require.Equal(t, "# Stored docs", body.Data.DocsContent)
+}
+
+func TestUpdateSettingsRejectsOversizedDocumentation(t *testing.T) {
+	h, _ := newStepUpSwitchTestHandler(t, map[string]string{})
+
+	t.Run("title counts unicode characters", func(t *testing.T) {
+		rec := doUpdateSettings(t, h, map[string]any{"docs_title": strings.Repeat("界", 121)}, nil)
+		require.Equal(t, http.StatusBadRequest, rec.Code)
+	})
+	t.Run("title counts surrounding whitespace", func(t *testing.T) {
+		rec := doUpdateSettings(t, h, map[string]any{"docs_title": " " + strings.Repeat("界", 120)}, nil)
+		require.Equal(t, http.StatusBadRequest, rec.Code)
+	})
+	t.Run("content counts bytes", func(t *testing.T) {
+		rec := doUpdateSettings(t, h, map[string]any{"docs_content": strings.Repeat("a", 2<<20+1)}, nil)
+		require.Equal(t, http.StatusBadRequest, rec.Code)
+	})
 }
 
 // A full payload keeps whole-document semantics: fields explicitly set to their

@@ -28,6 +28,7 @@ function createPublicSettings(overrides: Partial<PublicSettings> = {}): PublicSe
     turnstile_site_key: '',
     site_name: 'Test Site',
     site_logo: '',
+    site_favicon: '',
     site_subtitle: '',
     api_base_url: '',
     contact_info: '',
@@ -327,6 +328,68 @@ describe('useAppStore', () => {
   // --- 公开设置 ---
 
   describe('公开设置加载', () => {
+    it('loads and refreshes favicon independently from the site logo', async () => {
+      vi.mocked(getPublicSettings)
+        .mockResolvedValueOnce(createPublicSettings({
+          site_logo: '/logo-first.png',
+          site_favicon: '/favicon-first.ico',
+        }))
+        .mockResolvedValueOnce(createPublicSettings({
+          site_logo: '/logo-second.png',
+          site_favicon: '/favicon-second.webp',
+        }))
+        .mockResolvedValueOnce(createPublicSettings({
+          site_logo: '/logo-second.png',
+          site_favicon: '',
+        }))
+      const store = useAppStore()
+
+      await store.fetchPublicSettings()
+      expect(store.siteLogo).toBe('/logo-first.png')
+      expect(store.siteFavicon).toBe('/favicon-first.ico')
+
+      await store.fetchPublicSettings(true)
+      expect(store.siteLogo).toBe('/logo-second.png')
+      expect(store.siteFavicon).toBe('/favicon-second.webp')
+      expect(window.__APP_CONFIG__?.site_favicon).toBe('/favicon-second.webp')
+      expect((await store.fetchPublicSettings())?.site_favicon).toBe('/favicon-second.webp')
+
+      await store.fetchPublicSettings(true)
+      expect(store.siteFavicon).toBe('')
+      expect(store.siteLogo).toBe('/logo-second.png')
+    })
+
+    it('initializes the independent favicon from injected settings', () => {
+      window.__APP_CONFIG__ = createPublicSettings({
+        site_logo: '/custom-logo.png',
+        site_favicon: '/custom-favicon.ico',
+      })
+      const store = useAppStore()
+
+      expect(store.initFromInjectedConfig()).toBe(true)
+      expect(store.siteLogo).toBe('/custom-logo.png')
+      expect(store.siteFavicon).toBe('/custom-favicon.ico')
+    })
+
+    it.each(['api', 'injected'] as const)(
+      'normalizes missing legacy favicon settings from %s without copying the site logo',
+      async (source) => {
+        const settings = createPublicSettings({ site_logo: '/legacy-logo.png' })
+        delete settings.site_favicon
+        if (source === 'injected') window.__APP_CONFIG__ = settings
+        else vi.mocked(getPublicSettings).mockResolvedValueOnce(settings)
+        const store = useAppStore()
+
+        const result = await store.fetchPublicSettings()
+
+        expect(store.siteLogo).toBe('/legacy-logo.png')
+        expect(store.siteFavicon).toBe('')
+        expect(result?.site_favicon).toBe('')
+        expect(store.cachedPublicSettings?.site_favicon).toBe('')
+        expect(window.__APP_CONFIG__?.site_favicon).toBe('')
+      },
+    )
+
     it('并发调用复用并等待同一个请求，包括 force 调用', async () => {
       const deferred = createDeferred<PublicSettings>()
       vi.mocked(getPublicSettings).mockReturnValue(deferred.promise)

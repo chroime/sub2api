@@ -24,6 +24,7 @@ import (
 	"github.com/cespare/xxhash/v2"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
+	"golang.org/x/sync/singleflight"
 )
 
 const (
@@ -237,7 +238,10 @@ type OpenAIForwardResult struct {
 	// UpstreamHeaders 是直接上游的响应头，用于按账户配置解析上游请求标识。
 	UpstreamHeaders http.Header
 	Usage           OpenAIUsage
-	Model           string // 原始模型（用于响应和日志显示）
+	// UsagePresent distinguishes explicit upstream token counts from a default
+	// zero value. HTTP Responses streams set it; nil preserves other protocols.
+	UsagePresent *bool
+	Model        string // 原始模型（用于响应和日志显示）
 	// BillingModel is the model used for cost calculation.
 	// When non-empty, CalculateCost uses this instead of Model.
 	// This is set by the Anthropic Messages conversion path where
@@ -270,13 +274,14 @@ type OpenAIForwardResult struct {
 	Stream                   bool
 	OpenAIWSMode             bool
 	// UpstreamTerminalEvent is the normalized terminal event observed on an
-	// upstream Responses WebSocket turn. Empty preserves legacy/non-WS success.
+	// upstream Responses turn. Empty preserves legacy behavior.
 	UpstreamTerminalEvent string
 	ResponseHeaders       http.Header
 	Duration              time.Duration
 	FirstTokenMs          *int
-	// UpstreamFirstTokenMs preserves the real upstream TTFT when the user-facing
-	// FirstTokenMs is shortened by a synthetic SSE acknowledgement.
+	// StreamingAckMs measures the downstream SSE comment flush, not model output.
+	StreamingAckMs *int
+	// UpstreamFirstTokenMs retains the real upstream latency used by the scheduler.
 	UpstreamFirstTokenMs *int
 	ClientDisconnect     bool
 	ImageCount           int
@@ -522,6 +527,31 @@ type OpenAIGatewayService struct {
 	// 剥离跨账号回带（openai_codex_turn_state.go）。
 	openaiCodexTurnStateOrigins sync.Map
 	openaiCodexTurnStateWrites  atomic.Uint64
+	// openaiCodexTickets: mode\x00accountID\x00model → *openAICodexTicket.
+	openaiCodexTickets                  sync.Map
+	openaiCodexTicketFlight             singleflight.Group
+	openaiCodexTicketLifecycleMu        sync.Mutex
+	openaiCodexTicketCancel             context.CancelFunc
+	openaiCodexTicketDone               chan struct{}
+	openaiCodexTicketStopped            bool
+	openaiCodexTicketRuntimeMu          sync.Mutex
+	openaiCodexTicketProxyRepo          ProxyRepository
+	openaiCodexTicketRuntime            map[string]openAICodexTicketRuntime
+	openaiCodexTicketMonitorStates      map[string]OpenAICodexTicketMonitorState
+	openaiCodexTicketEvents             []OpenAICodexTicketMonitorEvent
+	openaiCodexTicketEventID            uint64
+	openaiCodexTicketRevocations        map[string]openAICodexTicketRevocation
+	openaiCodexTicketRejectIssuedBefore time.Time
+	openaiCodexTicketObserveSlots       chan struct{}
+	openaiCodexTicketPersistLocks       [32]sync.Mutex
+	openaiCodexTicketDirty              map[string]bool
+	openaiCodexTicketPendingRevocations map[string]*openAICodexTicketUse
+	openaiCodexTicketWritesInFlight     map[string]bool
+	openaiCodexTicketInjectedUses       map[string]*openAICodexTicketUse
+	openaiCodexTicketWriteContext       context.Context
+	openaiCodexTicketWriteCancel        context.CancelFunc
+	openaiCodexTicketWritesStopping     bool
+	openaiCodexTicketWriteWG            sync.WaitGroup
 }
 
 // NewOpenAIGatewayService creates a new OpenAIGatewayService
@@ -599,6 +629,7 @@ func NewOpenAIGatewayService(
 		openAITokenProvider.SetAccountRuntimeBlocker(svc)
 	}
 	svc.logOpenAIWSModeBootstrap()
+	svc.StartOpenAICodexTicketHarvester()
 	return svc
 }
 

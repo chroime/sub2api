@@ -5,7 +5,7 @@
       <nav class="mx-auto flex max-w-6xl items-center justify-between">
         <router-link to="/home" class="flex items-center gap-3">
           <div class="h-10 w-10 overflow-hidden rounded-xl shadow-md">
-            <img :src="siteLogo || '/logo.svg'" alt="Logo" class="h-full w-full object-contain" />
+            <SiteLogo :src="siteLogo" :alt="siteName" class="h-full w-full" />
           </div>
           <span class="text-lg font-semibold tracking-tight text-gray-900 dark:text-white">{{ siteName }}</span>
         </router-link>
@@ -22,7 +22,7 @@
             <Icon name="book" size="md" />
           </a>
           <button
-            aria-disabled="true"
+            @click="toggleTheme"
             class="rounded-lg p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-dark-400 dark:hover:bg-dark-800 dark:hover:text-white"
             :title="isDark ? t('home.switchToLight') : t('home.switchToDark')"
           >
@@ -416,6 +416,7 @@ import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores'
 import { FeatureFlags, resolveFeatureFlag } from '@/utils/featureFlags'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
+import SiteLogo from '@/components/common/SiteLogo.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { buildGatewayUrl } from '@/api/client'
 import { formatDateLocalInput } from '@/utils/format'
@@ -433,6 +434,12 @@ const docUrl = computed(() => sanitizeUrl(appStore.cachedPublicSettings?.doc_url
 // ==================== Theme (same as HomeView) ====================
 
 const isDark = ref(document.documentElement.classList.contains('dark'))
+
+function toggleTheme() {
+  isDark.value = !isDark.value
+  document.documentElement.classList.toggle('dark', isDark.value)
+  localStorage.setItem('theme', isDark.value ? 'dark' : 'light')
+}
 
 const currentYear = computed(() => new Date().getFullYear())
 
@@ -897,8 +904,7 @@ async function queryKey() {
 // ==================== Lifecycle ====================
 
 function initTheme() {
-  isDark.value = true
-  document.documentElement.classList.add('dark')
+  isDark.value = document.documentElement.classList.contains('dark')
 }
 
 function formatResetTime(resetAt: string | null | undefined): string {

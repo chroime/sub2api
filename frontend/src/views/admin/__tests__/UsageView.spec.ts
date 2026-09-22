@@ -32,6 +32,8 @@ const messages: Record<string, string> = {
   'admin.dashboard.day': 'Day',
   'admin.dashboard.hour': 'Hour',
   'admin.usage.failedToLoadUser': 'Failed to load user',
+  'usage.latency': 'Latency',
+  'usage.realLatency': 'Real latency',
 	'admin.usage.requestId': 'Request ID',
 	'admin.usage.upstreamRequestId': 'Upstream ID',
 	'usage.requestedModel': 'Requested model',
@@ -135,7 +137,7 @@ const UsageFiltersStub = defineComponent({
   template: '<div><span data-test="user-filter-label">{{ userKeyword }}</span><slot name="after-reset" /></div>',
 })
 const UsageTableStub = {
-  props: ['columns'],
+  props: ['columns', 'firstTokenMode'],
   emits: ['userClick'],
   template: '<div data-test="usage-table"><button class="user-click" @click="$emit(\'userClick\', 2)">user</button></div>',
 }
@@ -461,7 +463,7 @@ describe('admin UsageView distribution metric toggles', () => {
   })
 })
 
-describe('admin UsageView request ID column visibility', () => {
+describe('admin UsageView column visibility', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.mocked(localStorage.getItem).mockReset().mockReturnValue(null)
@@ -476,7 +478,87 @@ describe('admin UsageView request ID column visibility', () => {
   })
 
   afterEach(() => {
+    vi.mocked(localStorage.getItem).mockReset().mockReturnValue(null)
     vi.useRealTimers()
+  })
+
+  const mountColumnVisibilityView = () => mount(UsageView, {
+    global: { stubs: {
+      AppLayout: AppLayoutStub, UsageStatsCards: true, UsageFilters: UsageFiltersStub,
+      UsageTable: UsageTableStub, UsageExportProgress: true, UsageCleanupDialog: true,
+      UserBalanceHistoryModal: true, AuditLogModal: true, Pagination: true, Select: true,
+      DateRangePicker: true, Icon: true, TokenUsageTrend: true,
+      ModelDistributionChart: true, GroupDistributionChart: true,
+      EndpointDistributionChart: true, UserTokenRanking: true,
+    } },
+  })
+
+  it('shows response latency and real model latency in adjacent columns by default', async () => {
+    const wrapper = mountColumnVisibilityView()
+    await flushPromises()
+
+    const table = wrapper.findComponent(UsageTableStub)
+    expect(table.props('firstTokenMode')).toBe('response')
+    const columns = table.props('columns') as { key: string; label: string; sortable: boolean }[]
+    const latencyIndex = columns.findIndex(column => column.key === 'latency')
+    expect(latencyIndex).toBeGreaterThanOrEqual(0)
+    expect(columns.slice(latencyIndex, latencyIndex + 2)).toEqual([
+      { key: 'latency', label: 'Latency', sortable: false },
+      { key: 'real_latency', label: 'Real latency', sortable: false },
+    ])
+    wrapper.unmount()
+  })
+
+  it.each([null, 'request-id-hidden-by-default', 'upstream-request-id-hidden-by-default'])(
+    'preserves saved hidden columns while showing real latency for preferences version %s',
+    async (version) => {
+      vi.mocked(localStorage.getItem).mockImplementation((key) => {
+        if (key === 'usage-hidden-columns') return JSON.stringify(['latency', 'account', 'user_agent'])
+        if (key === 'usage-hidden-columns-version') return version
+        return null
+      })
+      const wrapper = mountColumnVisibilityView()
+      await flushPromises()
+
+      const columns = wrapper.findComponent(UsageTableStub).props('columns') as { key: string }[]
+      const keys = columns.map(column => column.key)
+      expect(keys).toContain('real_latency')
+      expect(keys).not.toContain('latency')
+      expect(keys).not.toContain('account')
+      expect(keys).not.toContain('user_agent')
+      if (version === 'upstream-request-id-hidden-by-default') {
+        expect(keys).toContain('request_id')
+        expect(keys).toContain('upstream_request_id')
+      }
+      wrapper.unmount()
+    },
+  )
+
+  it('toggles real latency independently and persists its visibility preference', async () => {
+    const wrapper = mountColumnVisibilityView()
+    await flushPromises()
+    const table = wrapper.findComponent(UsageTableStub)
+    const columnKeys = () => (table.props('columns') as { key: string }[]).map(column => column.key)
+
+    await wrapper.get('button[title="admin.users.columnSettings"]').trigger('click')
+    const realLatencyToggle = wrapper.findAll('button').find(button => button.text() === 'Real latency')!
+    await realLatencyToggle.trigger('click')
+
+    expect(columnKeys()).toContain('latency')
+    expect(columnKeys()).not.toContain('real_latency')
+    const savedHidden = JSON.parse(vi.mocked(localStorage.setItem).mock.calls
+      .filter(([key]) => key === 'usage-hidden-columns').at(-1)![1]) as string[]
+    expect(savedHidden).toContain('real_latency')
+    expect(savedHidden).not.toContain('latency')
+
+    await realLatencyToggle.trigger('click')
+    expect(columnKeys()).toContain('latency')
+    expect(columnKeys()).toContain('real_latency')
+    const latencyToggle = wrapper.findAll('button').find(button => button.text() === 'Latency')!
+    await latencyToggle.trigger('click')
+    expect(columnKeys()).not.toContain('latency')
+    expect(columnKeys()).toContain('real_latency')
+    wrapper.unmount()
   })
 
   it('keeps request ID hidden by default and allows enabling it from column settings', async () => {

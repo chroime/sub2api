@@ -69,6 +69,56 @@ func TestOpenAIGatewayServiceRecordUsage_RejectsNilInput(t *testing.T) {
 	require.Error(t, svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{}))
 }
 
+func TestOpenAIGatewayServiceRecordUsage_StreamingAckRemainsSeparate(t *testing.T) {
+	firstTokenMs, ackMs := 22580, 730
+	for _, tc := range []struct {
+		name string
+		ttft *int
+		ack  *int
+	}{
+		{name: "ACK before model output", ttft: &firstTokenMs, ack: &ackMs},
+		{name: "model output without ACK", ttft: &firstTokenMs},
+		{name: "ACK without model output", ack: &ackMs},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+			svc := newOpenAIRecordUsageServiceForTest(usageRepo, &openAIRecordUsageUserRepoStub{}, &openAIRecordUsageSubRepoStub{}, nil)
+			err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
+				Result: &OpenAIForwardResult{
+					RequestID: "ack-metrics", Model: "gpt-5.4", Stream: true,
+					Usage:    OpenAIUsage{InputTokens: 100, OutputTokens: 10},
+					Duration: 23 * time.Second, FirstTokenMs: tc.ttft, StreamingAckMs: tc.ack,
+				},
+				APIKey: &APIKey{ID: 1}, User: &User{ID: 2}, Account: &Account{ID: 3},
+			})
+			require.NoError(t, err)
+			require.NotNil(t, usageRepo.lastLog)
+			require.Equal(t, tc.ttft, usageRepo.lastLog.FirstTokenMs)
+			require.Equal(t, tc.ack, usageRepo.lastLog.StreamingAckMs)
+		})
+	}
+}
+
+func TestOpenAIGatewayServiceRecordUsage_StreamingAckAloneStillSkipsZeroUsage(t *testing.T) {
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	userRepo := &openAIRecordUsageUserRepoStub{}
+	subRepo := &openAIRecordUsageSubRepoStub{}
+	svc := newOpenAIRecordUsageServiceForTest(usageRepo, userRepo, subRepo, nil)
+	ackMs := 730
+	err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
+		Result: &OpenAIForwardResult{
+			RequestID: "ack-only", Model: "gpt-5.4", Stream: true,
+			Duration: time.Second, StreamingAckMs: &ackMs,
+		},
+		APIKey: &APIKey{ID: 1}, User: &User{ID: 2}, Account: &Account{ID: 3},
+	})
+	require.NoError(t, err)
+	require.Zero(t, usageRepo.calls)
+	require.Nil(t, usageRepo.lastLog)
+	require.Zero(t, userRepo.deductCalls)
+	require.Zero(t, subRepo.incrementCalls)
+}
+
 func TestRecordCyberPolicyUsageLog_BillsRealUpstreamTokens(t *testing.T) {
 	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
 	userRepo := &openAIRecordUsageUserRepoStub{}

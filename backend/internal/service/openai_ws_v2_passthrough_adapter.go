@@ -856,6 +856,7 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 	if buildHdrErr != nil {
 		return fmt.Errorf("build ws headers: %w", buildHdrErr)
 	}
+	sessionTicketSignature := headers.Get(openAIWSCodexTicketSignatureHeader)
 	proxyURL := ""
 	if account.ProxyID != nil && account.Proxy != nil {
 		proxyURL = account.Proxy.URL()
@@ -870,14 +871,17 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 	var upstreamConn openAIWSClientConn
 	statusCode := 0
 	var handshakeHeaders http.Header
+	var sessionTicketUse *openAICodexTicketUse
 	for {
 		headers, err = s.refreshOpenAIAgentIdentityHeaders(ctx, account, headers)
 		if err != nil {
 			return fmt.Errorf("refresh ws authentication headers: %w", err)
 		}
+		sessionTicketUse = s.snapshotOpenAICodexTicketUse(ctx, account, initialUpstreamModel, headers)
 		dialCtx, cancelDial := context.WithTimeout(ctx, s.openAIWSDialTimeout())
-		upstreamConn, statusCode, handshakeHeaders, err = dialer.Dial(dialCtx, wsURL, headers, proxyURL)
+		upstreamConn, statusCode, handshakeHeaders, err = dialer.Dial(dialCtx, wsURL, openAIWSHeadersForUpstream(headers), proxyURL)
 		cancelDial()
+		s.observeOpenAICodexTicketUse(ctx, sessionTicketUse, statusCode, handshakeHeaders)
 		if err == nil {
 			break
 		}
@@ -1095,6 +1099,11 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 			if isResponseCreate && model != "" && model != strings.TrimSpace(gjson.GetBytes(payload, "model").String()) {
 				payload = s.ReplaceModelInBody(payload, model)
 			}
+			if isResponseCreate {
+				if err := s.checkOpenAIWSCodexTicket(ctx, account, model, sessionTicketSignature); err != nil {
+					return payload, nil, err
+				}
+			}
 			out, blocked, policyErr := s.applyOpenAIFastPolicyToWSResponseCreate(ctx, account, model, payload)
 			// 多轮 passthrough usage：仅在成功（non-block / non-err）
 			// 的 response.create 帧上更新 usageMeta，使用
@@ -1133,6 +1142,9 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 			_ = clientConn.Write(writeCtx, coderws.MessageText, eventBytes)
 			cancel()
 		},
+	}
+	if err := s.checkOpenAIWSCodexTicket(ctx, account, initialUpstreamModel, sessionTicketSignature); err != nil {
+		return err
 	}
 	upstreamFirstMessageSent := false
 	firstWriteCtx, cancelFirstWrite := context.WithTimeout(ctx, s.openAIWSWriteTimeout())
@@ -1279,6 +1291,7 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 					return nil
 				}
 				eventType, _, _ := parseOpenAIWSEventEnvelope(payload)
+				s.observeOpenAICodexTicketWSError(ctx, sessionTicketUse, handshakeHeaders, payload)
 				if eventType == "response.created" {
 					failureAccountSideEffectsApplied = false
 				}

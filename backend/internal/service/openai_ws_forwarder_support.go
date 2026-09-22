@@ -30,6 +30,7 @@ func (s *OpenAIGatewayService) performOpenAIWSGeneratePrewarm(
 	account *Account,
 	stateStore OpenAIWSStateStore,
 	groupID int64,
+	ticketUse *openAICodexTicketUse,
 ) error {
 	if s == nil {
 		return nil
@@ -78,6 +79,10 @@ func (s *OpenAIGatewayService) performOpenAIWSGeneratePrewarm(
 	prewarmPayload["generate"] = false
 	prewarmPayloadJSON := payloadAsJSONBytes(prewarmPayload)
 
+	if err := s.checkOpenAIWSCodexTicket(ctx, account, openAIWSPayloadString(prewarmPayload, "model"), lease.codexTicketSignature()); err != nil {
+		lease.MarkBroken()
+		return err
+	}
 	if err := lease.WriteJSONWithContextTimeout(ctx, prewarmPayload, s.openAIWSWriteTimeout()); err != nil {
 		lease.MarkBroken()
 		logOpenAIWSModeInfo(
@@ -111,6 +116,7 @@ func (s *OpenAIGatewayService) performOpenAIWSGeneratePrewarm(
 		}
 
 		eventType, eventResponseID, _ := parseOpenAIWSEventEnvelope(message)
+		s.observeOpenAICodexTicketWSError(ctx, ticketUse, lease.HandshakeHeaders(), message)
 		if eventType == "" {
 			continue
 		}
@@ -157,6 +163,10 @@ func (s *OpenAIGatewayService) performOpenAIWSGeneratePrewarm(
 			return wrapOpenAIWSFallback("prewarm_error_event", errors.New(errMsg))
 		}
 
+		if eventType == "response.failed" || eventType == "response.incomplete" {
+			lease.MarkBroken()
+			return wrapOpenAIWSFallback("prewarm_failed", errors.New("upstream prewarm did not complete successfully"))
+		}
 		if isOpenAIWSTerminalEvent(eventType) {
 			prewarmTerminalCount++
 			break
@@ -623,7 +633,7 @@ func (s *OpenAIGatewayService) resolveAccountByPreviousResponseIDForCapability(
 		if vetoed, _ := openAIProfitControlVetoReason(ctx, latest); vetoed {
 			return 0, nil, "", nil
 		}
-		if s.isOpenAIAccountRequestRuntimeBlocked(latest, requestedModel) {
+		if s.isOpenAIAccountRequestRuntimeBlocked(latest, requestedModel, requireCompact) {
 			_ = store.DeleteResponseAccount(ctx, derefGroupID(groupID), responseID)
 			return 0, nil, "", nil
 		}

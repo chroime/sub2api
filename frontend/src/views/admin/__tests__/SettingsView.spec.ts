@@ -1,12 +1,14 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { defineComponent, h } from "vue";
-import { flushPromises, mount } from "@vue/test-utils";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { defineComponent, h, type Component } from "vue";
+import { enableAutoUnmount, flushPromises, mount, RouterLinkStub } from "@vue/test-utils";
 
 import enCommon from "@/i18n/locales/en/common";
 import enSettings from "@/i18n/locales/en/admin/settings";
 import zhCommon from "@/i18n/locales/zh/common";
 import zhSettings from "@/i18n/locales/zh/admin/settings";
 import SettingsView from "../SettingsView.vue";
+
+enableAutoUnmount(afterEach);
 
 const {
   getSettings,
@@ -81,6 +83,24 @@ const {
 
 const localeRef = vi.hoisted(() => ({ value: "zh-CN" }));
 
+vi.mock("@/api/admin/settings", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@/api/admin/settings")>(),
+  getSettings,
+  updateSettings,
+  getBalancePrechargeSettings: vi.fn().mockResolvedValue({ enabled: true, threshold: 1, amount: 0.02 }),
+  getCodexTicketMonitor: vi.fn().mockResolvedValue({ updated_at: '2026-09-20T00:00:00Z', states: [], events: [] }),
+}));
+
+vi.mock("@/api/admin/proxies", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@/api/admin/proxies")>(),
+  getAll: vi.fn().mockResolvedValue([]),
+}));
+
+vi.mock("@/api/admin/balancePrechargeReviews", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@/api/admin/balancePrechargeReviews")>(),
+  getBalancePrechargeReviews: vi.fn().mockResolvedValue({ items: [], total: 0 }),
+}));
+
 vi.mock("@/api", () => ({
   adminAPI: {
     settings: {
@@ -128,6 +148,13 @@ vi.mock("@/stores", () => ({
     fetchPublicSettings,
   }),
 }));
+
+vi.mock("@/api/admin/affiliates", () => {
+  const affiliatesAPI = {
+    listUsers: vi.fn().mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20, pages: 0 }),
+  };
+  return { affiliatesAPI, default: affiliatesAPI };
+});
 
 vi.mock("@/stores/adminSettings", () => ({
   useAdminSettingsStore: () => ({
@@ -543,11 +570,13 @@ const baseSettingsResponse = {
   },
 };
 
-function mountView() {
+function mountView(stubOverrides: Record<string, Component | boolean> = {}, attachTo?: Element) {
   return mount(SettingsView, {
+    attachTo,
     global: {
       stubs: {
         AppLayout: AppLayoutStub,
+        RouterLink: RouterLinkStub,
         Select: SelectStub,
         Toggle: ToggleStub,
         Icon: true,
@@ -559,6 +588,11 @@ function mountView() {
         ProxySelector: true,
         ImageUpload: ImageUploadStub,
         BackupSettings: true,
+        BalancePrechargeSettings: true,
+        StreamingACKSettings: defineComponent({
+          template: '<section data-testid="streaming-ack-settings-panel" />',
+        }),
+        ...stubOverrides,
       },
     },
   });
@@ -627,6 +661,103 @@ describe("admin SettingsView email domain quota copy", () => {
 });
 
 describe("admin SettingsView payment visible method controls", () => {
+  it.each(["#streaming-ack-settings", "#balance-precharge-settings", "#precharge-reviews-title", "#extensions"])("opens the extensions tab for the %s deep link", async (hash) => {
+    const previousURL = window.location.href;
+    window.history.replaceState(null, "", `/admin/settings${hash}`);
+    const wrapper = mountView();
+    try {
+      await flushPromises();
+      expect(wrapper.get("#settings-tab-extensions").attributes("aria-selected")).toBe("true");
+      expect(wrapper.get('[data-testid="streaming-ack-settings-panel"]').isVisible()).toBe(true);
+      expect(wrapper.get('balance-precharge-settings-stub').isVisible()).toBe(true);
+    } finally {
+      wrapper.unmount();
+      window.history.replaceState(null, "", previousURL);
+    }
+  });
+
+  it("mounts custom settings only in extensions and keeps their saves separate", async () => {
+    const wrapper = mountView();
+    await flushPromises();
+    await openGatewayTab(wrapper);
+    expect(wrapper.find('[data-testid="streaming-ack-settings-panel"]').exists()).toBe(false);
+    expect(wrapper.find('balance-precharge-settings-stub').exists()).toBe(false);
+    expect(wrapper.get('button[type="submit"]').isVisible()).toBe(true);
+
+    await wrapper.get('#settings-tab-extensions').trigger('click');
+    expect(wrapper.get('[data-testid="streaming-ack-settings-panel"]').isVisible()).toBe(true);
+    expect(wrapper.get('balance-precharge-settings-stub').isVisible()).toBe(true);
+    expect(wrapper.findAll('button[type="submit"]').filter((button) => button.isVisible())).toHaveLength(0);
+    await wrapper.get('form').trigger('submit');
+    await flushPromises();
+    expect(updateSettings).not.toHaveBeenCalled();
+
+    await wrapper.get('#settings-tab-general').trigger('click');
+    expect(wrapper.find('[data-testid="streaming-ack-settings-panel"]').exists()).toBe(false);
+    await wrapper.get('form').trigger('submit');
+    await flushPromises();
+    expect(updateSettings).toHaveBeenCalledOnce();
+  });
+
+  it("includes extensions in keyboard tab navigation and roving tab order", async () => {
+    const wrapper = mountView();
+    await flushPromises();
+    await openGatewayTab(wrapper);
+    await wrapper.get('#settings-tab-gateway').trigger('keydown', { key: 'ArrowRight' });
+    expect(wrapper.get('#settings-tab-extensions').attributes('aria-selected')).toBe('true');
+    expect(wrapper.get('#settings-tab-extensions').attributes('tabindex')).toBe('0');
+    expect(wrapper.get('#settings-tab-gateway').attributes('tabindex')).toBe('-1');
+    await wrapper.get('#settings-tab-extensions').trigger('keydown', { key: 'ArrowRight' });
+    expect(wrapper.get('#settings-tab-payment').attributes('aria-selected')).toBe('true');
+    await wrapper.get('#settings-tab-payment').trigger('keydown', { key: 'ArrowLeft' });
+    expect(wrapper.get('#settings-tab-extensions').attributes('aria-selected')).toBe('true');
+    await wrapper.get('#settings-tab-extensions').trigger('keydown', { key: 'Home' });
+    expect(wrapper.get('#settings-tab-general').attributes('aria-selected')).toBe('true');
+  });
+
+  it("handles an extension anchor change while the settings page is open", async () => {
+    const previousURL = window.location.href;
+    window.history.replaceState(null, '', '/admin/settings');
+    const wrapper = mountView();
+    try {
+      await flushPromises();
+      expect(wrapper.get('#settings-tab-general').attributes('aria-selected')).toBe('true');
+      window.history.replaceState(null, '', '/admin/settings#precharge-reviews-title');
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
+      await flushPromises();
+      expect(wrapper.get('#settings-tab-extensions').attributes('aria-selected')).toBe('true');
+      expect(wrapper.get('balance-precharge-settings-stub').isVisible()).toBe(true);
+    } finally {
+      wrapper.unmount();
+      window.history.replaceState(null, '', previousURL);
+    }
+  });
+
+  it("scrolls a reconciliation deep link to the real nested review heading after settings load", async () => {
+    const previousURL = window.location.href;
+    const previousScroll = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollIntoView');
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: scrollIntoView });
+    window.history.replaceState(null, '', '/admin/settings#precharge-reviews-title');
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const wrapper = mountView({ BalancePrechargeSettings: false }, container);
+    try {
+      await flushPromises();
+      const heading = wrapper.get('#precharge-reviews-title');
+      expect(heading.isVisible()).toBe(true);
+      expect(wrapper.get('#settings-tab-extensions').attributes('aria-selected')).toBe('true');
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: 'start' });
+      expect(scrollIntoView.mock.contexts).toContain(heading.element);
+    } finally {
+      wrapper.unmount();
+      container.remove();
+      if (previousScroll) Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', previousScroll);
+      else Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView');
+      window.history.replaceState(null, '', previousURL);
+    }
+  });
+
   beforeEach(() => {
     getSettings.mockReset();
     updateSettings.mockReset();
@@ -720,6 +851,76 @@ describe("admin SettingsView payment visible method controls", () => {
     adminSettingsFetch.mockResolvedValue(undefined);
   });
 
+  it("saves the two Codex ticket mechanisms independently inside extensions", async () => {
+    getSettings.mockResolvedValue({
+      ...baseSettingsResponse,
+      openai_codex_ticket_enabled: false,
+      openai_codex_ticket_fail_closed: true,
+      openai_codex_ticket_332_enabled: false,
+      openai_codex_ticket_332_fail_closed: false,
+    });
+    const wrapper = mountView();
+    await flushPromises();
+    expect(wrapper.find('#codex-ticket-292-settings').exists()).toBe(false);
+    await wrapper.get('#settings-tab-extensions').trigger('click');
+    await flushPromises();
+    expect(wrapper.get('#extensions #codex-ticket-292-settings').exists()).toBe(true);
+    expect(wrapper.get('#extensions #codex-ticket-332-settings').exists()).toBe(true);
+    expect(wrapper.get('#extensions #codex-ticket-monitor').exists()).toBe(true);
+    await wrapper.get('#codex-ticket-332-enabled').setValue(true);
+    await wrapper.get('#codex-ticket-332-save').trigger('click');
+    await flushPromises();
+    expect(updateSettings).toHaveBeenLastCalledWith({
+      openai_codex_ticket_332_enabled: true,
+      openai_codex_ticket_332_fail_closed: false,
+      openai_codex_ticket_332_harvest_proxy_url: '',
+      openai_codex_ticket_332_verify_enabled: false,
+      openai_codex_ticket_332_harvest_proxy_ids: [],
+      openai_codex_ticket_332_harvest_concurrency: 3,
+    });
+    await wrapper.get('#codex-ticket-292-enabled').setValue(true);
+    await wrapper.get('#codex-ticket-292-save').trigger('click');
+    await flushPromises();
+    expect(updateSettings).toHaveBeenLastCalledWith({
+      openai_codex_ticket_enabled: true,
+      openai_codex_ticket_fail_closed: true,
+      openai_codex_ticket_harvest_proxy_url: '',
+      openai_codex_ticket_verify_enabled: false,
+      openai_codex_ticket_harvest_proxy_ids: [],
+      openai_codex_ticket_harvest_concurrency: 3,
+    });
+    updateSettings.mockClear();
+    await wrapper.get('#settings-tab-general').trigger('click');
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+    expect(updateSettings.mock.calls[0]?.[0]).not.toHaveProperty('openai_codex_ticket_enabled');
+    expect(updateSettings.mock.calls[0]?.[0]).not.toHaveProperty('openai_codex_ticket_332_enabled');
+    expect(updateSettings.mock.calls[0]?.[0]).not.toHaveProperty('openai_codex_ticket_verify_enabled');
+    expect(updateSettings.mock.calls[0]?.[0]).not.toHaveProperty('openai_codex_ticket_332_harvest_proxy_ids');
+    wrapper.unmount();
+  });
+
+  it("loads the masked Codex harvest proxy and submits a replacement URL", async () => {
+    getSettings.mockResolvedValue({
+      ...baseSettingsResponse,
+      openai_codex_ticket_harvest_proxy_url: "http://user:***@old.example.com:8080",
+      openai_codex_ticket_harvest_proxy_configured: true,
+    });
+    const wrapper = mountView();
+    await flushPromises();
+    await wrapper.get('#settings-tab-extensions').trigger('click');
+    await flushPromises();
+    const input = wrapper.get<HTMLInputElement>("#codex-ticket-292-harvest-proxy");
+    expect(input.element.value).toBe("http://user:***@old.example.com:8080");
+    await input.setValue("socks5h://user:new-secret@new.example.com:1080");
+    await wrapper.get('#codex-ticket-292-save').trigger('click');
+    await flushPromises();
+    expect(updateSettings.mock.calls[0]?.[0].openai_codex_ticket_harvest_proxy_url)
+      .toBe("socks5h://user:new-secret@new.example.com:1080");
+    expect(updateSettings.mock.calls[0]?.[0]).not.toHaveProperty("openai_codex_ticket_harvest_proxy_configured");
+    wrapper.unmount();
+  });
+
   it("loads and saves the open button visibility for each custom menu", async () => {
     const menuItems = [
       { id: "docs", label: "Docs", url: "https://example.com/docs", icon_svg: "", visibility: "user", sort_order: 0 },
@@ -743,6 +944,20 @@ describe("admin SettingsView payment visible method controls", () => {
       ],
     }));
     wrapper.unmount();
+  });
+
+  it("loads and saves built-in documentation with a public settings refresh", async () => {
+    getSettings.mockResolvedValue({ ...baseSettingsResponse, docs_title: "API guide", docs_content: "## Existing" });
+    const wrapper = mountView();
+    await flushPromises();
+    expect((wrapper.get('#public-docs-title').element as HTMLInputElement).value).toBe('API guide');
+    expect((wrapper.get('#public-docs-markdown').element as HTMLTextAreaElement).value).toBe('## Existing');
+    await wrapper.get('#public-docs-title').setValue('接入文档');
+    await wrapper.get('#public-docs-markdown').setValue('## 快速开始\n\nPublished content');
+    await wrapper.find('form').trigger('submit.prevent');
+    await flushPromises();
+    expect(updateSettings).toHaveBeenCalledWith(expect.objectContaining({ docs_title: '接入文档', docs_content: '## 快速开始\n\nPublished content' }));
+    expect(fetchPublicSettings).toHaveBeenCalledWith(true);
   });
 
   it("submits the compact home page toggle", async () => {
@@ -1252,24 +1467,7 @@ describe("admin SettingsView payment visible method controls", () => {
       },
     });
 
-    const wrapper = mount(SettingsView, {
-      global: {
-        stubs: {
-          AppLayout: AppLayoutStub,
-          Select: SelectStub,
-          Toggle: ToggleStub,
-          Icon: true,
-          ConfirmDialog: true,
-          PaymentProviderList: PaymentProviderListStub,
-          PaymentProviderDialog: true,
-          GroupBadge: true,
-          GroupOptionItem: true,
-          ProxySelector: true,
-          ImageUpload: ImageUploadStub,
-          BackupSettings: true,
-        },
-      },
-    });
+    const wrapper = mountView({ PaymentProviderList: PaymentProviderListStub });
 
     await flushPromises();
     await openPaymentTab(wrapper);
@@ -1515,6 +1713,93 @@ describe("admin SettingsView payment visible method controls", () => {
     expect(paymentHelpImageUpload?.attributes("data-remove-label")).toBe("移除");
   });
 
+  it("allows a 1 MiB site logo without expanding other upload limits", async () => {
+    const wrapper = mountView();
+    await flushPromises();
+    const siteTab = wrapper.findAll("button").find((node) => node.text().includes("admin.settings.tabs.general"));
+    expect(siteTab).toBeDefined();
+    await siteTab?.trigger("click");
+    await flushPromises();
+    const logoUpload = wrapper.findAll(".image-upload-stub").find(
+      (node) => node.attributes("hint") === "admin.settings.site.logoHint",
+    );
+    expect(logoUpload).toBeDefined();
+    expect(logoUpload?.attributes("max-size")).toBe(String(1024 * 1024));
+    expect(zhSettings.settings.site.logoHint).toContain("1MB");
+    expect(enSettings.settings.site.logoHint).toContain("1MB");
+    wrapper.unmount();
+  });
+
+  it("places an independent favicon uploader immediately after the site logo", async () => {
+    getSettings.mockResolvedValueOnce({
+      ...baseSettingsResponse,
+      site_logo: "/brand.svg",
+      site_favicon: "/tab-icon.ico",
+    });
+    const wrapper = mountView();
+    await flushPromises();
+    const uploads = wrapper.findAllComponents(ImageUploadStub);
+    const logoIndex = uploads.findIndex((node) => node.attributes("hint") === "admin.settings.site.logoHint");
+    const faviconUpload = uploads[logoIndex + 1];
+    expect(logoIndex).toBeGreaterThanOrEqual(0);
+    expect(faviconUpload?.attributes("hint")).toBe("admin.settings.site.faviconHint");
+    expect(faviconUpload?.props("modelValue")).toBe("/tab-icon.ico");
+    expect(faviconUpload?.attributes("max-size")).toBe(String(1024 * 1024));
+    expect(faviconUpload?.attributes("allow-ico")).toBe("true");
+
+    faviconUpload!.vm.$emit("update:modelValue", "data:image/png;base64,aWNvbg==");
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+    expect(updateSettings).toHaveBeenLastCalledWith(expect.objectContaining({
+      site_logo: "/brand.svg",
+      site_favicon: "data:image/png;base64,aWNvbg==",
+    }));
+    expect(uploads[logoIndex].props("modelValue")).toBe("/brand.svg");
+    wrapper.unmount();
+  });
+
+  it("clears only the favicon when removing its image", async () => {
+    getSettings.mockResolvedValueOnce({
+      ...baseSettingsResponse,
+      site_logo: "/brand.svg",
+      site_favicon: "/tab-icon.ico",
+    });
+    const wrapper = mountView();
+    await flushPromises();
+    const faviconUpload = wrapper.findAllComponents(ImageUploadStub).find(
+      (node) => node.attributes("hint") === "admin.settings.site.faviconHint",
+    );
+    expect(faviconUpload).toBeDefined();
+    faviconUpload!.vm.$emit("update:modelValue", "");
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+    expect(updateSettings).toHaveBeenLastCalledWith(expect.objectContaining({
+      site_logo: "/brand.svg",
+      site_favicon: "",
+    }));
+    wrapper.unmount();
+  });
+
+  it("keeps a missing legacy favicon empty instead of copying the site logo", async () => {
+    getSettings.mockResolvedValueOnce({ ...baseSettingsResponse, site_logo: "/brand.svg" });
+    const wrapper = mountView();
+    await flushPromises();
+    const faviconUpload = wrapper.findAllComponents(ImageUploadStub).find(
+      (node) => node.attributes("hint") === "admin.settings.site.faviconHint",
+    );
+    expect(faviconUpload).toBeDefined();
+    expect(faviconUpload!.props("modelValue")).toBe("");
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+    expect(updateSettings).toHaveBeenLastCalledWith(expect.objectContaining({
+      site_logo: "/brand.svg",
+      site_favicon: "",
+    }));
+    expect(zhSettings.settings.site.faviconHint).toContain("1MB");
+    expect(enSettings.settings.site.faviconHint).toContain("1MB");
+    wrapper.unmount();
+  });
+
   it("normalizes null supported_types from API so provider card stays visible", async () => {
     // Backend returns null for supported_types when the list is empty
     // (Go nil slice → JSON null). Without normalization, ProviderCard's
@@ -1550,24 +1835,7 @@ describe("admin SettingsView payment visible method controls", () => {
       },
     });
 
-    const wrapper = mount(SettingsView, {
-      global: {
-        stubs: {
-          AppLayout: AppLayoutStub,
-          Select: SelectStub,
-          Toggle: ToggleStub,
-          Icon: true,
-          ConfirmDialog: true,
-          PaymentProviderList: PaymentProviderListCapture,
-          PaymentProviderDialog: true,
-          GroupBadge: true,
-          GroupOptionItem: true,
-          ProxySelector: true,
-          ImageUpload: ImageUploadStub,
-          BackupSettings: true,
-        },
-      },
-    });
+    const wrapper = mountView({ PaymentProviderList: PaymentProviderListCapture });
 
     await flushPromises();
     await openPaymentTab(wrapper);

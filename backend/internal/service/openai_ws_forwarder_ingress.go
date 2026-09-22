@@ -788,6 +788,8 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 	if buildHdrErr != nil {
 		return fmt.Errorf("build ws headers: %w", buildHdrErr)
 	}
+	sessionTicketSignature := wsHeaders.Get(openAIWSCodexTicketSignatureHeader)
+	sessionTicketUse := s.snapshotOpenAICodexTicketUse(ctx, account, firstRoutingFields[0].String(), wsHeaders)
 	baseAcquireReq := openAIWSAcquireRequest{
 		Account: account,
 		WSURL:   wsURL,
@@ -871,6 +873,9 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		lease, acquireErr := pool.Acquire(acquireCtx, req)
 		acquireCancel()
 		var dialErr *openAIWSDialError
+		if errors.As(acquireErr, &dialErr) && dialErr != nil {
+			s.observeOpenAICodexTicketUse(ctx, sessionTicketUse, dialErr.StatusCode, dialErr.ResponseHeaders)
+		}
 		if acquireErr != nil && s.isAgentIdentityAccount(ctx, account) && errors.As(acquireErr, &dialErr) && isAgentIdentityTaskInvalidWSDialError(dialErr) && !agentTaskRecoveryTried {
 			agentTaskRecoveryTried = true
 			if recoveryErr := s.recoverAgentIdentityTask(ctx, account, account.GetCredential("task_id")); recoveryErr != nil {
@@ -936,7 +941,9 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			if updatedHeaders == nil {
 				updatedHeaders = make(http.Header)
 			}
-			updatedHeaders.Set(openAIWSTurnStateHeader, handshakeTurnState)
+			if sessionTicketSignature == "" {
+				updatedHeaders.Set(openAIWSTurnStateHeader, handshakeTurnState)
+			}
 			baseAcquireReq.Headers = updatedHeaders
 		}
 		logOpenAIWSModeInfo(
@@ -960,6 +967,10 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		responseModelObserver := &upstreamResponseModelObserver{}
 		if lease == nil {
 			return nil, errors.New("upstream websocket lease is nil")
+		}
+		if err := s.checkOpenAIWSCodexTicket(ctx, account, gjson.GetBytes(payload, "model").String(), sessionTicketSignature); err != nil {
+			lease.MarkBroken()
+			return nil, wrapOpenAIWSIngressTurnError("ticket_policy", err, false)
 		}
 		turnStart := time.Now()
 		wroteDownstream := false
@@ -1040,6 +1051,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 				parseOpenAIWSResponseUsageFromCompletedEvent(upstreamMessage, &usage)
 			}
 			if eventType == "error" || eventType == "response.failed" {
+				s.observeOpenAICodexTicketWSError(ctx, sessionTicketUse, lease.HandshakeHeaders(), upstreamMessage)
 				markOpenAICyberPolicyEvent(c, upstreamMessage, http.StatusOK, &usage)
 			}
 			if eventType == "error" {
@@ -1900,6 +1912,9 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 				nextRoutingFields[1].String(),
 			)
 			if updHdrErr != nil {
+				if errors.Is(updHdrErr, ErrOpenAICodexTicketUnavailable) {
+					return openAIWSCodexTicketReconnectError(updHdrErr)
+				}
 				logOpenAIWSModeInfo("ingress_ws_update_headers_failed account_id=%d err=%v", account.ID, updHdrErr)
 			} else {
 				baseAcquireReq.Headers = updatedHeaders

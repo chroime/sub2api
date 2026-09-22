@@ -6,8 +6,9 @@ import i18n, { initI18n } from './i18n'
 import { useAppStore } from '@/stores/app'
 import { updateFavicon } from '@/utils/branding'
 import { isIOSDevice } from '@/utils/device'
-import { applyFixedDarkTheme } from '@/utils/theme'
+import { applyTheme, getInitialTheme } from '@/utils/theme'
 import './style.css'
+import './styles/public-theme.css'
 
 function initIOSViewportZoomFix() {
   // iOS Safari 在输入框字号小于 16px 时聚焦会自动放大页面，且失焦后不会恢复。
@@ -24,7 +25,7 @@ function initIOSViewportZoomFix() {
 }
 
 function initThemeClass() {
-  applyFixedDarkTheme()
+  applyTheme(getInitialTheme())
 }
 
 async function bootstrap() {
@@ -45,7 +46,7 @@ async function bootstrap() {
   if (appStore.siteName && appStore.siteName !== 'Sub2API') {
     document.title = `${appStore.siteName} - AI API Gateway`
   }
-  updateFavicon(appStore.siteLogo)
+  updateFavicon(appStore.siteFavicon)
 
   await initI18n()
 

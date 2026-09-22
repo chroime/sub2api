@@ -59,8 +59,8 @@ describe('MonitorAvailabilityResetDialog', () => {
     const wrapper = mountDialog()
 
     expect((wrapper.get('#availability-reset-pct').element as HTMLInputElement).value).toBe('73.25')
-    expect(wrapper.findAll('fieldset button')).toHaveLength(9)
-    expect(wrapper.findAll('fieldset button')[0].attributes('aria-pressed')).toBe('true')
+    expect(wrapper.findAll('#availability-reset-yellow-bars button')).toHaveLength(9)
+    expect(wrapper.findAll('#availability-reset-yellow-bars button')[0].attributes('aria-pressed')).toBe('true')
   })
 
   it('validates percentage precision and range', async () => {
@@ -79,7 +79,7 @@ describe('MonitorAvailabilityResetDialog', () => {
 
   it('emits the selected yellow bar count', async () => {
     const wrapper = mountDialog()
-    await wrapper.findAll('fieldset button')[8].trigger('click')
+    await wrapper.findAll('#availability-reset-yellow-bars button')[8].trigger('click')
     await wrapper.get('#availability-reset-pct').setValue('0')
     await wrapper.get('form').trigger('submit')
 
@@ -88,11 +88,13 @@ describe('MonitorAvailabilityResetDialog', () => {
 
   it('offers four layouts and submits the selected layout', async () => {
     const wrapper = mountDialog()
-    const select = wrapper.get('#availability-reset-layout')
-    expect(select.findAll('option')).toHaveLength(4)
-    expect((select.element as HTMLSelectElement).value).toBe('even')
+    const choices = wrapper.findAll('#availability-reset-layout button')
+    expect(choices).toHaveLength(4)
+    expect(choices.map(choice => choice.attributes('aria-pressed'))).toEqual(['true', 'false', 'false', 'false'])
 
-    await select.setValue('block_newest')
+    await choices[2].trigger('click')
+    expect(choices.map(choice => choice.attributes('aria-pressed'))).toEqual(['false', 'false', 'true', 'false'])
+    expect(wrapper.emitted('submit')).toBeUndefined()
     await wrapper.get('form').trigger('submit')
     expect(wrapper.emitted('submit')).toEqual([[
       { availability_pct: 73.25, degraded_bars: 0, degraded_bar_layout: 'block_newest' },

@@ -88,9 +88,8 @@ type OpenAIEndpointCapability string
 
 const openAILongContextBillingEnabledKey = "openai_long_context_billing_enabled"
 
-// OpenAISyntheticFirstResponseEnabledExtraKey is the per-account opt-in for
-// the synthetic SSE acknowledgement. The global gateway setting remains the
-// master switch; this key keeps the feature disabled for accounts by default.
+// OpenAISyntheticFirstResponseEnabledExtraKey is the legacy OpenAI opt-in,
+// read only when the generic StreamingACKEnabledExtraKey is absent.
 const OpenAISyntheticFirstResponseEnabledExtraKey = "openai_synthetic_first_response_enabled"
 
 const (
@@ -853,6 +852,10 @@ func resolveRequestedModelInMapping(mapping map[string]string, requestedModel st
 // 会把未知模型原样透传，Codex 上游对这类模型必然返回不可重试的 400，导致
 // 请求卡死在该账号上、无法 failover 到真正支持该模型的 API Key 账号（#3662）。
 // 未知/自定义别名仍保持允许（兼容渠道级映射），见 isOpenAIOAuthServableModel。
+//
+// 例外：DeepSeek 平台的空映射不再是「允许所有」，改按官方模型白名单判定
+// （isDeepseekServableModel）——未知模型名透传上游只会得到 404/400，并误触发
+// per-(账号,模型) 30 分钟冷却；带 [1m] 上下文后缀的写法先归一化再比对。
 func (a *Account) IsModelSupported(requestedModel string) bool {
 	// 透传模式仅替换认证、模型语义完全交由上游决定，因此放行所有模型。
 	// 该短路必须在 model_mapping 判定之前：账号从"白名单模式"切换到透传后，
@@ -865,6 +868,9 @@ func (a *Account) IsModelSupported(requestedModel string) bool {
 	if len(mapping) == 0 {
 		if a.IsOpenAIOAuth() {
 			return isOpenAIOAuthServableModel(requestedModel)
+		}
+		if a.Platform == PlatformDeepseek {
+			return isDeepseekServableModel(requestedModel)
 		}
 		return true // 无映射 = 允许所有
 	}
@@ -1302,15 +1308,46 @@ func (a *Account) IsOpenAILongContextBillingEnabled() bool {
 	return ok && enabled
 }
 
-// IsOpenAISyntheticFirstResponseEnabled reports whether this OpenAI account
-// explicitly opted in to the synthetic streaming acknowledgement.
-// Missing, malformed, or false values are all treated as disabled.
+// IsOpenAISyntheticFirstResponseEnabled retains compatibility with existing
+// gateway callers; new code should use IsStreamingACKEnabled.
 func (a *Account) IsOpenAISyntheticFirstResponseEnabled() bool {
-	if a == nil || !a.IsOpenAI() || a.IsShadow() || a.Extra == nil {
+	return a.IsStreamingACKEnabled()
+}
+
+// StreamingACKEnabledExtraKey is the platform-neutral, explicit account opt-in.
+const StreamingACKEnabledExtraKey = "streaming_ack_enabled"
+
+func SupportsStreamingACKPlatform(platform string) bool {
+	switch platform {
+	case PlatformOpenAI, PlatformAnthropic, PlatformGemini, PlatformAntigravity,
+		PlatformGrok, PlatformKimi, PlatformZhipu, PlatformDeepseek, PlatformMiniMax, PlatformOpenCodeGo:
+		return true
+	default:
+		return false
+	}
+}
+
+// IsStreamingACKEnabled reads the generic opt-in first, retaining the legacy
+// OpenAI setting only when no generic value exists. Malformed values fail closed.
+func (a *Account) IsStreamingACKEnabled() bool {
+	if !a.SupportsStreamingACK() || a.Extra == nil {
+		return false
+	}
+	if raw, exists := a.Extra[StreamingACKEnabledExtraKey]; exists {
+		enabled, ok := raw.(bool)
+		return ok && enabled
+	}
+	if !a.IsOpenAI() {
 		return false
 	}
 	enabled, ok := a.Extra[OpenAISyntheticFirstResponseEnabledExtraKey].(bool)
 	return ok && enabled
+}
+
+// SupportsStreamingACK describes transport capability independently of the
+// legacy account preference, which an explicit group policy may override.
+func (a *Account) SupportsStreamingACK() bool {
+	return a != nil && SupportsStreamingACKPlatform(a.Platform) && !a.IsShadow()
 }
 
 // IsOpenAISyntheticFirstResponseEnabledForGroup combines the account opt-in
@@ -1318,7 +1355,15 @@ func (a *Account) IsOpenAISyntheticFirstResponseEnabled() bool {
 // affecting a request routed outside its current group (including the
 // ungrouped pool when groupID is nil).
 func (a *Account) IsOpenAISyntheticFirstResponseEnabledForGroup(groupID *int64) bool {
-	if !a.IsOpenAISyntheticFirstResponseEnabled() {
+	return a.IsStreamingACKEnabledForGroup(groupID)
+}
+
+func (a *Account) IsStreamingACKEnabledForGroup(groupID *int64) bool {
+	return a.IsStreamingACKEnabled() && a.belongsToStreamingACKGroup(groupID)
+}
+
+func (a *Account) belongsToStreamingACKGroup(groupID *int64) bool {
+	if a == nil {
 		return false
 	}
 	if groupID == nil || *groupID <= 0 {
@@ -1860,6 +1905,11 @@ func (a *Account) GetOpenAISessionID() string {
 func (a *Account) SupportsOpenAIEndpointCapability(capability OpenAIEndpointCapability) bool {
 	if a == nil {
 		return false
+	}
+	if capability == OpenAIEndpointCapabilitySeedance {
+		configured, _ := a.openAIEndpointCapabilitySet()
+		return configured["seedance"] && a.Platform == PlatformOpenAI && a.Type == AccountTypeAPIKey &&
+			strings.TrimSpace(a.GetCredential("base_url")) != ""
 	}
 	if capability == "" {
 		return true

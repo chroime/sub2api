@@ -28,6 +28,7 @@ export const useAppStore = defineStore('app', () => {
   const publicSettingsLoading = ref<boolean>(false)
   const siteName = ref<string>('Sub2API')
   const siteLogo = ref<string>('')
+  const siteFavicon = ref<string>('')
   const siteVersion = ref<string>('')
   const contactInfo = ref<string>('')
   const apiBaseUrl = ref<string>('')
@@ -290,12 +291,14 @@ export const useAppStore = defineStore('app', () => {
    * Apply settings to store state (internal helper to avoid code duplication)
    */
   function applySettings(config: PublicSettings): void {
+    config = { ...config, site_favicon: config.site_favicon || '' }
     if (typeof window !== 'undefined') {
       window.__APP_CONFIG__ = { ...config }
     }
     cachedPublicSettings.value = config
     siteName.value = config.site_name || 'Sub2API'
     siteLogo.value = config.site_logo || ''
+    siteFavicon.value = config.site_favicon || ''
     siteVersion.value = config.version || ''
     contactInfo.value = config.contact_info || ''
     apiBaseUrl.value = config.api_base_url || ''
@@ -341,6 +344,7 @@ export const useAppStore = defineStore('app', () => {
         aliyun_captcha_region: 'cn',
         site_name: siteName.value,
         site_logo: siteLogo.value,
+        site_favicon: siteFavicon.value,
         site_subtitle: '',
         api_base_url: apiBaseUrl.value,
         contact_info: contactInfo.value,
@@ -396,7 +400,7 @@ export const useAppStore = defineStore('app', () => {
     const request = apiRequest
       .then((data) => {
         applySettings(data)
-        return data
+        return cachedPublicSettings.value
       })
       .catch((error) => {
         console.error('Failed to fetch public settings:', error)
@@ -448,6 +452,7 @@ export const useAppStore = defineStore('app', () => {
     publicSettingsLoaded,
     siteName,
     siteLogo,
+    siteFavicon,
     siteVersion,
     contactInfo,
     apiBaseUrl,

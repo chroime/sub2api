@@ -115,6 +115,11 @@ func Status(v string) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldStatus, v))
 }
 
+// StreamingAckEnabled applies equality check predicate on the "streaming_ack_enabled" field. It's identical to StreamingAckEnabledEQ.
+func StreamingAckEnabled(v bool) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldStreamingAckEnabled, v))
+}
+
 // DuplicateOperationID applies equality check predicate on the "duplicate_operation_id" field. It's identical to DuplicateOperationIDEQ.
 func DuplicateOperationID(v string) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldDuplicateOperationID, v))
@@ -908,6 +913,26 @@ func StatusEqualFold(v string) predicate.Group {
 // StatusContainsFold applies the ContainsFold predicate on the "status" field.
 func StatusContainsFold(v string) predicate.Group {
 	return predicate.Group(sql.FieldContainsFold(FieldStatus, v))
+}
+
+// StreamingAckEnabledEQ applies the EQ predicate on the "streaming_ack_enabled" field.
+func StreamingAckEnabledEQ(v bool) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldStreamingAckEnabled, v))
+}
+
+// StreamingAckEnabledNEQ applies the NEQ predicate on the "streaming_ack_enabled" field.
+func StreamingAckEnabledNEQ(v bool) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldStreamingAckEnabled, v))
+}
+
+// StreamingAckEnabledIsNil applies the IsNil predicate on the "streaming_ack_enabled" field.
+func StreamingAckEnabledIsNil() predicate.Group {
+	return predicate.Group(sql.FieldIsNull(FieldStreamingAckEnabled))
+}
+
+// StreamingAckEnabledNotNil applies the NotNil predicate on the "streaming_ack_enabled" field.
+func StreamingAckEnabledNotNil() predicate.Group {
+	return predicate.Group(sql.FieldNotNull(FieldStreamingAckEnabled))
 }
 
 // DuplicateOperationIDEQ applies the EQ predicate on the "duplicate_operation_id" field.

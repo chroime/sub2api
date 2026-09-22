@@ -151,10 +151,13 @@ type SystemSettings struct {
 
 	SiteName                    string           `json:"site_name"`
 	SiteLogo                    string           `json:"site_logo"`
+	SiteFavicon                 string           `json:"site_favicon"`
 	SiteSubtitle                string           `json:"site_subtitle"`
 	APIBaseURL                  string           `json:"api_base_url"`
 	ContactInfo                 string           `json:"contact_info"`
 	DocURL                      string           `json:"doc_url"`
+	DocsTitle                   string           `json:"docs_title"`
+	DocsContent                 string           `json:"docs_content"`
 	HomeContent                 string           `json:"home_content"`
 	CompactHomeEnabled          bool             `json:"compact_home_enabled"`
 	HideCcsImportButton         bool             `json:"hide_ccs_import_button"`
@@ -202,21 +205,35 @@ type SystemSettings struct {
 	BackendModeEnabled bool `json:"backend_mode_enabled"`
 
 	// Gateway forwarding behavior
-	OpenAITTFTMode                         string `json:"openai_ttft_mode"`
-	EnableFingerprintUnification           bool   `json:"enable_fingerprint_unification"`
-	EnableMetadataPassthrough              bool   `json:"enable_metadata_passthrough"`
-	EnableCCHSigning                       bool   `json:"enable_cch_signing"`
-	EnableClaudeOAuthSystemPromptInjection bool   `json:"enable_claude_oauth_system_prompt_injection"`
-	ClaudeOAuthSystemPrompt                string `json:"claude_oauth_system_prompt"`
-	ClaudeOAuthSystemPromptBlocks          string `json:"claude_oauth_system_prompt_blocks"`
-	EnableAnthropicCacheTTL1hInjection     bool   `json:"enable_anthropic_cache_ttl_1h_injection"`
-	RewriteMessageCacheControl             bool   `json:"rewrite_message_cache_control"`
-	EnableClientDatelineNormalization      bool   `json:"enable_client_dateline_normalization"`
-	AntigravityUserAgentVersion            string `json:"antigravity_user_agent_version"`
-	OpenAICodexUserAgent                   string `json:"openai_codex_user_agent"`
-	OpenAICodexClientVersion               string `json:"openai_codex_client_version"`
-	OpenAICodexClientVersionSynced         string `json:"openai_codex_client_version_synced"`
-	OpenAICodexVersionAutoSyncEnabled      bool   `json:"openai_codex_version_auto_sync_enabled"`
+	OpenAITTFTMode                             string  `json:"openai_ttft_mode"`
+	EnableFingerprintUnification               bool    `json:"enable_fingerprint_unification"`
+	EnableMetadataPassthrough                  bool    `json:"enable_metadata_passthrough"`
+	EnableCCHSigning                           bool    `json:"enable_cch_signing"`
+	EnableClaudeOAuthSystemPromptInjection     bool    `json:"enable_claude_oauth_system_prompt_injection"`
+	ClaudeOAuthSystemPrompt                    string  `json:"claude_oauth_system_prompt"`
+	ClaudeOAuthSystemPromptBlocks              string  `json:"claude_oauth_system_prompt_blocks"`
+	EnableAnthropicCacheTTL1hInjection         bool    `json:"enable_anthropic_cache_ttl_1h_injection"`
+	RewriteMessageCacheControl                 bool    `json:"rewrite_message_cache_control"`
+	EnableClientDatelineNormalization          bool    `json:"enable_client_dateline_normalization"`
+	AntigravityUserAgentVersion                string  `json:"antigravity_user_agent_version"`
+	OpenAICodexUserAgent                       string  `json:"openai_codex_user_agent"`
+	OpenAICodexClientVersion                   string  `json:"openai_codex_client_version"`
+	OpenAICodexClientVersionSynced             string  `json:"openai_codex_client_version_synced"`
+	OpenAICodexVersionAutoSyncEnabled          bool    `json:"openai_codex_version_auto_sync_enabled"`
+	OpenAICodexTicketEnabled                   bool    `json:"openai_codex_ticket_enabled"`
+	OpenAICodexTicketVerifyEnabled             bool    `json:"openai_codex_ticket_verify_enabled"`
+	OpenAICodexTicketHarvestProxyIDs           []int64 `json:"openai_codex_ticket_harvest_proxy_ids"`
+	OpenAICodexTicketHarvestConcurrency        int     `json:"openai_codex_ticket_harvest_concurrency"`
+	OpenAICodexTicket332VerifyEnabled          bool    `json:"openai_codex_ticket_332_verify_enabled"`
+	OpenAICodexTicket332HarvestProxyIDs        []int64 `json:"openai_codex_ticket_332_harvest_proxy_ids"`
+	OpenAICodexTicket332HarvestConcurrency     int     `json:"openai_codex_ticket_332_harvest_concurrency"`
+	OpenAICodexTicketFailClosed                bool    `json:"openai_codex_ticket_fail_closed"`
+	OpenAICodexTicketHarvestProxyURL           string  `json:"openai_codex_ticket_harvest_proxy_url"`
+	OpenAICodexTicketHarvestProxyConfigured    bool    `json:"openai_codex_ticket_harvest_proxy_configured"`
+	OpenAICodexTicket332Enabled                bool    `json:"openai_codex_ticket_332_enabled"`
+	OpenAICodexTicket332FailClosed             bool    `json:"openai_codex_ticket_332_fail_closed"`
+	OpenAICodexTicket332HarvestProxyURL        string  `json:"openai_codex_ticket_332_harvest_proxy_url"`
+	OpenAICodexTicket332HarvestProxyConfigured bool    `json:"openai_codex_ticket_332_harvest_proxy_configured"`
 
 	// codex_cli_only 加固
 	MinCodexVersion                      string `json:"min_codex_version"`
@@ -383,10 +400,13 @@ type PublicSettings struct {
 	AliyunCaptchaRegion                 string                   `json:"aliyun_captcha_region"`
 	SiteName                            string                   `json:"site_name"`
 	SiteLogo                            string                   `json:"site_logo"`
+	SiteFavicon                         string                   `json:"site_favicon"`
 	SiteSubtitle                        string                   `json:"site_subtitle"`
 	APIBaseURL                          string                   `json:"api_base_url"`
 	ContactInfo                         string                   `json:"contact_info"`
 	DocURL                              string                   `json:"doc_url"`
+	DocsTitle                           string                   `json:"docs_title"`
+	DocsContent                         string                   `json:"docs_content"`
 	HomeContent                         string                   `json:"home_content"`
 	CompactHomeEnabled                  bool                     `json:"compact_home_enabled"`
 	HideCcsImportButton                 bool                     `json:"hide_ccs_import_button"`

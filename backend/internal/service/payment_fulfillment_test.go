@@ -1081,6 +1081,14 @@ func createPaymentFulfillmentSubscriptionOrder(
 		Save(ctx)
 	require.NoError(t, err)
 
+	plan, err := client.SubscriptionPlan.Create().
+		SetGroupID(7).
+		SetName("payment-fulfillment-plan").
+		SetPrice(80).
+		SetSinglePurchase(false).
+		Save(ctx)
+	require.NoError(t, err)
+
 	order, err := client.PaymentOrder.Create().
 		SetUserID(user.ID).
 		SetUserEmail(user.Email).
@@ -1093,7 +1101,7 @@ func createPaymentFulfillmentSubscriptionOrder(
 		SetPaymentType(payment.TypeAlipay).
 		SetPaymentTradeNo("trade-fulfillment").
 		SetOrderType(payment.OrderTypeSubscription).
-		SetPlanID(100).
+		SetPlanID(plan.ID).
 		SetSubscriptionGroupID(7).
 		SetSubscriptionDays(30).
 		SetStatus(status).
@@ -1126,6 +1134,14 @@ func TestExecuteSubscriptionFulfillmentAppliesAffiliateRebate(t *testing.T) {
 		Save(ctx)
 	require.NoError(t, err)
 
+	plan, err := client.SubscriptionPlan.Create().
+		SetGroupID(7).
+		SetName("subscription-affiliate-plan").
+		SetPrice(9.99).
+		SetSinglePurchase(false).
+		Save(ctx)
+	require.NoError(t, err)
+
 	order, err := client.PaymentOrder.Create().
 		SetUserID(user.ID).
 		SetUserEmail(user.Email).
@@ -1138,7 +1154,7 @@ func TestExecuteSubscriptionFulfillmentAppliesAffiliateRebate(t *testing.T) {
 		SetPaymentType(payment.TypeAlipay).
 		SetPaymentTradeNo("trade-sub-affiliate").
 		SetOrderType(payment.OrderTypeSubscription).
-		SetPlanID(99).
+		SetPlanID(plan.ID).
 		SetSubscriptionGroupID(7).
 		SetSubscriptionDays(30).
 		SetStatus(OrderStatusPaid).
@@ -1212,6 +1228,14 @@ func TestExecuteSubscriptionFulfillmentDoesNotDuplicateWorkAfterLegacySuccessAud
 		Save(ctx)
 	require.NoError(t, err)
 
+	plan, err := client.SubscriptionPlan.Create().
+		SetGroupID(7).
+		SetName("subscription-affiliate-idempotent-plan").
+		SetPrice(80).
+		SetSinglePurchase(false).
+		Save(ctx)
+	require.NoError(t, err)
+
 	order, err := client.PaymentOrder.Create().
 		SetUserID(user.ID).
 		SetUserEmail(user.Email).
@@ -1224,7 +1248,7 @@ func TestExecuteSubscriptionFulfillmentDoesNotDuplicateWorkAfterLegacySuccessAud
 		SetPaymentType(payment.TypeAlipay).
 		SetPaymentTradeNo("trade-sub-affiliate-idempotent").
 		SetOrderType(payment.OrderTypeSubscription).
-		SetPlanID(100).
+		SetPlanID(plan.ID).
 		SetSubscriptionGroupID(7).
 		SetSubscriptionDays(30).
 		SetStatus(OrderStatusPaid).

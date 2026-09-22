@@ -87,6 +87,7 @@ func mustCreateGroup(t *testing.T, client *dbent.Client, g *service.Group) *serv
 		SetName(g.Name).
 		SetPlatform(g.Platform).
 		SetStatus(g.Status).
+		SetNillableStreamingAckEnabled(g.StreamingACKEnabled).
 		SetSubscriptionType(g.SubscriptionType).
 		SetRateMultiplier(g.RateMultiplier).
 		SetIsExclusive(g.IsExclusive).

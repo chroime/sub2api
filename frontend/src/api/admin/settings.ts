@@ -4,6 +4,7 @@
  */
 
 import { apiClient } from "../client";
+import { isBalancePrechargeMoney, validBalancePrechargeAmounts } from "@/utils/balancePrecharge";
 import type {
   CustomEndpoint,
   CustomMenuItem,
@@ -478,10 +479,13 @@ export interface SystemSettings {
   // OEM settings
   site_name: string;
   site_logo: string;
+  site_favicon?: string;
   site_subtitle: string;
   api_base_url: string;
   contact_info: string;
   doc_url: string;
+  docs_title?: string;
+  docs_content?: string;
   home_content: string;
   compact_home_enabled: boolean;
   hide_ccs_import_button: boolean;
@@ -639,6 +643,20 @@ export interface SystemSettings {
   openai_codex_client_version: string;
   openai_codex_client_version_synced: string;
   openai_codex_version_auto_sync_enabled: boolean;
+  openai_codex_ticket_enabled: boolean;
+  openai_codex_ticket_fail_closed: boolean;
+  openai_codex_ticket_harvest_proxy_url: string;
+  openai_codex_ticket_harvest_proxy_configured: boolean;
+  openai_codex_ticket_verify_enabled: boolean;
+  openai_codex_ticket_harvest_proxy_ids: number[];
+  openai_codex_ticket_harvest_concurrency: number;
+  openai_codex_ticket_332_enabled: boolean;
+  openai_codex_ticket_332_fail_closed: boolean;
+  openai_codex_ticket_332_harvest_proxy_url: string;
+  openai_codex_ticket_332_harvest_proxy_configured: boolean;
+  openai_codex_ticket_332_verify_enabled: boolean;
+  openai_codex_ticket_332_harvest_proxy_ids: number[];
+  openai_codex_ticket_332_harvest_concurrency: number;
   // codex_cli_only 加固
   min_codex_version: string;
   max_codex_version: string;
@@ -822,10 +840,13 @@ export interface UpdateSettingsRequest {
   auth_source_default_dingtalk_platform_quotas?: DefaultPlatformQuotasMap;
   site_name?: string;
   site_logo?: string;
+  site_favicon?: string;
   site_subtitle?: string;
   api_base_url?: string;
   contact_info?: string;
   doc_url?: string;
+  docs_title?: string;
+  docs_content?: string;
   home_content?: string;
   compact_home_enabled?: boolean;
   hide_ccs_import_button?: boolean;
@@ -958,6 +979,18 @@ export interface UpdateSettingsRequest {
   openai_codex_user_agent?: string;
   openai_codex_client_version?: string;
   openai_codex_version_auto_sync_enabled?: boolean;
+  openai_codex_ticket_enabled?: boolean;
+  openai_codex_ticket_fail_closed?: boolean;
+  openai_codex_ticket_harvest_proxy_url?: string;
+  openai_codex_ticket_verify_enabled?: boolean;
+  openai_codex_ticket_harvest_proxy_ids?: number[];
+  openai_codex_ticket_harvest_concurrency?: number;
+  openai_codex_ticket_332_enabled?: boolean;
+  openai_codex_ticket_332_fail_closed?: boolean;
+  openai_codex_ticket_332_harvest_proxy_url?: string;
+  openai_codex_ticket_332_verify_enabled?: boolean;
+  openai_codex_ticket_332_harvest_proxy_ids?: number[];
+  openai_codex_ticket_332_harvest_concurrency?: number;
   // codex_cli_only 加固
   min_codex_version?: string;
   max_codex_version?: string;
@@ -1566,7 +1599,153 @@ export async function resetWebSearchUsage(payload: {
   );
 }
 
+export interface BalancePrechargeSettings {
+  enabled: boolean;
+  threshold: number;
+  amount: number;
+}
+
+export interface GroupBalancePrechargeSettings {
+  mode: "inherit" | "custom";
+  threshold: number;
+  amount: number;
+}
+
+export interface GroupBalancePrechargeSettingsResponse {
+  group_id: number;
+  settings: GroupBalancePrechargeSettings;
+  global: BalancePrechargeSettings;
+  effective: BalancePrechargeSettings;
+}
+
+function validateBalancePrechargeSettings(data: BalancePrechargeSettings): BalancePrechargeSettings {
+  if (typeof data?.enabled !== "boolean" || !isBalancePrechargeMoney(data.threshold) ||
+      !isBalancePrechargeMoney(data.amount) ||
+      !validBalancePrechargeAmounts(data.threshold, data.amount, data.enabled)) {
+    throw new Error("Invalid balance precharge settings");
+  }
+  return data;
+}
+
+function validateGroupBalancePrechargeSettings(data: GroupBalancePrechargeSettingsResponse, groupId: number): GroupBalancePrechargeSettingsResponse {
+  const settings = data?.settings;
+  if (data?.group_id !== groupId || !settings || !["inherit", "custom"].includes(settings.mode) ||
+      !isBalancePrechargeMoney(settings.threshold) || !isBalancePrechargeMoney(settings.amount) ||
+      !validBalancePrechargeAmounts(settings.threshold, settings.amount, settings.mode === "custom")) {
+    throw new Error("Invalid group balance precharge settings");
+  }
+  validateBalancePrechargeSettings(data.global);
+  validateBalancePrechargeSettings(data.effective);
+  return data;
+}
+
+export async function getBalancePrechargeSettings(): Promise<BalancePrechargeSettings> {
+  const { data } = await apiClient.get<BalancePrechargeSettings>("/admin/settings/balance-precharge");
+  return validateBalancePrechargeSettings(data);
+}
+
+export async function updateBalancePrechargeSettings(settings: BalancePrechargeSettings): Promise<BalancePrechargeSettings> {
+  const { data } = await apiClient.put<BalancePrechargeSettings>("/admin/settings/balance-precharge", settings);
+  return validateBalancePrechargeSettings(data);
+}
+
+export async function getGroupBalancePrechargeSettings(groupId: number): Promise<GroupBalancePrechargeSettingsResponse> {
+  const { data } = await apiClient.get<GroupBalancePrechargeSettingsResponse>(`/admin/groups/${groupId}/balance-precharge`);
+  return validateGroupBalancePrechargeSettings(data, groupId);
+}
+
+export async function updateGroupBalancePrechargeSettings(groupId: number, settings: GroupBalancePrechargeSettings): Promise<GroupBalancePrechargeSettingsResponse> {
+  const { data } = await apiClient.put<GroupBalancePrechargeSettingsResponse>(`/admin/groups/${groupId}/balance-precharge`, settings);
+  return validateGroupBalancePrechargeSettings(data, groupId);
+}
+
+export interface StreamingACKSettings {
+  enabled: boolean;
+}
+
+function validateStreamingACKSettings(data: StreamingACKSettings): StreamingACKSettings {
+  if (typeof data?.enabled !== "boolean") {
+    throw new Error("Invalid streaming ACK settings");
+  }
+  return data;
+}
+
+export async function getStreamingACKSettings(): Promise<StreamingACKSettings> {
+  const { data } = await apiClient.get<StreamingACKSettings>(
+    "/admin/settings/streaming-ack",
+  );
+  return validateStreamingACKSettings(data);
+}
+
+export async function updateStreamingACKSettings(
+  settings: StreamingACKSettings,
+): Promise<StreamingACKSettings> {
+  const { data } = await apiClient.put<StreamingACKSettings>(
+    "/admin/settings/streaming-ack",
+    settings,
+  );
+  return validateStreamingACKSettings(data);
+}
+
+export interface CodexTicketMonitorState {
+  mode: string;
+  account_id: number;
+  account_name: string;
+  model: string;
+  status: string;
+  phase: string;
+  proxy_id?: number;
+  proxy_name: string;
+  length: number;
+  expires_at?: string;
+  next_attempt_at?: string;
+  last_error: string;
+  updated_at: string;
+  uses: number;
+  last_used_at?: string;
+}
+
+export interface CodexTicketMonitorEvent {
+  id: number | string;
+  time: string;
+  mode: string;
+  account_id: number;
+  account_name: string;
+  model: string;
+  phase: string;
+  status: string;
+  proxy_id?: number;
+  proxy_name: string;
+  http_status: number;
+  length: number;
+  error_code: string;
+  next_attempt_at?: string;
+}
+
+export interface CodexTicketMonitorSnapshot {
+  updated_at: string;
+  states: CodexTicketMonitorState[];
+  events: CodexTicketMonitorEvent[];
+}
+
+export async function getCodexTicketMonitor(options?: { signal?: AbortSignal }): Promise<CodexTicketMonitorSnapshot> {
+  const { data } = await apiClient.get<CodexTicketMonitorSnapshot>("/admin/settings/codex-tickets/monitor", {
+    signal: options?.signal,
+  });
+  if (!data || !Array.isArray(data.states) || !Array.isArray(data.events) || typeof data.updated_at !== "string") {
+    throw new Error("Invalid Codex ticket monitor response");
+  }
+  return data;
+}
+
 export const settingsAPI = {
+  getCodexTicketMonitor,
+  getBalancePrechargeSettings,
+  updateBalancePrechargeSettings,
+  getGroupBalancePrechargeSettings,
+  updateGroupBalancePrechargeSettings,
+  getStreamingACKSettings,
+  updateStreamingACKSettings,
   getSettings,
   updateSettings,
   testSmtpConnection,

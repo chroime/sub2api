@@ -109,6 +109,33 @@ describe('BulkEditAccountModal', () => {
     )
   })
 
+  it.each([true, false])('updates ACK to %s across mixed platforms with only the selected setting', async (enabled) => {
+    const wrapper = mountModal({
+      selectedPlatforms: ['openai', 'anthropic', 'gemini', 'grok', 'kimi', 'antigravity'],
+      selectedTypes: ['apikey', 'oauth', 'bedrock', 'service_account', 'upstream'],
+    })
+    await wrapper.get('#bulk-edit-streaming-ack-enabled').setValue(true)
+    const toggle = wrapper.get('[data-testid="bulk-edit-streaming-ack-toggle"]')
+    if (enabled) await toggle.trigger('click')
+    await wrapper.get('#bulk-edit-account-form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(adminAPI.accounts.bulkUpdate).toHaveBeenCalledWith([1, 2], {
+      extra: { streaming_ack_enabled: enabled },
+    })
+    wrapper.unmount()
+  })
+
+  it('does not overwrite account ACK opt-ins when bulk ACK is not selected', async () => {
+    const wrapper = mountModal({ selectedPlatforms: ['anthropic', 'gemini'] })
+    expect(wrapper.get('[data-testid="bulk-edit-streaming-ack-toggle"]').attributes('disabled')).toBeDefined()
+    await wrapper.get('#bulk-edit-priority-enabled').setValue(true)
+    await wrapper.get('#bulk-edit-account-form').trigger('submit.prevent')
+    await flushPromises()
+    expect(adminAPI.accounts.bulkUpdate).toHaveBeenCalledWith([1, 2], { priority: 1 })
+    wrapper.unmount()
+  })
+
   it('后端拒绝修改同步账号倍率时展示专用错误', async () => {
     vi.mocked(adminAPI.accounts.bulkUpdate).mockRejectedValueOnce({
       status: 409,
@@ -554,6 +581,18 @@ describe('BulkEditAccountModal', () => {
     expect(adminAPI.accounts.bulkUpdate).toHaveBeenCalledWith([1, 2], {
       credentials: { openai_capabilities: ['embeddings'] },
       extra: { openai_responses_mode: null }
+    })
+  })
+
+  it('persists Seedance in a two-capability bulk update', async () => {
+    const wrapper = mountModal({ selectedPlatforms: ['openai'], selectedTypes: ['apikey'] })
+    await wrapper.get('#bulk-edit-openai-endpoint-capabilities-enabled').setValue(true)
+    await wrapper.get('[data-testid="bulk-edit-openai-endpoint-capability-embeddings"]').setValue(false)
+    await wrapper.get('[data-testid="bulk-edit-openai-endpoint-capability-seedance"]').setValue(true)
+    await wrapper.get('#bulk-edit-account-form').trigger('submit.prevent')
+    await flushPromises()
+    expect(adminAPI.accounts.bulkUpdate).toHaveBeenCalledWith([1, 2], {
+      credentials: { openai_capabilities: ['chat_completions', 'seedance'] }
     })
   })
 

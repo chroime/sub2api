@@ -69,6 +69,7 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		settingKeyForwardedClientIPModeV2:                   "true",
 		SettingKeySiteName:                                  "Sub2API",
 		SettingKeySiteLogo:                                  "",
+		SettingKeySiteFavicon:                               "",
 		SettingKeyPurchaseSubscriptionEnabled:               "false",
 		SettingKeyPurchaseSubscriptionURL:                   "",
 		SettingKeyTableDefaultPageSize:                      "20",
@@ -246,6 +247,8 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyOpenAICodexClientVersion:                           "",
 		SettingKeyOpenAICodexClientVersionSynced:                     "",
 		SettingKeyOpenAICodexVersionAutoSyncEnabled:                  "true",
+		SettingKeyOpenAICodexTicketHarvestProxyURL:                   "",
+		SettingKeyOpenAICodexTicket332HarvestProxyURL:                "",
 		SettingPaymentVisibleMethodAlipaySource:                      "",
 		SettingPaymentVisibleMethodWxpaySource:                       "",
 		SettingPaymentVisibleMethodAlipayEnabled:                     "false",
@@ -357,10 +360,13 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 		ForwardedClientIPHeaders:               forwardedClientIPHeaders,
 		SiteName:                               s.getStringOrDefault(settings, SettingKeySiteName, "Sub2API"),
 		SiteLogo:                               settings[SettingKeySiteLogo],
+		SiteFavicon:                            settings[SettingKeySiteFavicon],
 		SiteSubtitle:                           s.getStringOrDefault(settings, SettingKeySiteSubtitle, "Subscription to API Conversion Platform"),
 		APIBaseURL:                             settings[SettingKeyAPIBaseURL],
 		ContactInfo:                            settings[SettingKeyContactInfo],
 		DocURL:                                 settings[SettingKeyDocURL],
+		DocsTitle:                              s.getStringOrDefault(settings, SettingKeyDocsTitle, ""),
+		DocsContent:                            settings[SettingKeyDocsContent],
 		HomeContent:                            settings[SettingKeyHomeContent],
 		CompactHomeEnabled:                     settings[SettingKeyCompactHomeEnabled] == "true",
 		HideCcsImportButton:                    settings[SettingKeyHideCcsImportButton] == "true",
@@ -891,6 +897,38 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	} else {
 		result.OpenAICodexVersionAutoSyncEnabled = true
 	}
+	if v, ok := settings[SettingKeyOpenAICodexTicketEnabled]; ok && v != "" {
+		result.OpenAICodexTicketEnabled = v == "true"
+	} else if s != nil && s.cfg != nil {
+		result.OpenAICodexTicketEnabled = s.cfg.Gateway.OpenAICodexTicket.Enabled
+	}
+	result.OpenAICodexTicketHarvestProxyURL = strings.TrimSpace(settings[SettingKeyOpenAICodexTicketHarvestProxyURL])
+	result.OpenAICodexTicketFailClosed = true
+	if s != nil && s.cfg != nil {
+		result.OpenAICodexTicketFailClosed = s.cfg.Gateway.OpenAICodexTicket.FailClosed
+		result.OpenAICodexTicket332Enabled = s.cfg.Gateway.OpenAICodexTicket332.Enabled
+		result.OpenAICodexTicket332FailClosed = s.cfg.Gateway.OpenAICodexTicket332.FailClosed
+	}
+	for key, target := range map[string]*bool{
+		SettingKeyOpenAICodexTicketFailClosed:    &result.OpenAICodexTicketFailClosed,
+		SettingKeyOpenAICodexTicket332Enabled:    &result.OpenAICodexTicket332Enabled,
+		SettingKeyOpenAICodexTicket332FailClosed: &result.OpenAICodexTicket332FailClosed,
+	} {
+		if value, ok := settings[key]; ok && strings.TrimSpace(value) != "" {
+			*target = value == "true"
+		}
+	}
+	result.OpenAICodexTicket332HarvestProxyURL = strings.TrimSpace(settings[SettingKeyOpenAICodexTicket332HarvestProxyURL])
+	keys292, _ := codexTicketHarvestOptionKeys("292")
+	options292 := parseCodexTicketHarvestOptions(settings, keys292, s.codexTicketHarvestConfigOptions("292"))
+	result.OpenAICodexTicketVerifyEnabled = options292.VerifyEnabled
+	result.OpenAICodexTicketHarvestProxyIDs = options292.ProxyIDs
+	result.OpenAICodexTicketHarvestConcurrency = options292.Concurrency
+	keys332, _ := codexTicketHarvestOptionKeys("332")
+	options332 := parseCodexTicketHarvestOptions(settings, keys332, s.codexTicketHarvestConfigOptions("332"))
+	result.OpenAICodexTicket332VerifyEnabled = options332.VerifyEnabled
+	result.OpenAICodexTicket332HarvestProxyIDs = options332.ProxyIDs
+	result.OpenAICodexTicket332HarvestConcurrency = options332.Concurrency
 	// codex_cli_only 加固
 	result.MinCodexVersion = settings[SettingKeyMinCodexVersion]
 	result.MaxCodexVersion = settings[SettingKeyMaxCodexVersion]

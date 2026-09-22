@@ -5,6 +5,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AdminGroup } from '@/types'
 import GroupsView from '@/views/admin/GroupsView.vue'
 import { adminAPI } from '@/api/admin'
+import GroupBalancePrechargeSettings from '@/components/admin/group/GroupBalancePrechargeSettings.vue'
+
+vi.mock('@/api/admin/settings', () => ({
+  getGroupBalancePrechargeSettings: vi.fn(async (groupId: number) => ({
+    group_id: groupId,
+    settings: { mode: 'inherit', threshold: 0, amount: 0 },
+    global: { enabled: false, threshold: 0, amount: 0 },
+    effective: { enabled: false, threshold: 0, amount: 0 },
+  })),
+  updateGroupBalancePrechargeSettings: vi.fn(),
+}))
 
 const {
   listGroups,
@@ -142,7 +153,7 @@ const DataTableStub = defineComponent({
     columns: { type: Array, default: () => [] },
     loading: { type: Boolean, default: false }
   },
-  template: '<div><div v-for="row in data" :key="row.id"><slot name="cell-actions" :row="row" /></div></div>'
+  template: '<div><div v-for="row in data" :key="row.id"><slot name="cell-streaming_ack_enabled" :value="row.streaming_ack_enabled" :row="row" /><slot name="cell-actions" :row="row" /></div></div>'
 })
 
 const BaseDialogStub = defineComponent({
@@ -215,6 +226,102 @@ describe('GroupsView duplicate action', () => {
 
   afterEach(() => {
     vi.restoreAllMocks()
+  })
+
+  it.each([
+    { value: null, label: 'admin.groups.streamingACK.legacy' },
+    { value: false, label: 'admin.groups.streamingACK.disabled' },
+    { value: true, label: 'admin.groups.streamingACK.enabled' }
+  ])('shows group ACK status for $value', async ({ value, label }) => {
+    listGroups.mockResolvedValue({ items: [{ ...sourceGroup, streaming_ack_enabled: value }], total: 1, page: 1, page_size: 20, pages: 1 })
+    const wrapper = mountView()
+    try {
+      await flushPromises()
+      expect(wrapper.text()).toContain(label)
+    } finally { wrapper.unmount() }
+  })
+
+  it.each(['openai', 'anthropic', 'gemini', 'antigravity', 'grok', 'kimi', 'zhipu', 'deepseek', 'minimax', 'opencode_go', 'composite'])('saves group ACK independently for %s', async (platform) => {
+    listGroups.mockResolvedValue({ items: [{ ...sourceGroup, platform, streaming_ack_enabled: null }], total: 1, page: 1, page_size: 20, pages: 1 })
+    updateGroup.mockResolvedValue(sourceGroup)
+    const wrapper = mountView()
+    try {
+      await flushPromises()
+      await wrapper.findAll('button').find((button) => button.text() === 'common.edit')!.trigger('click')
+      await flushPromises()
+      const control = wrapper.get('[data-testid="group-streaming-ack"]')
+      expect(control.text()).toContain('admin.groups.streamingACK.legacyHint')
+      await control.get('[data-testid="group-ack-enabled"]').trigger('click')
+      await wrapper.get('#edit-group-form').trigger('submit')
+      await flushPromises()
+      expect(updateGroup).toHaveBeenCalledWith(42, expect.objectContaining({ streaming_ack_enabled: true }))
+    } finally { wrapper.unmount() }
+  })
+
+  it('keeps legacy group ACK omitted when saving unrelated settings', async () => {
+    updateGroup.mockResolvedValue(sourceGroup)
+    const wrapper = mountView()
+    try {
+      await flushPromises()
+      await wrapper.findAll('button').find((button) => button.text() === 'common.edit')!.trigger('click')
+      await flushPromises()
+      expect(wrapper.get('[data-testid="group-streaming-ack"]').text()).toContain('admin.groups.streamingACK.legacyHint')
+      await wrapper.get('#edit-group-form').trigger('submit')
+      await flushPromises()
+      expect(updateGroup).toHaveBeenCalledTimes(1)
+      expect(updateGroup.mock.calls[0]![1]).not.toHaveProperty('streaming_ack_enabled')
+    } finally { wrapper.unmount() }
+  })
+
+  it('retains an explicit group ACK choice after save fails', async () => {
+    updateGroup.mockRejectedValue(new Error('save failed'))
+    const wrapper = mountView()
+    try {
+      await flushPromises()
+      await wrapper.findAll('button').find((button) => button.text() === 'common.edit')!.trigger('click')
+      await flushPromises()
+      await wrapper.get('[data-testid="group-ack-disabled"]').trigger('click')
+      await wrapper.get('#edit-group-form').trigger('submit')
+      await flushPromises()
+      expect(updateGroup).toHaveBeenCalledWith(42, expect.objectContaining({ streaming_ack_enabled: false }))
+      expect(wrapper.get('[data-testid="group-ack-disabled"]').attributes('aria-pressed')).toBe('true')
+      expect(showError).toHaveBeenCalledWith('save failed')
+    } finally { wrapper.unmount() }
+  })
+
+  it('defaults newly created groups to ACK disabled', async () => {
+    vi.mocked(adminAPI.groups.create).mockResolvedValue(sourceGroup)
+    const wrapper = mountView()
+    try {
+      await flushPromises()
+      await wrapper.get('[data-tour="groups-create-btn"]').trigger('click')
+      await flushPromises()
+      expect(wrapper.get('[data-testid="group-ack-disabled"]').attributes('aria-pressed')).toBe('true')
+      await wrapper.get('#create-group-form input').setValue('New group')
+      await wrapper.get('#create-group-form').trigger('submit')
+      await flushPromises()
+      expect(adminAPI.groups.create).toHaveBeenCalledWith(expect.objectContaining({ streaming_ack_enabled: false }))
+    } finally { wrapper.unmount() }
+  })
+
+  it('loads precharge settings for the saved group being edited and omits them in simple mode', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.findComponent(GroupBalancePrechargeSettings).exists()).toBe(false)
+    const editButton = wrapper.findAll('button').find((button) => button.text() === 'common.edit')!
+    await editButton.trigger('click')
+    await flushPromises()
+    expect(wrapper.getComponent(GroupBalancePrechargeSettings).props('groupId')).toBe(42)
+    wrapper.unmount()
+
+    authState.isSimpleMode = true
+    const simple = mountView()
+    await flushPromises()
+    await simple.findAll('button').find((button) => button.text() === 'common.edit')!.trigger('click')
+    await flushPromises()
+    expect(simple.findComponent(GroupBalancePrechargeSettings).exists()).toBe(false)
+    expect(simple.find('[data-testid="group-streaming-ack"]').exists()).toBe(true)
+    simple.unmount()
   })
 
   it('duplicates the selected group, reports success, and refreshes the list', async () => {
@@ -322,6 +429,65 @@ describe('GroupsView duplicate action', () => {
 
     expect(updateGroup).toHaveBeenCalledTimes(1)
     expect(showError).toHaveBeenCalledWith('group name already exists')
+    wrapper.unmount()
+  })
+
+  it('loads, edits, and saves custom reasoning multipliers for group pricing', async () => {
+    const group = {
+      ...sourceGroup,
+      model_pricing: [{
+        platform: 'openai', models: ['example-model'], billing_mode: 'token',
+        input_price: 3e-6, output_price: 15e-6, cache_write_price: null, cache_read_price: null,
+        image_input_price: null, image_output_price: null, per_request_price: null,
+        reasoning_effort_multipliers: { high: 1.5, max: 3 }, intervals: [], time_pricing: null,
+      }],
+    }
+    listGroups.mockResolvedValue({ items: [group], total: 1, page: 1, page_size: 20, pages: 1 })
+    updateGroup.mockResolvedValue(group)
+    const wrapper = mountView()
+    await flushPromises()
+    await wrapper.findAll('button').find(button => button.text() === 'common.edit')!.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get<HTMLInputElement>('[data-reasoning-effort="high"]').element.value).toBe('1.5')
+    await wrapper.get('[data-reasoning-effort="high"]').setValue('0.5')
+    await wrapper.get('[data-reasoning-effort="max"]').setValue('')
+    await wrapper.get('#edit-group-form').trigger('submit')
+    await flushPromises()
+    expect(updateGroup).toHaveBeenCalledWith(42, expect.objectContaining({
+      model_pricing: [expect.objectContaining({ reasoning_effort_multipliers: { high: 0.5 } })],
+    }))
+    wrapper.unmount()
+  })
+
+  it('blocks saving an invalid group reasoning multiplier and allows clearing it', async () => {
+    const group = {
+      ...sourceGroup,
+      model_pricing: [{
+        platform: 'openai', models: ['example-model'], billing_mode: 'token',
+        input_price: 3e-6, output_price: 15e-6, cache_write_price: null, cache_read_price: null,
+        image_input_price: null, image_output_price: null, per_request_price: null,
+        reasoning_effort_multipliers: { high: 1.5 }, intervals: [], time_pricing: null,
+      }],
+    }
+    listGroups.mockResolvedValue({ items: [group], total: 1, page: 1, page_size: 20, pages: 1 })
+    updateGroup.mockResolvedValue(group)
+    const wrapper = mountView()
+    await flushPromises()
+    await wrapper.findAll('button').find(button => button.text() === 'common.edit')!.trigger('click')
+    await flushPromises()
+
+    await wrapper.get('[data-reasoning-effort="high"]').setValue('0')
+    await wrapper.get('#edit-group-form').trigger('submit')
+    expect(updateGroup).not.toHaveBeenCalled()
+    expect(showError).toHaveBeenCalledWith(expect.stringContaining('reasoningEffortMultiplierPositive'))
+
+    await wrapper.get('[data-testid="reasoning-effort-multipliers"] button').trigger('click')
+    await wrapper.get('#edit-group-form').trigger('submit')
+    await flushPromises()
+    expect(updateGroup).toHaveBeenCalledWith(42, expect.objectContaining({
+      model_pricing: [expect.objectContaining({ reasoning_effort_multipliers: null })],
+    }))
     wrapper.unmount()
   })
 

@@ -254,16 +254,16 @@ func usageRecordContext(parent context.Context, base context.Context) context.Co
 	if requestID, _ := parent.Value(ctxkey.RequestID).(string); strings.TrimSpace(requestID) != "" {
 		base = context.WithValue(base, ctxkey.RequestID, strings.TrimSpace(requestID))
 	}
-	return base
+	return service.CopyBalancePrechargeContext(parent, base)
 }
 
 func wrapUsageRecordTaskContext(parent context.Context, task service.UsageRecordTask) service.UsageRecordTask {
 	if task == nil {
 		return nil
 	}
-	return func(ctx context.Context) {
+	return service.WrapBalancePrechargeTask(parent, func(ctx context.Context) {
 		task(usageRecordContext(parent, ctx))
-	}
+	})
 }
 
 func openAICompatibleRequestPlatform(ctx context.Context, apiKey *service.APIKey) string {
@@ -596,7 +596,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 	}
 
 	// 2. Re-check billing eligibility after wait
-	if err := h.billingCacheService.CheckBillingEligibility(c.Request.Context(), apiKey.User, apiKey, apiKey.Group, subscription, service.QuotaPlatform(c.Request.Context(), apiKey)); err != nil {
+	if err := h.billingCacheService.CheckBillingEligibility(balancePrechargeWaitContext(c.Request.Context(), c, reqStream, &streamStarted), apiKey.User, apiKey, apiKey.Group, subscription, service.QuotaPlatform(c.Request.Context(), apiKey)); err != nil {
 		reqLog.Info("openai.billing_eligibility_check_failed", zap.Error(err))
 		status, code, message, retryAfter := billingErrorDetails(err)
 		if retryAfter > 0 {
@@ -765,7 +765,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 		// Forward request
 		service.SetOpsLatencyMs(c, service.OpsRoutingLatencyMsKey, time.Since(routingStart).Milliseconds())
 		forwardStart := time.Now()
-		if stopSyntheticFirstResponse == nil && !streamStarted && account.IsOpenAISyntheticFirstResponseEnabledForGroup(apiKey.GroupID) {
+		if stopSyntheticFirstResponse == nil && !streamStarted && account.SupportsStreamingACK() {
 			stopSyntheticFirstResponse = h.startSyntheticFirstResponse(c, reqStream, forwardStart, account, apiKey.GroupID)
 		}
 		// 用扣除非语义心跳字节的口径快照：心跳注释不构成语义响应，
@@ -1248,7 +1248,7 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 		defer userReleaseFunc()
 	}
 
-	if err := h.billingCacheService.CheckBillingEligibility(c.Request.Context(), apiKey.User, apiKey, apiKey.Group, subscription, service.QuotaPlatform(c.Request.Context(), apiKey)); err != nil {
+	if err := h.billingCacheService.CheckBillingEligibility(balancePrechargeWaitContext(c.Request.Context(), c, reqStream, &streamStarted), apiKey.User, apiKey, apiKey.Group, subscription, service.QuotaPlatform(c.Request.Context(), apiKey)); err != nil {
 		reqLog.Info("openai_messages.billing_eligibility_check_failed", zap.Error(err))
 		status, code, message, retryAfter := billingErrorDetails(err)
 		if retryAfter > 0 {
@@ -1364,7 +1364,7 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 
 		service.SetOpsLatencyMs(c, service.OpsRoutingLatencyMsKey, time.Since(routingStart).Milliseconds())
 		forwardStart := time.Now()
-		if stopSyntheticFirstResponse == nil && !streamStarted && account.IsOpenAISyntheticFirstResponseEnabledForGroup(apiKey.GroupID) {
+		if stopSyntheticFirstResponse == nil && !streamStarted && account.SupportsStreamingACK() {
 			stopSyntheticFirstResponse = h.startSyntheticFirstResponse(c, reqStream, forwardStart, account, apiKey.GroupID)
 		}
 
@@ -1579,6 +1579,10 @@ func resolveOpenAIMessagesMetadataSession(c *gin.Context, sessionHash, promptCac
 
 // anthropicErrorResponse writes an error in Anthropic Messages API format.
 func (h *OpenAIGatewayHandler) anthropicErrorResponse(c *gin.Context, status int, errType, message string) {
+	if service.StopStreamingACKCommitted(c) || gatewaySSEAlreadyStarted(c) {
+		h.anthropicStreamingAwareError(c, status, errType, message, true)
+		return
+	}
 	c.JSON(status, gin.H{
 		"type": "error",
 		"error": gin.H{
@@ -1591,7 +1595,7 @@ func (h *OpenAIGatewayHandler) anthropicErrorResponse(c *gin.Context, status int
 // anthropicStreamingAwareError handles errors that may occur during streaming,
 // using Anthropic SSE error format.
 func (h *OpenAIGatewayHandler) anthropicStreamingAwareError(c *gin.Context, status int, errType, message string, streamStarted bool) {
-	if service.OpenAISyntheticFirstResponseCommitted(c) {
+	if service.StopStreamingACKCommitted(c) {
 		streamStarted = true
 	}
 	if streamStarted {
@@ -1609,6 +1613,7 @@ func (h *OpenAIGatewayHandler) anthropicStreamingAwareError(c *gin.Context, stat
 		}
 		return
 	}
+	c.Header("Content-Type", "application/json; charset=utf-8")
 	h.anthropicErrorResponse(c, status, errType, message)
 }
 
@@ -1639,8 +1644,11 @@ func (h *OpenAIGatewayHandler) ensureAnthropicErrorResponse(c *gin.Context, stre
 	if c == nil || c.Writer == nil {
 		return false
 	}
+	if service.IsResponseCommitted(c) {
+		return false
+	}
 	if c.Writer.Written() {
-		if !service.OpenAISyntheticFirstResponseCommitted(c) {
+		if !service.OpenAISyntheticFirstResponseCommitted(c) && !gatewayStreamHasOnlyHeartbeats(c) {
 			return false
 		}
 		streamStarted = true
@@ -2561,7 +2569,10 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 	if requestPlatform == service.PlatformGrok {
 		requiredTransport = service.OpenAIUpstreamTransportHTTPSSE
 	}
-	if err := h.billingCacheService.CheckBillingEligibility(ctx, apiKey.User, apiKey, apiKey.Group, subscription, service.QuotaPlatform(c.Request.Context(), apiKey)); err != nil {
+	prechargeTurns := newBalancePrechargeTurns(ctx, h.gatewayService.WithBalancePrecharge)
+	defer prechargeTurns.finish()
+	c.Request = c.Request.WithContext(prechargeTurns.context(1))
+	if err := h.billingCacheService.CheckBillingEligibility(prechargeTurns.context(1), apiKey.User, apiKey, apiKey.Group, subscription, service.QuotaPlatform(c.Request.Context(), apiKey)); err != nil {
 		reqLog.Info("openai.websocket_billing_eligibility_check_failed", zap.Error(err))
 		closeOpenAIClientWS(wsConn, coderws.StatusPolicyViolation, "billing check failed")
 		return
@@ -2833,6 +2844,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 			ReasoningEffortMappings:     reasoningEffortMappings,
 			TurnStarted:                 recordTurnStart,
 			BeforeRequest: func(turn int, payload []byte, originalModel string) error {
+				c.Request = c.Request.WithContext(prechargeTurns.context(turn))
 				c.Set(securityAuditWSTurnContextKey, turn)
 				service.BeginOpsStreamTurn(c, turn)
 				setCyberTurnBody(turn, payload)
@@ -2890,6 +2902,12 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 				return mapping.MappedModel, nil
 			},
 			BeforeTurn: func(turn int) error {
+				turnBillingCtx := prechargeTurns.context(turn)
+				if turn > 1 {
+					if err := h.billingCacheService.CheckBillingEligibility(turnBillingCtx, apiKey.User, apiKey, apiKey.Group, subscription, service.QuotaPlatform(turnBillingCtx, apiKey)); err != nil {
+						return service.NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, "billing check failed", err)
+					}
+				}
 				// turn==1 的会话屏蔽已由握手层检查覆盖；连接内 flag 只拦截后续 turn。
 				if cyberBlockedThisConn {
 					return service.NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, cyberSessionBlockedClientMsg, nil)
@@ -2937,6 +2955,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 				return nil
 			},
 			AfterTurn: func(turn int, result *service.OpenAIForwardResult, turnErr error) {
+				turnBillingCtx := prechargeTurns.billingContext(turn)
 				turnStart := getTurnStart(turn)
 				cyberBlockBody := takeCyberTurnBody(turn)
 				// 每次 attempt 都清 cyber mark；failover 链结束前保留 recorded guard，
@@ -3014,7 +3033,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 				sessionID := service.ExtractClientSessionID(c)
 				turnRecordPricingAt := turnPricing.currentOr(turnStart)
 				cyberBlocked := service.GetOpsCyberPolicy(c) != nil
-				h.submitOpenAIUsageRecordTask(ctx, result, func(taskCtx context.Context) {
+				h.submitOpenAIUsageRecordTask(turnBillingCtx, result, func(taskCtx context.Context) {
 					if err := h.gatewayService.RecordUsage(taskCtx, &service.OpenAIRecordUsageInput{
 						Result:             result,
 						APIKey:             apiKey,
@@ -3064,7 +3083,9 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 		}
 
 		for {
-			err := h.gatewayService.ProxyResponsesWebSocketFromClient(ctx, c, wsConn, account, token, wsFirstMessage, hooks)
+			attemptHooks := prechargeTurns.trackAttempt(hooks)
+			err := h.gatewayService.ProxyResponsesWebSocketFromClient(ctx, c, wsConn, account, token, wsFirstMessage, attemptHooks)
+			prechargeTurns.endAttempt(err)
 			if err == nil {
 				reqLog.Info("openai.websocket_ingress_closed", zap.Int64("account_id", account.ID))
 				return
@@ -3083,6 +3104,10 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 					return
 				}
 				wsAttemptMessage = nextAttemptMessage
+				if !prechargeTurns.retryAttempt() {
+					closeOpenAIWSFailoverExhausted(c, wsConn, failoverErr)
+					return
+				}
 				if retryCurrentTurn {
 					previousResponseID = ""
 					reqLog.Warn("openai.websocket_current_turn_failover_retry",
@@ -3286,6 +3311,10 @@ func getContextInt64(c *gin.Context, key string) (int64, bool) {
 
 func (h *OpenAIGatewayHandler) submitUsageRecordTask(parent context.Context, task service.UsageRecordTask) {
 	if task == nil {
+		return
+	}
+	if service.IsBalancePrechargeRequest(parent) {
+		h.submitMandatoryUsageRecordTask(parent, task)
 		return
 	}
 	task = wrapUsageRecordTaskContext(parent, task)
@@ -3543,7 +3572,7 @@ func (h *OpenAIGatewayHandler) handleStreamingAwareErrorWithCode(
 	streamStarted bool,
 	countTowardsSLA bool,
 ) {
-	if service.OpenAISyntheticFirstResponseCommitted(c) {
+	if service.StopStreamingACKCommitted(c) {
 		streamStarted = true
 	}
 	// body-signal compact 心跳可能已把响应头提交为 200：先停心跳（建立
@@ -3587,6 +3616,7 @@ func (h *OpenAIGatewayHandler) handleStreamingAwareErrorWithCode(
 	}
 
 	// Normal case: return JSON response with proper status code
+	c.Header("Content-Type", "application/json; charset=utf-8")
 	if code == "" {
 		h.errorResponse(c, status, errType, message)
 		return
@@ -3736,6 +3766,10 @@ func (h *OpenAIGatewayHandler) errorResponse(c *gin.Context, status int, errType
 		if writeResponsesFailedSSE(c, errType, "", message) {
 			return
 		}
+	}
+	if service.StopStreamingACKCommitted(c) || gatewaySSEAlreadyStarted(c) {
+		h.handleStreamingAwareError(c, status, errType, message, true)
+		return
 	}
 	c.JSON(status, gin.H{
 		"error": gin.H{
@@ -4262,9 +4296,9 @@ func (h *OpenAIGatewayHandler) recordCyberPolicyIfMarked(c *gin.Context, apiKey 
 			cancel()
 		}
 	}
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
+	// Claim the hold before detaching; the handler may finish while cyber usage
+	// is still being recorded. Keep this request's billing identity with it.
+	cyberTask := wrapUsageRecordTaskContext(requestCtx, func(ctx context.Context) {
 		if cmSvc != nil {
 			cmSvc.RecordCyberPolicyEvent(ctx, service.CyberPolicyRecordInput{
 				RequestID:       requestID,
@@ -4307,6 +4341,16 @@ func (h *OpenAIGatewayHandler) recordCyberPolicyIfMarked(c *gin.Context, apiKey 
 		if opsSvc != nil {
 			enqueueOpsErrorLog(opsSvc, buildCyberPolicyOpsErrorEntry(opsMeta, mark))
 		}
+	})
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				logger.L().Error("openai.cyber_usage_task_panic", zap.Any("panic", recovered))
+			}
+		}()
+		cyberTask(ctx)
 	}()
 }
 

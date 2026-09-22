@@ -29,7 +29,7 @@
         </div>
       </div>
 
-      <fieldset>
+      <fieldset id="availability-reset-yellow-bars">
         <legend class="input-label">
           {{ t('admin.channelMonitor.availabilityReset.yellowBars') }}
         </legend>
@@ -50,20 +50,26 @@
         </div>
       </fieldset>
 
-      <div>
-        <label class="input-label" for="availability-reset-layout">
+      <fieldset id="availability-reset-layout">
+        <legend class="input-label">
           {{ t('admin.channelMonitor.availabilityReset.yellowBarLayout') }}
-        </label>
-        <select
-          id="availability-reset-layout"
-          v-model="yellowBarLayout"
-          class="input w-full"
-        >
-          <option v-for="option in yellowBarLayoutOptions" :key="option.value" :value="option.value">
+        </legend>
+        <div class="grid grid-cols-2 gap-2">
+          <button
+            v-for="option in yellowBarLayoutOptions"
+            :key="option.value"
+            type="button"
+            class="rounded-md border px-2 py-1.5 text-sm transition-colors"
+            :class="yellowBarLayout === option.value
+              ? 'border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300'
+              : 'border-gray-200 text-gray-600 hover:bg-gray-50 dark:border-dark-600 dark:text-gray-300 dark:hover:bg-dark-700'"
+            :aria-pressed="yellowBarLayout === option.value"
+            @click="yellowBarLayout = option.value"
+          >
             {{ t(option.label) }}
-          </option>
-        </select>
-      </div>
+          </button>
+        </div>
+      </fieldset>
 
       <p v-if="errorMessage" id="availability-reset-error" class="text-sm text-red-600 dark:text-red-400">
         {{ errorMessage }}

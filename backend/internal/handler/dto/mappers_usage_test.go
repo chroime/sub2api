@@ -332,3 +332,28 @@ func TestUsageLogFromService_PreservesHistoricalMissingImageSize(t *testing.T) {
 func f64Ptr(value float64) *float64 {
 	return &value
 }
+
+func TestUsageLogFromService_SeparatesStreamingAckFromRealTTFT(t *testing.T) {
+	firstTokenMs, ackMs := 22580, 730
+	for _, log := range []*service.UsageLog{
+		{FirstTokenMs: &firstTokenMs, StreamingAckMs: &ackMs},
+		{FirstTokenMs: &firstTokenMs},
+		{StreamingAckMs: &ackMs},
+		{},
+	} {
+		for _, got := range []*UsageLog{UsageLogFromService(log), &UsageLogFromServiceAdmin(log).UsageLog} {
+			require.Equal(t, log.FirstTokenMs, got.FirstTokenMs)
+			require.Equal(t, log.StreamingAckMs, got.StreamingAckMs)
+			encoded, err := json.Marshal(got)
+			require.NoError(t, err)
+			var metrics map[string]json.RawMessage
+			require.NoError(t, json.Unmarshal(encoded, &metrics))
+			wantTTFT, err := json.Marshal(log.FirstTokenMs)
+			require.NoError(t, err)
+			wantAck, err := json.Marshal(log.StreamingAckMs)
+			require.NoError(t, err)
+			require.JSONEq(t, string(wantTTFT), string(metrics["first_token_ms"]))
+			require.JSONEq(t, string(wantAck), string(metrics["streaming_ack_ms"]))
+		}
+	}
+}

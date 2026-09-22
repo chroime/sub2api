@@ -234,10 +234,13 @@ export interface PublicSettings {
   aliyun_captcha_region?: string
   site_name: string
   site_logo: string
+  site_favicon?: string
   site_subtitle: string
   api_base_url: string
   contact_info: string
   doc_url: string
+  docs_title?: string
+  docs_content?: string
   home_content: string
   compact_home_enabled: boolean
   hide_ccs_import_button: boolean
@@ -623,6 +626,8 @@ export interface Group {
 }
 
 export interface AdminGroup extends Group {
+  // Missing/null retains the pre-migration account preference.
+  streaming_ack_enabled?: boolean | null
   force_openai_fast: boolean
   free_openai_fast: boolean
   model_pricing: import('@/api/admin/channels').ChannelModelPricing[]
@@ -787,6 +792,7 @@ export interface UpdateApiKeyRequest {
 }
 
 export interface CreateGroupRequest {
+  streaming_ack_enabled?: boolean
   name: string
   description?: string | null
   platform?: GroupPlatform
@@ -852,6 +858,7 @@ export interface CreateGroupRequest {
 }
 
 export interface UpdateGroupRequest {
+  streaming_ack_enabled?: boolean
   name?: string
   description?: string | null
   platform?: GroupPlatform
@@ -1155,6 +1162,18 @@ export interface OllamaCloudUsageSettings {
   debounce_minutes: number
 }
 
+export type CodexTicketMode = '292' | '332' | 'off'
+
+export interface CodexTurnTicketStatus {
+  mode: string
+  model: string
+  length?: number
+  ready: boolean
+  remaining_seconds: number
+  blocked: boolean
+  expires_at?: string
+}
+
 export interface Account {
   id: number
   name: string
@@ -1168,6 +1187,7 @@ export interface Account {
   credentials?: Record<string, unknown>
   credentials_status?: Record<string, boolean>
   ollama_cloud_usage?: OllamaCloudUsageState
+  codex_turn_tickets?: CodexTurnTicketStatus[]
   // Extra fields including Codex usage, OpenAI compact capability, and model-level rate limits.
   extra?: (CodexUsageSnapshot & OpenAICompactState & {
     model_rate_limits?: Record<string, { rate_limited_at: string; rate_limit_reset_at: string }>
@@ -1175,11 +1195,17 @@ export interface Account {
     upstream_billing_probe_enabled?: boolean
     upstream_billing_rate_sync_enabled?: boolean
     openai_synthetic_first_response_enabled?: boolean
+    codex_ticket_mode?: string
     upstream_billing_probe?: UpstreamBillingProbeSnapshot
     codex_reset_credit_snapshot?: {
       available_count?: number
       credits?: { expires_at?: string }[]
     }
+    codex_credits_snapshot?: {
+      credits: { has_credits: boolean; unlimited: boolean; balance: string | null } | null
+      fetched_at: number
+    }
+    codex_referral_snapshot?: import('./openaiReferrals').OpenAIReferralEligibility | null
     auto_reset_credit_enabled?: boolean
     auto_reset_credit_5h_threshold?: number
     auto_reset_credit_7d_threshold?: number
@@ -1456,7 +1482,7 @@ export interface CodexUsageSnapshot {
 
 export type OpenAICompactMode = 'auto' | 'force_on' | 'force_off'
 export type OpenAIResponsesMode = 'auto' | 'force_responses' | 'force_chat_completions'
-export type OpenAIEndpointCapability = 'chat_completions' | 'embeddings'
+export type OpenAIEndpointCapability = 'chat_completions' | 'embeddings' | 'seedance'
 
 export interface OpenAICompactState {
   openai_compact_mode?: OpenAICompactMode
@@ -1727,6 +1753,7 @@ export interface UsageLog {
   native_compaction_v2: boolean
   duration_ms: number | null
   first_token_ms: number | null
+  streaming_ack_ms?: number | null
 
   // 图片生成字段
   image_count: number

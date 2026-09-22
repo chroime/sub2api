@@ -5,9 +5,9 @@
   </AppLayout>
 
   <!-- 独立形态:自带导航条(logo/站名 + 登录/回后台) -->
-  <div v-else class="min-h-screen bg-gray-50 dark:bg-dark-950">
+  <div v-else class="public-theme public-model-plaza min-h-screen">
     <PlazaNavBar />
-    <main class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+    <main class="public-model-plaza-main mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
       <ModelPlazaContent :response="data" :loading="loading" :error="loadFailed" />
     </main>
   </div>
@@ -19,6 +19,7 @@ import { useRoute } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import PlazaNavBar from '@/components/modelPlaza/PlazaNavBar.vue'
 import ModelPlazaContent from '@/components/modelPlaza/ModelPlazaContent.vue'
+import '@/components/modelPlaza/publicModelPlaza.css'
 import { getModelPlaza, type ModelPlazaResponse } from '@/api/modelPlaza'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
@@ -46,3 +47,22 @@ onMounted(async () => {
   }
 })
 </script>
+
+<style scoped>
+.public-model-plaza-main {
+  position: relative;
+}
+
+.public-model-plaza-main::before {
+  position: absolute;
+  inset: 0 1rem auto;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--public-border), transparent);
+  content: '';
+  pointer-events: none;
+}
+
+@media (max-width: 639px) {
+  .public-model-plaza-main { padding-top: 1.5rem; }
+}
+</style>

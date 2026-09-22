@@ -92,6 +92,10 @@ func (s *SettingService) refreshCachedSettingsAfterWrite(ctx context.Context, se
 	}
 	stored, err := s.GetAllSettings(ctx)
 	if err != nil {
+		// The write committed even if the broad settings reread failed. Fence
+		// older option reads so the harvester reloads the changed mode settings.
+		s.InvalidateOpenAICodexTicketHarvestOptions("292")
+		s.InvalidateOpenAICodexTicketHarvestOptions("332")
 		slog.Warn("refresh cached settings after partial update failed", "error", err)
 		return
 	}
@@ -338,10 +342,13 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	// OEM设置
 	updates[SettingKeySiteName] = settings.SiteName
 	updates[SettingKeySiteLogo] = settings.SiteLogo
+	updates[SettingKeySiteFavicon] = settings.SiteFavicon
 	updates[SettingKeySiteSubtitle] = settings.SiteSubtitle
 	updates[SettingKeyAPIBaseURL] = settings.APIBaseURL
 	updates[SettingKeyContactInfo] = settings.ContactInfo
 	updates[SettingKeyDocURL] = settings.DocURL
+	updates[SettingKeyDocsTitle] = settings.DocsTitle
+	updates[SettingKeyDocsContent] = settings.DocsContent
 	updates[SettingKeyHomeContent] = settings.HomeContent
 	updates[SettingKeyCompactHomeEnabled] = strconv.FormatBool(settings.CompactHomeEnabled)
 	updates[SettingKeyHideCcsImportButton] = strconv.FormatBool(settings.HideCcsImportButton)
@@ -485,6 +492,48 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	updates[SettingKeyOpenAICodexUserAgent] = strings.TrimSpace(settings.OpenAICodexUserAgent)
 	updates[SettingKeyOpenAICodexClientVersion] = NormalizeCodexClientVersion(settings.OpenAICodexClientVersion)
 	updates[SettingKeyOpenAICodexVersionAutoSyncEnabled] = strconv.FormatBool(settings.OpenAICodexVersionAutoSyncEnabled)
+	updates[SettingKeyOpenAICodexTicketEnabled] = strconv.FormatBool(settings.OpenAICodexTicketEnabled)
+	updates[SettingKeyOpenAICodexTicketFailClosed] = strconv.FormatBool(settings.OpenAICodexTicketFailClosed)
+	updates[SettingKeyOpenAICodexTicket332Enabled] = strconv.FormatBool(settings.OpenAICodexTicket332Enabled)
+	updates[SettingKeyOpenAICodexTicket332FailClosed] = strconv.FormatBool(settings.OpenAICodexTicket332FailClosed)
+	if err := ValidateOpenAICodexTicketHarvestProxyURL(settings.OpenAICodexTicketHarvestProxyURL); err != nil {
+		return nil, infraerrors.BadRequest("INVALID_CODEX_HARVEST_PROXY", err.Error())
+	}
+	updates[SettingKeyOpenAICodexTicketHarvestProxyURL] = strings.TrimSpace(settings.OpenAICodexTicketHarvestProxyURL)
+	if err := ValidateOpenAICodexTicketHarvestProxyURL(settings.OpenAICodexTicket332HarvestProxyURL); err != nil {
+		return nil, infraerrors.BadRequest("INVALID_CODEX_332_HARVEST_PROXY", err.Error())
+	}
+	updates[SettingKeyOpenAICodexTicket332HarvestProxyURL] = strings.TrimSpace(settings.OpenAICodexTicket332HarvestProxyURL)
+	concurrency292 := settings.OpenAICodexTicketHarvestConcurrency
+	// Existing in-process callers use zero-value SystemSettings; the HTTP
+	// handler rejects explicitly submitted zero concurrency before this point.
+	if concurrency292 == 0 {
+		concurrency292 = 3
+	}
+	if err := config.ValidateCodexTicketHarvestOptions(settings.OpenAICodexTicketHarvestProxyIDs, concurrency292); err != nil {
+		return nil, infraerrors.BadRequest("INVALID_CODEX_292_HARVEST_OPTIONS", err.Error())
+	}
+	proxyIDs292, err := json.Marshal(append([]int64{}, settings.OpenAICodexTicketHarvestProxyIDs...))
+	if err != nil {
+		return nil, err
+	}
+	updates[SettingKeyOpenAICodexTicketVerifyEnabled] = strconv.FormatBool(settings.OpenAICodexTicketVerifyEnabled)
+	updates[SettingKeyOpenAICodexTicketHarvestProxyIDs] = string(proxyIDs292)
+	updates[SettingKeyOpenAICodexTicketHarvestConcurrency] = strconv.Itoa(concurrency292)
+	concurrency332 := settings.OpenAICodexTicket332HarvestConcurrency
+	if concurrency332 == 0 {
+		concurrency332 = 3
+	}
+	if err := config.ValidateCodexTicketHarvestOptions(settings.OpenAICodexTicket332HarvestProxyIDs, concurrency332); err != nil {
+		return nil, infraerrors.BadRequest("INVALID_CODEX_332_HARVEST_OPTIONS", err.Error())
+	}
+	proxyIDs332, err := json.Marshal(append([]int64{}, settings.OpenAICodexTicket332HarvestProxyIDs...))
+	if err != nil {
+		return nil, err
+	}
+	updates[SettingKeyOpenAICodexTicket332VerifyEnabled] = strconv.FormatBool(settings.OpenAICodexTicket332VerifyEnabled)
+	updates[SettingKeyOpenAICodexTicket332HarvestProxyIDs] = string(proxyIDs332)
+	updates[SettingKeyOpenAICodexTicket332HarvestConcurrency] = strconv.Itoa(concurrency332)
 	// SettingKeyOpenAICodexClientVersionSynced 由自动同步任务独占写入，此处不得覆盖，
 	// 否则面板保存会把同步结果清空。
 	// codex_cli_only 加固
@@ -739,6 +788,14 @@ func (s *SettingService) refreshCachedSettings(settings *SystemSettings) {
 	// 版本号缓存只做失效，不在此重算：生效值还取决于自动同步写入的 synced 键，
 	// 这里没有它的最新值，重算会把同步结果覆盖成陈旧值。
 	s.InvalidateOpenAICodexClientVersionCache()
+	s.InvalidateOpenAICodexTicketEnabledCache()
+	s.InvalidateOpenAICodexTicketHarvestProxyCache()
+	s.InvalidateOpenAICodexTicketFailClosedCache()
+	s.InvalidateOpenAICodexTicket332EnabledCache()
+	s.InvalidateOpenAICodexTicket332FailClosedCache()
+	s.InvalidateOpenAICodexTicket332HarvestProxyCache()
+	s.InvalidateOpenAICodexTicketHarvestOptions("292")
+	s.InvalidateOpenAICodexTicketHarvestOptions("332")
 	openAIAdvancedSchedulerSettingSF.Forget(openAIAdvancedSchedulerSettingKey)
 	openAIAdvancedSchedulerSettingCache.Store(&cachedOpenAIAdvancedSchedulerSetting{
 		lowUpstreamRatePriorityEnabled: settings.OpenAILowUpstreamRatePriorityEnabled,

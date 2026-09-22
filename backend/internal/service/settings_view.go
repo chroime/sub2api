@@ -151,10 +151,13 @@ type SystemSettings struct {
 
 	SiteName                    string
 	SiteLogo                    string
+	SiteFavicon                 string
 	SiteSubtitle                string
 	APIBaseURL                  string
 	ContactInfo                 string
 	DocURL                      string
+	DocsTitle                   string
+	DocsContent                 string
 	HomeContent                 string
 	CompactHomeEnabled          bool
 	HideCcsImportButton         bool
@@ -250,6 +253,18 @@ type SystemSettings struct {
 	OpenAICodexClientVersion               string // 出站声明的 Codex 客户端版本号（管理员覆写）；空值跟随自动同步值
 	OpenAICodexClientVersionSynced         string // 自动同步到的官方最新稳定版版本号（只读展示）
 	OpenAICodexVersionAutoSyncEnabled      bool   // 是否启用 Codex 客户端版本号自动同步（默认 true）
+	OpenAICodexTicketEnabled               bool   // Codex 292 打票总开关；关闭则不打票不注入
+	OpenAICodexTicketVerifyEnabled         bool
+	OpenAICodexTicketHarvestProxyIDs       []int64
+	OpenAICodexTicketHarvestConcurrency    int
+	OpenAICodexTicket332VerifyEnabled      bool
+	OpenAICodexTicket332HarvestProxyIDs    []int64
+	OpenAICodexTicket332HarvestConcurrency int
+	OpenAICodexTicketFailClosed            bool   // 292 模式缺少有效票据时是否拒绝请求
+	OpenAICodexTicketHarvestProxyURL       string // Codex 292 打票代理 URL；空则回退 yaml/env
+	OpenAICodexTicket332Enabled            bool   // 独立的 Codex 332 模式开关
+	OpenAICodexTicket332FailClosed         bool   // 332 模式缺少有效票据时是否拒绝请求
+	OpenAICodexTicket332HarvestProxyURL    string // 332 模式代理；不回退到 292 的代理
 	MinCodexVersion                        string // codex_cli_only 最低 Codex 引擎版本；空=不检查
 	MaxCodexVersion                        string // codex_cli_only 最高 Codex 引擎版本；空=不检查
 	CodexCLIOnlyBlacklist                  string // codex_cli_only 全局黑名单 JSON（[]AllowedClientEntry，OR deny）
@@ -349,10 +364,13 @@ type PublicSettings struct {
 	AliyunCaptchaRegion                 string
 	SiteName                            string
 	SiteLogo                            string
+	SiteFavicon                         string
 	SiteSubtitle                        string
 	APIBaseURL                          string
 	ContactInfo                         string
 	DocURL                              string
+	DocsTitle                           string
+	DocsContent                         string
 	HomeContent                         string
 	CompactHomeEnabled                  bool
 	HideCcsImportButton                 bool

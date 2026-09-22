@@ -13,12 +13,13 @@ type bulkOpenAISettings struct {
 	endpointCapabilities    bool
 	responsesMode           bool
 	syntheticFirstResponse  bool
+	streamingACK            bool
 	capabilitiesIncludeChat bool
 	forcedResponsesMode     bool
 }
 
 func (s bulkOpenAISettings) any() bool {
-	return s.longContextBilling || s.endpointCapabilities || s.responsesMode || s.syntheticFirstResponse
+	return s.longContextBilling || s.endpointCapabilities || s.responsesMode || s.syntheticFirstResponse || s.streamingACK
 }
 
 func normalizeBulkOpenAISettings(input *BulkUpdateAccountsInput) (bulkOpenAISettings, error) {
@@ -36,6 +37,12 @@ func normalizeBulkOpenAISettings(input *BulkUpdateAccountsInput) (bulkOpenAISett
 
 	if _, exists := input.Extra[OpenAISyntheticFirstResponseEnabledExtraKey]; exists {
 		settings.syntheticFirstResponse = true
+		if err := ValidateOpenAISyntheticFirstResponseExtra(PlatformOpenAI, input.Extra); err != nil {
+			return settings, err
+		}
+	}
+	if _, exists := input.Extra[StreamingACKEnabledExtraKey]; exists {
+		settings.streamingACK = true
 		if err := ValidateOpenAISyntheticFirstResponseExtra(PlatformOpenAI, input.Extra); err != nil {
 			return settings, err
 		}
@@ -177,6 +184,12 @@ func validateBulkOpenAISettingsTargets(
 			}
 			if account.IsShadow() {
 				inheritedCount++
+			}
+		}
+
+		if settings.streamingACK {
+			if !SupportsStreamingACKPlatform(account.Platform) || account.IsShadow() {
+				return 0, invalidBulkOpenAITarget(accountID, "streaming ACK requires a supported, non-shadow account")
 			}
 		}
 
