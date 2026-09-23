@@ -265,6 +265,9 @@ type SystemSettings struct {
 	OpenAICodexTicket332Enabled            bool   // 独立的 Codex 332 模式开关
 	OpenAICodexTicket332FailClosed         bool   // 332 模式缺少有效票据时是否拒绝请求
 	OpenAICodexTicket332HarvestProxyURL    string // 332 模式代理；不回退到 292 的代理
+	ClaudeCodeClientVersion                string // 出站声明的 Claude Code CLI 客户端版本号（管理员覆写）；空值跟随自动同步值
+	ClaudeCodeClientVersionSynced          string // 自动同步到的官方最新版本号（只读展示）
+	ClaudeCodeVersionAutoSyncEnabled       bool   // 是否启用 Claude Code 客户端版本号自动同步（默认 true）
 	MinCodexVersion                        string // codex_cli_only 最低 Codex 引擎版本；空=不检查
 	MaxCodexVersion                        string // codex_cli_only 最高 Codex 引擎版本；空=不检查
 	CodexCLIOnlyBlacklist                  string // codex_cli_only 全局黑名单 JSON（[]AllowedClientEntry，OR deny）
@@ -283,7 +286,7 @@ type SystemSettings struct {
 
 	// OpenAI 账号调度
 	OpenAILowUpstreamRatePriorityEnabled                   bool
-	OpenAIOAuthSchedulingRateMultiplier                    float64
+	OpenAIOAuthSchedulingRateMultiplier                    *float64
 	OpenAIAdvancedSchedulerEnabled                         bool
 	OpenAIAdvancedSchedulerStickyWeightedEnabled           bool
 	OpenAIAdvancedSchedulerSubscriptionPriorityEnabled     bool

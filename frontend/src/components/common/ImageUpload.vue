@@ -57,7 +57,7 @@
           v-if="modelValue"
           type="button"
           class="btn btn-secondary btn-sm text-red-600 hover:text-red-700 dark:text-red-400"
-          @click="$emit('update:modelValue', '')"
+          @click="removeImage"
         >
           <Icon name="trash" size="sm" class="mr-1.5" :stroke-width="2" />
           {{ resolvedRemoveLabel }}
@@ -70,7 +70,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from '@/components/icons/Icon.vue'
 import { sanitizeSvg } from '@/utils/sanitize'
@@ -105,6 +105,14 @@ const emit = defineEmits<{
 }>()
 
 const error = ref('')
+let reader: FileReader | null = null
+
+onBeforeUnmount(() => reader?.abort())
+
+function removeImage() {
+  reader?.abort()
+  emit('update:modelValue', '')
+}
 
 const resolvedUploadLabel = computed(() => props.uploadLabel || t('common.upload'))
 const resolvedRemoveLabel = computed(() => props.removeLabel || t('common.remove'))
@@ -125,6 +133,7 @@ function handleUpload(event: Event) {
   error.value = ''
 
   if (!file) return
+  reader?.abort()
 
   if (props.maxSize && file.size > props.maxSize) {
     error.value = t('common.fileTooLargeKb', {
@@ -135,23 +144,24 @@ function handleUpload(event: Event) {
     return
   }
 
-  const reader = new FileReader()
-  reader.onerror = () => {
+  const uploadReader = new FileReader()
+  reader = uploadReader
+  uploadReader.onerror = () => {
     error.value = t('common.fileReadFailed')
   }
   if (props.mode === 'svg') {
-    reader.onload = (e) => {
+    uploadReader.onload = (e) => {
       const text = e.target?.result as string
       if (text) emit('update:modelValue', text.trim())
     }
-    reader.readAsText(file)
+    uploadReader.readAsText(file)
   } else {
     // Windows may not supply an image MIME type for ICO files.
     const untypedIcon = props.allowIco && /\.ico$/i.test(file.name) &&
       (!file.type || file.type === 'application/octet-stream')
     if (untypedIcon) {
-      reader.onload = () => {
-        const bytes = reader.result as ArrayBuffer
+      uploadReader.onload = () => {
+        const bytes = uploadReader.result as ArrayBuffer
         const header = new DataView(bytes)
         const count = bytes.byteLength >= 6 ? header.getUint16(4, true) : 0
         if (!count || bytes.byteLength < 6 + count * 16 ||
@@ -167,10 +177,10 @@ function handleUpload(event: Event) {
             return
           }
         }
-        reader.onload = () => emit('update:modelValue', reader.result as string)
-        reader.readAsDataURL(new Blob([bytes], { type: 'image/x-icon' }))
+        uploadReader.onload = () => emit('update:modelValue', uploadReader.result as string)
+        uploadReader.readAsDataURL(new Blob([bytes], { type: 'image/x-icon' }))
       }
-      reader.readAsArrayBuffer(file)
+      uploadReader.readAsArrayBuffer(file)
       input.value = ''
       return
     }
@@ -179,10 +189,10 @@ function handleUpload(event: Event) {
       input.value = ''
       return
     }
-    reader.onload = (e) => {
+    uploadReader.onload = (e) => {
       emit('update:modelValue', e.target?.result as string)
     }
-    reader.readAsDataURL(file)
+    uploadReader.readAsDataURL(file)
   }
 
   input.value = ''
