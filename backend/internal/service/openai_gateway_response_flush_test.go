@@ -472,6 +472,28 @@ func TestOpenAIResponseFlush_CompatibleAPIKeyDoesNotUseCodexBareErrorSynthesis(t
 	require.NotContains(t, gotBody, `"type":"response.failed"`)
 }
 
+func TestOpenAIResponseFlush_CompatibleAPIKeyBareErrorDrainIsBounded(t *testing.T) {
+	body := "data: {\"type\":\"error\",\"error\":{\"code\":\"provider_error\",\"message\":\"provider failed\"}}\n\n"
+	reader := &hangingOpenAISSEAfterTerminal{payload: []byte(body), release: make(chan struct{})}
+	t.Cleanup(func() { _ = reader.Close() })
+	recorder := newOpenAIResponseFlushRecorder()
+	account := &Account{ID: 2, Platform: PlatformOpenAI, Type: AccountTypeAPIKey}
+	errCh := make(chan error, 1)
+	go func() {
+		_, err := runOpenAIResponseFlushTestWithAccount(recorder, reader, config.GatewayConfig{StreamDataIntervalTimeout: 1}, account)
+		errCh <- err
+	}()
+
+	select {
+	case err := <-errCh:
+		require.ErrorContains(t, err, "upstream response failed")
+	case <-time.After(3 * time.Second):
+		t.Fatal("bare error usage drain exceeded the configured stream timeout")
+	}
+	gotBody, _ := recorder.snapshot()
+	require.Equal(t, body, gotBody, "the timeout must not deliver a second error")
+}
+
 func TestOpenAIResponseFlush_RecentBareErrorAllowsCompletedBeforeIdleTimeout(t *testing.T) {
 	reader, writer := io.Pipe()
 	defer func() { _ = writer.Close() }()

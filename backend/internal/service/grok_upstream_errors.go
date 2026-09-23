@@ -36,6 +36,17 @@ func isGrokContentPolicyRejection(statusCode int, responseBody []byte) bool {
 	return grokContentPolicyMessage(string(responseBody))
 }
 
+// A 403 alone is not evidence of an account entitlement failure: upstream
+// proxies and individual endpoints can reject requests from healthy accounts.
+// Require an explicit account/subscription signal before quarantining one.
+func isGrokAccountAccessRejection(responseBody []byte) bool {
+	if grokAccountAccessMessage(string(responseBody)) {
+		return true
+	}
+	var payload any
+	return json.Unmarshal(responseBody, &payload) == nil && grokStructuredAccountAccessMarker(payload)
+}
+
 func grokStructuredAccountAccessMarker(value any) bool {
 	switch node := value.(type) {
 	case map[string]any:
@@ -115,6 +126,7 @@ func isGrokAccountAccessCode(value string) bool {
 		"user_disabled",
 		"subscription_required",
 		"entitlement_required",
+		"entitlement_denied",
 		"not_entitled",
 		"plan_required":
 		// permission-denied is omitted: xAI reuses it for both entitlement
@@ -136,6 +148,7 @@ func grokAccountAccessMessage(value string) bool {
 		"user has been suspended",
 		"subscription required",
 		"entitlement required",
+		"entitlement denied",
 		"not entitled",
 	} {
 		if strings.Contains(lower, phrase) {
@@ -270,7 +283,7 @@ func grokStructuredErrorMessageCandidates(body []byte) []string {
 
 // applyGrokForbiddenPolicy applies an administrator's existing temporary
 // unschedulable rules to a non-content 403. It reports true only when a rule
-// matched; unmatched responses retain the legacy entitlement cooldown.
+// matched; unmatched responses use the default body-aware access policy.
 func (s *OpenAIGatewayService) applyGrokForbiddenPolicy(ctx context.Context, account *Account, responseBody []byte) bool {
 	if account == nil || !account.IsTempUnschedulableEnabled() {
 		return false

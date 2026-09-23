@@ -18,8 +18,15 @@ import (
 func TestOpenAIResponsesForwardPreservesAuthoritativeUsageOnFailure(t *testing.T) {
 	const output = "data: {\"type\":\"response.output_text.delta\",\"delta\":\"partial\"}\n\n"
 	const failedPrefix = `data: {"type":"response.failed","response":{"id":"resp_partial","status":"failed","error":{"code":"server_error","message":"stream failed"}`
-	for _, passthrough := range []bool{false, true} {
-		mode := map[bool]string{false: "native", true: "passthrough"}[passthrough]
+	for _, mode := range []struct {
+		name        string
+		passthrough bool
+		async       bool
+	}{
+		{name: "native"},
+		{name: "native-async", async: true},
+		{name: "passthrough", passthrough: true},
+	} {
 		for _, tt := range []struct {
 			name       string
 			stream     string
@@ -102,11 +109,11 @@ func TestOpenAIResponsesForwardPreservesAuthoritativeUsageOnFailure(t *testing.T
 				stream: failedPrefix + `,"usage":{"input_tokens":7,"output_tokens":0}}}` + "\n\n",
 			},
 		} {
-			t.Run(mode+"/"+tt.name, func(t *testing.T) {
+			t.Run(mode.name+"/"+tt.name, func(t *testing.T) {
 				body := []byte(`{"model":"gpt-5.1","instructions":"test","input":"hello","stream":true}`)
 				c := newOpenAIRejectedFieldTestContext(body)
 				account := newOpenAIRejectedFieldTestAccount()
-				account.Extra["openai_passthrough"] = passthrough
+				account.Extra["openai_passthrough"] = mode.passthrough
 				stream := tt.stream
 				if tt.name == "failed-with-authoritative-zero" {
 					// Policy rejection is final rather than replayable. A genuine zero
@@ -125,7 +132,12 @@ func TestOpenAIResponsesForwardPreservesAuthoritativeUsageOnFailure(t *testing.T
 					},
 					Body: upstreamBody,
 				}}
-				result, err := newOpenAIRejectedFieldTestService(upstream).Forward(context.Background(), c, account, body)
+				svc := newOpenAIRejectedFieldTestService(upstream)
+				if mode.async {
+					svc.cfg.Gateway.StreamKeepaliveInterval = 1
+					svc.cfg.Gateway.StreamDataIntervalTimeout = 30
+				}
+				result, err := svc.Forward(context.Background(), c, account, body)
 				require.Error(t, err)
 				if !tt.wantResult {
 					require.Nil(t, result, "unknown consumption and retryable attempts must not be submitted as zero usage")
