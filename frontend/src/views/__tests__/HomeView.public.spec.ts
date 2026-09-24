@@ -106,7 +106,7 @@ describe('HomeView public home', () => {
     const wrapper = mount(HomeView, { global: { plugins: [createTestI18n('zh')], stubs: { RouterLink: RouterLinkStub, LocaleSwitcher: true } } })
 
     expect(wrapper.find('.public-grid').exists()).toBe(false)
-    expect(wrapper.find('header.site-header.shell').exists()).toBe(true)
+    expect(wrapper.find('header.public-site-header').exists()).toBe(true)
     expect(wrapper.find('main.shell > #story-scene').exists()).toBe(true)
     expect(wrapper.find('main.shell > .integration').exists()).toBe(true)
     expect(wrapper.find('footer.footer.shell').exists()).toBe(true)
@@ -122,14 +122,14 @@ describe('HomeView public home', () => {
     document.documentElement.classList.remove('dark')
     const wrapper = mount(HomeView, { global: { plugins: [createTestI18n('zh')], stubs: { RouterLink: RouterLinkStub, LocaleSwitcher: true } } })
 
-    await wrapper.get('#theme-toggle').trigger('click')
+    await wrapper.get('.public-theme-toggle').trigger('click')
     expect(document.documentElement.classList.contains('dark')).toBe(true)
-    expect(wrapper.get('#theme-toggle').attributes('aria-label')).toBe('切换到浅色模式')
-    await wrapper.get('#theme-toggle').trigger('click')
+    expect(wrapper.get('.public-theme-toggle').attributes('aria-label')).toBe('切换到浅色模式')
+    await wrapper.get('.public-theme-toggle').trigger('click')
     expect(document.documentElement.classList.contains('dark')).toBe(false)
     expect(wrapper.find('.public-home-light').exists()).toBe(false)
     expect(localStorage.getItem('theme')).toBe('light')
-    expect(wrapper.get('#theme-toggle').attributes('aria-label')).toBe('切换到深色模式')
+    expect(wrapper.get('.public-theme-toggle').attributes('aria-label')).toBe('切换到深色模式')
     wrapper.unmount()
   })
 
@@ -192,7 +192,7 @@ describe('HomeView public home', () => {
 
   it('keeps the public header navigation labels text-only', () => {
     const wrapper = mount(HomeView, { global: { plugins: [createTestI18n('zh')], stubs: { RouterLink: RouterLinkStub, LocaleSwitcher: true } } })
-    const links = wrapper.get('header').findAll('.desktop-link')
+    const links = wrapper.get('header').findAll('.public-nav-link')
     expect(links).toHaveLength(2)
     for (const link of links) {
       expect(link.find('svg').exists()).toBe(false)
@@ -258,7 +258,7 @@ describe('HomeView public home', () => {
     appStore.cachedPublicSettings.site_logo = siteLogo
     const wrapper = mount(HomeView, { global: { plugins: [createTestI18n()], stubs: { RouterLink: RouterLinkStub, LocaleSwitcher: true } } })
 
-    expect(wrapper.get('.wordmark img').attributes('src')).toBe(expected)
+    expect(wrapper.get('.public-brand img').attributes('src')).toBe(expected)
     expect(wrapper.get('footer.footer').text()).toContain('Test gateway')
     expect(wrapper.find('footer img').exists()).toBe(false)
     wrapper.unmount()
@@ -344,7 +344,9 @@ describe('HomeView public home', () => {
     appStore.cachedPublicSettings = { site_name: 'Test gateway', doc_url: configured }
     const wrapper = mount(HomeView, { global: { plugins: [createTestI18n()], stubs: { RouterLink: RouterLinkStub, LocaleSwitcher: { template: '<div />' }, Icon: { template: '<span />' } } } })
     await wrapper.vm.$nextTick()
-    expect(wrapper.findAll('a.desktop-link').find((link) => link.text() === 'Docs')?.attributes('href')).toBe(expected)
+    const docsRoute = wrapper.findAllComponents(RouterLinkStub).find(link => link.text() === 'Docs')
+    const docsHref = docsRoute?.props('to') ?? wrapper.get('header a.public-nav-link').attributes('href')
+    expect(docsHref).toBe(expected)
   })
 
   it('does not show channel errors after removing channel status from the homepage', async () => {

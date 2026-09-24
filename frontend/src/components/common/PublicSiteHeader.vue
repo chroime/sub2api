@@ -82,6 +82,7 @@ onBeforeUnmount(() => themeObserver?.disconnect())
   color: var(--header-text);
   backdrop-filter: blur(24px);
   font-family: ui-sans-serif, system-ui, sans-serif;
+  font-synthesis: none;
   font-size: 14px;
   font-weight: 400;
   line-height: 20px;
@@ -103,12 +104,12 @@ onBeforeUnmount(() => themeObserver?.disconnect())
 .public-site-header-story .public-brand-icon { width: 28px; height: 28px; border-radius: 0; }
 .public-site-header-story .public-brand-name { font-size: 21px; font-weight: 720; line-height: 1; }
 .public-site-header-story .public-brand-subtitle { max-width: 180px; padding-left: 11px; font-size: 12px; line-height: 1.2; }
-.public-header-inner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; max-width: 1280px; min-height: 72px; margin: 0 auto; padding: 16px 20px; }
+.public-header-inner { display: flex; align-items: center; justify-content: space-between; gap: 12px; max-width: 1280px; min-height: 72px; margin: 0 auto; padding: 16px 20px; }
 .public-brand { display: flex; min-width: 0; align-items: center; gap: 12px; color: var(--header-strong); }
 .public-brand-icon { width: 36px; height: 36px; flex-shrink: 0; border-radius: 8px; }
 .public-brand-name { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 16px; font-weight: 600; line-height: 24px; }
 .public-brand-subtitle { display: none; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-left: 1px solid var(--header-border); padding-left: 12px; color: var(--header-text); font-size: 12px; }
-.public-header-actions { display: flex; align-items: center; gap: 8px; }
+.public-header-actions { display: flex; flex-shrink: 0; align-items: center; gap: 8px; }
 .public-theme-toggle { display: inline-flex; min-height: 40px; width: 40px; align-items: center; justify-content: center; border: 0; border-radius: 8px; background: transparent; color: var(--header-text); cursor: pointer; transition: background-color 160ms ease, color 160ms ease; }
 .public-theme-toggle:hover { background: var(--header-hover); color: var(--header-strong); }
 .public-theme-toggle:focus-visible { outline: 2px solid var(--public-accent); outline-offset: 3px; }
@@ -126,17 +127,19 @@ onBeforeUnmount(() => themeObserver?.disconnect())
 .public-nav-cta:active { background: var(--public-cta-hover); box-shadow: inset 0 2px 4px rgb(0 0 0 / .12); }
 .public-nav-cta:focus-visible { outline: 2px solid var(--public-accent); outline-offset: 3px; }
 @media (prefers-reduced-motion: reduce) { .public-nav-cta { transition: none; } }
+@media (max-width: 639px) {
+  .public-nav-cta { padding-right: 12px; padding-left: 12px; }
+}
 @media (min-width: 640px) {
   .public-header-inner { padding-right: 32px; padding-left: 32px; }
   .public-header-actions { gap: 16px; }
-  .public-header-actions :deep(.public-nav-link) { display: inline-flex; }
   .public-brand-name { max-width: 240px; }
+}
+@media (min-width: 768px) {
+  .public-header-actions :deep(.public-nav-link) { display: inline-flex; }
 }
 @media (min-width: 1024px) {
   .public-header-inner { padding-right: 40px; padding-left: 40px; }
-  .public-brand-subtitle { display: inline; }
-}
-@media (min-width: 768px) and (max-width: 1023px) {
   .public-brand-subtitle { display: inline; }
 }
 @media (max-width: 1200px) {

@@ -1,5 +1,10 @@
 /* Shared palette for the public home, documentation, model plaza, and login.
    Opt in with .public-theme so other account and administration screens keep their theme. */
+/* Keep header controls in place while public page content loads. */
+html:has(.public-site-header) {
+  scrollbar-gutter: stable;
+}
+
 .public-theme {
   --public-bg: #e6ece3;
   --public-surface: #eef2ea;
