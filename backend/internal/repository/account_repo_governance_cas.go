@@ -18,8 +18,9 @@ func checkGovernanceAccountCAS(ctx context.Context, q sqlQueryer, id int64, expe
 	a := &service.Account{ID: id}
 	var credentials, extra []byte
 	var proxy, parent sql.NullInt64
+	var notes sql.NullString
 	var rate sql.NullFloat64
-	err := scanSingleRow(ctx, q, `SELECT name,platform,type,status,credentials,extra,proxy_id,rate_multiplier,parent_account_id FROM accounts WHERE id=$1 AND deleted_at IS NULL FOR UPDATE`, []any{id}, &a.Name, &a.Platform, &a.Type, &a.Status, &credentials, &extra, &proxy, &rate, &parent)
+	err := scanSingleRow(ctx, q, `SELECT name,platform,type,status,credentials,extra,proxy_id,rate_multiplier,parent_account_id,notes,concurrency FROM accounts WHERE id=$1 AND deleted_at IS NULL FOR UPDATE`, []any{id}, &a.Name, &a.Platform, &a.Type, &a.Status, &credentials, &extra, &proxy, &rate, &parent, &notes, &a.Concurrency)
 	if errors.Is(err, sql.ErrNoRows) {
 		return gov.ErrConflict
 	}
@@ -37,6 +38,9 @@ func checkGovernanceAccountCAS(ctx context.Context, q sqlQueryer, id int64, expe
 	}
 	if rate.Valid {
 		a.RateMultiplier = &rate.Float64
+	}
+	if notes.Valid {
+		a.Notes = &notes.String
 	}
 	rows, err := q.QueryContext(ctx, `SELECT group_id FROM account_groups WHERE account_id=$1 ORDER BY group_id`, id)
 	if err != nil {

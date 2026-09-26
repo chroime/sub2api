@@ -2,12 +2,19 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import ImportPanel from './ImportPanel.vue'
 import api from '@/api/admin/upstream-governance'
+import SiteOverview from './SiteOverview.vue'
+import { defaultImportConfig } from './import-config'
+vi.mock('./TransportSelect.vue', () => ({ default: {
+  props: ['modelValue', 'disabled'], emits: ['update:modelValue'],
+  template: `<select :value="modelValue" :disabled="disabled" @change="$emit('update:modelValue', $event.target.value)"><option value=""></option><option value="openai">OpenAI</option><option value="anthropic">Anthropic</option><option value="gemini">Gemini</option></select>`,
+} }))
 vi.mock('@/api/admin/upstream-governance', () => ({
-  default: { preview: vi.fn(), apply: vi.fn(), keys: vi.fn().mockResolvedValue([]), createKeys: vi.fn(), revealKey: vi.fn() },
+  default: { preview: vi.fn(), apply: vi.fn(), keys: vi.fn().mockResolvedValue([]), createKeys: vi.fn(), revealKey: vi.fn(), modelTemplates: vi.fn().mockResolvedValue({ version: 0, templates: [] }) },
 }))
-vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
+vi.mock('vue-i18n', async (importOriginal) => ({ ...await importOriginal<typeof import('vue-i18n')>(), useI18n: () => ({ t: (key: string) => key }) }))
 const props = {
   siteId: 1,
+  siteBaseUrl: 'https://fixture.example',
   groups: [{ id: 3, name: 'Local', platform: 'openai', rate_multiplier: 2 }],
   snapshot: {
     id: 1,
@@ -36,6 +43,46 @@ const props = {
 }
 describe('import confirmation', () => {
   beforeEach(() => vi.clearAllMocks())
+  it('reloads model defaults and permits preview after a new snapshot of the same site', async () => {
+    vi.mocked(api.preview).mockResolvedValue({ id: 'next-snapshot', site_id: 1, site_version: 1, snapshot_id: 2, created_at: '2026-09-26T15:08:02Z', expires_at: '2099-01-01', rows: [] })
+    const wrapper = mount(ImportPanel, { props })
+    await flushPromises()
+    await wrapper.setProps({ snapshot: { ...props.snapshot, id: 2, catalog: { ...props.snapshot.catalog, groups: [{ ...props.snapshot.catalog.groups[0]!, models: ['new-snapshot-model'] }] } } })
+    await flushPromises()
+    expect(api.modelTemplates).toHaveBeenCalledTimes(2)
+    await wrapper.get('[data-test=select]').setValue(true)
+    await wrapper.get('[data-test=target]').setValue(3)
+    expect(wrapper.get('[data-test=preview]').attributes('disabled')).toBeUndefined()
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(api.preview).toHaveBeenCalledWith(1, { selections: [expect.objectContaining({ account_config: expect.objectContaining({ model_mapping: { 'new-snapshot-model': 'new-snapshot-model' } }) })] })
+    wrapper.unmount()
+  })
+  it('uses real NewAPI models when the administrator resolves an unknown upstream protocol', async () => {
+    const remote = { ...props.snapshot.catalog.groups[0]!, platform: 'unknown', models: ['newapi-private-model'] }
+    vi.mocked(api.preview).mockResolvedValue({ id: 'newapi', site_id: 1, site_version: 1, snapshot_id: 1, created_at: '2026-09-26T15:08:02Z', expires_at: '2099-01-01', rows: [] })
+    const wrapper = mount(ImportPanel, { props: { ...props, snapshot: { ...props.snapshot, catalog: { ...props.snapshot.catalog, groups: [remote] } } } })
+    await flushPromises()
+    await wrapper.get('[data-test=select]').setValue(true)
+    await wrapper.get('[data-test=platform]').setValue('openai')
+    await wrapper.get('[data-test=target]').setValue(3)
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(api.preview).toHaveBeenCalledWith(1, { selections: [{ remote_group_id: 'r', platform: 'openai', local_group_id: 3, account_name: 'https://fixture.example--1', cost_multiplier: 1, account_config: { ...defaultImportConfig(), model_mapping: { 'newapi-private-model': 'newapi-private-model' } } }] })
+    wrapper.unmount()
+  })
+  it('prevents an empty enabled whitelist from silently turning into unrestricted models', async () => {
+    const wrapper = mount(ImportPanel, { props })
+    await flushPromises()
+    await wrapper.get('[data-test=select]').setValue(true)
+    await wrapper.get('[data-test=target]').setValue(3)
+    await wrapper.get('[data-test=clear-models]').trigger('click')
+    expect(wrapper.get('[data-test=preview]').attributes('disabled')).toBeDefined()
+    await wrapper.get('form').trigger('submit')
+    expect(api.preview).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('governance.emptyWhitelist')
+    wrapper.unmount()
+  })
   it('translates known partial-collection warnings instead of showing internal warning codes', () => {
     const warnings = ['sub2api_channels_pricing_unavailable', 'newapi_channels_not_exposed', 'newapi_pricing_unavailable', 'sub2api_complex_pricing_not_flattened', 'newapi_complex_pricing_not_flattened', 'sub2api_model_plaza_unavailable', 'sub2api_channels_unavailable']
     const wrapper = mount(ImportPanel, { props: { ...props, snapshot: { ...props.snapshot, catalog: { ...props.snapshot.catalog, warnings } } } })
@@ -93,13 +140,13 @@ describe('import confirmation', () => {
     expect(wrapper.get('[data-test=preview]').attributes('disabled')).toBeUndefined()
     await wrapper.get('form').trigger('submit')
     expect(api.preview).toHaveBeenCalledWith(1, { selections: [
-      { remote_group_id: 'r', platform: 'openai', local_group_id: 9, account_name: 'Remote', cost_multiplier: 1 },
-      { remote_group_id: 'grok', platform: 'openai', local_group_id: 9, account_name: 'Grok', cost_multiplier: 1 },
-      { remote_group_id: 'mixed', platform: 'anthropic', local_group_id: 9, account_name: 'Mixed', cost_multiplier: 1 },
+      { remote_group_id: 'r', platform: 'openai', local_group_id: 9, account_name: 'https://fixture.example--1', cost_multiplier: 1, account_config: { ...defaultImportConfig(), model_mapping: { 'fixture-model': 'fixture-model' } } },
+      { remote_group_id: 'grok', platform: 'openai', local_group_id: 9, account_name: 'https://fixture.example--1', cost_multiplier: 1, account_config: { ...defaultImportConfig(), model_mapping: { 'fixture-model': 'fixture-model' } } },
+      { remote_group_id: 'mixed', platform: 'anthropic', local_group_id: 9, account_name: 'https://fixture.example--1', cost_multiplier: 1, account_config: { ...defaultImportConfig(), model_mapping: { 'fixture-model': 'fixture-model' }, openai_long_context_billing_enabled: false } },
     ] })
   })
   it('preserves zero account balances and unknown amounts in original units', () => {
-    const wrapper = mount(ImportPanel, { props: { ...props, snapshot: { ...props.snapshot, catalog: { ...props.snapshot.catalog,
+    const wrapper = mount(SiteOverview, { props: { site: { id: 1, name: 'Fixture', base_url: props.siteBaseUrl, platform: 'sub2api', proxy_id: null, enabled: true, interval_minutes: 15, version: 1, has_credential: true, status: 'healthy', last_error: '', last_sync_at: null }, bindingCount: 0, snapshot: { ...props.snapshot, catalog: { ...props.snapshot.catalog,
       account: { user_id: 4, username: 'upstream-user', email: '', balance: 0, frozen_balance: null, used_balance: 2500, unit: 'quota', source: 'user/self' },
     } } } })
     expect(wrapper.get('[data-test=account-balance]').text()).toBe('0 quota')

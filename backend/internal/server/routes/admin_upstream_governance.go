@@ -11,10 +11,13 @@ func registerUpstreamGovernanceRoutes(admin *gin.RouterGroup, h *handler.Handler
 	}
 	api := h.Admin.UpstreamGovernance
 	g := admin.Group("/upstream-governance")
+	g.GET("/model-templates", api.ModelTemplates)
+	g.PUT("/model-templates", api.SaveModelTemplates)
 	g.GET("/sites", api.List)
 	g.POST("/sites", api.Create)
 	g.POST("/sites/detect", api.Detect)
 	g.PUT("/sites/:id", api.Update)
+	g.PUT("/sites/:id/balance-monitor", api.ConfigureBalanceMonitor)
 	g.DELETE("/sites/:id", api.Delete)
 	g.POST("/sites/:id/connect", api.Connect)
 	g.POST("/sites/:id/sync", api.Sync)

@@ -11,7 +11,7 @@ import (
 )
 
 func TestGovernanceLockedFingerprintRejectsConcurrentAccountEdits(t *testing.T) {
-	for _, field := range []string{"same", "credentials", "proxy", "groups", "extra", "name", "rate", "parent"} {
+	for _, field := range []string{"same", "credentials", "proxy", "groups", "extra", "name", "rate", "parent", "notes", "concurrency"} {
 		t.Run(field, func(t *testing.T) {
 			db, m, e := sqlmock.New()
 			require.NoError(t, e)
@@ -36,17 +36,25 @@ func TestGovernanceLockedFingerprintRejectsConcurrentAccountEdits(t *testing.T) 
 				a.Name = "admin-edit"
 			case "rate":
 				rate = 3
+			case "notes":
+				notes := "admin-edit"
+				a.Notes = &notes
+			case "concurrency":
+				a.Concurrency = 99
 			}
 			creds, _ := json.Marshal(a.Credentials)
 			extra, _ := json.Marshal(a.Extra)
-			var proxy, parent any
+			var proxy, parent, notes any
+			if a.Notes != nil {
+				notes = *a.Notes
+			}
 			if a.ParentAccountID != nil {
 				parent = *a.ParentAccountID
 			}
 			if a.ProxyID != nil {
 				proxy = *a.ProxyID
 			}
-			m.ExpectQuery("SELECT name,platform,type,status,credentials,extra,proxy_id,rate_multiplier,parent_account_id.*FOR UPDATE").WithArgs(int64(9)).WillReturnRows(sqlmock.NewRows([]string{"name", "platform", "type", "status", "credentials", "extra", "proxy", "rate", "parent"}).AddRow(a.Name, a.Platform, a.Type, a.Status, creds, extra, proxy, rate, parent))
+			m.ExpectQuery("SELECT name,platform,type,status,credentials,extra,proxy_id,rate_multiplier,parent_account_id,notes,concurrency.*FOR UPDATE").WithArgs(int64(9)).WillReturnRows(sqlmock.NewRows([]string{"name", "platform", "type", "status", "credentials", "extra", "proxy", "rate", "parent", "notes", "concurrency"}).AddRow(a.Name, a.Platform, a.Type, a.Status, creds, extra, proxy, rate, parent, notes, a.Concurrency))
 			m.ExpectQuery("SELECT group_id FROM account_groups").WithArgs(int64(9)).WillReturnRows(sqlmock.NewRows([]string{"group_id"}).AddRow(a.GroupIDs[0]))
 			e = checkGovernanceAccountCAS(context.Background(), db, 9, expected)
 			if field == "same" {

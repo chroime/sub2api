@@ -19,22 +19,25 @@ var (
 )
 
 type Site struct {
-	ID              int64      `json:"id"`
-	Name            string     `json:"name"`
-	Platform        string     `json:"platform"`
-	BaseURL         string     `json:"base_url"`
-	ProxyID         *int64     `json:"proxy_id"`
-	Enabled         bool       `json:"enabled"`
-	IntervalMinutes int        `json:"interval_minutes"`
-	Version         int64      `json:"version"`
-	HasCredential   bool       `json:"has_credential"`
-	SessionCipher   string     `json:"-"`
-	Status          string     `json:"status"`
-	LastError       string     `json:"last_error"`
-	LastSyncAt      *time.Time `json:"last_sync_at"`
-	NextSyncAt      time.Time  `json:"next_sync_at"`
-	CreatedAt       time.Time  `json:"created_at"`
-	UpdatedAt       time.Time  `json:"updated_at"`
+	ID                   int64                `json:"id"`
+	Name                 string               `json:"name"`
+	Platform             string               `json:"platform"`
+	BaseURL              string               `json:"base_url"`
+	ProxyID              *int64               `json:"proxy_id"`
+	Enabled              bool                 `json:"enabled"`
+	IntervalMinutes      int                  `json:"interval_minutes"`
+	Version              int64                `json:"version"`
+	HasCredential        bool                 `json:"has_credential"`
+	SessionCipher        string               `json:"-"`
+	Status               string               `json:"status"`
+	LastError            string               `json:"last_error"`
+	LastSyncAt           *time.Time           `json:"last_sync_at"`
+	NextSyncAt           time.Time            `json:"next_sync_at"`
+	CreatedAt            time.Time            `json:"created_at"`
+	UpdatedAt            time.Time            `json:"updated_at"`
+	BalanceMonitor       BalanceMonitorConfig `json:"balance_monitor"`
+	BalanceMonitorStatus BalanceMonitorStatus `json:"balance_monitor_status"`
+	balanceState         BalanceMonitorState
 }
 
 type LoginInput struct {
@@ -134,18 +137,31 @@ type Binding struct {
 	NextProbeAt          time.Time `json:"next_probe_at"`
 }
 type Selection struct {
-	RemoteGroupID  string  `json:"remote_group_id"`
-	Platform       string  `json:"platform"`
-	LocalGroupID   int64   `json:"local_group_id"`
-	AccountName    string  `json:"account_name"`
-	CostMultiplier float64 `json:"cost_multiplier"`
+	RemoteGroupID  string         `json:"remote_group_id"`
+	Platform       string         `json:"platform"`
+	LocalGroupID   int64          `json:"local_group_id"`
+	AccountName    string         `json:"account_name"`
+	CostMultiplier float64        `json:"cost_multiplier"`
+	AccountConfig  *AccountConfig `json:"account_config,omitempty"`
+}
+type AccountConfig struct {
+	Concurrency                     int               `json:"concurrency"`
+	ModelMapping                    map[string]string `json:"model_mapping"`
+	UpstreamBillingRateSyncEnabled  bool              `json:"upstream_billing_rate_sync_enabled"`
+	QuotaDailyLimit                 float64           `json:"quota_daily_limit"`
+	QuotaWeeklyLimit                float64           `json:"quota_weekly_limit"`
+	QuotaLimit                      float64           `json:"quota_limit"`
+	OpenAILongContextBillingEnabled bool              `json:"openai_long_context_billing_enabled"`
 }
 type LocalAccount struct {
-	ID             int64   `json:"id"`
-	Name           string  `json:"name"`
-	GroupIDs       []int64 `json:"group_ids"`
-	CostMultiplier float64 `json:"cost_multiplier"`
-	Fingerprint    string  `json:"fingerprint"`
+	ID                  int64          `json:"id"`
+	Name                string         `json:"name"`
+	GroupIDs            []int64        `json:"group_ids"`
+	CostMultiplier      float64        `json:"cost_multiplier"`
+	Fingerprint         string         `json:"fingerprint"`
+	AccountConfig       *AccountConfig `json:"account_config,omitempty"`
+	NotesMatchAPIKey    bool           `json:"notes_match_api_key"`
+	BillingProbeEnabled bool           `json:"upstream_billing_probe_enabled"`
 }
 type LocalTarget struct {
 	ID             int64   `json:"id"`
@@ -212,6 +228,7 @@ type AccountChange struct {
 	GroupID                                                      int64
 	CostMultiplier                                               float64
 	ProxyID                                                      *int64
+	AccountConfig                                                *AccountConfig
 }
 type HTTPDoer interface {
 	Do(*http.Request) (*http.Response, error)
@@ -240,6 +257,7 @@ type Store interface {
 	DeleteSite(context.Context, int64) error
 	LockSite(context.Context, int64) (func(), bool, error)
 	ObserveSite(context.Context, int64, string, string, time.Time, time.Time) error
+	SaveBalanceMonitorState(context.Context, int64, BalanceMonitorState, []Event) error
 	DueSites(context.Context, time.Time, int) ([]Site, error)
 	LatestSnapshot(context.Context, int64) (*Snapshot, error)
 	SaveSnapshot(context.Context, *Snapshot, []Event) error

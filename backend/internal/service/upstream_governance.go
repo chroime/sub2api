@@ -53,14 +53,30 @@ func (l *governanceLocalAccounts) Target(ctx context.Context, id int64, platform
 func governanceLocal(a *Account) *gov.LocalAccount {
 	ids := append([]int64{}, a.GroupIDs...)
 	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
-	return &gov.LocalAccount{ID: a.ID, Name: a.Name, GroupIDs: ids, CostMultiplier: a.BillingRateMultiplier(), Fingerprint: governanceFingerprint(struct {
+	config := governanceAccountConfig(a)
+	extra := make(map[string]any, len(a.Extra))
+	for key, value := range a.Extra {
+		extra[key] = value
+	}
+	// Runtime accounting and probe refreshes do not invalidate reviewed settings.
+	for _, key := range []string{"quota_used", "quota_daily_used", "quota_weekly_used", "quota_daily_start", "quota_weekly_start", "quota_daily_reset_at", "quota_weekly_reset_at", UpstreamBillingProbeExtraKey} {
+		delete(extra, key)
+	}
+	rate := a.BillingRateMultiplier()
+	if config.UpstreamBillingRateSyncEnabled {
+		rate = 0 // The upstream owns this value while synchronization is enabled.
+	}
+	key, _ := a.Credentials["api_key"].(string)
+	return &gov.LocalAccount{ID: a.ID, Name: a.Name, GroupIDs: ids, CostMultiplier: a.BillingRateMultiplier(), AccountConfig: config, NotesMatchAPIKey: key != "" && a.Notes != nil && *a.Notes == key, BillingProbeEnabled: upstreamBillingProbeEnabled(a), Fingerprint: governanceFingerprint(struct {
 		ID                           int64
 		Name, Platform, Type, Status string
+		Notes                        *string
+		Concurrency                  int
 		Credentials, Extra           map[string]any
 		ProxyID, ParentAccountID     *int64
 		Groups                       []int64
 		Rate                         float64
-	}{a.ID, a.Name, a.Platform, a.Type, a.Status, a.Credentials, a.Extra, a.ProxyID, a.ParentAccountID, ids, a.BillingRateMultiplier()})}
+	}{a.ID, a.Name, a.Platform, a.Type, a.Status, a.Notes, a.Concurrency, a.Credentials, extra, a.ProxyID, a.ParentAccountID, ids, rate})}
 }
 func (l *governanceLocalAccounts) find(ctx context.Context, marker string) (*Account, error) {
 	var id int64
@@ -88,13 +104,21 @@ func (l *governanceLocalAccounts) FindAccount(ctx context.Context, marker string
 	return governanceLocal(a), nil
 }
 func governanceDesired(a *Account, c gov.AccountChange) bool {
-	probe, _ := a.Extra[UpstreamBillingProbeEnabledExtraKey].(bool)
-	sync, _ := a.Extra[UpstreamBillingRateSyncEnabledExtraKey].(bool)
-	return a.ParentAccountID == nil && a.Extra[governanceMarkerKey] == c.Marker && a.Type == "apikey" && a.Platform == c.Platform && a.Name == c.Name && a.Credentials["api_key"] == c.APIKey && a.Credentials["base_url"] == c.BaseURL && reflect.DeepEqual(a.ProxyID, c.ProxyID) && len(a.GroupIDs) == 1 && a.GroupIDs[0] == c.GroupID && a.BillingRateMultiplier() == c.CostMultiplier && !probe && !sync
+	config := c.AccountConfig
+	return config != nil && a.ParentAccountID == nil && a.Extra[governanceMarkerKey] == c.Marker && a.Type == "apikey" && a.Platform == c.Platform && a.Name == c.Name &&
+		a.Notes != nil && *a.Notes == c.APIKey && a.Credentials["api_key"] == c.APIKey && a.Credentials["base_url"] == c.BaseURL &&
+		reflect.DeepEqual(a.ProxyID, c.ProxyID) && len(a.GroupIDs) == 1 && a.GroupIDs[0] == c.GroupID &&
+		(config.UpstreamBillingRateSyncEnabled || a.BillingRateMultiplier() == c.CostMultiplier) &&
+		upstreamBillingProbeEnabled(a) == config.UpstreamBillingRateSyncEnabled && reflect.DeepEqual(governanceAccountConfig(a), config)
 }
 func (l *governanceLocalAccounts) ApplyAccount(ctx context.Context, c gov.AccountChange) (*gov.LocalAccount, error) {
 	if c.Marker == "" || c.APIKey == "" {
 		return nil, gov.ErrInvalid
+	}
+	var e error
+	c.AccountConfig, e = gov.NormalizeAccountConfig(c.AccountConfig, c.Platform, nil)
+	if e != nil {
+		return nil, e
 	}
 	target, e := l.Target(ctx, c.GroupID, c.Platform)
 	if e != nil {
@@ -107,7 +131,8 @@ func (l *governanceLocalAccounts) ApplyAccount(ctx context.Context, c gov.Accoun
 	if e != nil {
 		return nil, e
 	}
-	disabled := false
+	config := c.AccountConfig
+	syncEnabled := config.UpstreamBillingRateSyncEnabled
 	if a != nil {
 		if governanceDesired(a, c) {
 			return governanceLocal(a), nil
@@ -115,24 +140,22 @@ func (l *governanceLocalAccounts) ApplyAccount(ctx context.Context, c gov.Accoun
 		if a.ParentAccountID != nil || c.ExpectedFingerprint == "" || governanceLocal(a).Fingerprint != c.ExpectedFingerprint || a.Platform != c.Platform || a.Type != "apikey" {
 			return nil, gov.ErrConflict
 		}
-		credentials := map[string]any{}
-		for k, v := range a.Credentials {
-			credentials[k] = v
-		}
-		credentials["api_key"] = c.APIKey
-		credentials["base_url"] = c.BaseURL
 		proxy := c.ProxyID
 		if proxy == nil {
 			zero := int64(0)
 			proxy = &zero
 		}
 		groups := []int64{c.GroupID}
-		a, e = l.admin.UpdateAccount(withGovernanceMutation(ctx, c.ExpectedFingerprint, groups), a.ID, &UpdateAccountInput{Name: c.Name, Credentials: credentials, ProxyID: proxy, RateMultiplier: &c.CostMultiplier, GroupIDs: &groups, ProbeEnabled: &disabled, RateSyncEnabled: &disabled})
+		var rate *float64
+		if !syncEnabled {
+			rate = &c.CostMultiplier
+		}
+		a, e = l.admin.UpdateAccount(withGovernanceMutation(ctx, c.ExpectedFingerprint, groups), a.ID, &UpdateAccountInput{Name: c.Name, Notes: &c.APIKey, Credentials: governanceImportCredentials(a.Credentials, c), Extra: governanceImportExtra(a.Extra, c), ProxyID: proxy, Concurrency: &config.Concurrency, RateMultiplier: rate, GroupIDs: &groups, ProbeEnabled: &syncEnabled, RateSyncEnabled: &syncEnabled})
 	} else {
 		if c.ExpectedFingerprint != "" {
 			return nil, gov.ErrConflict
 		}
-		a, e = l.admin.CreateAccount(withGovernanceMutation(ctx, "", []int64{c.GroupID}), &CreateAccountInput{Name: c.Name, Platform: c.Platform, Type: "apikey", Credentials: map[string]any{"api_key": c.APIKey, "base_url": c.BaseURL}, Extra: map[string]any{governanceMarkerKey: c.Marker}, ProxyID: c.ProxyID, Concurrency: 1, RateMultiplier: &c.CostMultiplier, GroupIDs: []int64{c.GroupID}, ProbeEnabled: &disabled})
+		a, e = l.admin.CreateAccount(withGovernanceMutation(ctx, "", []int64{c.GroupID}), &CreateAccountInput{Name: c.Name, Notes: &c.APIKey, Platform: c.Platform, Type: "apikey", Credentials: governanceImportCredentials(nil, c), Extra: governanceImportExtra(nil, c), ProxyID: c.ProxyID, Concurrency: config.Concurrency, RateMultiplier: &c.CostMultiplier, GroupIDs: []int64{c.GroupID}, ProbeEnabled: &syncEnabled, RateSyncEnabled: &syncEnabled})
 		if e != nil {
 			recovered, re := l.find(ctx, c.Marker)
 			if re == nil && recovered != nil && governanceDesired(recovered, c) {
@@ -179,8 +202,13 @@ func governanceClientFactory(upstream HTTPUpstream, proxies ProxyRepository) gov
 		return governanceHTTPClient{upstream: upstream, proxy: proxyURL}, nil
 	}
 }
-func ProvideUpstreamGovernanceService(db *sql.DB, admin AdminService, upstream HTTPUpstream, proxies ProxyRepository, cipher SecretEncryptor, cfg *config.Config) *gov.Service {
+func ProvideUpstreamGovernanceService(db *sql.DB, admin AdminService, upstream HTTPUpstream, proxies ProxyRepository, cipher SecretEncryptor, cfg *config.Config, email *EmailService, settings SettingRepository, users UserRepository) *gov.Service {
 	svc := gov.NewService(gov.NewSQLStore(db), gov.NewConnector(governanceClientFactory(upstream, proxies)), &governanceLocalAccounts{db: db, admin: admin}, cipher, cfg != nil && cfg.Totp.EncryptionKeyConfigured)
+	notifier := &governanceBalanceNotifier{settings: settings, admins: users}
+	if email != nil {
+		notifier.mail = email
+	}
+	svc.SetBalanceNotifier(notifier)
 	svc.Start()
 	return svc
 }

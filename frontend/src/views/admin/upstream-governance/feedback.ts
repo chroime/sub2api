@@ -14,6 +14,10 @@ export function errorKey(error: unknown): string {
   return `governance.${reasonKeys[e?.reason || ''] || (e?.status === 409 ? 'stale' : 'error')}`
 }
 export const eventKeys: Record<string, string> = {
+  balance_low: 'balanceLow',
+  balance_recovered: 'balanceRecovered',
+  balance_notification_sent: 'balanceNotificationSent',
+  balance_notification_failed: 'balanceNotificationFailed',
   group_added: 'groupAdded',
   group_removed: 'groupRemoved',
   group_changed: 'groupChanged',

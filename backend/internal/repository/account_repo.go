@@ -506,8 +506,19 @@ func (r *accountRepository) updateAccount(
 			return service.ErrAccountNotFound
 		}
 		current.Name, current.Credentials, current.ProxyID = account.Name, account.Credentials, account.ProxyID
+		current.Notes, current.Concurrency = account.Notes, account.Concurrency
 		current.RateMultiplier = account.RateMultiplier
 		current.GroupIDs = append([]int64(nil), account.GroupIDs...)
+		if current.Extra == nil {
+			current.Extra = make(map[string]any)
+		}
+		for _, key := range []string{"quota_limit", "quota_daily_limit", "quota_weekly_limit", "openai_long_context_billing_enabled"} {
+			if value, exists := account.Extra[key]; exists {
+				current.Extra[key] = value
+			} else {
+				delete(current.Extra, key)
+			}
+		}
 		*account = *current
 	}
 

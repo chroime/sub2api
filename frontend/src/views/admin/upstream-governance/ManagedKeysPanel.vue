@@ -3,6 +3,7 @@ import { computed, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import api, { type KeySelection, type ManagedKey } from '@/api/admin/upstream-governance'
 import { errorKey } from './feedback'
+import { formatGovernanceTime } from './format'
 
 const props = defineProps<{
   siteId: number
@@ -145,11 +146,11 @@ async function copy(key?: ManagedKey) {
     <p v-if="error" role="alert" class="text-sm text-red-600">{{ error }}</p>
     <p v-if="loading" role="status" class="text-sm">{{ t('common.loading') }}</p>
     <p v-else-if="!keys.length && !selections.length" class="text-sm text-gray-500">{{ t('governance.selectForKeys') }}</p>
-    <div v-if="selections.length" class="flex flex-wrap gap-2">
+    <details v-if="selections.length" class="text-xs"><summary class="cursor-pointer text-gray-500">{{ t('governance.individualKeys') }} · {{ selections.length }}</summary><div class="mt-3 flex flex-wrap gap-2">
       <button v-for="selection in selections" :key="selection.remote_group_id + selection.platform" type="button" class="btn btn-secondary text-sm" data-test="create-group-key" :disabled="busy || disabled || loading || !selection.platform" @click="create([selection])">
         {{ t('governance.createGroupKey', { name: groupName(selection.remote_group_id) }) }} · {{ selection.platform || t('governance.chooseTransport') }}
       </button>
-    </div>
+    </div></details>
     <p v-if="busy && total" role="status" class="text-sm text-primary-600">{{ t('governance.keyBatchProgress', { count: processed, total }) }}</p>
     <p v-for="item in outcomes" :key="item.remote_group_id + item.platform" role="status" class="text-sm" :class="item.status === 'failed' || item.status === 'interrupted' ? 'text-red-600' : item.status === 'created' || item.status === 'reused' ? 'text-emerald-700' : 'text-gray-500'">
       {{ groupName(item.remote_group_id) }} / {{ item.platform }}: {{ t('governance.' + (keyStatus[item.status] || 'unknown')) }}<span v-if="item.error"> · {{ t(errorKey({ reason: item.error })) }}</span>
@@ -163,6 +164,7 @@ async function copy(key?: ManagedKey) {
         </template>
         <span v-else class="text-sm text-amber-700">{{ t('governance.keyPending') }}</span>
       </div>
+      <p class="text-[11px] tabular-nums text-gray-400">{{ t('governance.keyCreatedAt') }} {{ formatGovernanceTime(key.created_at) }} · {{ t('governance.keyUpdatedAt') }} {{ formatGovernanceTime(key.updated_at) }}</p>
       <code v-if="secrets[key.id]" data-test="key-secret" class="block select-all break-all rounded bg-gray-100 p-3 text-sm dark:bg-dark-900">{{ secrets[key.id] }}</code>
       <p v-else-if="keyErrors[key.id]" data-test="key-read-error" role="alert" class="text-sm text-red-600">{{ t('governance.keyReadFailed') }} · {{ keyErrors[key.id] }}</p>
       <p v-else-if="key.has_key" class="text-sm text-gray-500">{{ t('governance.keyLoading') }}</p>

@@ -5,7 +5,9 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import View from './UpstreamGovernanceView.vue'
 import ConnectDialog from './ConnectDialog.vue'
-import api from '@/api/admin/upstream-governance'
+import BalanceMonitorPanel from './BalanceMonitorPanel.vue'
+import ImportPanel from './ImportPanel.vue'
+import api, { type Site, type Snapshot } from '@/api/admin/upstream-governance'
 vi.mock('@/api/admin/upstream-governance', () => ({
   default: {
     list: vi.fn(),
@@ -20,6 +22,8 @@ vi.mock('@/api/admin/upstream-governance', () => ({
     connect: vi.fn(),
     sync: vi.fn(),
     keys: vi.fn().mockResolvedValue([]),
+    modelTemplates: vi.fn().mockResolvedValue({ version: 0, templates: [] }),
+    balanceMonitor: vi.fn(),
   },
 }))
 vi.mock('@/api/admin/groups', () => ({
@@ -28,9 +32,58 @@ vi.mock('@/api/admin/groups', () => ({
 vi.mock('@/api/admin/proxies', () => ({
   default: { getAll: vi.fn().mockResolvedValue([]) },
 }))
-vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
+vi.mock('vue-i18n', async (importOriginal) => ({ ...await importOriginal<typeof import('vue-i18n')>(), useI18n: () => ({ t: (key: string) => key }) }))
 describe('governance page', () => {
   beforeEach(() => vi.clearAllMocks())
+  it('locks site changes during a balance save and retains the returned site version for later visits', async () => {
+    const site: Site = { id: 1, name: 'Site A', platform: 'sub2api', base_url: 'https://fixture.example', enabled: true, interval_minutes: 15, proxy_id: null, version: 1, has_credential: true, status: 'healthy', last_error: '', last_sync_at: null }
+    const page = { items: [], total: 0, page: 1, pages: 0, page_size: 20 }
+    vi.mocked(api.list).mockResolvedValue([site, { ...site, id: 2, name: 'Site B' }])
+    vi.mocked(api.catalog).mockRejectedValue({ status: 404 })
+    vi.mocked(api.bindings).mockResolvedValue([])
+    vi.mocked(api.events).mockResolvedValue(page)
+    vi.mocked(api.checks).mockResolvedValue(page)
+    let finish!: (value: Site) => void
+    vi.mocked(api.balanceMonitor).mockImplementation(() => new Promise(resolve => { finish = resolve }))
+    const wrapper = mount(View, { global: { stubs: { BaseDialog: true } } })
+    await flushPromises()
+    await wrapper.get('#governance-monitor-tab').trigger('click')
+    const monitor = wrapper.getComponent(BalanceMonitorPanel)
+    await monitor.get('#governance-balance-settings').trigger('click')
+    await monitor.get('form').trigger('submit')
+    expect(wrapper.get('#governance-site-2').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('#governance-collect').attributes('disabled')).toBeDefined()
+    finish({ ...site, version: 2, balance_monitor: { enabled: true, threshold: 10, unit: 'usd', recipients: [], cooldown_minutes: 1440 } })
+    await flushPromises()
+    expect(wrapper.get('#governance-site-2').attributes('disabled')).toBeUndefined()
+    await wrapper.get('#governance-site-2').trigger('click')
+    await flushPromises()
+    await wrapper.get('#governance-site-1').trigger('click')
+    await flushPromises()
+    expect(wrapper.getComponent(BalanceMonitorPanel).props('site').version).toBe(2)
+    expect(wrapper.getComponent(BalanceMonitorPanel).props('site').balance_monitor?.enabled).toBe(true)
+    wrapper.unmount()
+  })
+  it('keeps the newly selected site when an earlier catalog request completes later', async () => {
+    const site: Site = { id: 1, name: 'Slow A', platform: 'sub2api', base_url: 'https://fixture.example', enabled: true, interval_minutes: 15, proxy_id: null, version: 1, has_credential: true, status: 'healthy', last_error: '', last_sync_at: null }
+    const snapshot: Snapshot = { id: 1, site_id: 1, site_version: 1, created_at: '2026-09-26T15:08:02Z', catalog: { groups: [], channels: [], warnings: [] } }
+    let finish!: (value: Snapshot) => void
+    vi.mocked(api.list).mockResolvedValue([site, { ...site, id: 2, name: 'Fast B' }])
+    vi.mocked(api.catalog).mockImplementation(id => id === 1 ? new Promise(resolve => { finish = resolve }) : Promise.resolve({ ...snapshot, id: 2, site_id: 2 }))
+    vi.mocked(api.bindings).mockResolvedValue([])
+    const page = { items: [], total: 0, page: 1, pages: 0, page_size: 20 }
+    vi.mocked(api.events).mockResolvedValue(page)
+    vi.mocked(api.checks).mockResolvedValue(page)
+    const wrapper = mount(View, { global: { stubs: { BaseDialog: true } } })
+    await flushPromises()
+    await wrapper.get('#governance-site-2').trigger('click')
+    await flushPromises()
+    finish(snapshot)
+    await flushPromises()
+    expect(wrapper.getComponent(ImportPanel).props('snapshot').site_id).toBe(2)
+    expect(wrapper.getComponent(BalanceMonitorPanel).props('site').id).toBe(2)
+    wrapper.unmount()
+  })
   it('retains newly connected authorization when automatic collection fails so collection can be retried', async () => {
     const site = { id: 1, name: 'Disconnected site', platform: 'sub2api' as const, base_url: 'https://fixture.example', enabled: true, interval_minutes: 15, proxy_id: null, version: 1, has_credential: false, status: 'disconnected', last_error: '', last_sync_at: null }
     vi.mocked(api.list).mockResolvedValue([site])
@@ -57,7 +110,7 @@ describe('governance page', () => {
   })
   it('automatically collects after reconnecting an existing site', async () => {
     const site = { id: 1, name: 'Reconnect site', platform: 'sub2api' as const, base_url: 'https://fixture.example', enabled: true, interval_minutes: 15, proxy_id: null, version: 1, has_credential: true, status: 'connected', last_error: '', last_sync_at: null }
-    const snapshot = { id: 10, site_id: 1, site_version: 1, created_at: 'new-collection', catalog: { groups: [], channels: [], warnings: [] } }
+    const snapshot = { id: 10, site_id: 1, site_version: 1, created_at: '2026-09-26T15:08:02+08:00', catalog: { groups: [], channels: [], warnings: [] } }
     vi.mocked(api.list).mockResolvedValue([site])
     vi.mocked(api.catalog).mockRejectedValue({ status: 404 })
     vi.mocked(api.sync).mockResolvedValue(snapshot)
@@ -73,7 +126,7 @@ describe('governance page', () => {
     wrapper.getComponent(ConnectDialog).vm.$emit('connected')
     await flushPromises()
     expect(api.sync).toHaveBeenCalledWith(1)
-    expect(wrapper.text()).toContain('new-collection')
+    expect(wrapper.text()).toMatch(/2026-09-26 \d{2}:08:02/)
     expect(wrapper.findComponent(ConnectDialog).exists()).toBe(false)
   })
   it('onboards from URL, username and password and automatically collects without a second user action', async () => {

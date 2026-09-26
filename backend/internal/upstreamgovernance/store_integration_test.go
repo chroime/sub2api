@@ -59,6 +59,11 @@ func TestSQLStorePostgresIntegration(t *testing.T) {
 		t.Fatal(e)
 	}
 	mustExec(string(keyMigration))
+	balanceMigration, e := os.ReadFile("../../migrations/249_upstream_governance_balance_monitor.sql")
+	if e != nil {
+		t.Fatal(e)
+	}
+	mustExec(string(balanceMigration))
 	ctx := context.Background()
 	s := NewSQLStore(fixture)
 	now := time.Now().UTC().Truncate(time.Microsecond)
@@ -281,5 +286,40 @@ func TestSQLStorePostgresIntegration(t *testing.T) {
 	var count int
 	if e = fixture.QueryRow(`SELECT COUNT(*) FROM accounts`).Scan(&count); e != nil || count != 6 {
 		t.Fatalf("governance cleanup touched accounts: %d %v", count, e)
+	}
+	// Delivery state survives a new store instance without changing the policy
+	// version used by optimistic site editing and import previews.
+	monitorSite := &Site{Name: "Monitor fixture", Platform: "newapi", BaseURL: "https://fixture.example", IntervalMinutes: 15, Status: "disconnected", NextSyncAt: now}
+	if e = s.CreateSite(ctx, monitorSite); e != nil {
+		t.Fatal(e)
+	}
+	monitorSite, e = s.GetSite(ctx, monitorSite.ID)
+	if e != nil || monitorSite.BalanceMonitor.Unit != "quota" || monitorSite.BalanceMonitor.Enabled {
+		t.Fatalf("monitor default: %#v %v", monitorSite, e)
+	}
+	monitorSite.BalanceMonitor.Enabled = true
+	monitorSite.BalanceMonitor.Threshold = 1000
+	monitorSite.BalanceMonitor.Recipients = []string{"fixture@example.com"}
+	if e = s.UpdateSite(ctx, monitorSite, 1); e != nil {
+		t.Fatal(e)
+	}
+	monitorState := BalanceMonitorState{Low: true, Status: BalanceMonitorStatus{State: "low", LastAttemptAt: &now, LastNotifiedAt: &now}, Recipients: map[string]BalanceRecipientState{"fixture-hash": {NextAttemptAt: now.Add(24 * time.Hour), LastSentAt: &now}}}
+	if e = s.SaveBalanceMonitorState(ctx, monitorSite.ID, monitorState, []Event{{Kind: "balance_low", CreatedAt: now}}); e != nil {
+		t.Fatal(e)
+	}
+	storedMonitor, e := NewSQLStore(fixture).GetSite(ctx, monitorSite.ID)
+	if e != nil || storedMonitor.Version != 2 || !storedMonitor.BalanceMonitor.Enabled || storedMonitor.BalanceMonitor.Threshold != 1000 || storedMonitor.BalanceMonitorStatus.State != "low" || !storedMonitor.balanceState.Recipients["fixture-hash"].NextAttemptAt.Equal(now.Add(24*time.Hour)) {
+		t.Fatalf("monitor policy/state roundtrip: %#v %v", storedMonitor, e)
+	}
+	if e = s.ObserveSite(ctx, monitorSite.ID, "healthy", "", now, now.Add(time.Hour)); e != nil {
+		t.Fatal(e)
+	}
+	service := NewService(s, nil, nil, nil, false)
+	if _, e = service.UpdateSite(ctx, monitorSite.ID, Site{Version: 2, Name: "Different wallet", Platform: "sub2api", BaseURL: "https://another.example", IntervalMinutes: 15}); e != nil {
+		t.Fatal(e)
+	}
+	replaced, e := s.GetSite(ctx, monitorSite.ID)
+	if e != nil || replaced.LastSyncAt != nil || replaced.BalanceMonitor.Enabled || replaced.BalanceMonitor.Unit != "usd" || replaced.BalanceMonitorStatus.LastNotifiedAt != nil || len(replaced.balanceState.Recipients) != 0 {
+		t.Fatalf("new wallet retained old state after reload: %#v %v", replaced, e)
 	}
 }

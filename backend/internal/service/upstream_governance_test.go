@@ -40,9 +40,21 @@ func (s *governanceAdminStub) UpdateAccount(_ context.Context, id int64, in *Upd
 	s.input = *in
 	a := s.account
 	a.Name = in.Name
+	a.Notes = in.Notes
 	a.Credentials = in.Credentials
+	if in.Extra != nil {
+		a.Extra = in.Extra
+	}
+	if in.Concurrency != nil {
+		a.Concurrency = *in.Concurrency
+	}
 	a.GroupIDs = *in.GroupIDs
-	a.RateMultiplier = in.RateMultiplier
+	if in.RateMultiplier != nil {
+		if in.RateSyncEnabled != nil && *in.RateSyncEnabled {
+			return nil, ErrUpstreamBillingRateSyncConflict
+		}
+		a.RateMultiplier = in.RateMultiplier
+	}
 	if *in.ProxyID == 0 {
 		a.ProxyID = nil
 	} else {
@@ -57,7 +69,8 @@ func TestGovernanceAccountRecoveryChecksCredentialsAndFingerprint(t *testing.T) 
 	require.NoError(t, e)
 	defer db.Close()
 	rate := 2.0
-	a := &Account{ID: 9, Name: "import", Platform: "openai", Type: "apikey", Status: StatusActive, Credentials: map[string]any{"api_key": "canary-key", "base_url": "https://fixture.example", "custom": "keep"}, Extra: map[string]any{governanceMarkerKey: "marker", "unrelated": "keep"}, GroupIDs: []int64{3}, RateMultiplier: &rate}
+	key := "canary-key"
+	a := &Account{ID: 9, Name: "import", Notes: &key, Concurrency: 5000, Platform: "openai", Type: "apikey", Status: StatusActive, Credentials: map[string]any{"api_key": "canary-key", "base_url": "https://fixture.example", "custom": "keep"}, Extra: map[string]any{governanceMarkerKey: "marker", "unrelated": "keep", "quota_daily_limit": 10000.0, "quota_weekly_limit": 700000.0, "quota_limit": 10000000.0, openAILongContextBillingEnabledKey: true, UpstreamBillingProbeEnabledExtraKey: true, UpstreamBillingRateSyncEnabledExtraKey: true}, GroupIDs: []int64{3}, RateMultiplier: &rate}
 	admin := &governanceAdminStub{account: a, group: &Group{ID: 3, Platform: "openai", Status: StatusActive}}
 	local := &governanceLocalAccounts{db: db, admin: admin}
 	change := gov.AccountChange{Marker: "marker", Name: "import", Platform: "openai", BaseURL: "https://fixture.example", APIKey: "canary-key", GroupID: 3, CostMultiplier: 2}
@@ -83,8 +96,9 @@ func TestGovernanceAccountRecoveryChecksCredentialsAndFingerprint(t *testing.T) 
 	require.Equal(t, 1, admin.updates)
 	require.Equal(t, "keep", a.Credentials["custom"])
 	require.Equal(t, "keep", a.Extra["unrelated"])
-	require.False(t, *admin.input.ProbeEnabled)
-	require.False(t, *admin.input.RateSyncEnabled)
+	require.True(t, *admin.input.ProbeEnabled)
+	require.True(t, *admin.input.RateSyncEnabled)
+	require.Nil(t, admin.input.RateMultiplier)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 func TestGovernanceFingerprintTracksSecretsProxyAndTarget(t *testing.T) {
@@ -100,7 +114,7 @@ func TestGovernanceFingerprintTracksSecretsProxyAndTarget(t *testing.T) {
 	_, e := local.Target(context.Background(), 3, "openai")
 	require.ErrorIs(t, e, gov.ErrInvalid)
 }
-func TestGovernanceCreateDisablesLegacyProbe(t *testing.T) {
+func TestGovernanceCreateEnablesDeclaredRateSync(t *testing.T) {
 	db, m, e := sqlmock.New()
 	require.NoError(t, e)
 	defer db.Close()
@@ -109,7 +123,7 @@ func TestGovernanceCreateDisablesLegacyProbe(t *testing.T) {
 	local := &governanceLocalAccounts{db: db, admin: admin}
 	_, e = local.ApplyAccount(context.Background(), gov.AccountChange{Marker: "marker", Name: "import", Platform: "openai", BaseURL: "https://fixture.example", APIKey: "key", GroupID: 3, CostMultiplier: 2})
 	require.NoError(t, e)
-	require.False(t, upstreamBillingRateSyncEnabled(admin.account))
+	require.True(t, upstreamBillingRateSyncEnabled(admin.account))
 	require.Equal(t, 5.0, admin.group.RateMultiplier)
 	require.Equal(t, 2.0, admin.account.BillingRateMultiplier())
 	require.NoError(t, m.ExpectationsWereMet())

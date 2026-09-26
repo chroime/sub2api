@@ -10,7 +10,9 @@ import (
 	"math"
 	"net"
 	"net/url"
+	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -19,16 +21,17 @@ import (
 )
 
 type Service struct {
-	store        Store
-	connector    Connector
-	local        LocalAccounts
-	cipher       Encryptor
-	durableKey   bool
-	slots        chan struct{}
-	now          func() time.Time
-	workerMu     sync.Mutex
-	workerCancel context.CancelFunc
-	workerDone   chan struct{}
+	store           Store
+	connector       Connector
+	local           LocalAccounts
+	cipher          Encryptor
+	durableKey      bool
+	slots           chan struct{}
+	now             func() time.Time
+	workerMu        sync.Mutex
+	workerCancel    context.CancelFunc
+	workerDone      chan struct{}
+	balanceNotifier BalanceNotifier
 }
 
 func NewService(store Store, connector Connector, local LocalAccounts, cipher Encryptor, durableKey bool) *Service {
@@ -98,6 +101,9 @@ func (s *Service) CreateSite(ctx context.Context, input Site) (*Site, error) {
 	input.NextSyncAt = s.now()
 	input.CreatedAt = s.now()
 	input.UpdatedAt = s.now()
+	input.BalanceMonitor = defaultBalanceMonitor(input.Platform)
+	input.BalanceMonitorStatus = BalanceMonitorStatus{State: "disabled"}
+	input.balanceState = BalanceMonitorState{Status: input.BalanceMonitorStatus}
 	if e := s.store.CreateSite(ctx, &input); e != nil {
 		return nil, e
 	}
@@ -149,6 +155,13 @@ func (s *Service) UpdateSite(ctx context.Context, id int64, input Site) (*Site, 
 		site.SessionCipher = ""
 		site.HasCredential = false
 		site.Status = "disconnected"
+		site.LastError = ""
+		site.LastSyncAt = nil
+		// A different upstream is a different wallet, potentially with another
+		// unit. Its thresholds and delivery history must be configured afresh.
+		site.BalanceMonitor = defaultBalanceMonitor(input.Platform)
+		site.balanceState = BalanceMonitorState{Status: BalanceMonitorStatus{State: "disabled"}}
+		site.BalanceMonitorStatus = site.balanceState.Status
 	}
 	site.Name = input.Name
 	site.Platform = input.Platform
@@ -376,6 +389,9 @@ func (s *Service) syncLocked(ctx context.Context, site Site) (*Snapshot, error) 
 	if e = s.store.ObserveSite(ctx, site.ID, "healthy", "", now, next); e != nil {
 		return nil, e
 	}
+	// Notification failures have their own persisted status and must not turn a
+	// successfully collected catalog into a failed synchronization.
+	s.checkBalanceMonitor(ctx, site, snapshot)
 	return snapshot, nil
 }
 
@@ -422,12 +438,23 @@ func (s *Service) Preview(ctx context.Context, id int64, selections []Selection)
 	seen := map[string]bool{}
 	for _, selection := range selections {
 		g, ok := groups[selection.RemoteGroupID]
-		if !ok || !validTransport(selection.Platform) || selection.LocalGroupID <= 0 || !validCost(selection.CostMultiplier) || strings.TrimSpace(selection.AccountName) == "" || len(selection.AccountName) > 100 {
+		if !ok || !validTransport(selection.Platform) || selection.LocalGroupID <= 0 || !validCost(selection.CostMultiplier) {
 			return nil, ErrInvalid
 		}
 		// Existing account cost storage is NUMERIC(10,4). Freeze its persisted
 		// precision in the preview so recovery compares exactly the approved cost.
 		selection.CostMultiplier = math.Round(selection.CostMultiplier*10000) / 10000
+		selection.AccountName = strings.TrimSpace(selection.AccountName)
+		if selection.AccountName == "" {
+			selection.AccountName = site.BaseURL + "--" + strconv.FormatFloat(selection.CostMultiplier, 'f', -1, 64)
+		}
+		if len(selection.AccountName) > 100 {
+			return nil, ErrInvalid
+		}
+		selection.AccountConfig, e = NormalizeAccountConfig(selection.AccountConfig, selection.Platform, g.Models)
+		if e != nil {
+			return nil, e
+		}
 		if !compatibleTransport(g.Platform, selection.Platform) {
 			return nil, ErrInvalid
 		}
@@ -465,7 +492,11 @@ func allApplied(r *ApplyResult) bool {
 	return true
 }
 func accountMatches(a *LocalAccount, row PreviewRow) bool {
-	return a != nil && a.Name == row.Selection.AccountName && a.CostMultiplier == row.Selection.CostMultiplier && len(a.GroupIDs) == 1 && a.GroupIDs[0] == row.Selection.LocalGroupID
+	config := row.Selection.AccountConfig
+	return a != nil && config != nil && a.Name == row.Selection.AccountName &&
+		(config.UpstreamBillingRateSyncEnabled || a.CostMultiplier == row.Selection.CostMultiplier) &&
+		len(a.GroupIDs) == 1 && a.GroupIDs[0] == row.Selection.LocalGroupID &&
+		a.NotesMatchAPIKey && a.BillingProbeEnabled == config.UpstreamBillingRateSyncEnabled && reflect.DeepEqual(a.AccountConfig, config)
 }
 func (s *Service) Apply(ctx context.Context, id int64, previewID string) (*ApplyResult, error) {
 	free, e := s.remoteSlot(ctx)
@@ -506,6 +537,11 @@ func (s *Service) Apply(ctx context.Context, id int64, previewID string) (*Apply
 	}
 	// Validate every remaining destination before any remote key creation or local write.
 	for _, row := range p.Rows {
+		// Previews issued before account settings were included must be refreshed;
+		// applying new defaults to an old preview would change its reviewed intent.
+		if row.Selection.AccountConfig == nil {
+			return nil, ErrConflict
+		}
 		if _, ok := completed[row.Selection.RemoteGroupID+"\x00"+row.Selection.Platform]; ok {
 			continue
 		}
@@ -586,7 +622,7 @@ func (s *Service) applyRow(ctx context.Context, site Site, session Session, row 
 	}
 	// The local adapter checks the full desired state, including key, origin and
 	// proxy. It can recover a committed local write without overwriting later edits.
-	account, e := s.local.ApplyAccount(ctx, AccountChange{Marker: row.Marker, Name: row.Selection.AccountName, Platform: row.Selection.Platform, BaseURL: site.BaseURL, APIKey: key.Key, ExpectedFingerprint: expected, ExpectedTargetFingerprint: row.Target.Fingerprint, GroupID: row.Selection.LocalGroupID, CostMultiplier: row.Selection.CostMultiplier, ProxyID: site.ProxyID})
+	account, e := s.local.ApplyAccount(ctx, AccountChange{Marker: row.Marker, Name: row.Selection.AccountName, Platform: row.Selection.Platform, BaseURL: site.BaseURL, APIKey: key.Key, ExpectedFingerprint: expected, ExpectedTargetFingerprint: row.Target.Fingerprint, GroupID: row.Selection.LocalGroupID, CostMultiplier: row.Selection.CostMultiplier, ProxyID: site.ProxyID, AccountConfig: row.Selection.AccountConfig})
 	if e != nil {
 		return nil, e
 	}

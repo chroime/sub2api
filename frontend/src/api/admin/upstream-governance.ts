@@ -15,6 +15,41 @@ export interface Site extends SiteInput {
   status: string
   last_error: string
   last_sync_at: string | null
+  balance_monitor?: BalanceMonitor
+  balance_monitor_status?: BalanceMonitorStatus
+}
+export interface BalanceMonitor {
+  enabled: boolean
+  threshold: number
+  unit: 'usd' | 'quota'
+  recipients: string[]
+  cooldown_minutes: number
+}
+export interface BalanceMonitorStatus {
+  state: 'disabled' | 'unknown' | 'healthy' | 'low'
+  last_attempt_at: string | null
+  last_notified_at: string | null
+  last_error: string
+}
+export interface ModelTemplate {
+  id: string
+  name: string
+  platform: Transport
+  models: string[]
+  is_default: boolean
+}
+export interface ModelTemplateCollection {
+  version: number
+  templates: ModelTemplate[]
+}
+export interface ImportAccountConfig {
+  concurrency: number
+  model_mapping: Record<string, string>
+  upstream_billing_rate_sync_enabled: boolean
+  quota_daily_limit: number
+  quota_weekly_limit: number
+  quota_limit: number
+  openai_long_context_billing_enabled: boolean
 }
 export interface LoginInput {
   username?: string
@@ -107,6 +142,7 @@ export interface Selection {
   local_group_id: number
   account_name: string
   cost_multiplier: number
+  account_config?: ImportAccountConfig
 }
 export interface PreviewRow {
   selection: Selection
@@ -185,6 +221,15 @@ export interface Page<T> {
 const base = '/admin/upstream-governance/sites'
 const site = (id: number) => `${base}/${id}`
 const api = {
+  async modelTemplates() {
+    return (await apiClient.get<ModelTemplateCollection>('/admin/upstream-governance/model-templates')).data
+  },
+  async saveModelTemplates(input: ModelTemplateCollection) {
+    return (await apiClient.put<ModelTemplateCollection>('/admin/upstream-governance/model-templates', input)).data
+  },
+  async balanceMonitor(id: number, input: BalanceMonitor & { version: number }) {
+    return (await apiClient.put<Site>(`${site(id)}/balance-monitor`, input)).data
+  },
   async list() {
     return (await apiClient.get<Site[]>(base)).data
   },

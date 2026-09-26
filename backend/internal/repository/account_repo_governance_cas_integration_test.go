@@ -40,16 +40,16 @@ func TestGovernancePostgresConcurrentAdminEdit(t *testing.T) {
 	fixture, e := sql.Open("postgres", u.String())
 	require.NoError(t, e)
 	defer fixture.Close()
-	_, e = fixture.Exec(`CREATE TABLE accounts(id BIGINT PRIMARY KEY,name TEXT,platform TEXT,type TEXT,status TEXT,credentials JSONB,extra JSONB,proxy_id BIGINT,rate_multiplier DOUBLE PRECISION,parent_account_id BIGINT,deleted_at TIMESTAMPTZ);CREATE TABLE account_groups(account_id BIGINT,group_id BIGINT);INSERT INTO accounts VALUES(9,'import','openai','apikey','active','{"api_key":"old"}','{"upstream_governance_marker":"marker","unrelated":"preserved"}',NULL,2,NULL,NULL);INSERT INTO account_groups VALUES(9,3)`)
+	_, e = fixture.Exec(`CREATE TABLE accounts(id BIGINT PRIMARY KEY,name TEXT,platform TEXT,type TEXT,status TEXT,credentials JSONB,extra JSONB,proxy_id BIGINT,rate_multiplier DOUBLE PRECISION,parent_account_id BIGINT,deleted_at TIMESTAMPTZ,notes TEXT,concurrency INTEGER NOT NULL DEFAULT 0);CREATE TABLE account_groups(account_id BIGINT,group_id BIGINT);INSERT INTO accounts VALUES(9,'import','openai','apikey','active','{"api_key":"old"}','{"upstream_governance_marker":"marker","unrelated":"preserved"}',NULL,2,NULL,NULL,NULL,0);INSERT INTO account_groups VALUES(9,3)`)
 	require.NoError(t, e)
 	rate := 2.0
 	a := &service.Account{ID: 9, Name: "import", Platform: "openai", Type: "apikey", Status: "active", Credentials: map[string]any{"api_key": "old"}, Extra: map[string]any{"upstream_governance_marker": "marker", "unrelated": "preserved"}, GroupIDs: []int64{3}, RateMultiplier: &rate}
 	expected := service.GovernanceAccountFingerprint(a)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	for _, kind := range []string{"credentials", "groups"} {
+	for _, kind := range []string{"credentials", "groups", "notes", "concurrency"} {
 		t.Run(kind, func(t *testing.T) {
-			_, e = fixture.Exec(`UPDATE accounts SET credentials='{"api_key":"old"}';UPDATE account_groups SET group_id=3`)
+			_, e = fixture.Exec(`UPDATE accounts SET credentials='{"api_key":"old"}',notes=NULL,concurrency=0;UPDATE account_groups SET group_id=3`)
 			require.NoError(t, e)
 			admin, e := fixture.BeginTx(ctx, nil)
 			require.NoError(t, e)
@@ -57,8 +57,12 @@ func TestGovernancePostgresConcurrentAdminEdit(t *testing.T) {
 			require.NoError(t, lockAccountForGroupBind(ctx, admin, 9))
 			if kind == "credentials" {
 				_, e = admin.ExecContext(ctx, `UPDATE accounts SET credentials='{"api_key":"admin-won"}' WHERE id=9`)
-			} else {
+			} else if kind == "groups" {
 				_, e = admin.ExecContext(ctx, `UPDATE account_groups SET group_id=5 WHERE account_id=9`)
+			} else if kind == "notes" {
+				_, e = admin.ExecContext(ctx, `UPDATE accounts SET notes='admin-won' WHERE id=9`)
+			} else {
+				_, e = admin.ExecContext(ctx, `UPDATE accounts SET concurrency=99 WHERE id=9`)
 			}
 			require.NoError(t, e)
 			done := make(chan error, 1)
@@ -87,9 +91,12 @@ func TestGovernancePostgresConcurrentAdminEdit(t *testing.T) {
 			if kind == "credentials" {
 				require.Equal(t, "admin-won", key)
 				require.EqualValues(t, 3, group)
-			} else {
+			} else if kind == "groups" {
 				require.Equal(t, "old", key)
 				require.EqualValues(t, 5, group)
+			} else {
+				require.Equal(t, "old", key)
+				require.EqualValues(t, 3, group)
 			}
 		})
 	}

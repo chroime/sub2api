@@ -183,7 +183,7 @@ func (f *fakeLocal) ApplyAccount(_ context.Context, c AccountChange) (*LocalAcco
 	if f.fail {
 		return nil, errors.New("fixture failure secret")
 	}
-	a := &LocalAccount{ID: 10, Name: c.Name, GroupIDs: []int64{c.GroupID}, CostMultiplier: c.CostMultiplier, Fingerprint: "updated"}
+	a := &LocalAccount{ID: 10, Name: c.Name, GroupIDs: []int64{c.GroupID}, CostMultiplier: c.CostMultiplier, Fingerprint: "updated", AccountConfig: c.AccountConfig, NotesMatchAPIKey: true, BillingProbeEnabled: c.AccountConfig.UpstreamBillingRateSyncEnabled}
 	f.accounts[c.Marker] = a
 	return a, nil
 }
