@@ -125,8 +125,37 @@ func (s *sqlStore) UpdateSite(ctx context.Context, v *Site, version int64) error
 	return e
 }
 func (s *sqlStore) DeleteSite(ctx context.Context, id int64) error {
-	r, e := s.db.ExecContext(ctx, `DELETE FROM upstream_governance_sites WHERE id=$1 AND NOT EXISTS (SELECT 1 FROM upstream_governance_bindings WHERE site_id=$1) AND NOT EXISTS (SELECT 1 FROM upstream_governance_keys WHERE site_id=$1)`, id)
-	return affected(r, e, ErrConflict)
+	tx, e := s.db.BeginTx(ctx, nil)
+	if e != nil {
+		return e
+	}
+	defer tx.Rollback()
+	// The service holds the advisory site lock; this row lock also prevents new
+	// FK references from appearing between the dependency check and deletion.
+	var siteID int64
+	if e = tx.QueryRowContext(ctx, `SELECT id FROM upstream_governance_sites WHERE id=$1 FOR UPDATE`, id).Scan(&siteID); e != nil {
+		return storeError(e)
+	}
+	var inUse bool
+	if e = tx.QueryRowContext(ctx, `SELECT EXISTS (
+SELECT 1 FROM upstream_governance_bindings b WHERE b.site_id=$1
+AND (b.account_id=0 OR EXISTS (SELECT 1 FROM accounts a WHERE a.id=b.account_id AND a.deleted_at IS NULL))
+) OR EXISTS (SELECT 1 FROM upstream_governance_keys WHERE site_id=$1)`, id).Scan(&inUse); e != nil {
+		return e
+	}
+	if inUse {
+		return ErrSiteInUse
+	}
+	// Retired local accounts leave historical bindings. Remove only those
+	// orphans; pending imports and managed keys retain their ownership records.
+	if _, e = tx.ExecContext(ctx, `DELETE FROM upstream_governance_bindings b WHERE b.site_id=$1 AND b.account_id>0 AND NOT EXISTS (SELECT 1 FROM accounts a WHERE a.id=b.account_id AND a.deleted_at IS NULL)`, id); e != nil {
+		return e
+	}
+	r, e := tx.ExecContext(ctx, `DELETE FROM upstream_governance_sites WHERE id=$1`, id)
+	if e = affected(r, e, ErrNotFound); e != nil {
+		return e
+	}
+	return tx.Commit()
 }
 func (s *sqlStore) ObserveSite(ctx context.Context, id int64, status, message string, last, next time.Time) error {
 	var success any

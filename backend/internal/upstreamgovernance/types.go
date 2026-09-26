@@ -11,6 +11,7 @@ import (
 var (
 	ErrNotFound    = errors.New("governance resource not found")
 	ErrConflict    = errors.New("governance preview or resource is stale")
+	ErrSiteInUse   = errors.New("governance site has active account bindings, pending imports, or managed keys")
 	ErrBusy        = errors.New("an operation is already running for this site")
 	ErrInvalid     = errors.New("invalid governance input")
 	ErrReauth      = errors.New("upstream authorization required")

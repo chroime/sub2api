@@ -217,5 +217,12 @@ export default {
   previous: '上一页',
   next: '下一页',
   deleteNotice:
-    '确认删除站点？已导入的本地账户始终保留。存在绑定的站点不能删除，请改为关闭自动采集和定时检查。',
+    '确认删除站点？仅清理本地账户已删除或不存在的历史绑定。仍有关联账户、待完成导入或托管 API Key 时无法删除，请先关闭自动采集和定时检查。',
+  siteInUse: '该站点仍有关联账户、待完成导入或托管 API Key，暂时无法删除。可关闭自动采集和定时检查。',
+  compositeGroup: '混合分组',
+  protocolMismatch: '与上游声明的平台不匹配',
+  targetProtocolMismatch: '与当前推理协议不匹配',
+  targetGroupHint: '目标列表显示本地已启用分组；未创建的厂商分组不会出现。不兼容的分组会置灰，混合分组支持各推理协议。',
+  antigravityNeedsSub2API: '需要 Sub2API 的 Antigravity 专用接口',
+  importStateUnavailable: '读取已有绑定或 API Key 信息失败，请重新选择站点后再导入。',
 }

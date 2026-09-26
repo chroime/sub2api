@@ -95,14 +95,6 @@ func TestSQLStoreBindingPreservesSecretAndUniqueTuple(t *testing.T) {
 		t.Fatal(b.ID)
 	}
 }
-func TestSQLStoreDeleteRefusesBindings(t *testing.T) {
-	s, m := storeFixture(t)
-	m.ExpectExec(`DELETE FROM upstream_governance_sites[\s\S]*NOT EXISTS`).WithArgs(int64(1)).WillReturnResult(sqlmock.NewResult(0, 0))
-	if e := s.DeleteSite(context.Background(), 1); !errors.Is(e, ErrConflict) {
-		t.Fatalf("want conflict got %v", e)
-	}
-}
-
 func TestSQLStoreUnlockFailureDiscardsConnection(t *testing.T) {
 	for _, failed := range []bool{false, true} {
 		t.Run(fmt.Sprint(failed), func(t *testing.T) {

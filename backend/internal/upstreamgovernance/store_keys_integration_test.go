@@ -49,7 +49,7 @@ func TestSQLManagedKeysPostgresIntegration(t *testing.T) {
 	defer db.Close()
 	_, err = db.Exec(`CREATE TABLE proxies(id BIGSERIAL PRIMARY KEY); CREATE TABLE groups(id BIGSERIAL PRIMARY KEY); CREATE TABLE accounts(id BIGSERIAL PRIMARY KEY,extra JSONB NOT NULL DEFAULT '{}',deleted_at TIMESTAMPTZ); INSERT INTO groups(id) VALUES(1)`)
 	require.NoError(t, err)
-	for _, migration := range []string{"247_upstream_governance.sql", "248_upstream_governance_keys.sql", "249_upstream_governance_balance_monitor.sql"} {
+	for _, migration := range []string{"247_upstream_governance.sql", "248_upstream_governance_keys.sql", "249_upstream_governance_balance_monitor.sql", "250_upstream_governance_platforms.sql"} {
 		raw, err := os.ReadFile("../../migrations/" + migration)
 		require.NoError(t, err)
 		_, err = db.Exec(string(raw))
@@ -110,7 +110,7 @@ func TestSQLManagedKeysPostgresIntegration(t *testing.T) {
 	require.Len(t, pending, 1)
 	require.Equal(t, int64(5), pending[0].OwnerUserID)
 	require.False(t, pending[0].HasKey)
-	require.ErrorIs(t, store.DeleteSite(t.Context(), site.ID), gov.ErrConflict)
+	require.ErrorIs(t, store.DeleteSite(t.Context(), site.ID), gov.ErrSiteInUse)
 	_, err = db.Exec(`DELETE FROM upstream_governance_sites WHERE id=$1`, site.ID)
 	require.Error(t, err, "the foreign key must also protect pending ownership")
 	result, err = service.CreateKeys(t.Context(), site.ID, request)

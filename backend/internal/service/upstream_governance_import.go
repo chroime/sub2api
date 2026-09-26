@@ -2,6 +2,13 @@ package service
 
 import gov "github.com/Wei-Shaw/sub2api/internal/upstreamgovernance"
 
+// Governance freezes an explicit model allowlist in each import preview. Native
+// provider defaults and aliases must not silently expand that list; an empty
+// list means the administrator selected unrestricted upstream models.
+func (account *Account) usesGovernanceModelPolicy() bool {
+	return account != nil && account.Type == AccountTypeAPIKey && account.GetExtraString(governanceMarkerKey) != ""
+}
+
 func governanceAccountConfig(account *Account) *gov.AccountConfig {
 	mapping := stringMappingFromRaw(account.Credentials["model_mapping"])
 	if mapping == nil {
@@ -21,6 +28,13 @@ func governanceImportCredentials(previous map[string]any, change gov.AccountChan
 		credentials[key] = value
 	}
 	credentials["api_key"], credentials["base_url"] = change.APIKey, change.BaseURL
+	// Relay imports use the public Chat Completions endpoint. In particular,
+	// OpenCode's adaptive default would otherwise choose official protocol URLs
+	// that do not belong to this upstream. Preserve an administrator's explicit
+	// protocol when updating an existing governed account.
+	if (IsCNProvider(change.Platform) || change.Platform == PlatformOpenCodeGo) && credentials["api_protocol"] == nil {
+		credentials["api_protocol"] = APIProtocolChatCompletions
+	}
 	delete(credentials, "model_mapping")
 	if len(change.AccountConfig.ModelMapping) > 0 {
 		mapping := make(map[string]any, len(change.AccountConfig.ModelMapping))

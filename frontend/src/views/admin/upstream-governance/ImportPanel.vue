@@ -6,12 +6,15 @@ import { formatGovernanceTime } from './format'
 import {
   defaultAccountName,
   defaultImportConfig,
+  defaultModelSelections,
   importAccountConfig,
   type ModelSelections,
 } from './import-config'
 import ManagedKeysPanel from './ManagedKeysPanel.vue'
 import ImportSettingsPanel from './ImportSettingsPanel.vue'
 import TransportSelect from './TransportSelect.vue'
+import TargetGroupSelect from './TargetGroupSelect.vue'
+import { initialTransport, transportUnavailable } from './providers'
 import PriceDetails from './PriceDetails.vue'
 import Icon from '@/components/icons/Icon.vue'
 import api, {
@@ -20,10 +23,16 @@ import api, {
   type Preview,
   type ApplyResult,
   type Transport,
+  type SiteInput,
+  type KeySelection,
+  type Binding,
 } from '@/api/admin/upstream-governance'
 const props = defineProps<{
   siteId: number
   siteBaseUrl: string
+  sitePlatform?: SiteInput['platform']
+  bindings?: Pick<Binding, 'remote_group_id' | 'platform'>[]
+  managedKeys?: KeySelection[]
   disabled?: boolean
   snapshot: Snapshot
   groups: {
@@ -46,7 +55,7 @@ const busy = ref(false),
   keyBusy = ref(false),
   error = ref('')
 const query = ref(''),
-  platformFilter = ref(''),
+  platformFilter = ref<Transport | ''>(''),
   selectedOnly = ref(false)
 const bulkTarget = ref(0),
   bulkMessage = ref(''),
@@ -54,19 +63,8 @@ const bulkTarget = ref(0),
 const config = ref(defaultImportConfig()),
   quotaEnabled = ref(true),
   modelsReady = ref(false)
-const modelSelections = ref<ModelSelections>({
-  openai: { enabled: false, models: [] },
-  anthropic: { enabled: false, models: [] },
-  gemini: { enabled: false, models: [] },
-})
+const modelSelections = ref<ModelSelections>(defaultModelSelections())
 let generation = 0
-function inferTransport(platform: string): Transport | '' {
-  const normalized = platform.toLowerCase()
-  if (normalized === 'grok') return 'openai'
-  return ['openai', 'anthropic', 'gemini'].includes(normalized)
-    ? (normalized as Transport)
-    : ''
-}
 const working = computed(() => busy.value || keyBusy.value)
 const resolvedGroups = computed(() =>
   props.snapshot.catalog.groups.map((group) => ({
@@ -85,7 +83,7 @@ watch(
         {
           selected: false,
           remote_group_id: group.id,
-          platform: inferTransport(group.platform),
+          platform: initialTransport(group.id, group.platform, props.bindings, props.managedKeys, props.sitePlatform),
           local_group_id: 0,
           account_name: defaultAccountName(
             props.siteBaseUrl,
@@ -107,6 +105,7 @@ watch(
     config.value = defaultImportConfig()
     quotaEnabled.value = true
     modelsReady.value = false
+    modelSelections.value = defaultModelSelections()
   },
   { immediate: true },
 )
@@ -149,6 +148,7 @@ const unresolved = computed(() =>
   selected.value.filter(
     (choice) =>
       !choice.platform ||
+      !!transportUnavailable(choice.platform, props.sitePlatform, props.snapshot.catalog.groups.find(group => group.id === choice.remote_group_id)?.platform) ||
       !props.groups.some(
         (group) =>
           group.id === choice.local_group_id &&
@@ -349,16 +349,13 @@ const catalogWarnings: Record<string, string> = {
               :aria-label="t('governance.searchGroups')"
             />
           </div>
-          <select
+          <TransportSelect
             v-model="platformFilter"
-            class="input w-full text-sm sm:w-auto"
-            :aria-label="t('governance.transport')"
-          >
-            <option value="">{{ t('governance.allProtocols') }}</option>
-            <option value="openai">OpenAI</option>
-            <option value="anthropic">Anthropic</option>
-            <option value="gemini">Gemini</option></select
-          ><label class="flex items-center gap-2 text-xs text-gray-500"
+            data-test="protocol-filter"
+            class="w-full text-sm sm:w-56"
+            :disabled="working || disabled"
+            allow-all
+          /><label class="flex items-center gap-2 text-xs text-gray-500"
             ><input v-model="selectedOnly" type="checkbox" />{{
               t('governance.onlySelected')
             }}</label
@@ -382,19 +379,16 @@ const catalogWarnings: Record<string, string> = {
             >{{
               t('governance.selectedCount', { count: selected.length })
             }}</span
-          ><select
+          ><TargetGroupSelect
             id="governance-bulk-target"
             v-model="bulkTarget"
             data-test="bulk-target"
-            class="input w-full min-w-48 text-sm sm:w-auto"
+            class="w-full min-w-48 text-sm sm:w-72"
+            :groups="groups"
+            :disabled="working || disabled"
+            :placeholder="t('governance.bulkTarget')"
             :aria-label="t('governance.bulkTarget')"
-          >
-            <option :value="0">{{ t('governance.bulkTarget') }}</option>
-            <option v-for="group in groups" :key="group.id" :value="group.id">
-              {{ group.name }} · {{ group.platform }} ·
-              {{ group.rate_multiplier }}×
-            </option></select
-          ><button
+          /><button
             id="governance-assign-target"
             data-test="assign-target"
             type="button"
@@ -405,6 +399,9 @@ const catalogWarnings: Record<string, string> = {
             {{ t('governance.assignSelected') }}
           </button>
         </div>
+        <p
+          class="text-xs text-gray-500"
+        >{{ t('governance.targetGroupHint') }}</p>
         <p
           v-if="bulkMessage"
           role="status"
@@ -486,6 +483,8 @@ const catalogWarnings: Record<string, string> = {
                     <TransportSelect
                       v-model="choices[remote.id]!.platform"
                       data-test="platform"
+                      :site-platform="sitePlatform"
+                      :remote-platform="remote.platform"
                       :disabled="working || disabled"
                       @update:model-value="
                         choices[remote.id]!.local_group_id = 0
@@ -493,28 +492,17 @@ const catalogWarnings: Record<string, string> = {
                     />
                   </td>
                   <td class="px-3 py-3">
-                    <select
+                    <TargetGroupSelect
                       v-model="choices[remote.id]!.local_group_id"
                       data-test="target"
-                      class="input w-full text-sm"
+                      class="w-full text-sm"
+                      :groups="groups"
+                      :transport="choices[remote.id]!.platform"
                       :aria-label="
                         t('governance.localGroup') + ' ' + remote.name
                       "
-                      :disabled="!choices[remote.id]!.selected"
-                    >
-                      <option :value="0">{{ t('governance.choose') }}</option>
-                      <option
-                        v-for="group in groups.filter(
-                          (item) =>
-                            item.platform === choices[remote.id]!.platform ||
-                            item.platform === 'composite',
-                        )"
-                        :key="group.id"
-                        :value="group.id"
-                      >
-                        {{ group.name }} · {{ group.rate_multiplier }}×
-                      </option>
-                    </select>
+                      :disabled="working || disabled || !choices[remote.id]!.selected || !choices[remote.id]!.platform"
+                    />
                   </td>
                   <td class="px-3 py-3">
                     <button

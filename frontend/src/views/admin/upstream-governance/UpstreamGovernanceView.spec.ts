@@ -24,6 +24,7 @@ vi.mock('@/api/admin/upstream-governance', () => ({
     keys: vi.fn().mockResolvedValue([]),
     modelTemplates: vi.fn().mockResolvedValue({ version: 0, templates: [] }),
     balanceMonitor: vi.fn(),
+    remove: vi.fn(),
   },
 }))
 vi.mock('@/api/admin/groups', () => ({
@@ -35,6 +36,91 @@ vi.mock('@/api/admin/proxies', () => ({
 vi.mock('vue-i18n', async (importOriginal) => ({ ...await importOriginal<typeof import('vue-i18n')>(), useI18n: () => ({ t: (key: string) => key }) }))
 describe('governance page', () => {
   beforeEach(() => vi.clearAllMocks())
+  it('waits for existing key metadata before enabling imports and preserves key-only Grok compatibility', async () => {
+    const site: Site = { id: 1, name: 'Legacy Grok', platform: 'sub2api', base_url: 'https://fixture.example', enabled: true, interval_minutes: 15, proxy_id: null, version: 1, has_credential: true, status: 'healthy', last_error: '', last_sync_at: null }
+    const snapshot: Snapshot = { id: 1, site_id: 1, site_version: 1, created_at: '2026-09-26T15:08:02Z', catalog: { groups: [], channels: [], warnings: [] } }
+    const page = { items: [], total: 0, page: 1, pages: 0, page_size: 20 }
+    vi.mocked(api.list).mockResolvedValue([site])
+    vi.mocked(api.catalog).mockResolvedValue(snapshot)
+    vi.mocked(api.bindings).mockResolvedValue([])
+    vi.mocked(api.events).mockResolvedValue(page)
+    vi.mocked(api.checks).mockResolvedValue(page)
+    let finish!: (value: Awaited<ReturnType<typeof api.keys>>) => void
+    vi.mocked(api.keys).mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+    const wrapper = mount(View, { global: { stubs: { BaseDialog: true } } })
+    await flushPromises()
+    expect(wrapper.findComponent(ImportPanel).exists()).toBe(false)
+    const key = { id: 9, site_id: 1, remote_group_id: 'grok', platform: 'openai' as const, remote_key_id: 'old-key', marker: 'existing', has_key: false, created_at: '', updated_at: '' }
+    finish([key])
+    await flushPromises()
+    expect(wrapper.getComponent(ImportPanel).props('managedKeys')).toEqual([key])
+    expect(wrapper.getComponent(ImportPanel).props('sitePlatform')).toBe('sub2api')
+    wrapper.unmount()
+  })
+  it('blocks imports when existing key metadata fails to load', async () => {
+    const site: Site = { id: 1, name: 'Unavailable metadata', platform: 'sub2api', base_url: 'https://fixture.example', enabled: true, interval_minutes: 15, proxy_id: null, version: 1, has_credential: true, status: 'healthy', last_error: '', last_sync_at: null }
+    const page = { items: [], total: 0, page: 1, pages: 0, page_size: 20 }
+    vi.mocked(api.list).mockResolvedValue([site])
+    vi.mocked(api.catalog).mockResolvedValue({ id: 1, site_id: 1, site_version: 1, created_at: '', catalog: { groups: [], channels: [], warnings: [] } })
+    vi.mocked(api.bindings).mockResolvedValue([])
+    vi.mocked(api.events).mockResolvedValue(page)
+    vi.mocked(api.checks).mockResolvedValue(page)
+    vi.mocked(api.keys).mockRejectedValueOnce({ status: 503 })
+    const wrapper = mount(View, { global: { stubs: { BaseDialog: true } } })
+    await flushPromises()
+    expect(wrapper.findComponent(ImportPanel).exists()).toBe(false)
+    expect(wrapper.text()).toContain('governance.importStateUnavailable')
+    wrapper.unmount()
+  })
+  it('explains an in-use deletion conflict and selects the remaining site after successful deletion', async () => {
+    const site: Site = { id: 1, name: 'Sample', platform: 'sub2api', base_url: 'https://fixture.example', enabled: true, interval_minutes: 15, proxy_id: null, version: 1, has_credential: true, status: 'healthy', last_error: '', last_sync_at: null }
+    const real = { ...site, id: 2, name: 'Real upstream' }
+    const page = { items: [], total: 0, page: 1, pages: 0, page_size: 20 }
+    vi.mocked(api.list).mockResolvedValue([site, real])
+    vi.mocked(api.catalog).mockRejectedValue({ status: 404 })
+    vi.mocked(api.bindings).mockResolvedValue([])
+    vi.mocked(api.events).mockResolvedValue(page)
+    vi.mocked(api.checks).mockResolvedValue(page)
+    vi.mocked(api.remove).mockRejectedValueOnce({ status: 409, reason: 'site_in_use' }).mockResolvedValueOnce(undefined)
+    const wrapper = mount(View, { global: { stubs: { BaseDialog: { props: ['show'], template: '<div v-if="show"><slot /></div>' } } } })
+    await flushPromises()
+    await wrapper.get('[aria-label="common.delete"]').trigger('click')
+    await wrapper.get('.btn-danger').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('governance.siteInUse')
+    expect(wrapper.text()).not.toContain('governance.stale')
+    vi.mocked(api.list).mockResolvedValue([real])
+    await wrapper.get('.btn-danger').trigger('click')
+    await flushPromises()
+    expect(api.remove).toHaveBeenLastCalledWith(1)
+    expect(wrapper.find('#governance-site-1').exists()).toBe(false)
+    expect(wrapper.getComponent(BalanceMonitorPanel).props('site').id).toBe(2)
+    wrapper.unmount()
+  })
+  it.each(['sync', 'apply'] as const)('blocks stale imports after a %s metadata reload fails and recovers by reselecting the site', async action => {
+    const site: Site = { id: 1, name: 'Metadata reload', platform: 'sub2api', base_url: 'https://fixture.example', enabled: true, interval_minutes: 15, proxy_id: null, version: 1, has_credential: true, status: 'healthy', last_error: '', last_sync_at: null }
+    const snapshot: Snapshot = { id: 1, site_id: 1, site_version: 1, created_at: '', catalog: { groups: [], channels: [], warnings: [] } }
+    const page = { items: [], total: 0, page: 1, pages: 0, page_size: 20 }
+    vi.mocked(api.list).mockResolvedValue([site])
+    vi.mocked(api.catalog).mockResolvedValue(snapshot)
+    vi.mocked(api.sync).mockResolvedValue({ ...snapshot, id: 2 })
+    vi.mocked(api.bindings).mockResolvedValue([])
+    vi.mocked(api.events).mockResolvedValue(page)
+    vi.mocked(api.checks).mockResolvedValue(page)
+    const wrapper = mount(View, { global: { stubs: { BaseDialog: true } } })
+    await flushPromises()
+    expect(wrapper.findComponent(ImportPanel).exists()).toBe(true)
+    vi.mocked(api.keys).mockRejectedValueOnce({ status: 503 })
+    if (action === 'sync') await wrapper.get('#governance-collect').trigger('click')
+    else wrapper.getComponent(ImportPanel).vm.$emit('applied')
+    await flushPromises()
+    expect(wrapper.findComponent(ImportPanel).exists()).toBe(false)
+    expect(wrapper.text()).toContain('governance.importStateUnavailable')
+    await wrapper.get('#governance-site-1').trigger('click')
+    await flushPromises()
+    expect(wrapper.findComponent(ImportPanel).exists()).toBe(true)
+    wrapper.unmount()
+  })
   it('locks site changes during a balance save and retains the returned site version for later visits', async () => {
     const site: Site = { id: 1, name: 'Site A', platform: 'sub2api', base_url: 'https://fixture.example', enabled: true, interval_minutes: 15, proxy_id: null, version: 1, has_credential: true, status: 'healthy', last_error: '', last_sync_at: null }
     const page = { items: [], total: 0, page: 1, pages: 0, page_size: 20 }

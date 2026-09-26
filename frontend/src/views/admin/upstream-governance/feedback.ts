@@ -1,6 +1,7 @@
 const reasonKeys: Record<string, string> = {
   stale_preview: 'stale',
   site_busy: 'siteBusy',
+  site_in_use: 'siteInUse',
   reauth_required: 'reauth',
   unsupported_contract: 'unsupported',
   persistent_encryption_required: 'encryption',

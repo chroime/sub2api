@@ -20,6 +20,7 @@ import api, {
   type Page,
   type GovernanceEvent,
   type Check,
+  type ManagedKey,
 } from '@/api/admin/upstream-governance'
 import groupsAPI from '@/api/admin/groups'
 import proxiesAPI from '@/api/admin/proxies'
@@ -34,6 +35,7 @@ const sites = ref<Site[]>([]),
   active = ref<Site | null>(null),
   snapshot = ref<Snapshot | null>(null),
   bindings = ref<Binding[]>([])
+const managedKeys = ref<ManagedKey[]>([]), importStateReady = ref(false)
 const groups = ref<AdminGroup[]>([]),
   proxies = ref<{ id: number; name: string }[]>([])
 const events = ref<Page<GovernanceEvent> | null>(null),
@@ -112,6 +114,8 @@ async function select(site: Site, collected?: Snapshot) {
   events.value = null
   checks.value = null
   bindings.value = []
+  managedKeys.value = []
+  importStateReady.value = false
   busy.value = true
   error.value = ''
   const results = await Promise.allSettled([
@@ -119,6 +123,7 @@ async function select(site: Site, collected?: Snapshot) {
     api.bindings(site.id),
     api.events(site.id),
     api.checks(site.id),
+    api.keys(site.id),
   ])
   if (request === generation && active.value?.id === site.id) {
     if (results[0].status === 'fulfilled') snapshot.value = results[0].value
@@ -130,6 +135,9 @@ async function select(site: Site, collected?: Snapshot) {
     else failure(results[2].reason)
     if (results[3].status === 'fulfilled') checks.value = results[3].value
     else failure(results[3].reason)
+    if (results[4].status === 'fulfilled') managedKeys.value = results[4].value
+    else failure(results[4].reason)
+    importStateReady.value = results[1].status === 'fulfilled' && results[4].status === 'fulfilled'
     busy.value = false
   }
 }
@@ -179,13 +187,21 @@ async function sync() {
   const id = active.value.id
   const request = generation
   await run(async () => {
-    const collected = await api.sync(id)
-    const [list, history] = await Promise.all([api.list(), api.events(id)])
-    if (request !== generation) return
-    snapshot.value = collected
-    sites.value = list
-    active.value = list.find((s) => s.id === id) || null
-    events.value = history
+    try {
+      const collected = await api.sync(id)
+      const [list, history, currentBindings, currentKeys] = await Promise.all([api.list(), api.events(id), api.bindings(id), api.keys(id)])
+      if (request !== generation) return
+      snapshot.value = collected
+      sites.value = list
+      active.value = list.find((s) => s.id === id) || null
+      events.value = history
+      bindings.value = currentBindings
+      managedKeys.value = currentKeys
+      importStateReady.value = true
+    } catch (e) {
+      if (request === generation) importStateReady.value = false
+      throw e
+    }
   })
 }
 async function remove() {
@@ -199,6 +215,11 @@ async function remove() {
     active.value = null
     deleting.value = false
     sites.value = list
+    snapshot.value = null
+    bindings.value = []
+    managedKeys.value = []
+    importStateReady.value = false
+    if (list[0]) await select(list[0])
   })
 }
 async function connected(site?: Site) {
@@ -226,10 +247,17 @@ async function reloadBindings() {
   const id = active.value.id,
     request = generation
   try {
-    const value = await api.bindings(id)
-    if (request === generation) bindings.value = value
+    const [value, keys] = await Promise.all([api.bindings(id), api.keys(id)])
+    if (request === generation) {
+      bindings.value = value
+      managedKeys.value = keys
+      importStateReady.value = true
+    }
   } catch (e) {
-    if (request === generation) failure(e)
+    if (request === generation) {
+      importStateReady.value = false
+      failure(e)
+    }
   }
 }
 async function onboarded(site: Site, collected: Snapshot) {
@@ -577,10 +605,13 @@ onUnmounted(() => {
             </nav>
             <div v-show="tab === 'import'" class="p-5">
               <ImportPanel
-                v-if="snapshot"
+                v-if="snapshot && importStateReady"
                 :key="active.id"
                 :site-id="active.id"
                 :site-base-url="active.base_url"
+                :site-platform="active.platform"
+                :bindings="bindings"
+                :managed-keys="managedKeys"
                 :snapshot="snapshot"
                 :groups="groups"
                 :disabled="busy || balanceBusy"
@@ -588,7 +619,7 @@ onUnmounted(() => {
                 @applied="reloadBindings"
               />
               <p v-else class="py-12 text-center text-sm text-gray-400">
-                {{ busy ? t('common.loading') : t('governance.noSnapshot') }}
+                {{ busy ? t('common.loading') : t(snapshot ? 'governance.importStateUnavailable' : 'governance.noSnapshot') }}
               </p>
             </div>
             <div v-show="tab === 'monitor'" class="space-y-6 p-5">

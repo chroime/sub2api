@@ -1,7 +1,9 @@
 import type { ImportAccountConfig, Transport } from '@/api/admin/upstream-governance'
+import { transportPlatforms } from './providers'
 
 export type ModelSelection = { enabled: boolean; models: string[] }
 export type ModelSelections = Record<Transport, ModelSelection>
+export const defaultModelSelections = (): ModelSelections => Object.fromEntries<ModelSelection>(transportPlatforms.map(platform => [platform, { enabled: false, models: [] }])) as ModelSelections
 export const defaultAccountName = (baseURL: string, rate: number) => `${baseURL}--${Math.round(rate * 10000) / 10000}`
 export const defaultImportConfig = (): ImportAccountConfig => ({
   concurrency: 5000,

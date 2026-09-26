@@ -55,9 +55,8 @@ func (s *Service) Acknowledge(ctx context.Context, siteID, eventID int64) error 
 	return s.store.AckEvent(ctx, siteID, eventID)
 }
 
-func validRate(v float64) bool     { return !math.IsNaN(v) && !math.IsInf(v, 0) && v >= 0 }
-func validCost(v float64) bool     { return validRate(v) && v <= 999999.9999 }
-func validTransport(p string) bool { return p == "openai" || p == "anthropic" || p == "gemini" }
+func validRate(v float64) bool { return !math.IsNaN(v) && !math.IsInf(v, 0) && v >= 0 }
+func validCost(v float64) bool { return validRate(v) && v <= 999999.9999 }
 func validateSite(site *Site) error {
 	site.Name = strings.TrimSpace(site.Name)
 	if site.Name == "" || len(site.Name) > 100 || (site.Platform != "sub2api" && site.Platform != "newapi") {
@@ -315,6 +314,8 @@ func ErrorCode(err error) string {
 		return "reauth_required"
 	case errors.Is(err, ErrConflict):
 		return "stale_preview"
+	case errors.Is(err, ErrSiteInUse):
+		return "site_in_use"
 	case errors.Is(err, ErrBusy):
 		return "site_busy"
 	case errors.Is(err, ErrUnsupported):
@@ -438,7 +439,7 @@ func (s *Service) Preview(ctx context.Context, id int64, selections []Selection)
 	seen := map[string]bool{}
 	for _, selection := range selections {
 		g, ok := groups[selection.RemoteGroupID]
-		if !ok || !validTransport(selection.Platform) || selection.LocalGroupID <= 0 || !validCost(selection.CostMultiplier) {
+		if !ok || !validSiteTransport(site.Platform, selection.Platform) || selection.LocalGroupID <= 0 || !validCost(selection.CostMultiplier) {
 			return nil, ErrInvalid
 		}
 		// Existing account cost storage is NUMERIC(10,4). Freeze its persisted

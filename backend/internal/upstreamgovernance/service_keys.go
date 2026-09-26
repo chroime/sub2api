@@ -51,23 +51,6 @@ type RevealKeyResult struct {
 	Key        string      `json:"key"`
 }
 
-// Grok's gateway exposes the OpenAI wire protocol. Unknown/composite groups
-// need the administrator's explicit transport; other unsupported labels are
-// never silently treated as OpenAI.
-func compatibleTransport(remote, selected string) bool {
-	if !validTransport(selected) {
-		return false
-	}
-	switch remote {
-	case "", "unknown", "composite":
-		return true
-	case "grok":
-		return selected == "openai"
-	default:
-		return remote == selected
-	}
-}
-
 func (s *Service) Keys(ctx context.Context, siteID int64) ([]ManagedKey, error) {
 	if _, err := s.store.GetSite(ctx, siteID); err != nil {
 		return nil, err
@@ -138,7 +121,7 @@ func (s *Service) CreateKeys(ctx context.Context, siteID int64, input CreateKeys
 	for _, selected := range input.Selections {
 		group, ok := groups[selected.RemoteGroupID]
 		key := marker(siteID, selected.RemoteGroupID, selected.Platform)
-		if !ok || !compatibleTransport(group.Platform, selected.Platform) || seen[key] {
+		if !ok || !validSiteTransport(site.Platform, selected.Platform) || !compatibleTransport(group.Platform, selected.Platform) || seen[key] {
 			return nil, ErrInvalid
 		}
 		seen[key] = true

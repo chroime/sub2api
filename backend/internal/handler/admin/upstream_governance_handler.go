@@ -34,6 +34,9 @@ func governanceError(c *gin.Context, e error) bool {
 	case errors.Is(e, gov.ErrConflict), errors.Is(e, gov.ErrBusy):
 		status = 409
 		message = "Governance resource changed or is busy"
+	case errors.Is(e, gov.ErrSiteInUse):
+		status = http.StatusConflict
+		message = "This site still has active account bindings, pending imports, or managed keys. Disable automatic collection to retain these resources."
 	case errors.Is(e, gov.ErrEncryption):
 		status = 503
 		message = "Persistent encryption key is required"

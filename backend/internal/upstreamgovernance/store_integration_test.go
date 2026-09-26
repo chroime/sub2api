@@ -64,6 +64,11 @@ func TestSQLStorePostgresIntegration(t *testing.T) {
 		t.Fatal(e)
 	}
 	mustExec(string(balanceMigration))
+	platformMigration, e := os.ReadFile("../../migrations/250_upstream_governance_platforms.sql")
+	if e != nil {
+		t.Fatal(e)
+	}
+	mustExec(string(platformMigration))
 	ctx := context.Background()
 	s := NewSQLStore(fixture)
 	now := time.Now().UTC().Truncate(time.Microsecond)
@@ -197,8 +202,16 @@ func TestSQLStorePostgresIntegration(t *testing.T) {
 	if len(expectedDue) != 0 {
 		t.Fatalf("eligible sites missing: %v", expectedDue)
 	}
-	if e = s.DeleteSite(ctx, site.ID); !errors.Is(e, ErrConflict) {
-		t.Fatalf("deletion with binding: %v", e)
+	binding.AccountID = 0
+	if e = s.SaveBinding(ctx, binding); e != nil {
+		t.Fatal(e)
+	}
+	if e = s.DeleteSite(ctx, site.ID); !errors.Is(e, ErrSiteInUse) {
+		t.Fatalf("deletion with pending import: %v", e)
+	}
+	binding.AccountID = 8
+	if e = s.SaveBinding(ctx, binding); e != nil {
+		t.Fatal(e)
 	}
 	check := &Check{SiteID: site.ID, BindingID: binding.ID, Model: "text", ProbeResult: ProbeResult{Success: true, LatencyMS: 15}}
 	if e = s.AddCheck(ctx, check); e != nil {
@@ -279,7 +292,6 @@ func TestSQLStorePostgresIntegration(t *testing.T) {
 	if e = s.SavePreview(ctx, &Preview{ID: "over-limit", SiteID: site.ID, ExpiresAt: now.Add(time.Minute)}); !errors.Is(e, ErrConflict) {
 		t.Fatalf("unbounded active previews: %v", e)
 	}
-	mustExec(`DELETE FROM upstream_governance_bindings WHERE site_id=$1`, site.ID)
 	if e = s.DeleteSite(ctx, site.ID); e != nil {
 		t.Fatal(e)
 	}

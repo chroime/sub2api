@@ -1,5 +1,5 @@
 import { apiClient } from '../client'
-export type Transport = 'openai' | 'anthropic' | 'gemini'
+export type Transport = 'openai' | 'anthropic' | 'gemini' | 'antigravity' | 'grok' | 'kimi' | 'zhipu' | 'deepseek' | 'minimax' | 'opencode_go'
 export interface SiteInput {
   name: string
   platform: 'sub2api' | 'newapi'

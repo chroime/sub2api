@@ -16,11 +16,25 @@ func (c *platformConnector) Probe(ctx context.Context, s Site, key RemoteKey, pl
 	if key.Key == "" || strings.TrimSpace(model) == "" || len(model) > 256 {
 		return result, ErrInvalid
 	}
+	if !validSiteTransport(s.Platform, platform) {
+		return result, ErrUnsupported
+	}
+	wireProtocol, prefix := platform, ""
+	switch platform {
+	case "grok", "kimi", "zhipu", "deepseek", "minimax", "opencode_go":
+		wireProtocol = "openai"
+	case "antigravity":
+		prefix = "/antigravity"
+		wireProtocol = "anthropic"
+		if strings.HasPrefix(strings.ToLower(model), "gemini") {
+			wireProtocol = "gemini"
+		}
+	}
 	headers := http.Header{}
 	session := Session{}
 	var path string
 	var payload any
-	switch platform {
+	switch wireProtocol {
 	case "openai":
 		path = "/v1/chat/completions"
 		session.AccessToken = key.Key
@@ -40,7 +54,7 @@ func (c *platformConnector) Probe(ctx context.Context, s Site, key RemoteKey, pl
 	default:
 		return result, ErrUnsupported
 	}
-	_, raw, e := c.request(ctx, s, session, "POST", path, payload, headers, false)
+	_, raw, e := c.request(ctx, s, session, "POST", prefix+path, payload, headers, false)
 	result.LatencyMS = time.Since(started).Milliseconds()
 	if e != nil {
 		result.ErrorCode = "upstream_request_failed"
@@ -69,7 +83,7 @@ func (c *platformConnector) Probe(ctx context.Context, s Site, key RemoteKey, pl
 		result.ErrorCode = "invalid_text_response"
 		return result, ErrUnsupported
 	}
-	switch platform {
+	switch wireProtocol {
 	case "openai":
 		for _, choice := range response.Choices {
 			if strings.TrimSpace(choice.Message.Content) != "" {

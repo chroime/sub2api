@@ -232,5 +232,12 @@ export default {
   previous: 'Previous',
   next: 'Next',
   deleteNotice:
-    'Delete this site? Imported local accounts are always kept. Sites with existing bindings cannot be deleted; disable discovery and monitoring instead.',
+    'Delete this site? Historical bindings are removed only when their local accounts are deleted or missing. Linked accounts, unfinished imports, or managed API keys prevent deletion; disable discovery and monitoring first.',
+  siteInUse: 'This site still has linked accounts, unfinished imports, or managed API keys and cannot be deleted. You can disable discovery and monitoring.',
+  compositeGroup: 'Composite group',
+  protocolMismatch: 'Does not match the upstream platform',
+  targetProtocolMismatch: 'Does not match the selected protocol',
+  targetGroupHint: 'Targets show enabled local groups. Create a vendor group locally to include it. Incompatible groups are disabled; composite groups accept any supported protocol.',
+  antigravityNeedsSub2API: 'Requires the Sub2API Antigravity interface',
+  importStateUnavailable: 'Existing bindings or API keys could not be loaded. Select the site again before importing.',
 }

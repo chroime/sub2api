@@ -4,9 +4,14 @@ import ImportPanel from './ImportPanel.vue'
 import api from '@/api/admin/upstream-governance'
 import SiteOverview from './SiteOverview.vue'
 import { defaultImportConfig } from './import-config'
+import { transportPlatforms } from './providers'
 vi.mock('./TransportSelect.vue', () => ({ default: {
   props: ['modelValue', 'disabled'], emits: ['update:modelValue'],
-  template: `<select :value="modelValue" :disabled="disabled" @change="$emit('update:modelValue', $event.target.value)"><option value=""></option><option value="openai">OpenAI</option><option value="anthropic">Anthropic</option><option value="gemini">Gemini</option></select>`,
+  template: `<select :value="modelValue" :disabled="disabled" @change="$emit('update:modelValue', $event.target.value)"><option value=""></option><option v-for="p in ['openai','anthropic','gemini','antigravity','grok','kimi','zhipu','deepseek','minimax','opencode_go']" :value="p">{{ p }}</option></select>`,
+} }))
+vi.mock('./TargetGroupSelect.vue', () => ({ default: {
+  props: ['modelValue', 'disabled', 'groups'], emits: ['update:modelValue'],
+  template: `<select :value="modelValue" :disabled="disabled" @change="$emit('update:modelValue', Number($event.target.value))"><option :value="0"></option><option v-for="group in groups" :value="group.id">{{ group.name }}</option></select>`,
 } }))
 vi.mock('@/api/admin/upstream-governance', () => ({
   default: { preview: vi.fn(), apply: vi.fn(), keys: vi.fn().mockResolvedValue([]), createKeys: vi.fn(), revealKey: vi.fn(), modelTemplates: vi.fn().mockResolvedValue({ version: 0, templates: [] }) },
@@ -130,7 +135,7 @@ describe('import confirmation', () => {
     } })
     await wrapper.get('[data-test=select-all]').setValue(true)
     expect(wrapper.findAll('[data-test=select]').every(input => (input.element as HTMLInputElement).checked)).toBe(true)
-    expect(wrapper.findAll('[data-test=platform]').map(input => (input.element as HTMLSelectElement).value)).toEqual(['openai', 'openai', ''])
+    expect(wrapper.findAll('[data-test=platform]').map(input => (input.element as HTMLSelectElement).value)).toEqual(['openai', 'grok', ''])
     await wrapper.get('[data-test=bulk-target]').setValue(9)
     await wrapper.get('[data-test=assign-target]').trigger('click')
     expect(wrapper.findAll('[data-test=target]').map(input => (input.element as HTMLSelectElement).value)).toEqual(['9', '9', '0'])
@@ -141,7 +146,7 @@ describe('import confirmation', () => {
     await wrapper.get('form').trigger('submit')
     expect(api.preview).toHaveBeenCalledWith(1, { selections: [
       { remote_group_id: 'r', platform: 'openai', local_group_id: 9, account_name: 'https://fixture.example--1', cost_multiplier: 1, account_config: { ...defaultImportConfig(), model_mapping: { 'fixture-model': 'fixture-model' } } },
-      { remote_group_id: 'grok', platform: 'openai', local_group_id: 9, account_name: 'https://fixture.example--1', cost_multiplier: 1, account_config: { ...defaultImportConfig(), model_mapping: { 'fixture-model': 'fixture-model' } } },
+      { remote_group_id: 'grok', platform: 'grok', local_group_id: 9, account_name: 'https://fixture.example--1', cost_multiplier: 1, account_config: { ...defaultImportConfig(), model_mapping: { 'fixture-model': 'fixture-model' }, openai_long_context_billing_enabled: false } },
       { remote_group_id: 'mixed', platform: 'anthropic', local_group_id: 9, account_name: 'https://fixture.example--1', cost_multiplier: 1, account_config: { ...defaultImportConfig(), model_mapping: { 'fixture-model': 'fixture-model' }, openai_long_context_billing_enabled: false } },
     ] })
   })
@@ -152,6 +157,37 @@ describe('import confirmation', () => {
     expect(wrapper.get('[data-test=account-balance]').text()).toBe('0 quota')
     expect(wrapper.get('[data-test=account-frozen]').text()).toContain('governance.unknown')
     expect(wrapper.get('[data-test=account-used]').text()).toBe('2500 quota')
+  })
+  it('maps every native platform to its own group and includes its collected model restrictions in preview', async () => {
+    const remote = props.snapshot.catalog.groups[0]!
+    const wrapper = mount(ImportPanel, { props: {
+      ...props, sitePlatform: 'sub2api',
+      groups: transportPlatforms.map((platform, index) => ({ id: index + 10, name: platform, platform, rate_multiplier: 1 })),
+      snapshot: { ...props.snapshot, catalog: { ...props.snapshot.catalog, groups: transportPlatforms.map(platform => ({ ...remote, id: platform, platform, models: [platform + '-model'] })) } },
+    } })
+    await flushPromises()
+    await wrapper.get('[data-test=select-all]').setValue(true)
+    expect(wrapper.findAll('[data-test=platform]').map(input => (input.element as HTMLSelectElement).value)).toEqual(transportPlatforms)
+    for (const [index, target] of wrapper.findAll('[data-test=target]').entries()) await target.setValue(index + 10)
+    await wrapper.get('form').trigger('submit')
+    expect(api.preview).toHaveBeenCalledWith(1, { selections: transportPlatforms.map((platform, index) => expect.objectContaining({
+      remote_group_id: platform, platform, local_group_id: index + 10,
+      account_config: expect.objectContaining({ model_mapping: { [platform + '-model']: platform + '-model' } }),
+    })) })
+    wrapper.unmount()
+  })
+  it.each(['binding', 'key'] as const)('preserves legacy Grok to OpenAI protocol from an existing %s across refreshes', async source => {
+    const legacy = { remote_group_id: 'r', platform: 'openai' as const }
+    const wrapper = mount(ImportPanel, { props: { ...props,
+      bindings: source === 'binding' ? [legacy] : [], managedKeys: source === 'key' ? [legacy] : [],
+      snapshot: { ...props.snapshot, catalog: { ...props.snapshot.catalog, groups: [{ ...props.snapshot.catalog.groups[0]!, platform: 'grok' }] } },
+    } })
+    await flushPromises()
+    expect((wrapper.get('[data-test=platform]').element as HTMLSelectElement).value).toBe('openai')
+    await wrapper.get('[data-test=platform]').setValue('grok')
+    await wrapper.setProps({ bindings: [legacy] })
+    expect((wrapper.get('[data-test=platform]').element as HTMLSelectElement).value).toBe('grok')
+    wrapper.unmount()
   })
   it('allows mixed local groups for an explicitly chosen transport', async () => {
     const wrapper = mount(ImportPanel, { props: { ...props, groups: [{ id: 9, name: 'Mixed destination', platform: 'composite', rate_multiplier: 2 }] } })

@@ -2,7 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ModelTemplatePanel from './ModelTemplatePanel.vue'
 import api, { type RemoteGroup } from '@/api/admin/upstream-governance'
-import type { ModelSelections } from './import-config'
+import { defaultModelSelections } from './import-config'
 vi.mock('@/api/admin/upstream-governance', () => ({ default: { modelTemplates: vi.fn(), saveModelTemplates: vi.fn() } }))
 vi.mock('vue-i18n', async (importOriginal) => ({ ...await importOriginal<typeof import('vue-i18n')>(), useI18n: () => ({ t: (key: string) => key }) }))
 const groups: RemoteGroup[] = [
@@ -10,7 +10,7 @@ const groups: RemoteGroup[] = [
   { id: '2', name: 'Claude', platform: 'anthropic', models: ['upstream-claude'], prices: [], rate_multiplier: 1, resolved_rate_multiplier: 1, user_rate_multiplier: null, peak_rate_enabled: false, source: 'fixture' },
 ]
 function setup() {
-  const models: ModelSelections = { openai: { enabled: false, models: [] }, anthropic: { enabled: false, models: [] }, gemini: { enabled: false, models: [] } }
+  const models = defaultModelSelections()
   const wrapper = mount(ModelTemplatePanel, { props: { modelValue: models, groups, 'onUpdate:modelValue': value => { void wrapper.setProps({ modelValue: value }) } } })
   return wrapper
 }
@@ -24,7 +24,7 @@ describe('server-backed model templates', () => {
     vi.mocked(api.modelTemplates).mockResolvedValue({ version: 3, templates: [{ id: 'default', name: 'Saved GPT', platform: 'openai', models: ['saved-gpt'], is_default: true }] })
     const wrapper = setup()
     await flushPromises()
-    expect(wrapper.props('modelValue')).toEqual({ openai: { enabled: true, models: ['saved-gpt'] }, anthropic: { enabled: true, models: ['upstream-claude'] }, gemini: { enabled: false, models: [] } })
+    expect(wrapper.props('modelValue')).toEqual({ ...defaultModelSelections(), openai: { enabled: true, models: ['saved-gpt'] }, anthropic: { enabled: true, models: ['upstream-claude'] } })
     await wrapper.get('[data-test=model-platform-anthropic]').trigger('click')
     await wrapper.get('[data-test=clear-models]').trigger('click')
     expect(wrapper.props('modelValue').anthropic).toEqual({ enabled: true, models: [] })
@@ -45,6 +45,22 @@ describe('server-backed model templates', () => {
       { id: 'old', name: 'Old', platform: 'openai', models: ['saved-gpt'], is_default: false },
       { id: expect.stringMatching(/^tpl_/), name: 'New default', platform: 'openai', models: ['saved-gpt', 'custom-gpt'], is_default: true },
     ] })
+    wrapper.unmount()
+  })
+  it('keeps Grok and DeepSeek templates independent from OpenAI', async () => {
+    vi.mocked(api.modelTemplates).mockResolvedValue({ version: 3, templates: [
+      { id: 'grok', name: 'Grok default', platform: 'grok', models: ['grok-4'], is_default: true },
+      { id: 'deepseek', name: 'DeepSeek default', platform: 'deepseek', models: ['deepseek-chat'], is_default: true },
+    ] })
+    const wrapper = setup()
+    await flushPromises()
+    expect(wrapper.props('modelValue').grok.models).toEqual(['grok-4'])
+    expect(wrapper.props('modelValue').deepseek.models).toEqual(['deepseek-chat'])
+    expect(wrapper.props('modelValue').openai.models).toEqual(['upstream-gpt'])
+    await wrapper.get('[data-test=model-platform-deepseek]').trigger('click')
+    await wrapper.get('[data-test=clear-models]').trigger('click')
+    expect(wrapper.props('modelValue').deepseek).toEqual({ enabled: true, models: [] })
+    expect(wrapper.props('modelValue').grok.models).toEqual(['grok-4'])
     wrapper.unmount()
   })
   it('rejects wildcard model names and handles a failed reload after a concurrent save', async () => {

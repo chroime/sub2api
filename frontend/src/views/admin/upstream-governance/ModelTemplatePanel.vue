@@ -11,6 +11,7 @@ import api, {
 } from '@/api/admin/upstream-governance'
 import type { ModelSelections } from './import-config'
 import { errorKey } from './feedback'
+import { providerLabel, transportPlatforms } from './providers'
 const props = defineProps<{
   modelValue: ModelSelections
   groups: RemoteGroup[]
@@ -21,7 +22,7 @@ const emit = defineEmits<{
   ready: [value: boolean]
 }>()
 const { t } = useI18n()
-const platforms: Transport[] = ['openai', 'anthropic', 'gemini']
+const platforms = transportPlatforms
 const platform = ref<Transport>('openai')
 const collection = ref<ModelTemplateCollection>({ version: 0, templates: [] })
 const loading = ref(true)
@@ -34,11 +35,7 @@ const saveAsDefault = ref(true)
 const templateID = ref('')
 let generation = 0
 let templatesLoaded = false
-const edited: Record<Transport, boolean> = {
-  openai: false,
-  anthropic: false,
-  gemini: false,
-}
+const edited: Partial<Record<Transport, boolean>> = {}
 const current = computed(() => props.modelValue[platform.value])
 const availableTemplates = computed(() =>
   collection.value.templates.filter(
@@ -54,7 +51,7 @@ function upstreamModels(p: Transport) {
       props.groups
         .filter(
           (group) =>
-            (group.platform === 'grok' ? 'openai' : group.platform) === p,
+            group.platform === p,
         )
         .flatMap((group) => group.models || []),
     ),
@@ -238,7 +235,7 @@ onUnmounted(() => {
         @click="platform = p"
       >
         <PlatformIcon :platform="p" />{{
-          p === 'openai' ? 'OpenAI' : p === 'anthropic' ? 'Anthropic' : 'Gemini'
+          providerLabel(p)
         }}
       </button>
     </div>

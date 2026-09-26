@@ -27,6 +27,16 @@ func TestGovernanceErrorDoesNotExposeCause(t *testing.T) {
 	require.NotContains(t, w.Body.String(), "canary")
 	require.Contains(t, w.Body.String(), `"reason":"operation_failed"`)
 }
+
+func TestGovernanceErrorExplainsSiteInUse(t *testing.T) {
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	require.True(t, governanceError(c, gov.ErrSiteInUse))
+	require.Equal(t, 409, w.Code)
+	require.Contains(t, w.Body.String(), `"reason":"site_in_use"`)
+	require.Contains(t, w.Body.String(), "active account bindings, pending imports, or managed keys")
+	require.NotContains(t, w.Body.String(), "stale_preview")
+}
 func TestGovernanceIDsAndPaginationAreStrict(t *testing.T) {
 	for _, id := range []string{"0", "-1", "+1", "01", "9223372036854775808"} {
 		c, _ := gin.CreateTestContext(httptest.NewRecorder())
