@@ -93,6 +93,20 @@ type Catalog struct {
 	Groups   []RemoteGroup   `json:"groups"`
 	Channels []RemoteChannel `json:"channels"`
 	Warnings []string        `json:"warnings"`
+	Account  *RemoteAccount  `json:"account,omitempty"`
+}
+
+// RemoteAccount contains only user-visible accounting fields. A nil amount is
+// unknown, not zero; New API quotas retain their native unit.
+type RemoteAccount struct {
+	UserID        int64    `json:"user_id"`
+	Username      string   `json:"username"`
+	Email         string   `json:"email"`
+	Balance       *float64 `json:"balance"`
+	FrozenBalance *float64 `json:"frozen_balance"`
+	UsedBalance   *float64 `json:"used_balance"`
+	Unit          string   `json:"unit"`
+	Source        string   `json:"source"`
 }
 type Snapshot struct {
 	ID          int64     `json:"id"`
@@ -237,6 +251,9 @@ type Store interface {
 	SavePreviewResult(context.Context, int64, string, *ApplyResult) error
 	ListBindings(context.Context, int64) ([]Binding, error)
 	SaveBinding(context.Context, *Binding) error
+	ListManagedKeys(context.Context, int64) ([]ManagedKey, error)
+	GetManagedKey(context.Context, int64, int64) (*ManagedKey, error)
+	SaveManagedKey(context.Context, *ManagedKey) error
 	AddCheck(context.Context, *Check) error
 	LatestCheck(context.Context, int64, int64) (*Check, error)
 	ListChecks(context.Context, int64, int, int) ([]Check, int64, error)

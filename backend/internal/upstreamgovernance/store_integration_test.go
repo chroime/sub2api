@@ -54,6 +54,11 @@ func TestSQLStorePostgresIntegration(t *testing.T) {
 		t.Fatal(e)
 	}
 	mustExec(string(migration))
+	keyMigration, e := os.ReadFile("../../migrations/248_upstream_governance_keys.sql")
+	if e != nil {
+		t.Fatal(e)
+	}
+	mustExec(string(keyMigration))
 	ctx := context.Background()
 	s := NewSQLStore(fixture)
 	now := time.Now().UTC().Truncate(time.Microsecond)

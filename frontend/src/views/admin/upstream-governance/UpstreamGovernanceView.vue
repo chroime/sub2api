@@ -6,6 +6,7 @@ import AppLayout from '@/components/layout/AppLayout.vue'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import ImportPanel from './ImportPanel.vue'
 import ConnectDialog from './ConnectDialog.vue'
+import OnboardDialog from './OnboardDialog.vue'
 import api, {
   type Site,
   type SiteInput,
@@ -30,6 +31,7 @@ const events = ref<Page<GovernanceEvent> | null>(null),
 const busy = ref(false),
   error = ref(''),
   connecting = ref(false),
+  onboarding = ref(false),
   editing = ref(false),
   deleting = ref(false),
   editId = ref<number | null>(null),
@@ -66,7 +68,7 @@ async function load() {
       active.value = data.find((s) => s.id === active.value?.id) || null
   })
 }
-async function select(site: Site) {
+async function select(site: Site, collected?: Snapshot) {
   active.value = site
   snapshot.value = null
   events.value = null
@@ -75,7 +77,7 @@ async function select(site: Site) {
   busy.value = true
   error.value = ''
   const results = await Promise.allSettled([
-    api.catalog(site.id),
+    collected ? Promise.resolve(collected) : api.catalog(site.id),
     api.bindings(site.id),
     api.events(site.id),
     api.checks(site.id),
@@ -147,11 +149,22 @@ async function remove() {
     sites.value = await api.list()
   })
 }
-async function connected() {
+async function connected(site?: Site) {
   connecting.value = false
-  const id = active.value?.id
-  await load()
-  if (id && active.value) await select(active.value)
+  if (!active.value || (site && site.id !== active.value.id)) return
+  const updated = site || { ...active.value, has_credential: true, status: 'connected', last_error: '' }
+  siteCreated(updated)
+  active.value = updated
+  await sync()
+}
+function siteCreated(site: Site) {
+  sites.value = [...sites.value.filter((s) => s.id !== site.id), site]
+}
+async function onboarded(site: Site, collected: Snapshot) {
+  onboarding.value = false
+  const updated = { ...site, has_credential: true, status: 'healthy', last_error: '', last_sync_at: collected.created_at }
+  siteCreated(updated)
+  await select(updated, collected)
 }
 async function page(kind: 'events' | 'checks', n: number) {
   if (!active.value) return
@@ -214,7 +227,7 @@ onMounted(async () => {
         <div class="flex gap-2">
           <button class="btn btn-secondary" :disabled="busy" @click="load">
             {{ t('common.refresh') }}</button
-          ><button class="btn btn-primary" :disabled="busy" @click="edit()">
+          ><button id="governance-add-site" class="btn btn-primary" :disabled="busy" @click="onboarding = true">
             {{ t('governance.add') }}
           </button>
         </div>
@@ -237,6 +250,7 @@ onMounted(async () => {
         <button
           v-for="site in sites"
           :key="site.id"
+          :id="'governance-site-' + site.id"
           class="rounded-xl border p-4 text-left dark:border-dark-600"
           :class="active?.id === site.id ? 'ring-2 ring-primary-500' : ''"
           :disabled="busy"
@@ -270,6 +284,7 @@ onMounted(async () => {
           >
             {{ t('common.edit') }}</button
           ><button
+            id="governance-reconnect"
             class="btn btn-secondary"
             :disabled="busy"
             @click="connecting = true"
@@ -282,6 +297,7 @@ onMounted(async () => {
               )
             }}</button
           ><button
+            id="governance-collect"
             class="btn btn-primary"
             :disabled="busy || !active.has_credential"
             @click="sync"
@@ -434,6 +450,13 @@ onMounted(async () => {
           </div>
         </section>
       </template>
+      <OnboardDialog
+        v-if="onboarding"
+        :proxies="proxies"
+        @close="onboarding = false"
+        @created="siteCreated"
+        @completed="onboarded"
+      />
       <ConnectDialog
         v-if="connecting && active"
         :site-id="active.id"

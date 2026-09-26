@@ -32,17 +32,27 @@ func connectorModels(models []string) ([]string, error) {
 	return out, nil
 }
 func (c *platformConnector) Discover(ctx context.Context, s Site, session Session) (Catalog, error) {
-	session, e := c.identity(ctx, s, session)
+	session, account, e := c.profile(ctx, s, session)
 	if e != nil {
 		return Catalog{}, e
 	}
-	if s.Platform == "sub2api" {
-		return c.subCatalog(ctx, s, session)
+	var catalog Catalog
+	switch s.Platform {
+	case "sub2api":
+		catalog, e = c.subCatalog(ctx, s, session)
+		if e == nil {
+			e = c.supplementPlaza(ctx, s, session, &catalog)
+		}
+	case "newapi":
+		catalog, e = c.newCatalog(ctx, s, session)
+	default:
+		return Catalog{}, ErrUnsupported
 	}
-	if s.Platform == "newapi" {
-		return c.newCatalog(ctx, s, session)
+	if e != nil {
+		return Catalog{}, e
 	}
-	return Catalog{}, ErrUnsupported
+	catalog.Account = account
+	return catalog, nil
 }
 func (c *platformConnector) subCatalog(ctx context.Context, s Site, session Session) (Catalog, error) {
 	catalog := Catalog{Groups: []RemoteGroup{}, Channels: []RemoteChannel{}, Warnings: []string{}}

@@ -18,6 +18,7 @@ type memoryStore struct {
 	snap                    *Snapshot
 	previews                map[string]*Preview
 	bindings                []Binding
+	keys                    []ManagedKey
 	events                  []Event
 	checks                  []Check
 	locked                  bool

@@ -36,7 +36,7 @@ func TestConnectorSub2APIRateOverride(t *testing.T) {
 			return 200, `{"code":0,"data":[{"id":7,"name":"VIP","platform":"openai","rate_multiplier":2}]}`
 		case "/api/v1/groups/rates":
 			return 200, `{"code":0,"data":{"7":0.8}}`
-		case "/api/v1/channels/available":
+		case "/api/v1/channels/available", "/api/v1/model-plaza":
 			return 404, `{"message":"secret"}`
 		}
 		t.Fatalf("unexpected %s", r.URL)
@@ -183,6 +183,8 @@ func TestConnectorSub2APIPriceUnit(t *testing.T) {
 			return 200, `{"code":0,"data":[{"id":7,"name":"VIP","platform":"openai","rate_multiplier":2}]}`
 		case "/api/v1/groups/rates":
 			return 200, `{"code":0,"data":{}}`
+		case "/api/v1/model-plaza":
+			return 404, `{}`
 		default:
 			return 200, `{"code":0,"data":[{"name":"channel","platforms":[{"platform":"openai","groups":[{"id":7}],"supported_models":[{"name":"model","platform":"openai","pricing":{"billing_mode":"token","input_price":0.000002,"output_price":0.000004}}]}]}]}`
 		}
@@ -504,6 +506,8 @@ func TestConnectorSub2APIPerRequestPriceUnit(t *testing.T) {
 			return 200, `{"code":0,"data":[{"id":7,"name":"VIP","platform":"openai","rate_multiplier":2}]}`
 		case "/api/v1/groups/rates":
 			return 200, `{"code":0,"data":{}}`
+		case "/api/v1/model-plaza":
+			return 404, `{}`
 		default:
 			return 200, `{"code":0,"data":[{"name":"channel","platforms":[{"platform":"openai","groups":[{"id":7}],"supported_models":[{"name":"model","platform":"openai","pricing":{"billing_mode":"per_request","per_request_price":0.01}}]}]}]}`
 		}

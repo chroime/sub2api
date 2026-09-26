@@ -96,7 +96,7 @@ func (s *sqlStore) UpdateSite(ctx context.Context, v *Site, version int64) error
 	return e
 }
 func (s *sqlStore) DeleteSite(ctx context.Context, id int64) error {
-	r, e := s.db.ExecContext(ctx, `DELETE FROM upstream_governance_sites WHERE id=$1 AND NOT EXISTS (SELECT 1 FROM upstream_governance_bindings WHERE site_id=$1)`, id)
+	r, e := s.db.ExecContext(ctx, `DELETE FROM upstream_governance_sites WHERE id=$1 AND NOT EXISTS (SELECT 1 FROM upstream_governance_bindings WHERE site_id=$1) AND NOT EXISTS (SELECT 1 FROM upstream_governance_keys WHERE site_id=$1)`, id)
 	return affected(r, e, ErrConflict)
 }
 func (s *sqlStore) ObserveSite(ctx context.Context, id int64, status, message string, last, next time.Time) error {

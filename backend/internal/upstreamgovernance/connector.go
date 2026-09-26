@@ -174,27 +174,8 @@ func (c *platformConnector) data(ctx context.Context, s Site, session Session, m
 	return nil
 }
 func (c *platformConnector) identity(ctx context.Context, s Site, session Session) (Session, error) {
-	path := "/api/v1/user/profile"
-	if s.Platform == "newapi" {
-		path = "/api/user/self"
-	}
-	var user struct {
-		ID int64 `json:"id"`
-	}
-	if e := c.data(ctx, s, session, "GET", path, nil, &user); e != nil {
-		// Legacy New API middleware signals invalid management credentials with
-		// HTTP 200 / success:false. Classify that only while verifying identity;
-		// the same envelope on token creation is an operation failure, not reauth.
-		if errors.Is(e, errConnectorEnvelopeDenied) {
-			return Session{}, ErrReauth
-		}
-		return Session{}, e
-	}
-	if user.ID <= 0 || session.UserID > 0 && session.UserID != user.ID {
-		return Session{}, ErrReauth
-	}
-	session.UserID = user.ID
-	return session, nil
+	verified, _, e := c.profile(ctx, s, session)
+	return verified, e
 }
 func (c *platformConnector) Login(ctx context.Context, s Site, input LoginInput) (Session, *Challenge, error) {
 	session := Session{AccessToken: input.SessionToken}

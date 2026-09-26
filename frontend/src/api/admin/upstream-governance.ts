@@ -25,6 +25,46 @@ export interface LoginInput {
   session_token?: string
   user_id?: number
 }
+export interface DetectedSite {
+  platform: SiteInput['platform']
+  name: string
+  base_url: string
+  captcha_required: boolean
+  captcha_site_key?: string
+}
+export interface AccountSummary {
+  user_id: number
+  username: string
+  email: string
+  balance: number | null
+  frozen_balance: number | null
+  used_balance: number | null
+  unit: string
+  source: string
+}
+export interface ManagedKey {
+  id: number
+  site_id: number
+  remote_group_id: string
+  platform: Transport
+  remote_key_id: string
+  marker: string
+  has_key: boolean
+  created_at: string
+  updated_at: string
+}
+export interface KeySelection {
+  remote_group_id: string
+  platform: Transport
+}
+export interface KeyOutcome {
+  remote_group_id: string
+  platform: string
+  status: 'created' | 'reused' | 'failed'
+  managed_key?: ManagedKey
+  key?: string
+  error?: string
+}
 export interface RemotePrice {
   model: string
   platform: string
@@ -55,6 +95,7 @@ export interface Snapshot {
   site_version: number
   created_at: string
   catalog: {
+    account?: AccountSummary | null
     groups: RemoteGroup[]
     channels: { name: string; group_ids: string[]; models: string[] }[]
     warnings: string[]
@@ -147,6 +188,9 @@ const api = {
   async list() {
     return (await apiClient.get<Site[]>(base)).data
   },
+  async detect(input: { base_url: string; proxy_id: number | null }) {
+    return (await apiClient.post<DetectedSite>(`${base}/detect`, input)).data
+  },
   async create(input: SiteInput) {
     return (await apiClient.post<Site>(base, input)).data
   },
@@ -165,13 +209,22 @@ const api = {
     ).data
   },
   async sync(id: number) {
-    return (await apiClient.post<Snapshot>(`${site(id)}/sync`)).data
+    return (await apiClient.post<Snapshot>(`${site(id)}/sync`, undefined, { timeout: 300000 })).data
   },
   async catalog(id: number) {
     return (await apiClient.get<Snapshot>(`${site(id)}/catalog`)).data
   },
   async bindings(id: number) {
     return (await apiClient.get<Binding[]>(`${site(id)}/bindings`)).data
+  },
+  async keys(id: number) {
+    return (await apiClient.get<ManagedKey[]>(`${site(id)}/keys`)).data
+  },
+  async createKeys(id: number, input: { snapshot_id: number; selections: KeySelection[] }) {
+    return (await apiClient.post<{ items: KeyOutcome[] }>(`${site(id)}/keys`, input, { timeout: 120000 })).data
+  },
+  async revealKey(id: number, keyId: number) {
+    return (await apiClient.post<{ managed_key: ManagedKey; key: string }>(`${site(id)}/keys/${keyId}/reveal`, {})).data
   },
   async preview(id: number, input: { selections: Selection[] }) {
     return (await apiClient.post<Preview>(`${site(id)}/previews`, input)).data
@@ -180,6 +233,8 @@ const api = {
     return (
       await apiClient.post<ApplyResult>(
         `${site(id)}/previews/${encodeURIComponent(previewId)}/apply`,
+        undefined,
+        { timeout: 300000 },
       )
     ).data
   },

@@ -139,6 +139,13 @@ func (s *Service) UpdateSite(ctx context.Context, id int64, input Site) (*Site, 
 		if len(bindings) > 0 {
 			return nil, ErrConflict
 		}
+		keys, e := s.store.ListManagedKeys(ctx, id)
+		if e != nil {
+			return nil, e
+		}
+		if len(keys) > 0 {
+			return nil, ErrConflict
+		}
 		site.SessionCipher = ""
 		site.HasCredential = false
 		site.Status = "disconnected"
@@ -229,6 +236,15 @@ func (s *Service) Connect(ctx context.Context, id int64, input LoginInput) (*Con
 			return nil, e
 		}
 		if old.UserID != session.UserID {
+			return nil, ErrConflict
+		}
+	}
+	keys, e := s.store.ListManagedKeys(ctx, id)
+	if e != nil {
+		return nil, e
+	}
+	for _, key := range keys {
+		if key.OwnerUserID != session.UserID {
 			return nil, ErrConflict
 		}
 	}
@@ -368,7 +384,7 @@ func marker(siteID int64, group, platform string) string {
 	return "sub2api-governance-" + hex.EncodeToString(sum[:12])
 }
 func (s *Service) Preview(ctx context.Context, id int64, selections []Selection) (*Preview, error) {
-	if len(selections) == 0 || len(selections) > 50 {
+	if len(selections) == 0 || len(selections) > 100 {
 		return nil, ErrInvalid
 	}
 	site, release, e := s.siteLock(ctx, id)
@@ -398,6 +414,10 @@ func (s *Service) Preview(ctx context.Context, id int64, selections []Selection)
 	for _, b := range bindings {
 		byMarker[b.Marker] = b
 	}
+	managed, e := s.managedKeysByMarker(ctx, id)
+	if e != nil {
+		return nil, e
+	}
 	p := &Preview{ID: uuid.NewString(), SiteID: id, SiteVersion: site.Version, SnapshotID: snapshot.ID, CreatedAt: s.now(), ExpiresAt: s.now().Add(15 * time.Minute), Rows: []PreviewRow{}}
 	seen := map[string]bool{}
 	for _, selection := range selections {
@@ -408,7 +428,7 @@ func (s *Service) Preview(ctx context.Context, id int64, selections []Selection)
 		// Existing account cost storage is NUMERIC(10,4). Freeze its persisted
 		// precision in the preview so recovery compares exactly the approved cost.
 		selection.CostMultiplier = math.Round(selection.CostMultiplier*10000) / 10000
-		if g.Platform != "" && g.Platform != "unknown" && g.Platform != "composite" && g.Platform != selection.Platform {
+		if !compatibleTransport(g.Platform, selection.Platform) {
 			return nil, ErrInvalid
 		}
 		key := marker(id, g.ID, selection.Platform)
@@ -424,7 +444,8 @@ func (s *Service) Preview(ctx context.Context, id int64, selections []Selection)
 		if e != nil {
 			return nil, e
 		}
-		p.Rows = append(p.Rows, PreviewRow{Selection: selection, RemoteGroup: g, Target: target, Existing: existing, Marker: key, WillCreateKey: byMarker[key].KeyCipher == ""})
+		willCreateKey := byMarker[key].KeyCipher == "" && (managed[key] == nil || managed[key].KeyCipher == "")
+		p.Rows = append(p.Rows, PreviewRow{Selection: selection, RemoteGroup: g, Target: target, Existing: existing, Marker: key, WillCreateKey: willCreateKey})
 	}
 	if e = s.store.SavePreview(ctx, p); e != nil {
 		return nil, e
@@ -515,6 +536,10 @@ func (s *Service) Apply(ctx context.Context, id int64, previewID string) (*Apply
 	for _, b := range bindings {
 		byMarker[b.Marker] = b
 	}
+	managed, e := s.managedKeysByMarker(ctx, id)
+	if e != nil {
+		return nil, e
+	}
 	result := &ApplyResult{PreviewID: p.ID, Items: []ItemResult{}}
 	for _, row := range p.Rows {
 		key := row.Selection.RemoteGroupID + "\x00" + row.Selection.Platform
@@ -527,7 +552,7 @@ func (s *Service) Apply(ctx context.Context, id int64, previewID string) (*Apply
 		if binding.Marker == "" {
 			binding = Binding{SiteID: id, RemoteGroupID: row.Selection.RemoteGroupID, Platform: row.Selection.Platform, Marker: row.Marker, LocalGroupID: row.Selection.LocalGroupID, ProbeIntervalMinutes: 30, NextProbeAt: s.now()}
 		}
-		account, applyErr := s.applyRow(ctx, *site, session, row, &binding)
+		account, applyErr := s.applyRow(ctx, *site, session, row, &binding, managed[row.Marker])
 		if applyErr != nil {
 			item.Error = ErrorCode(applyErr)
 		} else {
@@ -544,30 +569,15 @@ func (s *Service) Apply(ctx context.Context, id int64, previewID string) (*Apply
 	}
 	return result, nil
 }
-func (s *Service) applyRow(ctx context.Context, site Site, session Session, row PreviewRow, binding *Binding) (*LocalAccount, error) {
-	var key RemoteKey
+func (s *Service) applyRow(ctx context.Context, site Site, session Session, row PreviewRow, binding *Binding, managed *ManagedKey) (*LocalAccount, error) {
+	managed, key, _, e := s.ensureManagedKey(ctx, site, session, row.RemoteGroup, row.Selection.Platform, managed, binding)
+	if e != nil {
+		return nil, e
+	}
 	if binding.KeyCipher == "" {
-		remote, e := s.connector.EnsureKey(ctx, site, session, row.RemoteGroup, row.Marker)
-		if e != nil {
-			return nil, e
-		}
-		if remote.Key == "" {
-			return nil, ErrUnsupported
-		}
-		key = remote
-		raw, _ := json.Marshal(key)
-		encrypted, e := s.cipher.Encrypt(string(raw))
-		if e != nil {
-			return nil, ErrEncryption
-		}
-		binding.KeyCipher = encrypted
+		binding.KeyCipher = managed.KeyCipher
 		if e = s.store.SaveBinding(ctx, binding); e != nil {
 			return nil, e
-		}
-	} else {
-		raw, e := s.cipher.Decrypt(binding.KeyCipher)
-		if e != nil || json.Unmarshal([]byte(raw), &key) != nil || key.Key == "" {
-			return nil, ErrReauth
 		}
 	}
 	expected := ""

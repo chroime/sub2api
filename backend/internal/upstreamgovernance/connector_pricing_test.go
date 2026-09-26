@@ -19,6 +19,8 @@ func connectorPricingCatalog(t *testing.T, platform, pricing string) Catalog {
 				return 200, `{"code":0,"data":[{"id":7,"name":"VIP","platform":"openai","rate_multiplier":1}]}`
 			case "/api/v1/groups/rates":
 				return 200, `{"code":0,"data":{}}`
+			case "/api/v1/model-plaza":
+				return 404, `{}`
 			default:
 				return 200, `{"code":0,"data":[{"name":"channel","platforms":[{"platform":"openai","groups":[{"id":7}],"supported_models":[{"name":"model","platform":"openai","pricing":` + pricing + `}]}]}]}`
 			}
