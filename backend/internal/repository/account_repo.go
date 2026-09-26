@@ -490,6 +490,27 @@ func (r *accountRepository) updateAccount(
 		}
 	}
 
+	expectedGovernanceFingerprint, governanceGroups, governanceMutation := service.GovernanceMutationFromContext(ctx)
+	if governanceMutation {
+		if err := checkGovernanceAccountCAS(ctx, client, account.ID, expectedGovernanceFingerprint); err != nil {
+			return err
+		}
+		// Preserve unrelated configuration and runtime fields from the locked row,
+		// not the earlier AdminService read. Only confirmed import fields change.
+		fresh, err := client.Account.Get(ctx, account.ID)
+		if err != nil {
+			return err
+		}
+		current := accountEntityToService(fresh)
+		if current.ParentAccountID != nil {
+			return service.ErrAccountNotFound
+		}
+		current.Name, current.Credentials, current.ProxyID = account.Name, account.Credentials, account.ProxyID
+		current.RateMultiplier = account.RateMultiplier
+		current.GroupIDs = append([]int64(nil), account.GroupIDs...)
+		*account = *current
+	}
+
 	updated, err := r.updateLockedAccount(
 		ctx,
 		client,
@@ -500,6 +521,16 @@ func (r *accountRepository) updateAccount(
 	)
 	if err != nil {
 		return translatePersistenceError(err, service.ErrAccountNotFound, nil)
+	}
+	if governanceMutation {
+		if err := replaceAccountGroupsInTransaction(ctx, client, account.ID, governanceGroups); err != nil {
+			return err
+		}
+		oldGroups := append([]int64(nil), account.GroupIDs...)
+		account.GroupIDs = append([]int64(nil), governanceGroups...)
+		if err := enqueueSchedulerOutbox(ctx, client, service.SchedulerOutboxEventAccountGroupsChanged, &account.ID, nil, buildSchedulerGroupPayload(mergeGroupIDs(oldGroups, governanceGroups))); err != nil {
+			return err
+		}
 	}
 	if err := enqueueSchedulerOutbox(ctx, client, service.SchedulerOutboxEventAccountChanged, &account.ID, nil, buildSchedulerGroupPayload(account.GroupIDs)); err != nil {
 		return err
@@ -979,10 +1010,7 @@ func (r *accountRepository) UpdateCredentials(ctx context.Context, id int64, cre
 }
 
 func (r *accountRepository) Delete(ctx context.Context, id int64) error {
-	groupIDs, err := r.loadAccountGroupIDs(ctx, id)
-	if err != nil {
-		return err
-	}
+
 	// 使用事务保证账号与关联分组的删除原子性
 	tx, err := r.client.Tx(ctx)
 	if err != nil && !errors.Is(err, dbent.ErrTxStarted) {
@@ -998,6 +1026,17 @@ func (r *accountRepository) Delete(ctx context.Context, id int64) error {
 		txClient = r.client
 	}
 
+	if err := lockAccountForGroupBind(ctx, txClient, id); err != nil {
+		return err
+	}
+	entries, err := txClient.AccountGroup.Query().Where(dbaccountgroup.AccountIDEQ(id)).All(ctx)
+	if err != nil {
+		return err
+	}
+	groupIDs := make([]int64, 0, len(entries))
+	for _, entry := range entries {
+		groupIDs = append(groupIDs, entry.GroupID)
+	}
 	if _, err := txClient.AccountGroup.Delete().Where(dbaccountgroup.AccountIDEQ(id)).Exec(ctx); err != nil {
 		return err
 	}
@@ -1892,6 +1931,9 @@ func (r *accountRepository) AddToGroup(ctx context.Context, accountID, groupID i
 		defer func() { _ = tx.Rollback() }()
 		client = tx.Client()
 	}
+	if err := lockAccountForGroupBind(ctx, client, accountID); err != nil {
+		return err
+	}
 	if err := lockLiveGroups(ctx, client, []int64{groupID}); err != nil {
 		return err
 	}
@@ -1916,22 +1958,29 @@ func (r *accountRepository) AddToGroup(ctx context.Context, accountID, groupID i
 }
 
 func (r *accountRepository) RemoveFromGroup(ctx context.Context, accountID, groupID int64) error {
-	_, err := r.client.AccountGroup.Delete().
-		Where(
-			dbaccountgroup.AccountIDEQ(accountID),
-			dbaccountgroup.GroupIDEQ(groupID),
-		).
-		Exec(ctx)
-	if err != nil {
+	tx, err := r.client.Tx(ctx)
+	if err != nil && !errors.Is(err, dbent.ErrTxStarted) {
 		return err
 	}
-	payload := buildSchedulerGroupPayload([]int64{groupID})
-	if err := enqueueSchedulerOutbox(ctx, r.sql, service.SchedulerOutboxEventAccountGroupsChanged, &accountID, nil, payload); err != nil {
-		logger.LegacyPrintf("repository.account", "[SchedulerOutbox] enqueue remove from group failed: account=%d group=%d err=%v", accountID, groupID, err)
+	client := r.client
+	if tx != nil {
+		defer func() { _ = tx.Rollback() }()
+		client = tx.Client()
+	}
+	if err := lockAccountForGroupBind(ctx, client, accountID); err != nil {
+		return err
+	}
+	if _, err := client.AccountGroup.Delete().Where(dbaccountgroup.AccountIDEQ(accountID), dbaccountgroup.GroupIDEQ(groupID)).Exec(ctx); err != nil {
+		return err
+	}
+	if err := enqueueSchedulerOutbox(ctx, client, service.SchedulerOutboxEventAccountGroupsChanged, &accountID, nil, buildSchedulerGroupPayload([]int64{groupID})); err != nil {
+		return err
+	}
+	if tx != nil {
+		return tx.Commit()
 	}
 	return nil
 }
-
 func (r *accountRepository) GetGroups(ctx context.Context, accountID int64) ([]service.Group, error) {
 	groups, err := r.client.Group.Query().
 		Where(
@@ -1950,64 +1999,39 @@ func (r *accountRepository) GetGroups(ctx context.Context, accountID int64) ([]s
 }
 
 func (r *accountRepository) BindGroups(ctx context.Context, accountID int64, groupIDs []int64) error {
-	existingGroupIDs, err := r.loadAccountGroupIDs(ctx, accountID)
-	if err != nil {
-		return err
-	}
-	// 使用事务保证删除旧绑定与创建新绑定的原子性
 	tx, err := r.client.Tx(ctx)
 	if err != nil && !errors.Is(err, dbent.ErrTxStarted) {
 		return err
 	}
-
-	var txClient *dbent.Client
-	if err == nil {
+	txClient := r.client
+	if tx != nil {
 		defer func() { _ = tx.Rollback() }()
 		txClient = tx.Client()
-	} else {
-		// 已处于外部事务中（ErrTxStarted），复用当前 client
-		txClient = r.client
 	}
-	if err := lockLiveGroups(ctx, txClient, groupIDs); err != nil {
+	// All group edits serialize on their parent account, as governance CAS does.
+	if err := lockAccountForGroupBind(ctx, txClient, accountID); err != nil {
 		return err
 	}
-
-	if _, err := txClient.AccountGroup.Delete().Where(dbaccountgroup.AccountIDEQ(accountID)).Exec(ctx); err != nil {
+	entries, err := txClient.AccountGroup.Query().Where(dbaccountgroup.AccountIDEQ(accountID)).All(ctx)
+	if err != nil {
 		return err
 	}
-
-	if len(groupIDs) == 0 {
-		if tx != nil {
-			return tx.Commit()
-		}
-		return nil
+	existingGroupIDs := make([]int64, 0, len(entries))
+	for _, entry := range entries {
+		existingGroupIDs = append(existingGroupIDs, entry.GroupID)
 	}
-
-	builders := make([]*dbent.AccountGroupCreate, 0, len(groupIDs))
-	for i, groupID := range groupIDs {
-		builders = append(builders, txClient.AccountGroup.Create().
-			SetAccountID(accountID).
-			SetGroupID(groupID).
-			SetPriority(i+1),
-		)
-	}
-
-	if _, err := txClient.AccountGroup.CreateBulk(builders...).Save(ctx); err != nil {
+	if err := replaceAccountGroupsInTransaction(ctx, txClient, accountID, groupIDs); err != nil {
 		return err
-	}
-
-	if tx != nil {
-		if err := tx.Commit(); err != nil {
-			return err
-		}
 	}
 	payload := buildSchedulerGroupPayload(mergeGroupIDs(existingGroupIDs, groupIDs))
-	if err := enqueueSchedulerOutbox(ctx, r.sql, service.SchedulerOutboxEventAccountGroupsChanged, &accountID, nil, payload); err != nil {
-		logger.LegacyPrintf("repository.account", "[SchedulerOutbox] enqueue bind groups failed: account=%d err=%v", accountID, err)
+	if err := enqueueSchedulerOutbox(ctx, txClient, service.SchedulerOutboxEventAccountGroupsChanged, &accountID, nil, payload); err != nil {
+		return err
+	}
+	if tx != nil {
+		return tx.Commit()
 	}
 	return nil
 }
-
 func (r *accountRepository) ListSchedulable(ctx context.Context) ([]service.Account, error) {
 	accounts, err := r.schedulableAccountsQuery(time.Now()).All(ctx)
 	if err != nil {

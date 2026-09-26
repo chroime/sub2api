@@ -1,0 +1,646 @@
+package upstreamgovernance
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"math"
+	"net"
+	"net/url"
+	"sort"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/google/uuid"
+)
+
+type Service struct {
+	store        Store
+	connector    Connector
+	local        LocalAccounts
+	cipher       Encryptor
+	durableKey   bool
+	slots        chan struct{}
+	now          func() time.Time
+	workerMu     sync.Mutex
+	workerCancel context.CancelFunc
+	workerDone   chan struct{}
+}
+
+func NewService(store Store, connector Connector, local LocalAccounts, cipher Encryptor, durableKey bool) *Service {
+	return &Service{store: store, connector: connector, local: local, cipher: cipher, durableKey: durableKey, slots: make(chan struct{}, 2), now: func() time.Time { return time.Now().UTC() }}
+}
+
+func (s *Service) ListSites(ctx context.Context) ([]Site, error) { return s.store.ListSites(ctx) }
+func (s *Service) Catalog(ctx context.Context, id int64) (*Snapshot, error) {
+	return s.store.LatestSnapshot(ctx, id)
+}
+func (s *Service) Bindings(ctx context.Context, id int64) ([]Binding, error) {
+	return s.store.ListBindings(ctx, id)
+}
+func (s *Service) Events(ctx context.Context, id int64, page, size int) ([]Event, int64, error) {
+	return s.store.ListEvents(ctx, id, page, size)
+}
+func (s *Service) Checks(ctx context.Context, id int64, page, size int) ([]Check, int64, error) {
+	return s.store.ListChecks(ctx, id, page, size)
+}
+func (s *Service) Acknowledge(ctx context.Context, siteID, eventID int64) error {
+	return s.store.AckEvent(ctx, siteID, eventID)
+}
+
+func validRate(v float64) bool     { return !math.IsNaN(v) && !math.IsInf(v, 0) && v >= 0 }
+func validCost(v float64) bool     { return validRate(v) && v <= 999999.9999 }
+func validTransport(p string) bool { return p == "openai" || p == "anthropic" || p == "gemini" }
+func validateSite(site *Site) error {
+	site.Name = strings.TrimSpace(site.Name)
+	if site.Name == "" || len(site.Name) > 100 || (site.Platform != "sub2api" && site.Platform != "newapi") {
+		return ErrInvalid
+	}
+	u, e := url.Parse(strings.TrimSpace(site.BaseURL))
+	if e != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Path != "" && u.Path != "/") {
+		return ErrInvalid
+	}
+	host := strings.ToLower(strings.TrimSuffix(u.Hostname(), "."))
+	if host == "localhost" || strings.HasSuffix(host, ".localhost") || strings.HasSuffix(host, ".local") {
+		return ErrInvalid
+	}
+	if ip := net.ParseIP(host); ip != nil && (!ip.IsGlobalUnicast() || ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast()) {
+		return ErrInvalid
+	}
+	if site.IntervalMinutes == 0 {
+		site.IntervalMinutes = 15
+	}
+	if site.IntervalMinutes < 5 || site.IntervalMinutes > 1440 {
+		return ErrInvalid
+	}
+	if site.ProxyID != nil && *site.ProxyID <= 0 {
+		return ErrInvalid
+	}
+	site.BaseURL = strings.TrimSuffix(u.String(), "/")
+	return nil
+}
+
+func (s *Service) CreateSite(ctx context.Context, input Site) (*Site, error) {
+	if e := validateSite(&input); e != nil {
+		return nil, e
+	}
+	input.ID = 0
+	input.Version = 0
+	input.HasCredential = false
+	input.SessionCipher = ""
+	input.Status = "disconnected"
+	input.LastError = ""
+	input.LastSyncAt = nil
+	input.NextSyncAt = s.now()
+	input.CreatedAt = s.now()
+	input.UpdatedAt = s.now()
+	if e := s.store.CreateSite(ctx, &input); e != nil {
+		return nil, e
+	}
+	return &input, nil
+}
+func (s *Service) siteLock(ctx context.Context, id int64) (*Site, func(), error) {
+	release, ok, e := s.store.LockSite(ctx, id)
+	if e != nil {
+		return nil, nil, e
+	}
+	if !ok {
+		return nil, nil, ErrBusy
+	}
+	site, e := s.store.GetSite(ctx, id)
+	if e != nil {
+		release()
+		return nil, nil, e
+	}
+	return site, release, nil
+}
+func (s *Service) UpdateSite(ctx context.Context, id int64, input Site) (*Site, error) {
+	if e := validateSite(&input); e != nil {
+		return nil, e
+	}
+	site, release, e := s.siteLock(ctx, id)
+	if e != nil {
+		return nil, e
+	}
+	defer release()
+	if input.Version != site.Version {
+		return nil, ErrConflict
+	}
+	changedOrigin := site.BaseURL != input.BaseURL || site.Platform != input.Platform
+	if changedOrigin {
+		bindings, e := s.store.ListBindings(ctx, id)
+		if e != nil {
+			return nil, e
+		}
+		if len(bindings) > 0 {
+			return nil, ErrConflict
+		}
+		site.SessionCipher = ""
+		site.HasCredential = false
+		site.Status = "disconnected"
+	}
+	site.Name = input.Name
+	site.Platform = input.Platform
+	site.BaseURL = input.BaseURL
+	site.ProxyID = input.ProxyID
+	site.Enabled = input.Enabled
+	site.IntervalMinutes = input.IntervalMinutes
+	site.NextSyncAt = s.now()
+	if e = s.store.UpdateSite(ctx, site, input.Version); e != nil {
+		return nil, e
+	}
+	return site, nil
+}
+func (s *Service) DeleteSite(ctx context.Context, id int64) error {
+	_, release, e := s.siteLock(ctx, id)
+	if e != nil {
+		return e
+	}
+	defer release()
+	return s.store.DeleteSite(ctx, id)
+}
+func (s *Service) remoteSlot(ctx context.Context) (func(), error) {
+	select {
+	case s.slots <- struct{}{}:
+		return func() { <-s.slots }, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+func (s *Service) session(site Site) (Session, error) {
+	if !s.durableKey || s.cipher == nil {
+		return Session{}, ErrEncryption
+	}
+	if site.SessionCipher == "" {
+		return Session{}, ErrReauth
+	}
+	plain, e := s.cipher.Decrypt(site.SessionCipher)
+	if e != nil {
+		return Session{}, ErrReauth
+	}
+	var session Session
+	if json.Unmarshal([]byte(plain), &session) != nil {
+		return Session{}, ErrReauth
+	}
+	if session.AccessToken == "" && len(session.Cookies) == 0 {
+		return Session{}, ErrReauth
+	}
+	return session, nil
+}
+
+func (s *Service) Connect(ctx context.Context, id int64, input LoginInput) (*ConnectResult, error) {
+	if !s.durableKey || s.cipher == nil {
+		return nil, ErrEncryption
+	}
+	free, e := s.remoteSlot(ctx)
+	if e != nil {
+		return nil, e
+	}
+	defer free()
+	site, release, e := s.siteLock(ctx, id)
+	if e != nil {
+		return nil, e
+	}
+	defer release()
+	session, challenge, e := s.connector.Login(ctx, *site, input)
+	if challenge != nil && errors.Is(e, ErrUnsupported) {
+		return &ConnectResult{Challenge: challenge}, nil
+	}
+	if e != nil {
+		return nil, e
+	}
+	if challenge != nil {
+		return &ConnectResult{Challenge: challenge}, nil
+	}
+	if session.AccessToken == "" && len(session.Cookies) == 0 {
+		return nil, ErrReauth
+	}
+	bindings, e := s.store.ListBindings(ctx, id)
+	if e != nil {
+		return nil, e
+	}
+	if len(bindings) > 0 {
+		old, e := s.session(*site)
+		if e != nil {
+			return nil, e
+		}
+		if old.UserID != session.UserID {
+			return nil, ErrConflict
+		}
+	}
+	raw, e := json.Marshal(session)
+	if e != nil {
+		return nil, ErrReauth
+	}
+	cipher, e := s.cipher.Encrypt(string(raw))
+	if e != nil {
+		return nil, ErrEncryption
+	}
+	site.SessionCipher = cipher
+	site.HasCredential = true
+	site.Status = "connected"
+	site.LastError = ""
+	site.NextSyncAt = s.now()
+	version := site.Version
+	if e = s.store.UpdateSite(ctx, site, version); e != nil {
+		return nil, e
+	}
+	return &ConnectResult{Site: site}, nil
+}
+
+func validateCatalog(c Catalog) error {
+	if len(c.Groups) > 1000 || len(c.Channels) > 1000 {
+		return ErrUnsupported
+	}
+	seen := map[string]bool{}
+	for _, g := range c.Groups {
+		if g.ID == "" || len(g.ID) > 200 || len(g.Name) > 300 || seen[g.ID] || len(g.Models) > 3000 || len(g.Prices) > 3000 {
+			return ErrUnsupported
+		}
+		seen[g.ID] = true
+		for _, r := range []*float64{g.RateMultiplier, g.UserRateMultiplier, g.ResolvedRateMultiplier, g.PeakRateMultiplier} {
+			if r != nil && !validRate(*r) {
+				return ErrUnsupported
+			}
+		}
+		for _, m := range g.Models {
+			if m == "" || len(m) > 300 {
+				return ErrUnsupported
+			}
+		}
+	}
+	raw, e := json.Marshal(c)
+	if e != nil || len(raw) > 2*1024*1024 {
+		return ErrUnsupported
+	}
+	return nil
+}
+
+func ErrorCode(err error) string {
+	switch {
+	case errors.Is(err, ErrReauth):
+		return "reauth_required"
+	case errors.Is(err, ErrConflict):
+		return "stale_preview"
+	case errors.Is(err, ErrBusy):
+		return "site_busy"
+	case errors.Is(err, ErrUnsupported):
+		return "unsupported_contract"
+	case errors.Is(err, ErrEncryption):
+		return "persistent_encryption_required"
+	case errors.Is(err, ErrInvalid):
+		return "invalid_input"
+	case errors.Is(err, ErrNotFound):
+		return "not_found"
+	case errors.Is(err, context.DeadlineExceeded):
+		return "timeout"
+	default:
+		return "operation_failed"
+	}
+}
+func (s *Service) Sync(ctx context.Context, id int64) (*Snapshot, error) {
+	free, e := s.remoteSlot(ctx)
+	if e != nil {
+		return nil, e
+	}
+	defer free()
+	site, release, e := s.siteLock(ctx, id)
+	if e != nil {
+		return nil, e
+	}
+	defer release()
+	return s.syncLocked(ctx, *site)
+}
+func (s *Service) syncLocked(ctx context.Context, site Site) (*Snapshot, error) {
+	session, e := s.session(site)
+	var catalog Catalog
+	if e == nil {
+		catalog, e = s.connector.Discover(ctx, site, session)
+	}
+	if e == nil {
+		e = validateCatalog(catalog)
+	}
+	now := s.now()
+	next := now.Add(time.Duration(site.IntervalMinutes) * time.Minute)
+	if e != nil {
+		state := "error"
+		if errors.Is(e, ErrReauth) {
+			state = "reauth_required"
+		}
+		if oe := s.store.ObserveSite(ctx, site.ID, state, ErrorCode(e), now, next); oe != nil {
+			return nil, oe
+		}
+		if site.Status != state || site.LastError != ErrorCode(e) {
+			if ae := s.store.AddEvent(ctx, &Event{SiteID: site.ID, Kind: "sync_failed", After: ErrorCode(e), CreatedAt: now}); ae != nil {
+				return nil, ae
+			}
+		}
+		return nil, e
+	}
+	var before Catalog
+	previous, e := s.store.LatestSnapshot(ctx, site.ID)
+	if e != nil && !errors.Is(e, ErrNotFound) {
+		return nil, e
+	}
+	if previous != nil {
+		before = previous.Catalog
+	}
+	snapshot := &Snapshot{SiteID: site.ID, SiteVersion: site.Version, Catalog: catalog, CreatedAt: now}
+	events := DiffCatalog(site.ID, before, catalog)
+	for i := range events {
+		events[i].CreatedAt = now
+	}
+	if e = s.store.SaveSnapshot(ctx, snapshot, events); e != nil {
+		return nil, e
+	}
+	if e = s.store.ObserveSite(ctx, site.ID, "healthy", "", now, next); e != nil {
+		return nil, e
+	}
+	return snapshot, nil
+}
+
+func marker(siteID int64, group, platform string) string {
+	sum := sha256.Sum256([]byte(fmt.Sprintf("%d\x00%s\x00%s", siteID, group, platform)))
+	return "sub2api-governance-" + hex.EncodeToString(sum[:12])
+}
+func (s *Service) Preview(ctx context.Context, id int64, selections []Selection) (*Preview, error) {
+	if len(selections) == 0 || len(selections) > 50 {
+		return nil, ErrInvalid
+	}
+	site, release, e := s.siteLock(ctx, id)
+	if e != nil {
+		return nil, e
+	}
+	defer release()
+	if _, e = s.session(*site); e != nil {
+		return nil, e
+	}
+	snapshot, e := s.store.LatestSnapshot(ctx, id)
+	if e != nil {
+		return nil, e
+	}
+	if snapshot.SiteVersion != site.Version {
+		return nil, ErrConflict
+	}
+	groups := map[string]RemoteGroup{}
+	for _, g := range snapshot.Catalog.Groups {
+		groups[g.ID] = g
+	}
+	bindings, e := s.store.ListBindings(ctx, id)
+	if e != nil {
+		return nil, e
+	}
+	byMarker := map[string]Binding{}
+	for _, b := range bindings {
+		byMarker[b.Marker] = b
+	}
+	p := &Preview{ID: uuid.NewString(), SiteID: id, SiteVersion: site.Version, SnapshotID: snapshot.ID, CreatedAt: s.now(), ExpiresAt: s.now().Add(15 * time.Minute), Rows: []PreviewRow{}}
+	seen := map[string]bool{}
+	for _, selection := range selections {
+		g, ok := groups[selection.RemoteGroupID]
+		if !ok || !validTransport(selection.Platform) || selection.LocalGroupID <= 0 || !validCost(selection.CostMultiplier) || strings.TrimSpace(selection.AccountName) == "" || len(selection.AccountName) > 100 {
+			return nil, ErrInvalid
+		}
+		// Existing account cost storage is NUMERIC(10,4). Freeze its persisted
+		// precision in the preview so recovery compares exactly the approved cost.
+		selection.CostMultiplier = math.Round(selection.CostMultiplier*10000) / 10000
+		if g.Platform != "" && g.Platform != "unknown" && g.Platform != "composite" && g.Platform != selection.Platform {
+			return nil, ErrInvalid
+		}
+		key := marker(id, g.ID, selection.Platform)
+		if seen[key] {
+			return nil, ErrInvalid
+		}
+		seen[key] = true
+		target, e := s.local.Target(ctx, selection.LocalGroupID, selection.Platform)
+		if e != nil {
+			return nil, e
+		}
+		existing, e := s.local.FindAccount(ctx, key)
+		if e != nil {
+			return nil, e
+		}
+		p.Rows = append(p.Rows, PreviewRow{Selection: selection, RemoteGroup: g, Target: target, Existing: existing, Marker: key, WillCreateKey: byMarker[key].KeyCipher == ""})
+	}
+	if e = s.store.SavePreview(ctx, p); e != nil {
+		return nil, e
+	}
+	return p, nil
+}
+
+func allApplied(r *ApplyResult) bool {
+	if r == nil || len(r.Items) == 0 {
+		return false
+	}
+	for _, i := range r.Items {
+		if i.Status != "applied" {
+			return false
+		}
+	}
+	return true
+}
+func accountMatches(a *LocalAccount, row PreviewRow) bool {
+	return a != nil && a.Name == row.Selection.AccountName && a.CostMultiplier == row.Selection.CostMultiplier && len(a.GroupIDs) == 1 && a.GroupIDs[0] == row.Selection.LocalGroupID
+}
+func (s *Service) Apply(ctx context.Context, id int64, previewID string) (*ApplyResult, error) {
+	free, e := s.remoteSlot(ctx)
+	if e != nil {
+		return nil, e
+	}
+	defer free()
+	site, release, e := s.siteLock(ctx, id)
+	if e != nil {
+		return nil, e
+	}
+	defer release()
+	p, e := s.store.GetPreview(ctx, id, previewID)
+	if e != nil {
+		return nil, e
+	}
+	if p.Result != nil && len(p.Result.Items) == len(p.Rows) && allApplied(p.Result) {
+		return p.Result, nil
+	}
+	snapshot, e := s.store.LatestSnapshot(ctx, id)
+	if e != nil {
+		return nil, e
+	}
+	if site.Version != p.SiteVersion || snapshot.ID != p.SnapshotID || !s.now().Before(p.ExpiresAt) {
+		return nil, ErrConflict
+	}
+	session, e := s.session(*site)
+	if e != nil {
+		return nil, e
+	}
+	completed := map[string]ItemResult{}
+	if p.Result != nil {
+		for _, r := range p.Result.Items {
+			if r.Status == "applied" {
+				completed[r.RemoteGroupID+"\x00"+r.Platform] = r
+			}
+		}
+	}
+	// Validate every remaining destination before any remote key creation or local write.
+	for _, row := range p.Rows {
+		if _, ok := completed[row.Selection.RemoteGroupID+"\x00"+row.Selection.Platform]; ok {
+			continue
+		}
+		target, e := s.local.Target(ctx, row.Selection.LocalGroupID, row.Selection.Platform)
+		if e != nil {
+			return nil, e
+		}
+		if target.Fingerprint != row.Target.Fingerprint {
+			return nil, ErrConflict
+		}
+		account, e := s.local.FindAccount(ctx, row.Marker)
+		if e != nil {
+			return nil, e
+		}
+		if row.Existing != nil {
+			if account == nil || (account.Fingerprint != row.Existing.Fingerprint && !accountMatches(account, row)) {
+				return nil, ErrConflict
+			}
+		} else if account != nil && !accountMatches(account, row) {
+			return nil, ErrConflict
+		}
+	}
+	bindings, e := s.store.ListBindings(ctx, id)
+	if e != nil {
+		return nil, e
+	}
+	byMarker := map[string]Binding{}
+	for _, b := range bindings {
+		byMarker[b.Marker] = b
+	}
+	result := &ApplyResult{PreviewID: p.ID, Items: []ItemResult{}}
+	for _, row := range p.Rows {
+		key := row.Selection.RemoteGroupID + "\x00" + row.Selection.Platform
+		if done, ok := completed[key]; ok {
+			result.Items = append(result.Items, done)
+			continue
+		}
+		item := ItemResult{RemoteGroupID: row.Selection.RemoteGroupID, Platform: row.Selection.Platform, Status: "failed"}
+		binding := byMarker[row.Marker]
+		if binding.Marker == "" {
+			binding = Binding{SiteID: id, RemoteGroupID: row.Selection.RemoteGroupID, Platform: row.Selection.Platform, Marker: row.Marker, LocalGroupID: row.Selection.LocalGroupID, ProbeIntervalMinutes: 30, NextProbeAt: s.now()}
+		}
+		account, applyErr := s.applyRow(ctx, *site, session, row, &binding)
+		if applyErr != nil {
+			item.Error = ErrorCode(applyErr)
+		} else {
+			item.Status = "applied"
+			item.AccountID = account.ID
+		}
+		result.Items = append(result.Items, item)
+		if e = s.store.SavePreviewResult(ctx, id, p.ID, result); e != nil {
+			return nil, e
+		}
+	}
+	if e = s.store.AddEvent(ctx, &Event{SiteID: id, Kind: "import_applied", Resource: p.ID, After: fmt.Sprintf("%d items", len(result.Items)), CreatedAt: s.now()}); e != nil {
+		return nil, e
+	}
+	return result, nil
+}
+func (s *Service) applyRow(ctx context.Context, site Site, session Session, row PreviewRow, binding *Binding) (*LocalAccount, error) {
+	var key RemoteKey
+	if binding.KeyCipher == "" {
+		remote, e := s.connector.EnsureKey(ctx, site, session, row.RemoteGroup, row.Marker)
+		if e != nil {
+			return nil, e
+		}
+		if remote.Key == "" {
+			return nil, ErrUnsupported
+		}
+		key = remote
+		raw, _ := json.Marshal(key)
+		encrypted, e := s.cipher.Encrypt(string(raw))
+		if e != nil {
+			return nil, ErrEncryption
+		}
+		binding.KeyCipher = encrypted
+		if e = s.store.SaveBinding(ctx, binding); e != nil {
+			return nil, e
+		}
+	} else {
+		raw, e := s.cipher.Decrypt(binding.KeyCipher)
+		if e != nil || json.Unmarshal([]byte(raw), &key) != nil || key.Key == "" {
+			return nil, ErrReauth
+		}
+	}
+	expected := ""
+	if row.Existing != nil {
+		expected = row.Existing.Fingerprint
+	}
+	// The local adapter checks the full desired state, including key, origin and
+	// proxy. It can recover a committed local write without overwriting later edits.
+	account, e := s.local.ApplyAccount(ctx, AccountChange{Marker: row.Marker, Name: row.Selection.AccountName, Platform: row.Selection.Platform, BaseURL: site.BaseURL, APIKey: key.Key, ExpectedFingerprint: expected, ExpectedTargetFingerprint: row.Target.Fingerprint, GroupID: row.Selection.LocalGroupID, CostMultiplier: row.Selection.CostMultiplier, ProxyID: site.ProxyID})
+	if e != nil {
+		return nil, e
+	}
+	binding.AccountID = account.ID
+	binding.LocalGroupID = row.Selection.LocalGroupID
+	if e = s.store.SaveBinding(ctx, binding); e != nil {
+		return nil, e
+	}
+	return account, nil
+}
+
+func canonical(v any) string            { b, _ := json.Marshal(v); return string(b) }
+func sortedStrings(s []string) []string { r := append([]string{}, s...); sort.Strings(r); return r }
+func groupRates(g RemoteGroup) any {
+	return struct {
+		Base, User, Resolved, Peak *float64
+		Enabled                    bool
+		Start, End                 string
+	}{g.RateMultiplier, g.UserRateMultiplier, g.ResolvedRateMultiplier, g.PeakRateMultiplier, g.PeakRateEnabled, g.PeakStart, g.PeakEnd}
+}
+func prices(g RemoteGroup) []RemotePrice {
+	p := append([]RemotePrice{}, g.Prices...)
+	sort.Slice(p, func(i, j int) bool { return canonical(p[i]) < canonical(p[j]) })
+	return p
+}
+func channels(c Catalog) []RemoteChannel {
+	r := append([]RemoteChannel{}, c.Channels...)
+	for i := range r {
+		r[i].GroupIDs = sortedStrings(r[i].GroupIDs)
+		r[i].Models = sortedStrings(r[i].Models)
+	}
+	sort.Slice(r, func(i, j int) bool { return canonical(r[i]) < canonical(r[j]) })
+	return r
+}
+func DiffCatalog(siteID int64, before, after Catalog) []Event {
+	events := []Event{}
+	add := func(kind, resource string, b, a any) {
+		old, new := canonical(b), canonical(a)
+		if old != new {
+			events = append(events, Event{SiteID: siteID, Kind: kind, Resource: resource, Before: old, After: new})
+		}
+	}
+	old := map[string]RemoteGroup{}
+	for _, g := range before.Groups {
+		old[g.ID] = g
+	}
+	for _, g := range after.Groups {
+		prior, ok := old[g.ID]
+		if !ok {
+			add("group_added", g.ID, nil, g)
+		} else {
+			add("rate_changed", g.ID, groupRates(prior), groupRates(g))
+			add("models_changed", g.ID, sortedStrings(prior.Models), sortedStrings(g.Models))
+			add("price_changed", g.ID, prices(prior), prices(g))
+			if prior.Name != g.Name || prior.Platform != g.Platform {
+				add("group_changed", g.ID, []string{prior.Name, prior.Platform}, []string{g.Name, g.Platform})
+			}
+		}
+		delete(old, g.ID)
+	}
+	for id, g := range old {
+		add("group_removed", id, g, nil)
+	}
+	add("channels_changed", "channels", channels(before), channels(after))
+	sort.Slice(events, func(i, j int) bool { return events[i].Kind+events[i].Resource < events[j].Kind+events[j].Resource })
+	return events
+}

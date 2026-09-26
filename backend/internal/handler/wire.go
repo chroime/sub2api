@@ -11,6 +11,7 @@ import (
 
 // ProvideAdminHandlers creates the AdminHandlers struct
 func ProvideAdminHandlers(
+	upstreamGovernance *admin.UpstreamGovernanceHandler,
 	dashboardHandler *admin.DashboardHandler,
 	userHandler *admin.UserHandler,
 	groupHandler *admin.GroupHandler,
@@ -61,6 +62,7 @@ func ProvideAdminHandlers(
 	openAIGatewayService.SetCodexTicketProxyRepository(proxyRepository)
 	settingHandler.SetCodexTicketMonitorService(openAIGatewayService)
 	return &AdminHandlers{
+		UpstreamGovernance:     upstreamGovernance,
 		Dashboard:              dashboardHandler,
 		User:                   userHandler,
 		Group:                  groupHandler,
@@ -235,6 +237,7 @@ func ProvideHandlers(
 
 // ProviderSet is the Wire provider set for all handlers
 var ProviderSet = wire.NewSet(
+	admin.NewUpstreamGovernanceHandler,
 	// Top-level handlers
 	NewAuthHandler,
 	NewUserHandler,

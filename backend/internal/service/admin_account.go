@@ -536,14 +536,26 @@ func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccou
 	if err := s.ValidateAccountGroupBindings(ctx, groupIDs); err != nil {
 		return nil, err
 	}
-	if err := s.accountRepo.Create(ctx, account); err != nil {
-		return nil, err
-	}
-
-	// 绑定分组
-	if len(groupIDs) > 0 {
-		if err := s.accountRepo.BindGroups(ctx, account.ID, groupIDs); err != nil {
+	if _, _, governance := GovernanceMutationFromContext(ctx); governance {
+		// Reuse the existing atomic account+group creation path for governance imports.
+		if s.accountDuplicateRepo == nil {
+			return nil, errors.New("atomic account creation unavailable")
+		}
+		groups := make([]AccountGroup, len(groupIDs))
+		for i, id := range groupIDs {
+			groups[i] = AccountGroup{GroupID: id, Priority: i + 1}
+		}
+		if err := s.accountDuplicateRepo.CreateWithAccountGroups(ctx, account, groups); err != nil {
 			return nil, err
+		}
+	} else {
+		if err := s.accountRepo.Create(ctx, account); err != nil {
+			return nil, err
+		}
+		if len(groupIDs) > 0 {
+			if err := s.accountRepo.BindGroups(ctx, account.ID, groupIDs); err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -911,7 +923,8 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 	}
 
 	// 绑定分组
-	if input.GroupIDs != nil {
+	_, _, governanceMutation := GovernanceMutationFromContext(ctx)
+	if input.GroupIDs != nil && !governanceMutation {
 		if err := s.accountRepo.BindGroups(ctx, account.ID, *input.GroupIDs); err != nil {
 			return nil, err
 		}
