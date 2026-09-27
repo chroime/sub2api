@@ -28,6 +28,7 @@ export const eventKeys: Record<string, string> = {
   channels_changed: 'channelsChanged',
   sync_failed: 'syncFailed',
   import_applied: 'importApplied',
+  reconciliation_applied: 'reconciliationApplied',
   probe_failed: 'probeFailed',
   probe_recovered: 'probeRecovered',
 }

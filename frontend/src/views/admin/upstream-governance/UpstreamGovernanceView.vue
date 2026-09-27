@@ -11,8 +11,13 @@ import SiteEditDialog from './SiteEditDialog.vue'
 import SiteOverview from './SiteOverview.vue'
 import BalanceMonitorPanel from './BalanceMonitorPanel.vue'
 import GovernanceHistory from './GovernanceHistory.vue'
+import GovernanceSitesOverview from './GovernanceSitesOverview.vue'
+import AutomationPolicyPanel from './AutomationPolicyPanel.vue'
+import ReconciliationPanel from './ReconciliationPanel.vue'
+import BalanceHealthPanel from './BalanceHealthPanel.vue'
+import RechargePlanPanel from './RechargePlanPanel.vue'
+import ManagedKeysPanel from './ManagedKeysPanel.vue'
 import Icon from '@/components/icons/Icon.vue'
-import { formatGovernanceTime } from './format'
 import api, {
   type Site,
   type Snapshot,
@@ -21,20 +26,28 @@ import api, {
   type GovernanceEvent,
   type Check,
   type ManagedKey,
+  type KeySelection,
+  type AutomationConfiguration,
+  type BalanceHealth,
 } from '@/api/admin/upstream-governance'
 import groupsAPI from '@/api/admin/groups'
 import proxiesAPI from '@/api/admin/proxies'
 import type { AdminGroup } from '@/types'
 const { t } = useI18n()
-const query = ref('')
-const tab = ref<'import' | 'monitor'>('import')
+const tab = ref<'overview' | 'import' | 'monitor' | 'history'>('overview')
+const showOverview = ref(true)
+const automation = ref<AutomationConfiguration | null>(null), balanceHealth = ref<BalanceHealth | null>(null)
+const automationBusy = ref(false), reconciliationBusy = ref(false), keyBusy = ref(false), rechargeBusy = ref(false)
+const keysOpen = ref(false), keySelections = ref<KeySelection[]>([]), reconciliationEpoch = ref(0)
 const importBusy = ref(false)
 const balanceBusy = ref(false)
 const editBusy = ref(false)
 let generation = 0
+let healthGeneration = 0
 const sites = ref<Site[]>([]),
   active = ref<Site | null>(null),
   snapshot = ref<Snapshot | null>(null),
+  overviewSnapshot = ref<Snapshot | null>(null),
   bindings = ref<Binding[]>([])
 const managedKeys = ref<ManagedKey[]>([]), importStateReady = ref(false)
 const groups = ref<AdminGroup[]>([]),
@@ -50,23 +63,7 @@ const busy = ref(false),
 const probe = ref<Binding | null>(null),
   probeAction = ref<'check' | 'monitor'>('check')
 const working = computed(
-  () => busy.value || importBusy.value || balanceBusy.value || editBusy.value,
-)
-const filteredSites = computed(() =>
-  sites.value.filter((site) =>
-    `${site.name} ${site.base_url}`
-      .toLowerCase()
-      .includes(query.value.toLowerCase()),
-  ),
-)
-const healthySites = computed(
-  () => sites.value.filter((site) => site.status === 'healthy').length,
-)
-const attentionSites = computed(
-  () =>
-    sites.value.filter(
-      (site) => site.last_error || site.balance_monitor_status?.state === 'low',
-    ).length,
+  () => busy.value || importBusy.value || balanceBusy.value || editBusy.value || automationBusy.value || reconciliationBusy.value || keyBusy.value || rechargeBusy.value,
 )
 function failure(e: unknown) {
   error.value = t(errorKey(e))
@@ -94,14 +91,21 @@ async function load() {
   })
 }
 async function select(site: Site, collected?: Snapshot) {
-  if (importBusy.value || balanceBusy.value || editBusy.value) return
+  if (importBusy.value || balanceBusy.value || editBusy.value || automationBusy.value || reconciliationBusy.value || keyBusy.value || rechargeBusy.value) return
   const request = ++generation
   connecting.value = false
   editing.value = false
   deleting.value = false
   probe.value = null
+  if (active.value?.id !== site.id) tab.value = 'overview'
   active.value = site
+  showOverview.value = false
+  keysOpen.value = false
+  keySelections.value = []
+  automation.value = null
+  balanceHealth.value = null
   snapshot.value = null
+  overviewSnapshot.value = null
   events.value = null
   checks.value = null
   bindings.value = []
@@ -115,9 +119,11 @@ async function select(site: Site, collected?: Snapshot) {
     api.events(site.id),
     api.checks(site.id),
     api.keys(site.id),
+    api.automation(site.id),
+    api.balanceHealth(site.id),
   ])
   if (request === generation && active.value?.id === site.id) {
-    if (results[0].status === 'fulfilled') snapshot.value = results[0].value
+    if (results[0].status === 'fulfilled') snapshot.value = overviewSnapshot.value = results[0].value
     else if ((results[0].reason as { status?: number }).status !== 404)
       failure(results[0].reason)
     if (results[1].status === 'fulfilled') bindings.value = results[1].value
@@ -128,6 +134,8 @@ async function select(site: Site, collected?: Snapshot) {
     else failure(results[3].reason)
     if (results[4].status === 'fulfilled') managedKeys.value = results[4].value
     else failure(results[4].reason)
+    if (results[5].status === 'fulfilled') automation.value = results[5].value
+    if (results[6].status === 'fulfilled') balanceHealth.value = results[6].value
     importStateReady.value = results[1].status === 'fulfilled' && results[4].status === 'fulfilled'
     busy.value = false
   }
@@ -148,12 +156,14 @@ async function sync() {
       const [list, history, currentBindings, currentKeys] = await Promise.all([api.list(), api.events(id), api.bindings(id), api.keys(id)])
       if (request !== generation) return
       snapshot.value = collected
+      overviewSnapshot.value = collected
       sites.value = list
       active.value = list.find((s) => s.id === id) || null
       events.value = history
       bindings.value = currentBindings
       managedKeys.value = currentKeys
       importStateReady.value = true
+      await reloadHealth()
     } catch (e) {
       if (request === generation) importStateReady.value = false
       throw e
@@ -172,9 +182,11 @@ async function remove() {
     deleting.value = false
     sites.value = list
     snapshot.value = null
+    overviewSnapshot.value = null
     bindings.value = []
     managedKeys.value = []
     importStateReady.value = false
+    showOverview.value = true
     if (list[0]) await select(list[0])
   })
 }
@@ -197,6 +209,7 @@ function siteCreated(site: Site) {
 function balanceSaved(site: Site) {
   siteCreated(site)
   if (active.value?.id === site.id) active.value = site
+  void reloadHealth()
 }
 async function reloadBindings() {
   if (!active.value) return
@@ -284,6 +297,52 @@ async function submitProbe() {
     if (request === generation) probe.value = null
   })
 }
+function openKeys(selections: KeySelection[] = []) {
+  if (working.value || !active.value) return
+  keySelections.value = [...selections]
+  keysOpen.value = true
+}
+async function reloadHealth() {
+  if (!active.value) return
+  const id = active.value.id, request = generation, healthRequest = ++healthGeneration
+  try {
+    const [health, latest] = await Promise.all([
+      api.balanceHealth(id),
+      api.catalog(id).catch(e => {
+        if ((e as { status?: number }).status === 404) return null
+        throw e
+      }),
+    ])
+    if (request === generation && healthRequest === healthGeneration) {
+      balanceHealth.value = health
+      overviewSnapshot.value = latest
+    }
+  } catch (e) {
+    if (request === generation && healthRequest === healthGeneration) {
+      balanceHealth.value = null
+      overviewSnapshot.value = null
+      failure(e)
+    }
+  }
+}
+async function reloadAutomation() {
+  if (!active.value) return
+  const id = active.value.id, request = generation
+  try { const value = await api.automation(id); if (request === generation) automation.value = value }
+  catch (e) { if (request === generation) failure(e) }
+}
+function automationSaved(value: AutomationConfiguration) {
+  automation.value = value
+  reconciliationEpoch.value++
+}
+async function reconciled() {
+  if (!active.value) return
+  const id = active.value.id, request = generation
+  await reloadBindings()
+  await reloadHealth()
+  try { const value = await api.events(id); if (request === generation) events.value = value }
+  catch (e) { if (request === generation) failure(e) }
+}
 onMounted(async () => {
   await load()
   await run(async () => {
@@ -291,7 +350,6 @@ onMounted(async () => {
     groups.value = g
     proxies.value = p.map(({ id, name }) => ({ id, name }))
   })
-  if (!active.value && sites.value[0]) await select(sites.value[0])
 })
 onUnmounted(() => {
   generation++
@@ -299,313 +357,32 @@ onUnmounted(() => {
 </script>
 <template>
   <AppLayout>
-    <div class="space-y-6 text-gray-900 dark:text-gray-100">
-      <header class="flex flex-wrap items-start justify-between gap-4">
-        <div class="flex items-start gap-3">
-          <div
-            class="rounded-xl bg-primary-50 p-3 text-primary-700 dark:bg-primary-900/20 dark:text-primary-300"
-          >
-            <Icon name="server" size="lg" />
-          </div>
-          <div>
-            <h2 class="text-xl font-semibold tracking-tight">
-              {{ t('governance.title') }}
-            </h2>
-            <p class="mt-1 text-sm text-gray-500">
-              {{ t('governance.workspaceDescription') }}
-            </p>
-          </div>
-        </div>
-        <div class="flex gap-2">
-          <button class="btn btn-secondary" :disabled="working" @click="load">
-            <Icon name="refresh" size="sm" class="mr-2" />{{
-              t('common.refresh')
-            }}</button
-          ><button
-            id="governance-add-site"
-            class="btn btn-primary"
-            :disabled="working"
-            @click="onboarding = true"
-          >
-            <Icon name="plus" size="sm" class="mr-2" />{{ t('governance.add') }}
-          </button>
-        </div>
-      </header>
-      <p
-        v-if="error"
-        role="alert"
-        class="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-600 dark:border-red-900 dark:bg-red-900/10"
-      >
-        {{ error }}
-      </p>
-      <p
-        v-if="!busy && !sites.length"
-        class="rounded-2xl border border-dashed border-gray-200 p-12 text-center text-sm text-gray-500 dark:border-dark-600"
-      >
-        {{ t('governance.empty') }}
-      </p>
-      <div
-        v-if="sites.length"
-        class="grid min-w-0 gap-5 2xl:grid-cols-[248px_minmax(0,1fr)]"
-      >
-        <aside class="min-w-0 space-y-4 2xl:self-start">
-          <div class="flex flex-wrap items-center gap-3 text-xs">
-            <span class="font-semibold text-gray-700 dark:text-gray-200">{{
-              t('governance.siteCount', { count: sites.length })
-            }}</span
-            ><span class="text-primary-700 dark:text-primary-300">{{
-              t('governance.healthyCount', { count: healthySites })
-            }}</span
-            ><span
-              v-if="attentionSites"
-              class="text-amber-700 dark:text-amber-400"
-              >{{
-                t('governance.attentionCount', { count: attentionSites })
-              }}</span
-            >
-          </div>
-          <div class="relative">
-            <Icon
-              name="search"
-              size="sm"
-              class="absolute left-3 top-3 text-gray-400"
-            /><input
-              v-model="query"
-              data-test="site-search"
-              class="input w-full pl-9 text-sm"
-              :placeholder="t('governance.searchSites')"
-              :aria-label="t('governance.searchSites')"
-            />
-          </div>
-          <nav
-            class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-1"
-            :aria-label="t('governance.upstreamSites')"
-          >
-            <button
-              v-for="site in filteredSites"
-              :key="site.id"
-              :id="'governance-site-' + site.id"
-              class="min-w-0 rounded-xl border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
-              :class="
-                active?.id === site.id
-                  ? 'border-primary-400 bg-primary-50/60 shadow-sm dark:border-primary-600 dark:bg-primary-900/15'
-                  : 'border-gray-200 bg-white hover:border-primary-300 dark:border-dark-600 dark:bg-dark-800 dark:hover:border-primary-700'
-              "
-              :disabled="importBusy || balanceBusy || editBusy"
-              :aria-current="active?.id === site.id ? 'true' : undefined"
-              @click="select(site)"
-            >
-              <div class="flex items-center gap-2">
-                <span
-                  class="h-2 w-2 shrink-0 rounded-full"
-                  :class="
-                    site.last_error ||
-                    site.balance_monitor_status?.state === 'low'
-                      ? 'bg-amber-500'
-                      : site.status === 'healthy'
-                        ? 'bg-primary-500'
-                        : 'bg-gray-300'
-                  "
-                /><strong class="truncate text-sm">{{ site.name }}</strong
-                ><span class="ml-auto text-[10px] uppercase text-gray-400">{{
-                  site.platform
-                }}</span>
-              </div>
-              <p class="mt-2 truncate text-xs text-gray-500">
-                {{ site.base_url }}
-              </p>
-              <p
-                class="mt-3 text-xs"
-                :class="
-                  site.last_error
-                    ? 'text-amber-700 dark:text-amber-400'
-                    : 'text-gray-500'
-                "
-              >
-                {{ t('governance.' + (siteStateKeys[site.status] || 'unknown'))
-                }}<span v-if="site.balance_monitor_status?.state === 'low'">
-                  · {{ t('governance.balanceState_low') }}</span
-                >
-              </p>
-              <time
-                class="mt-1 block whitespace-nowrap text-[11px] tabular-nums text-gray-400"
-                >{{ formatGovernanceTime(site.last_sync_at) }}</time
-              >
-            </button>
+    <div class="min-w-0 space-y-6 text-gray-900 dark:text-gray-100">
+      <header class="flex flex-wrap items-start justify-between gap-4"><div class="min-w-0"><h2 class="text-xl font-semibold tracking-tight">{{ t('governance.title') }}</h2><p class="mt-1 max-w-3xl text-sm leading-relaxed text-gray-500">{{ t('governance.workspaceDescription') }}</p></div><div class="flex flex-wrap gap-2"><button class="btn btn-secondary" :disabled="working" @click="load"><Icon name="refresh" size="sm" class="mr-2" />{{ t('common.refresh') }}</button><button id="governance-add-site" class="btn btn-primary" :disabled="working" @click="onboarding = true"><Icon name="plus" size="sm" class="mr-2" />{{ t('governance.add') }}</button></div></header>
+      <p v-if="error" role="alert" class="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-600 dark:border-red-900 dark:bg-red-900/10">{{ error }}</p>
+      <p v-if="!busy && !sites.length" class="rounded-xl border border-dashed border-gray-200 p-8 text-center text-sm text-gray-500 dark:border-dark-600">{{ t('governance.empty') }}</p>
+      <GovernanceSitesOverview v-show="showOverview" v-if="sites.length" :sites="sites" :disabled="importBusy || balanceBusy || editBusy || automationBusy || reconciliationBusy || keyBusy || rechargeBusy" @select="select" />
+      <section v-if="active" v-show="!showOverview" class="min-w-0 space-y-5">
+        <div class="flex flex-wrap items-center gap-3"><button id="governance-back-sites" type="button" class="btn btn-secondary text-sm" :disabled="working" @click="showOverview = true">{{ t('governance.allSites') }}</button><div class="min-w-0 flex-1"><h3 class="break-words text-lg font-semibold">{{ active.name }}</h3><p class="mt-1 break-all text-xs text-gray-500">{{ active.base_url }} · {{ active.platform }}</p></div><span class="rounded-full bg-gray-100 px-2.5 py-1 text-xs dark:bg-dark-700">{{ t('governance.' + (siteStateKeys[active.status] || 'unknown')) }}</span></div>
+        <div class="flex flex-wrap gap-2"><button id="governance-collect" class="btn btn-primary text-sm" :disabled="working || !active.has_credential" @click="sync"><Icon name="refresh" size="sm" class="mr-2" :class="busy ? 'animate-spin' : ''" />{{ busy ? t('common.loading') : t('governance.sync') }}</button><button id="governance-view-keys" data-test="view-keys" class="btn btn-secondary text-sm" :disabled="working" @click="openKeys()">{{ t('governance.viewKeys') }}</button><button class="btn btn-secondary text-sm" :disabled="working" @click="editing = true">{{ t('common.edit') }}</button><button id="governance-reconnect" class="btn btn-secondary text-sm" :disabled="working" @click="connecting = true">{{ t(active.has_credential ? 'governance.reconnect' : 'governance.connect') }}</button><button class="ml-auto rounded-lg p-2 text-gray-500 hover:bg-red-50 hover:text-red-600 focus-visible:ring-2 focus-visible:ring-primary-500 dark:hover:bg-red-900/20" :disabled="working" :aria-label="t('common.delete')" @click="deleting = true"><Icon name="trash" size="sm" /></button></div>
+        <p v-if="active.status === 'reauth_required'" role="alert" class="rounded-lg bg-amber-50 p-3 text-sm text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">{{ t('governance.reauth') }}</p><p v-else-if="active.last_error" role="alert" class="text-sm text-red-600">{{ t(errorKey({ reason: active.last_error })) }}</p>
+        <div class="min-w-0 overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-dark-600 dark:bg-dark-800">
+          <nav class="grid grid-cols-2 gap-1 border-b border-gray-100 p-2 dark:border-dark-700 sm:flex sm:flex-wrap" :aria-label="t('governance.workspaceSections')">
+            <button v-for="entry in ([{ value: 'overview', id: 'governance-overview-tab', label: 'overviewTab' }, { value: 'import', id: 'governance-import-tab', label: 'groupImport' }, { value: 'monitor', id: 'governance-monitor-tab', label: 'automationTab' }, { value: 'history', id: 'governance-history-tab', label: 'historyTitle' }] as const)" :id="entry.id" :key="entry.value" type="button" class="min-h-11 rounded-lg px-4 py-2 text-sm transition-colors" :class="tab === entry.value ? 'bg-primary-50 font-medium text-primary-700 dark:bg-primary-900/20 dark:text-primary-300' : 'text-gray-500 hover:bg-gray-50 dark:hover:bg-dark-700'" :aria-pressed="tab === entry.value" @click="tab = entry.value">{{ t('governance.' + entry.label) }}</button>
           </nav>
-          <p
-            v-if="!filteredSites.length"
-            class="p-4 text-center text-xs text-gray-400"
-          >
-            {{ t('governance.noMatchingSites') }}
-          </p>
-        </aside>
-        <div v-if="active" class="min-w-0 space-y-5">
-          <section
-            class="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-dark-600 dark:bg-dark-800"
-          >
-            <div class="mb-5 flex flex-wrap items-center gap-3">
-              <div class="mr-auto min-w-0">
-                <h3 class="text-lg font-semibold">{{ active.name }}</h3>
-                <p class="mt-1 break-all text-xs text-gray-500">
-                  {{ active.base_url }}
-                  <span class="ml-2 uppercase">{{ active.platform }}</span>
-                </p>
-              </div>
-              <button
-                class="btn btn-secondary text-sm"
-                :disabled="working"
-                @click="editing = true"
-              >
-                {{ t('common.edit') }}</button
-              ><button
-                id="governance-reconnect"
-                class="btn btn-secondary text-sm"
-                :disabled="working"
-                @click="connecting = true"
-              >
-                {{
-                  t(
-                    active.has_credential
-                      ? 'governance.reconnect'
-                      : 'governance.connect',
-                  )
-                }}</button
-              ><button
-                id="governance-collect"
-                class="btn btn-primary text-sm"
-                :disabled="working || !active.has_credential"
-                @click="sync"
-              >
-                <Icon
-                  name="refresh"
-                  size="sm"
-                  class="mr-2"
-                  :class="busy ? 'animate-spin' : ''"
-                />{{
-                  busy ? t('common.loading') : t('governance.sync')
-                }}</button
-              ><button
-                class="rounded-lg p-2 text-gray-400 hover:bg-red-50 hover:text-red-600 focus-visible:ring-2 focus-visible:ring-primary-500 dark:hover:bg-red-900/20"
-                :disabled="working"
-                :aria-label="t('common.delete')"
-                @click="deleting = true"
-              >
-                <Icon name="trash" size="sm" />
-              </button>
-            </div>
-            <p
-              v-if="active.status === 'reauth_required'"
-              role="alert"
-              class="mb-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-700 dark:bg-amber-900/20 dark:text-amber-300"
-            >
-              {{ t('governance.reauth') }}
-            </p>
-            <p
-              v-else-if="active.last_error"
-              role="alert"
-              class="mb-4 text-sm text-red-600"
-            >
-              {{ t(errorKey({ reason: active.last_error })) }}
-            </p>
-            <SiteOverview
-              :site="active"
-              :snapshot="snapshot"
-              :binding-count="
-                bindings.filter((binding) => binding.account_id > 0).length
-              "
-            />
-          </section>
-          <div
-            class="rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-dark-600 dark:bg-dark-800"
-          >
-            <nav
-              class="flex gap-6 border-b border-gray-100 px-5 dark:border-dark-700"
-              :aria-label="t('governance.workspaceSections')"
-            >
-              <button
-                id="governance-import-tab"
-                type="button"
-                class="flex items-center gap-2 border-b-2 py-4 text-sm font-medium"
-                :class="
-                  tab === 'import'
-                    ? 'border-primary-600 text-primary-700 dark:text-primary-300'
-                    : 'border-transparent text-gray-500'
-                "
-                :aria-pressed="tab === 'import'"
-                @click="tab = 'import'"
-              >
-                <Icon name="download" size="sm" />{{
-                  t('governance.groupImport')
-                }}
-              </button>
-              <button
-                id="governance-monitor-tab"
-                type="button"
-                class="flex items-center gap-2 border-b-2 py-4 text-sm font-medium"
-                :class="
-                  tab === 'monitor'
-                    ? 'border-primary-600 text-primary-700 dark:text-primary-300'
-                    : 'border-transparent text-gray-500'
-                "
-                :aria-pressed="tab === 'monitor'"
-                @click="tab = 'monitor'"
-              >
-                <Icon name="bell" size="sm" />{{
-                  t('governance.monitoringAndHistory')
-                }}<span
-                  v-if="active.balance_monitor_status?.state === 'low'"
-                  class="h-2 w-2 rounded-full bg-red-500"
-                />
-              </button>
-            </nav>
-            <div v-show="tab === 'import'" class="p-5">
-              <ImportPanel
-                v-if="snapshot && importStateReady"
-                :key="active.id"
-                :site-id="active.id"
-                :site-base-url="active.base_url"
-                :site-platform="active.platform"
-                :bindings="bindings"
-                :managed-keys="managedKeys"
-                :snapshot="snapshot"
-                :groups="groups"
-                :disabled="busy || balanceBusy"
-                @busy="importBusy = $event"
-                @applied="reloadBindings"
-              />
-              <p v-else class="py-12 text-center text-sm text-gray-400">
-                {{ busy ? t('common.loading') : t(snapshot ? 'governance.importStateUnavailable' : 'governance.noSnapshot') }}
-              </p>
-            </div>
-            <div v-show="tab === 'monitor'" class="space-y-6 p-5">
-              <BalanceMonitorPanel
-                :key="active.id"
-                :site="active"
-                :unit="snapshot?.catalog.account?.unit"
-                :disabled="working"
-                @saved="balanceSaved"
-                @busy="balanceBusy = $event"
-              /><GovernanceHistory
-                :bindings="bindings"
-                :groups="groups"
-                :events="events"
-                :checks="checks"
-                :disabled="working"
-                @configure="configure"
-                @acknowledge="acknowledge"
-                @page="page"
-              />
-            </div>
+          <div v-show="tab === 'overview'" data-test="site-overview-tab" class="min-w-0 space-y-5 p-4 sm:p-5">
+            <SiteOverview :site="active" :snapshot="overviewSnapshot" :binding-count="bindings.filter(binding => binding.account_id > 0).length" :balance-health="balanceHealth" />
+            <div class="flex flex-wrap items-center gap-3 rounded-lg bg-gray-50 p-3 text-sm dark:bg-dark-900"><span class="font-medium">{{ t(!automation ? 'governance.automationUnknown' : automation.policy.enabled ? 'governance.automationOn' : 'governance.automationOff') }}</span><span class="min-w-0 flex-1 text-xs text-gray-500">{{ t('governance.automationSummaryHint') }}</span><button type="button" class="text-sm font-medium text-primary-700 dark:text-primary-300" @click="tab = 'monitor'">{{ t('governance.configureAutomation') }}</button></div>
+            <ReconciliationPanel v-if="snapshot" :key="active.id" :site-id="active.id" :refresh-key="`${snapshot.id}:${reconciliationEpoch}`" :disabled="working" @busy="reconciliationBusy = $event" @applied="reconciled" />
+            <p v-else class="rounded-lg bg-gray-50 p-4 text-sm text-gray-500 dark:bg-dark-900">{{ busy ? t('common.loading') : t('governance.noSnapshot') }}</p>
+            <BalanceHealthPanel :health="balanceHealth" :disabled="working" @reload="reloadHealth" @configure="tab = 'monitor'" />
           </div>
+          <div v-show="tab === 'import'" class="min-w-0 p-4 sm:p-5"><ImportPanel v-if="snapshot && importStateReady" :key="active.id" :site-id="active.id" :site-base-url="active.base_url" :site-platform="active.platform" :bindings="bindings" :managed-keys="managedKeys" :snapshot="snapshot" :groups="groups" :disabled="busy || balanceBusy || automationBusy || reconciliationBusy || keyBusy || rechargeBusy" @busy="importBusy = $event" @applied="reloadBindings" @manage-keys="openKeys" /><p v-else class="py-8 text-center text-sm text-gray-500">{{ busy ? t('common.loading') : t(snapshot ? 'governance.importStateUnavailable' : 'governance.noSnapshot') }}</p></div>
+          <div v-show="tab === 'monitor'" class="min-w-0 space-y-5 p-4 sm:p-5"><AutomationPolicyPanel :key="active.id" :site-id="active.id" :configuration="automation" :disabled="working" @busy="automationBusy = $event" @saved="automationSaved" @reload="reloadAutomation" /><BalanceMonitorPanel :key="active.id" :site="active" :unit="snapshot?.catalog.account?.unit" :disabled="working" @saved="balanceSaved" @busy="balanceBusy = $event" /><RechargePlanPanel :key="active.id" :site-id="active.id" :disabled="working" @busy="rechargeBusy = $event" /><GovernanceHistory mode="bindings" :bindings="bindings" :groups="groups" :events="null" :checks="null" :disabled="working" @configure="configure" /></div>
+          <div v-show="tab === 'history'" class="min-w-0 p-4 sm:p-5"><GovernanceHistory mode="history" :bindings="[]" :events="events" :checks="checks" :disabled="working" @acknowledge="acknowledge" @page="page" /></div>
         </div>
-        <div
-          v-else
-          class="flex min-h-72 items-center justify-center rounded-2xl border border-dashed border-gray-200 text-sm text-gray-400 dark:border-dark-600"
-        >
-          {{ t('governance.chooseSite') }}
-        </div>
-      </div>
+      </section>
+      <BaseDialog v-if="keysOpen && active" :show="true" :title="t('governance.groupKeys')" width="wide" :show-close-button="!keyBusy" :close-on-escape="!keyBusy" @close="keysOpen = false"><ManagedKeysPanel :key="active.id" :site-id="active.id" :snapshot-id="snapshot?.id || 0" :groups="snapshot?.catalog.groups || []" :selections="keySelections" :disabled="busy || importBusy || balanceBusy || editBusy || automationBusy || reconciliationBusy || rechargeBusy" @busy="keyBusy = $event" /></BaseDialog>
       <OnboardDialog
         v-if="onboarding"
         :proxies="proxies"

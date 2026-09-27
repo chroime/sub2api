@@ -23,6 +23,7 @@ func TestPreviewFreezesAccountImportDefaults(t *testing.T) {
 	require.NoError(t, json.Unmarshal(raw, &saved))
 	require.Equal(t, map[string]any{
 		"concurrency":                         float64(5000),
+		"priority":                            float64(1),
 		"model_mapping":                       map[string]any{"gpt-fixture": "gpt-fixture"},
 		"upstream_billing_rate_sync_enabled":  true,
 		"quota_daily_limit":                   float64(10000),

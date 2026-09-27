@@ -10,7 +10,6 @@ import {
   importAccountConfig,
   type ModelSelections,
 } from './import-config'
-import ManagedKeysPanel from './ManagedKeysPanel.vue'
 import ImportSettingsPanel from './ImportSettingsPanel.vue'
 import TransportSelect from './TransportSelect.vue'
 import TargetGroupSelect from './TargetGroupSelect.vue'
@@ -45,7 +44,7 @@ const props = defineProps<{
     rate_multiplier: number
   }[]
 }>()
-const emit = defineEmits<{ applied: []; busy: [value: boolean] }>()
+const emit = defineEmits<{ applied: []; busy: [value: boolean]; manageKeys: [selections: KeySelection[]] }>()
 const { t } = useI18n()
 type GroupChoice = Omit<Selection, 'platform' | 'local_group_id' | 'local_group_ids'> & {
   selected: boolean
@@ -56,7 +55,6 @@ const choices = ref<Record<string, GroupChoice>>({})
 const preview = ref<Preview | null>(null)
 const result = ref<ApplyResult | null>(null)
 const busy = ref(false),
-  keyBusy = ref(false),
   error = ref('')
 const query = ref(''),
   platformFilter = ref<Transport | ''>(''),
@@ -69,7 +67,7 @@ const config = ref(defaultImportConfig()),
   modelsReady = ref(false)
 const modelSelections = ref<ModelSelections>(defaultModelSelections())
 let generation = 0
-const working = computed(() => busy.value || keyBusy.value)
+const working = computed(() => busy.value)
 const resolvedGroups = computed(() =>
   props.snapshot.catalog.groups.map((group) => ({
     ...group,
@@ -412,7 +410,7 @@ const catalogWarnings: Record<string, string> = {
         <div
           class="overflow-x-auto rounded-xl border border-gray-200 dark:border-dark-600"
         >
-          <table class="w-full text-left text-sm">
+          <table class="governance-mapping w-full text-left text-sm">
             <thead class="bg-gray-50 text-xs text-gray-500 dark:bg-dark-900">
               <tr>
                 <th class="w-9 px-3 py-3">
@@ -453,8 +451,8 @@ const catalogWarnings: Record<string, string> = {
                     />
                   </td>
                   <td class="px-3 py-3">
-                    <span class="font-medium">{{ remote.name }}</span>
-                    <p class="mt-1 text-xs text-gray-400">
+                    <span class="break-all font-medium">{{ remote.name }}</span>
+                    <p class="mt-1 break-all text-xs text-gray-400">
                       #{{ remote.id }} ·
                       {{
                         t('governance.modelSelectedCount', {
@@ -464,6 +462,7 @@ const catalogWarnings: Record<string, string> = {
                     </p>
                   </td>
                   <td class="px-3 py-3">
+                    <span class="mb-1 block text-xs text-gray-500 md:hidden">{{ t('governance.costRate') }}</span>
                     <span
                       class="font-semibold tabular-nums text-primary-700 dark:text-primary-300"
                       >{{ value(remote.resolved_rate_multiplier)
@@ -480,6 +479,7 @@ const catalogWarnings: Record<string, string> = {
                     </p>
                   </td>
                   <td class="px-3 py-3">
+                    <span class="mb-1 block text-xs text-gray-500 md:hidden">{{ t('governance.transport') }}</span>
                     <TransportSelect
                       v-model="choices[remote.id]!.platform"
                       data-test="platform"
@@ -492,6 +492,7 @@ const catalogWarnings: Record<string, string> = {
                     />
                   </td>
                   <td class="px-3 py-3">
+                    <span class="mb-1 block text-xs text-gray-500 md:hidden">{{ t('governance.localGroup') }}</span>
                     <TargetGroupSelect
                       v-model="choices[remote.id]!.local_group_ids"
                       data-test="target"
@@ -752,15 +753,7 @@ const catalogWarnings: Record<string, string> = {
         {{ item.error }}
       </p>
     </section>
-    <ManagedKeysPanel
-      :key="siteId"
-      :site-id="siteId"
-      :snapshot-id="snapshot.id"
-      :groups="snapshot.catalog.groups"
-      :selections="keySelections"
-      :disabled="busy || disabled || !!preview"
-      @busy="keyBusy = $event"
-    />
+    <div class="flex flex-wrap items-center gap-3 rounded-xl bg-gray-50 px-4 py-3 dark:bg-dark-900"><p class="min-w-0 flex-1 text-xs text-gray-500">{{ t('governance.keysWorkspaceHint') }}</p><button id="governance-import-keys" data-test="manage-keys" type="button" class="btn btn-secondary text-sm" :disabled="working || disabled || !!preview" @click="emit('manageKeys', keySelections.filter((selection): selection is KeySelection => !!selection.platform))">{{ t('governance.viewKeys') }}</button></div>
     <details
       v-if="snapshot.catalog.channels?.length"
       class="rounded-xl border border-gray-200 p-4 text-sm dark:border-dark-600"
@@ -779,3 +772,14 @@ const catalogWarnings: Record<string, string> = {
     </details>
   </section>
 </template>
+<style scoped>
+@media (max-width: 767px) {
+  .governance-mapping,
+  .governance-mapping > tbody,
+  .governance-mapping > tbody > tr,
+  .governance-mapping > tbody > tr > td { display: block; width: 100%; min-width: 0; }
+  .governance-mapping > thead { display: none; }
+  .governance-mapping > tbody > tr { padding: 12px; }
+  .governance-mapping > tbody > tr > td { padding: 6px 0; }
+}
+</style>

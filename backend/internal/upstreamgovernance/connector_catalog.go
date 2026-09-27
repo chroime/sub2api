@@ -69,12 +69,24 @@ func (c *platformConnector) subCatalog(ctx context.Context, s Site, session Sess
 	if e := c.data(ctx, s, session, "GET", "/api/v1/groups/available", nil, &groups); e != nil {
 		return Catalog{}, e
 	}
+	if groups == nil {
+		return Catalog{}, ErrUnsupported
+	}
+	catalog.GroupsComplete = true
 	if len(groups) > connectorMaxGroups {
 		return Catalog{}, ErrUnsupported
 	}
-	rates := map[string]float64{}
+	var rates map[string]*float64
 	if e := c.data(ctx, s, session, "GET", "/api/v1/groups/rates", nil, &rates); e != nil {
 		return Catalog{}, e
+	}
+	if rates == nil {
+		return Catalog{}, ErrUnsupported
+	}
+	for _, rate := range rates {
+		if rate == nil || !connectorValidRate(rate) {
+			return Catalog{}, ErrUnsupported
+		}
 	}
 	indexes := map[string]int{}
 	for _, g := range groups {
@@ -87,11 +99,11 @@ func (c *platformConnector) subCatalog(ctx context.Context, s Site, session Sess
 		}
 		r := RemoteGroup{ID: id, Name: g.Name, Platform: g.Platform, RateMultiplier: g.Rate, ResolvedRateMultiplier: g.Rate, PeakRateEnabled: g.PeakEnabled, PeakStart: g.PeakStart, PeakEnd: g.PeakEnd, PeakRateMultiplier: g.PeakRate, Models: []string{}, Prices: []RemotePrice{}, Source: "sub2api:user-visible-groups"}
 		if override, ok := rates[id]; ok {
-			if !connectorValidRate(&override) {
+			if override == nil || !connectorValidRate(override) {
 				return Catalog{}, ErrUnsupported
 			}
-			r.UserRateMultiplier = &override
-			r.ResolvedRateMultiplier = &override
+			r.UserRateMultiplier = override
+			r.ResolvedRateMultiplier = override
 		}
 		indexes[id] = len(catalog.Groups)
 		catalog.Groups = append(catalog.Groups, r)
@@ -209,6 +221,10 @@ func (c *platformConnector) newCatalog(ctx context.Context, s Site, session Sess
 	if e := c.data(ctx, s, session, "GET", "/api/user/self/groups", nil, &groups); e != nil {
 		return Catalog{}, e
 	}
+	if groups == nil {
+		return Catalog{}, ErrUnsupported
+	}
+	catalog.GroupsComplete = true
 	if len(groups) > connectorMaxGroups {
 		return Catalog{}, ErrUnsupported
 	}

@@ -148,6 +148,13 @@ func (s *Service) checkBalanceMonitor(ctx context.Context, site Site, snapshot *
 	for key, value := range site.balanceState.Recipients {
 		state.Recipients[key] = value
 	}
+	observation := s.observeBalance(site, snapshot)
+	if observation.reason != "" {
+		state.Status.State = "unknown"
+		state.Status.LastError = observation.reason
+		s.saveBalanceState(ctx, site.ID, state)
+		return
+	}
 	account := snapshot.Catalog.Account
 	if account == nil || account.Balance == nil || math.IsNaN(*account.Balance) || math.IsInf(*account.Balance, 0) || account.Unit != config.Unit || config.Unit != balanceUnit(site.Platform) {
 		state.Status.State = "unknown"

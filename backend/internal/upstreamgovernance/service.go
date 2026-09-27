@@ -423,6 +423,8 @@ func (s *Service) syncLocked(ctx context.Context, site Site) (*Snapshot, error) 
 	}
 	// Notification failures have their own persisted status and must not turn a
 	// successfully collected catalog into a failed synchronization.
+	s.reconcileSuccessfulSnapshot(ctx, site, snapshot)
+	s.evaluateRechargeAfterSnapshot(ctx, site, snapshot)
 	s.checkBalanceMonitor(ctx, site, snapshot)
 	return snapshot, nil
 }
@@ -677,6 +679,9 @@ func (s *Service) applyRow(ctx context.Context, site Site, session Session, row 
 	binding.LocalGroupID = row.Selection.LocalGroupID
 	binding.LocalGroupIDs = append([]int64(nil), row.Selection.LocalGroupIDs...)
 	if e = s.store.SaveBinding(ctx, binding); e != nil {
+		return nil, e
+	}
+	if e = s.adoptImportedReconciliationState(ctx, site.ID, *binding, row.RemoteGroup.Name); e != nil {
 		return nil, e
 	}
 	return account, nil

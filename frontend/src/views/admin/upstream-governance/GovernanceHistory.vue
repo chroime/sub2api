@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import PlatformIcon from '@/components/common/PlatformIcon.vue'
 import type {
@@ -16,6 +17,7 @@ defineProps<{
   events: Page<GovernanceEvent> | null
   checks: Page<Check> | null
   disabled?: boolean
+  mode?: 'bindings' | 'history'
 }>()
 const emit = defineEmits<{
   configure: [binding: Binding, action: 'check' | 'monitor']
@@ -23,10 +25,11 @@ const emit = defineEmits<{
   page: [kind: 'events' | 'checks', page: number]
 }>()
 const { t } = useI18n()
+const historyTab = ref<'events' | 'checks'>('events')
 </script>
 <template>
   <section class="space-y-6">
-    <section class="space-y-3">
+    <section v-if="mode !== 'history'" class="min-w-0 space-y-3">
       <div>
         <h3 class="font-semibold">
           {{ t('governance.bindings') }}
@@ -48,7 +51,7 @@ const { t } = useI18n()
         class="flex flex-wrap items-center gap-3 rounded-xl border border-gray-200 p-4 dark:border-dark-600"
       >
         <PlatformIcon :platform="binding.platform as Transport" size="md" />
-        <div class="mr-auto">
+        <div class="mr-auto min-w-0 flex-1 break-words">
           <p class="text-sm font-medium">
             {{ binding.remote_group_id }} →
             {{
@@ -85,7 +88,8 @@ const { t } = useI18n()
         </button>
       </article>
     </section>
-    <section v-if="events" class="space-y-3">
+    <nav v-if="mode === 'history'" class="flex flex-wrap gap-2" :aria-label="t('governance.historyTitle')"><button v-for="kind in (['events', 'checks'] as const)" :key="kind" type="button" class="rounded-lg px-3 py-2 text-sm" :class="historyTab === kind ? 'bg-primary-50 font-medium text-primary-700 dark:bg-primary-900/20 dark:text-primary-300' : 'text-gray-500'" :aria-pressed="historyTab === kind" @click="historyTab = kind">{{ t('governance.' + kind) }}</button></nav>
+    <section v-if="events && mode !== 'bindings' && (mode !== 'history' || historyTab === 'events')" class="space-y-3">
       <h3 class="font-semibold">
         {{ t('governance.events') }}
         <span class="ml-1 text-sm font-normal text-gray-400">{{
@@ -161,7 +165,7 @@ const { t } = useI18n()
         </button>
       </div>
     </section>
-    <section v-if="checks" class="space-y-3">
+    <section v-if="checks && mode !== 'bindings' && (mode !== 'history' || historyTab === 'checks')" class="space-y-3">
       <h3 class="font-semibold">
         {{ t('governance.checks') }}
         <span class="ml-1 text-sm font-normal text-gray-400">{{

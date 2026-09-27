@@ -31,6 +31,89 @@ export interface BalanceMonitorStatus {
   last_notified_at: string | null
   last_error: string
 }
+export interface AutomationPolicy {
+  enabled: boolean
+  sync_rate: boolean
+  sync_name: boolean
+  pause_missing: boolean
+  restore_returned: boolean
+  missing_confirmations: number
+  max_rate_increase_percent: number
+}
+export interface AutomationConfiguration {
+  version: number
+  policy: AutomationPolicy
+}
+export interface ReconciliationRow {
+  binding_id: number
+  account_id: number
+  remote_group_id: string
+  remote_group_name: string
+  account_name: string
+  action: 'update' | 'pause' | 'restore' | 'none'
+  state: 'ready' | 'review' | 'conflict' | 'unavailable'
+  reason: string
+  changes: { field: string; before: unknown; after: unknown }[]
+}
+export interface Reconciliation {
+  snapshot_id: number
+  observed_at: string | null
+  rows: ReconciliationRow[]
+}
+export interface ReconciliationPreview extends Reconciliation {
+  id: string
+  site_version: number
+  expires_at: string
+}
+export interface ReconciliationResult {
+  preview_id: string
+  items: { binding_id: number; account_id: number; status: string; error?: string }[]
+}
+export interface BalanceHealth {
+  collection_enabled: boolean
+  interval_minutes: number
+  last_attempt_at: string | null
+  observed_at: string | null
+  next_run_at: string | null
+  stale: boolean
+  monitor_enabled: boolean
+  state: 'healthy' | 'low' | 'unknown' | 'disabled'
+  delivery_ready: boolean
+  recipient_count: number
+  reason: string
+  delivery_reason: string
+  last_notified_at: string | null
+  last_delivery_error: string
+}
+export interface RechargePolicy {
+  mode: 'disabled' | 'plan_only'
+  threshold: number
+  unit: 'usd' | 'quota'
+  amount_minor: number
+  currency: 'USD' | 'CNY'
+  daily_budget_minor: number
+  cooldown_minutes: number
+}
+export interface RechargePlan {
+  version: number
+  policy: RechargePolicy
+  capability: { available: boolean; reason: string }
+  status: 'disabled' | 'blocked'
+  evaluation: null | {
+    id: string
+    episode_id?: string
+    policy_matched: boolean
+    status: 'blocked'
+    reasons: string[]
+    observed_at: string | null
+    evaluated_at: string
+    balance: number | null
+    unit: string
+    amount_minor: number
+    currency: 'USD' | 'CNY'
+    daily_budget_remaining_minor: number
+  }
+}
 export interface ModelTemplate {
   id: string
   name: string
@@ -233,6 +316,33 @@ export interface Page<T> {
 const base = '/admin/upstream-governance/sites'
 const site = (id: number) => `${base}/${id}`
 const api = {
+  async balanceHealth(id: number) {
+    return (await apiClient.get<BalanceHealth>(`${site(id)}/balance-health`)).data
+  },
+  async rechargePlan(id: number) {
+    return (await apiClient.get<RechargePlan>(`${site(id)}/recharge-plan`)).data
+  },
+  async saveRechargePlan(id: number, input: { version: number; policy: RechargePolicy }) {
+    return (await apiClient.put<RechargePlan>(`${site(id)}/recharge-plan`, input)).data
+  },
+  async evaluateRechargePlan(id: number) {
+    return (await apiClient.post<RechargePlan>(`${site(id)}/recharge-plan/evaluate`, {})).data
+  },
+  async automation(id: number) {
+    return (await apiClient.get<AutomationConfiguration>(`${site(id)}/automation`)).data
+  },
+  async saveAutomation(id: number, input: AutomationConfiguration) {
+    return (await apiClient.put<AutomationConfiguration>(`${site(id)}/automation`, input)).data
+  },
+  async reconciliation(id: number) {
+    return (await apiClient.get<Reconciliation>(`${site(id)}/reconciliation`)).data
+  },
+  async reconcilePreview(id: number) {
+    return (await apiClient.post<ReconciliationPreview>(`${site(id)}/reconcile-preview`, {})).data
+  },
+  async applyReconciliation(id: number, previewId: string, bindingIds: number[]) {
+    return (await apiClient.post<ReconciliationResult>(`${site(id)}/reconcile-previews/${encodeURIComponent(previewId)}/apply`, { binding_ids: bindingIds }, { timeout: 300000 })).data
+  },
   async modelTemplates() {
     return (await apiClient.get<ModelTemplateCollection>('/admin/upstream-governance/model-templates')).data
   },

@@ -791,6 +791,17 @@ func lockAndMergeAccountProbeExtra(
 		}
 	}
 	extra := service.MergeOpenAICodexTicketExtra(copyJSONMap(normalizeJSONMap(account.Extra)), currentExtra)
+	service.MergeGovernanceRuntimeExtra(ctx, extra, currentExtra)
+	// Ordinary configuration edits carry a pre-transaction Account snapshot.
+	// Preserve the row-locked availability of governed accounts in both pause
+	// and restore races unless the administrator supplied an availability intent.
+	_, _, governanceImport := service.GovernanceMutationFromContext(ctx)
+	if marker, _ := currentExtra["upstream_governance_marker"].(string); marker != "" && !governanceImport && !service.GovernancePauseRevoked(ctx) {
+		_ = rows.Close()
+		if err := scanSingleRow(ctx, client, `SELECT schedulable FROM accounts WHERE id=$1`, []any{account.ID}, &account.Schedulable); err != nil {
+			return nil, err
+		}
+	}
 	for _, key := range []string{
 		service.UpstreamBillingProbeEnabledExtraKey,
 		service.UpstreamBillingRateSyncEnabledExtraKey,
@@ -2736,10 +2747,7 @@ func (r *accountRepository) UpdateSessionWindowEnd(ctx context.Context, id int64
 }
 
 func (r *accountRepository) SetSchedulable(ctx context.Context, id int64, schedulable bool) error {
-	_, err := r.client.Account.Update().
-		Where(dbaccount.IDEQ(id)).
-		SetSchedulable(schedulable).
-		Save(ctx)
+	_, err := r.sql.ExecContext(ctx, `UPDATE accounts SET schedulable=$2, extra=COALESCE(extra,'{}'::jsonb)-'upstream_governance_pause'-'upstream_governance_reconcile_receipt',updated_at=NOW() WHERE id=$1 AND deleted_at IS NULL`, id, schedulable)
 	if err != nil {
 		return err
 	}
@@ -2821,6 +2829,7 @@ func (r *accountRepository) InvalidateCodexTicket(ctx context.Context, accountID
 }
 
 func (r *accountRepository) UpdateExtra(ctx context.Context, id int64, updates map[string]any) error {
+	updates = stripGovernanceRuntimeExtra(updates)
 	updates = stripCodexFingerprintSeedFromExtraUpdate(updates)
 	if len(updates) == 0 {
 		return nil
@@ -2993,6 +3002,7 @@ func (r *accountRepository) updateUpstreamBillingProbeSnapshotInTx(
 				WHEN $10::numeric IS NOT NULL
 					AND extra @> '{"upstream_billing_probe_enabled": true}'::jsonb
 					AND extra @> '{"upstream_billing_rate_sync_enabled": true}'::jsonb
+					AND COALESCE(extra->>'upstream_governance_rate_owner','') = ''
 				THEN $10::numeric
 				ELSE rate_multiplier
 			END,
@@ -3005,8 +3015,9 @@ func (r *accountRepository) updateUpstreamBillingProbeSnapshotInTx(
 			AND COALESCE(extra -> 'upstream_billing_probe', 'null'::jsonb) = $7::jsonb
 			AND COALESCE(extra -> 'upstream_billing_probe_enabled', 'null'::jsonb) = $8::jsonb
 			AND COALESCE(extra -> 'upstream_billing_rate_sync_enabled', 'null'::jsonb) = $9::jsonb
+			AND COALESCE(extra->>'upstream_governance_rate_owner','') = $11
 			AND deleted_at IS NULL
-	`, string(payload), account.ID, account.Platform, account.Type, string(credentials), proxyID, string(expectedSnapshotJSON), string(expectedEnabledJSON), string(expectedRateSyncEnabledJSON), rateMultiplier)
+	`, string(payload), account.ID, account.Platform, account.Type, string(credentials), proxyID, string(expectedSnapshotJSON), string(expectedEnabledJSON), string(expectedRateSyncEnabledJSON), rateMultiplier, account.GetExtraString("upstream_governance_rate_owner"))
 	if err != nil {
 		return err
 	}
@@ -3099,6 +3110,7 @@ func (r *accountRepository) BulkUpdate(ctx context.Context, ids []int64, updates
 		return 0, nil
 	}
 	updates.Extra = stripCodexFingerprintSeedFromExtraUpdate(updates.Extra)
+	updates.Extra = stripGovernanceRuntimeExtra(updates.Extra)
 
 	setClauses := make([]string, 0, 8)
 	args := make([]any, 0, 8)
@@ -3218,7 +3230,7 @@ func (r *accountRepository) BulkUpdate(ctx context.Context, ids []int64, updates
 				" AND COALESCE(btrim("+credentialPlaceholder+"::jsonb ->> 'account_mode') <> 'zen', true) IS NOT TRUE")
 	}
 
-	if len(updates.Extra) > 0 || len(ollamaGroupIdentityChanges) > 0 || len(opencodeGroupIdentityChanges) > 0 || ollamaProxyIdentityChanged != "" || updates.EnsureCodexFingerprintSeed {
+	if len(updates.Extra) > 0 || len(ollamaGroupIdentityChanges) > 0 || len(opencodeGroupIdentityChanges) > 0 || ollamaProxyIdentityChanged != "" || updates.EnsureCodexFingerprintSeed || updates.Status != nil || updates.Schedulable != nil {
 		extraExpression := "COALESCE(extra, '{}'::jsonb)"
 		if len(updates.Extra) > 0 {
 			payload, err := json.Marshal(updates.Extra)
@@ -3236,6 +3248,9 @@ func (r *accountRepository) BulkUpdate(ctx context.Context, ids []int64, updates
 			}
 		}
 		eligibleAccount := "platform IN (" + ollamaCloudUsagePlatformsSQL + ") AND type = 'apikey'"
+		if updates.Status != nil || updates.Schedulable != nil {
+			extraExpression = "(" + extraExpression + ") - 'upstream_governance_pause' - 'upstream_governance_reconcile_receipt'"
+		}
 		groupIdentityChanged := ""
 		if len(ollamaGroupIdentityChanges) > 0 {
 			groupIdentityChanged = "(" + eligibleAccount + " AND (" + joinClauses(ollamaGroupIdentityChanges, " OR ") + "))"

@@ -1,14 +1,17 @@
 vi.mock('@/components/layout/AppLayout.vue', () => ({
   default: { template: '<main><slot /></main>' },
 }))
-import { mount, flushPromises } from '@vue/test-utils'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { mount, flushPromises, enableAutoUnmount } from '@vue/test-utils'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import View from './UpstreamGovernanceView.vue'
 import ConnectDialog from './ConnectDialog.vue'
 import BalanceMonitorPanel from './BalanceMonitorPanel.vue'
+import BalanceHealthPanel from './BalanceHealthPanel.vue'
 import ImportPanel from './ImportPanel.vue'
+import ReconciliationPanel from './ReconciliationPanel.vue'
 import SiteEditDialog from './SiteEditDialog.vue'
-import api, { type Site, type Snapshot } from '@/api/admin/upstream-governance'
+import ManagedKeysPanel from './ManagedKeysPanel.vue'
+import api, { type BalanceHealth, type Site, type Snapshot } from '@/api/admin/upstream-governance'
 vi.mock('@/api/admin/upstream-governance', () => ({
   default: {
     list: vi.fn(),
@@ -28,6 +31,12 @@ vi.mock('@/api/admin/upstream-governance', () => ({
     remove: vi.fn(),
     loginCredentials: vi.fn(),
     update: vi.fn(),
+    automation: vi.fn().mockResolvedValue({ version: 0, policy: { enabled: false, sync_rate: true, sync_name: true, pause_missing: true, restore_returned: true, missing_confirmations: 2, max_rate_increase_percent: 20 } }),
+    balanceHealth: vi.fn().mockResolvedValue(null),
+    reconciliation: vi.fn().mockResolvedValue({ snapshot_id: 0, observed_at: null, rows: [] }),
+    reconcilePreview: vi.fn(),
+    rechargePlan: vi.fn().mockResolvedValue({ version: 0, policy: { mode: 'disabled', threshold: 10, unit: 'usd', amount_minor: 1000, currency: 'USD', daily_budget_minor: 10000, cooldown_minutes: 1440 }, capability: { available: false, reason: 'provider_unavailable' }, status: 'disabled', evaluation: null }),
+    revealKey: vi.fn(),
   },
 }))
 vi.mock('@/api/admin/groups', () => ({
@@ -37,8 +46,107 @@ vi.mock('@/api/admin/proxies', () => ({
   default: { getAll: vi.fn().mockResolvedValue([]) },
 }))
 vi.mock('vue-i18n', async (importOriginal) => ({ ...await importOriginal<typeof import('vue-i18n')>(), useI18n: () => ({ t: (key: string) => key }) }))
+enableAutoUnmount(afterEach)
 describe('governance page', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => { vi.clearAllMocks(); vi.mocked(api.keys).mockResolvedValue([]) })
+  it('starts with all sites and does not fetch per-site data or plaintext keys before selection', async () => {
+    const site: Site = { id: 1, name: 'First upstream', platform: 'sub2api', base_url: 'https://fixture.example', enabled: true, interval_minutes: 15, proxy_id: null, version: 1, has_credential: true, status: 'healthy', last_error: '', last_sync_at: null }
+    vi.mocked(api.list).mockResolvedValue([site])
+    const wrapper = mount(View, { global: { stubs: { BaseDialog: true } } })
+    await flushPromises()
+    expect(wrapper.get('[data-test=sites-overview]').isVisible()).toBe(true)
+    expect(wrapper.find('[data-test=site-overview-tab]').exists()).toBe(false)
+    expect(api.catalog).not.toHaveBeenCalled()
+    expect(api.keys).not.toHaveBeenCalled()
+    expect(api.revealKey).not.toHaveBeenCalled()
+    expect(api.rechargePlan).not.toHaveBeenCalled()
+  })
+  it('preserves import selections between tabs and opens one on-demand key dialog from either entry point', async () => {
+    const site: Site = { id: 1, name: 'Imported upstream', platform: 'sub2api', base_url: 'https://fixture.example', enabled: true, interval_minutes: 15, proxy_id: null, version: 1, has_credential: true, status: 'healthy', last_error: '', last_sync_at: null }
+    const snapshot: Snapshot = { id: 1, site_id: 1, site_version: 1, created_at: '2026-09-27T01:00:00Z', catalog: { groups: [{ id: 'r', name: 'Remote', platform: 'openai', rate_multiplier: 1, user_rate_multiplier: null, resolved_rate_multiplier: 1, models: [], prices: [], source: 'user', peak_rate_enabled: false }], channels: [], warnings: [] } }
+    const page = { items: [], total: 0, page: 1, pages: 0, page_size: 20 }
+    const key = { id: 9, site_id: 1, remote_group_id: 'r', platform: 'openai' as const, remote_key_id: 'fixture-key', marker: 'existing', has_key: true, created_at: '', updated_at: '' }
+    vi.mocked(api.list).mockResolvedValue([site])
+    vi.mocked(api.catalog).mockResolvedValue(snapshot)
+    vi.mocked(api.bindings).mockResolvedValue([])
+    vi.mocked(api.events).mockResolvedValue(page)
+    vi.mocked(api.checks).mockResolvedValue(page)
+    vi.mocked(api.keys).mockResolvedValue([key])
+    vi.mocked(api.revealKey).mockResolvedValue({ managed_key: key, key: 'fixture-plaintext-key' })
+    const wrapper = mount(View, { global: { stubs: { BaseDialog: { props: ['show'], emits: ['close'], template: '<div v-if="show"><button data-test="close-dialog" @click="$emit(\'close\')">Close</button><slot /></div>' } } } })
+    await flushPromises()
+    await wrapper.get('#governance-site-1').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-test=site-overview-tab]').isVisible()).toBe(true)
+    expect(wrapper.findComponent(ManagedKeysPanel).exists()).toBe(false)
+    expect(api.revealKey).not.toHaveBeenCalled()
+    await wrapper.get('#governance-import-tab').trigger('click')
+    const importPanel = wrapper.getComponent(ImportPanel)
+    await importPanel.get('[data-test=select]').setValue(true)
+    await importPanel.get('[data-test=priority]').setValue(7)
+    await wrapper.get('#governance-monitor-tab').trigger('click')
+    await wrapper.get('#governance-history-tab').trigger('click')
+    await wrapper.get('#governance-import-tab').trigger('click')
+    expect(wrapper.getComponent(ImportPanel).element).toBe(importPanel.element)
+    expect((importPanel.get('[data-test=select]').element as HTMLInputElement).checked).toBe(true)
+    expect((importPanel.get('[data-test=priority]').element as HTMLInputElement).value).toBe('7')
+    await wrapper.get('#governance-view-keys').trigger('click')
+    await flushPromises()
+    expect(wrapper.findAllComponents(ManagedKeysPanel)).toHaveLength(1)
+    expect(wrapper.get('[data-test=key-secret]').text()).toBe('fixture-plaintext-key')
+    expect(api.revealKey).toHaveBeenCalledTimes(1)
+    await wrapper.get('[data-test=close-dialog]').trigger('click')
+    expect(wrapper.findComponent(ManagedKeysPanel).exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('fixture-plaintext-key')
+    await wrapper.get('#governance-import-keys').trigger('click')
+    await flushPromises()
+    expect(wrapper.findAllComponents(ManagedKeysPanel)).toHaveLength(1)
+    expect(wrapper.getComponent(ManagedKeysPanel).props('selections')).toEqual([{ remote_group_id: 'r', platform: 'openai' }])
+    expect(api.revealKey).toHaveBeenCalledTimes(2)
+  })
+  it.each([false, true])('refreshes the balance observation as a pair without resetting import or frozen changes (catalog failure: %s)', async catalogFails => {
+    const site: Site = { id: 1, name: 'Observed upstream', platform: 'sub2api', base_url: 'https://fixture.example', enabled: true, interval_minutes: 15, proxy_id: null, version: 1, has_credential: true, status: 'healthy', last_error: '', last_sync_at: null }
+    const snapshot: Snapshot = { id: 1, site_id: 1, site_version: 1, created_at: '2026-09-27T01:00:00Z', catalog: { groups: [{ id: 'r', name: 'Remote', platform: 'openai', rate_multiplier: 1, user_rate_multiplier: null, resolved_rate_multiplier: 1, models: [], prices: [], source: 'user', peak_rate_enabled: false }], account: { user_id: 1, username: 'fixture', email: '', balance: 100, frozen_balance: 0, used_balance: 0, unit: 'usd', source: 'user' }, channels: [], warnings: [] } }
+    const latest: Snapshot = { ...snapshot, id: 2, created_at: '2026-09-27T01:15:00Z', catalog: { ...snapshot.catalog, account: { ...snapshot.catalog.account!, balance: 5 } } }
+    const health: BalanceHealth = { collection_enabled: true, interval_minutes: 15, last_attempt_at: snapshot.created_at, observed_at: snapshot.created_at, next_run_at: latest.created_at, stale: false, monitor_enabled: true, state: 'healthy', delivery_ready: false, recipient_count: 1, reason: 'healthy', delivery_reason: 'smtp_not_configured', last_notified_at: null, last_delivery_error: '' }
+    const nextHealth: BalanceHealth = { ...health, observed_at: latest.created_at, state: 'low', reason: 'low' }
+    const row = { binding_id: 11, account_id: 21, remote_group_id: 'r', remote_group_name: 'Remote', account_name: 'Local account', action: 'update' as const, state: 'ready' as const, reason: '', changes: [{ field: 'rate_multiplier', before: 1, after: 1.1 }] }
+    const reconciliation = { snapshot_id: snapshot.id, observed_at: snapshot.created_at, rows: [row] }
+    const page = { items: [], total: 0, page: 1, pages: 0, page_size: 20 }
+    vi.mocked(api.list).mockResolvedValue([site])
+    vi.mocked(api.catalog).mockResolvedValueOnce(snapshot)
+    if (catalogFails) vi.mocked(api.catalog).mockRejectedValueOnce({ status: 503 })
+    else vi.mocked(api.catalog).mockResolvedValueOnce(latest)
+    vi.mocked(api.balanceHealth).mockResolvedValueOnce(health).mockResolvedValueOnce(nextHealth)
+    vi.mocked(api.bindings).mockResolvedValue([])
+    vi.mocked(api.events).mockResolvedValue(page)
+    vi.mocked(api.checks).mockResolvedValue(page)
+    vi.mocked(api.reconciliation).mockResolvedValueOnce(reconciliation)
+    vi.mocked(api.reconcilePreview).mockResolvedValueOnce({ ...reconciliation, id: 'frozen-preview', site_version: 1, expires_at: '2099-01-01T00:00:00Z' })
+    const wrapper = mount(View, { global: { stubs: { BaseDialog: true } } })
+    await flushPromises()
+    await wrapper.get('#governance-site-1').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-test=account-balance]').text()).toBe('100 usd')
+    const importPanel = wrapper.getComponent(ImportPanel)
+    await importPanel.get('[data-test=select]').setValue(true)
+    await importPanel.get('[data-test=priority]').setValue(7)
+    const changes = wrapper.getComponent(ReconciliationPanel)
+    await changes.get('[data-test=reconcile-select]').setValue(true)
+    await changes.get('[data-test=reconcile-preview]').trigger('click')
+    await flushPromises()
+    wrapper.getComponent(BalanceHealthPanel).vm.$emit('reload')
+    await flushPromises()
+    expect(wrapper.get('[data-test=account-balance]').text()).toBe(catalogFails ? 'governance.unknown' : '5 usd')
+    expect(wrapper.getComponent(BalanceHealthPanel).props('health')).toEqual(catalogFails ? null : nextHealth)
+    expect(wrapper.getComponent(ImportPanel).element).toBe(importPanel.element)
+    expect(importPanel.props('snapshot').id).toBe(snapshot.id)
+    expect((importPanel.get('[data-test=select]').element as HTMLInputElement).checked).toBe(true)
+    expect((importPanel.get('[data-test=priority]').element as HTMLInputElement).value).toBe('7')
+    expect(changes.find('[data-test=reconcile-apply]').exists()).toBe(true)
+    expect(api.reconciliation).toHaveBeenCalledTimes(1)
+    expect(api.sync).not.toHaveBeenCalled()
+  })
   it('opens the site editor with saved login and refreshes metadata after saving without reconnecting', async () => {
     const site: Site = { id: 1, name: 'Editable', platform: 'sub2api', base_url: 'https://fixture.example', enabled: true, interval_minutes: 15, proxy_id: null, version: 1, has_credential: true, status: 'healthy', last_error: '', last_sync_at: null }
     const page = { items: [], total: 0, page: 1, pages: 0, page_size: 20 }
@@ -50,6 +158,8 @@ describe('governance page', () => {
     vi.mocked(api.loginCredentials).mockResolvedValue({ username: 'fixture-user', password: 'fixture-password', version: 1 })
     vi.mocked(api.update).mockResolvedValue({ ...site, name: 'Renamed', version: 2 })
     const wrapper = mount(View, { global: { stubs: { BaseDialog: { props: ['show'], template: '<div v-if="show"><slot /><slot name="footer" /></div>' } } } })
+    await flushPromises()
+    await wrapper.get('#governance-site-1').trigger('click')
     await flushPromises()
     await wrapper.findAll('button').find(button => button.text() === 'common.edit')!.trigger('click')
     await flushPromises()
@@ -77,6 +187,8 @@ describe('governance page', () => {
     vi.mocked(api.keys).mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
     const wrapper = mount(View, { global: { stubs: { BaseDialog: true } } })
     await flushPromises()
+    await wrapper.get('#governance-site-1').trigger('click')
+    await flushPromises()
     expect(wrapper.findComponent(ImportPanel).exists()).toBe(false)
     const key = { id: 9, site_id: 1, remote_group_id: 'grok', platform: 'openai' as const, remote_key_id: 'old-key', marker: 'existing', has_key: false, created_at: '', updated_at: '' }
     finish([key])
@@ -96,6 +208,8 @@ describe('governance page', () => {
     vi.mocked(api.keys).mockRejectedValueOnce({ status: 503 })
     const wrapper = mount(View, { global: { stubs: { BaseDialog: true } } })
     await flushPromises()
+    await wrapper.get('#governance-site-1').trigger('click')
+    await flushPromises()
     expect(wrapper.findComponent(ImportPanel).exists()).toBe(false)
     expect(wrapper.text()).toContain('governance.importStateUnavailable')
     wrapper.unmount()
@@ -111,6 +225,8 @@ describe('governance page', () => {
     vi.mocked(api.checks).mockResolvedValue(page)
     vi.mocked(api.remove).mockRejectedValueOnce({ status: 409, reason: 'site_in_use' }).mockResolvedValueOnce(undefined)
     const wrapper = mount(View, { global: { stubs: { BaseDialog: { props: ['show'], template: '<div v-if="show"><slot /></div>' } } } })
+    await flushPromises()
+    await wrapper.get('#governance-site-1').trigger('click')
     await flushPromises()
     await wrapper.get('[aria-label="common.delete"]').trigger('click')
     await wrapper.get('.btn-danger').trigger('click')
@@ -137,6 +253,8 @@ describe('governance page', () => {
     vi.mocked(api.checks).mockResolvedValue(page)
     const wrapper = mount(View, { global: { stubs: { BaseDialog: true } } })
     await flushPromises()
+    await wrapper.get('#governance-site-1').trigger('click')
+    await flushPromises()
     expect(wrapper.findComponent(ImportPanel).exists()).toBe(true)
     vi.mocked(api.keys).mockRejectedValueOnce({ status: 503 })
     if (action === 'sync') await wrapper.get('#governance-collect').trigger('click')
@@ -160,6 +278,8 @@ describe('governance page', () => {
     let finish!: (value: Site) => void
     vi.mocked(api.balanceMonitor).mockImplementation(() => new Promise(resolve => { finish = resolve }))
     const wrapper = mount(View, { global: { stubs: { BaseDialog: true } } })
+    await flushPromises()
+    await wrapper.get('#governance-site-1').trigger('click')
     await flushPromises()
     await wrapper.get('#governance-monitor-tab').trigger('click')
     const monitor = wrapper.getComponent(BalanceMonitorPanel)
@@ -189,6 +309,8 @@ describe('governance page', () => {
     vi.mocked(api.events).mockResolvedValue(page)
     vi.mocked(api.checks).mockResolvedValue(page)
     const wrapper = mount(View, { global: { stubs: { BaseDialog: true } } })
+    await flushPromises()
+    await wrapper.get('#governance-site-1').trigger('click')
     await flushPromises()
     await wrapper.get('#governance-site-2').trigger('click')
     await flushPromises()

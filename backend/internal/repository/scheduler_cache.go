@@ -986,6 +986,7 @@ func filterSchedulerExtra(extra map[string]any) map[string]any {
 		// Candidate admission must retain the governance import's explicit model
 		// policy, rather than restoring a provider's implicit default allowlist.
 		"upstream_governance_marker",
+		"upstream_governance_rate_owner",
 		// Anthropic shared-window and Fable-only threshold checks run on this
 		// projection. UpdateExtra refreshes both payloads without a bucket rebuild.
 		"session_window_utilization",

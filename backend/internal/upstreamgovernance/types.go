@@ -103,10 +103,11 @@ type RemoteChannel struct {
 	Models   []string `json:"models"`
 }
 type Catalog struct {
-	Groups   []RemoteGroup   `json:"groups"`
-	Channels []RemoteChannel `json:"channels"`
-	Warnings []string        `json:"warnings"`
-	Account  *RemoteAccount  `json:"account,omitempty"`
+	GroupsComplete bool            `json:"groups_complete"`
+	Groups         []RemoteGroup   `json:"groups"`
+	Channels       []RemoteChannel `json:"channels"`
+	Warnings       []string        `json:"warnings"`
+	Account        *RemoteAccount  `json:"account,omitempty"`
 }
 
 // RemoteAccount contains only user-visible accounting fields. A nil amount is

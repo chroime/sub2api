@@ -859,6 +859,7 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 		}
 	}
 	if input.Status != "" {
+		ctx = withGovernancePauseRevoked(ctx)
 		account.Status = input.Status
 	}
 	if input.ExpiresAt != nil {

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	gov "github.com/Wei-Shaw/sub2api/internal/upstreamgovernance"
 	"github.com/stretchr/testify/require"
 )
 
@@ -41,4 +42,17 @@ func TestSchedulerMetadataPreservesGovernanceModelPolicy(t *testing.T) {
 			})
 		}
 	}
+}
+
+func TestGovernanceSchedulerMetadataRetainsCatalogAuthority(t *testing.T) {
+	rate := 0.5
+	a := service.Account{ID: 3, Platform: "openai", Type: "apikey", RateMultiplier: &rate, Extra: map[string]any{"upstream_governance_marker": "owned", gov.GovernanceRateOwnerExtraKey: "owned", gov.GovernancePauseExtraKey: map[string]any{"token": "private-operation"}, gov.GovernanceReceiptExtraKey: "private-receipt"}}
+	metadata := buildSchedulerMetadataAccount(a)
+	require.True(t, service.GovernanceCatalogOwnsRate(&metadata))
+	require.Equal(t, 0.5, metadata.BillingRateMultiplier())
+	_, raw, err := marshalSchedulerCacheAccount(a)
+	require.NoError(t, err)
+	require.Contains(t, string(raw), gov.GovernanceRateOwnerExtraKey)
+	require.NotContains(t, string(raw), "private-operation")
+	require.NotContains(t, string(raw), "private-receipt")
 }
