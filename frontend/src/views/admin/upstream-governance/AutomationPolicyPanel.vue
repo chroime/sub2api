@@ -41,9 +41,9 @@ async function save() {
     <form v-else class="mt-5 space-y-4" @submit.prevent="save">
       <p v-if="error" role="alert" class="text-sm text-red-600">{{ error }}</p><p v-if="saved" role="status" class="text-sm text-primary-700 dark:text-primary-300">{{ t('governance.automationSaved') }}</p>
       <fieldset :disabled="busy || disabled" class="min-w-0 space-y-4">
-        <label class="flex items-center gap-3 rounded-lg bg-gray-50 p-3 text-sm font-medium dark:bg-dark-900"><input v-model="draft.enabled" data-test="automation-enabled" type="checkbox" class="h-4 w-4" />{{ t('governance.enableAutomation') }}</label>
+        <label class="governance-checkbox-label flex items-center gap-3 rounded-lg bg-gray-50 p-3 text-sm font-medium dark:bg-dark-900"><input v-model="draft.enabled" data-test="automation-enabled" type="checkbox" class="governance-checkbox" />{{ t('governance.enableAutomation') }}</label>
         <div class="grid gap-3 sm:grid-cols-2">
-          <label v-for="option in (['sync_rate', 'sync_name', 'pause_missing', 'restore_returned'] as const)" :key="option" class="flex items-start gap-2 text-sm"><input v-model="draft[option]" type="checkbox" class="mt-1" :data-test="'automation-' + option" /><span>{{ t(`governance.automation_${option}`) }}</span></label>
+          <label v-for="option in (['sync_rate', 'sync_name', 'pause_missing', 'restore_returned'] as const)" :key="option" class="governance-checkbox-label flex items-start gap-2 text-sm leading-6"><input v-model="draft[option]" type="checkbox" class="governance-checkbox mt-1" :data-test="'automation-' + option" /><span class="min-w-0">{{ t(`governance.automation_${option}`) }}</span></label>
         </div>
         <p class="text-xs leading-relaxed text-gray-500">{{ t('governance.automationOwnershipHint') }}</p>
         <div class="grid gap-4 sm:grid-cols-2"><label class="text-sm">{{ t('governance.missingConfirmations') }}<input v-model.number="draft.missing_confirmations" data-test="missing-confirmations" type="number" min="2" max="10" step="1" required class="input mt-1 w-full" /></label><label class="text-sm">{{ t('governance.maxRateIncrease') }}<input v-model.number="draft.max_rate_increase_percent" data-test="max-rate-increase" type="number" min="0" max="10000" step="any" required class="input mt-1 w-full" /></label></div>

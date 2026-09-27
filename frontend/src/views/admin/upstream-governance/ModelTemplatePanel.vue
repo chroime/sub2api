@@ -259,10 +259,11 @@ onUnmounted(() => {
     </div>
     <fieldset :disabled="disabled || loading || saving" class="min-w-0 space-y-3">
       <div class="flex flex-wrap items-center gap-3">
-        <label class="flex items-center gap-2 text-sm font-medium"
+        <label class="governance-checkbox-label flex items-center gap-2 text-sm font-medium"
           ><input
             data-test="model-restriction-enabled"
             type="checkbox"
+            class="governance-checkbox"
             :checked="current.enabled"
             @change="
               update(
@@ -329,9 +330,10 @@ onUnmounted(() => {
           <label
             v-for="model in filteredModels"
             :key="model"
-            class="flex min-w-0 items-center gap-2 rounded px-2 py-1.5 text-xs hover:bg-gray-50 dark:hover:bg-dark-700"
+            class="governance-checkbox-label flex min-w-0 items-center gap-2 rounded px-2 py-1.5 text-xs hover:bg-gray-50 dark:hover:bg-dark-700"
             ><input
               type="checkbox"
+              class="governance-checkbox"
               :checked="current.models.includes(model)"
               :value="model"
               @change="toggle(model)"
@@ -375,11 +377,12 @@ onUnmounted(() => {
             class="input min-w-40 flex-1 text-sm"
             :aria-label="t('governance.templateName')"
             :placeholder="t('governance.templateName')"
-          /><label class="flex items-center gap-2 text-xs"
+          /><label class="governance-checkbox-label flex items-center gap-2 text-xs"
             ><input
               v-model="saveAsDefault"
               data-test="template-default"
               type="checkbox"
+              class="governance-checkbox"
             />{{ t('governance.useAsDefault') }}</label
           ><button
             data-test="save-template"

@@ -188,11 +188,12 @@ async function save() {
     >
       <p v-if="error" role="alert" class="text-sm text-red-600">{{ error }}</p>
       <fieldset :disabled="busy || disabled" class="min-w-0 space-y-4">
-        <label class="flex items-center gap-2 text-sm font-medium"
+        <label class="governance-checkbox-label flex items-center gap-2 text-sm font-medium"
           ><input
             v-model="form.enabled"
             data-test="balance-enabled"
             type="checkbox"
+            class="governance-checkbox"
           />{{ t('governance.enableBalanceMonitor') }}</label
         >
         <div class="grid gap-4 sm:grid-cols-3">

@@ -442,8 +442,8 @@ onUnmounted(() => {
                 probeAction === 'check' || probe.probe_enabled
               " /></label
           ><template v-if="probeAction === 'monitor'"
-            ><label class="flex gap-2"
-              ><input v-model="probe.probe_enabled" type="checkbox" />{{
+            ><label class="governance-checkbox-label flex items-center gap-2"
+              ><input v-model="probe.probe_enabled" type="checkbox" class="governance-checkbox" />{{
                 t('governance.enableMonitor')
               }}</label
             ><label class="block"

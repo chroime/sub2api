@@ -69,11 +69,12 @@ function checked(event: Event) {
             @input="emit('update:config', { ...config, priority: number($event) })"
           /></label>
         <div class="space-y-3 sm:col-span-2">
-          <label class="flex items-center gap-2 text-sm"
+          <label class="governance-checkbox-label flex items-center gap-2 text-sm"
             ><input
               :checked="config.upstream_billing_rate_sync_enabled"
               data-test="sync-billing"
               type="checkbox"
+              class="governance-checkbox"
               @change="
                 emit('update:config', {
                   ...config,
@@ -81,11 +82,12 @@ function checked(event: Event) {
                 })
               "
             />{{ t('governance.syncUpstreamBilling') }}</label
-          ><label class="flex items-center gap-2 text-sm"
+          ><label class="governance-checkbox-label flex items-center gap-2 text-sm"
             ><input
               :checked="config.openai_long_context_billing_enabled"
               data-test="long-context"
               type="checkbox"
+              class="governance-checkbox"
               @change="
                 emit('update:config', {
                   ...config,
@@ -99,11 +101,12 @@ function checked(event: Event) {
           </p>
         </div>
         <div class="sm:col-span-2">
-          <label class="flex items-center gap-2 text-sm font-medium"
+          <label class="governance-checkbox-label flex items-center gap-2 text-sm font-medium"
             ><input
               :checked="quotaEnabled"
               data-test="quota-enabled"
               type="checkbox"
+              class="governance-checkbox"
               @change="emit('update:quotaEnabled', checked($event))"
             />{{ t('governance.quotaControl') }}</label
           >

@@ -353,8 +353,8 @@ const catalogWarnings: Record<string, string> = {
             class="w-full text-sm sm:w-56"
             :disabled="working || disabled"
             allow-all
-          /><label class="flex items-center gap-2 text-xs text-gray-500"
-            ><input v-model="selectedOnly" type="checkbox" />{{
+          /><label class="governance-checkbox-label flex items-center gap-2 text-xs text-gray-500"
+            ><input v-model="selectedOnly" type="checkbox" class="governance-checkbox" />{{
               t('governance.onlySelected')
             }}</label
           >
@@ -362,12 +362,13 @@ const catalogWarnings: Record<string, string> = {
         <div
           class="flex flex-wrap items-center gap-3 rounded-xl bg-primary-50/70 px-4 py-3 dark:bg-primary-900/10"
         >
-          <label class="flex items-center gap-2 text-sm font-medium"
+          <label class="governance-checkbox-label flex items-center gap-2 text-sm font-medium"
             ><input
               id="governance-select-all"
               v-model="allSelected"
               data-test="select-all"
               type="checkbox"
+              class="governance-checkbox"
               :indeterminate="selected.length > 0 && !allSelected"
             />{{
               t('governance.selectAll', { count: visibleGroups.length })
@@ -443,12 +444,15 @@ const catalogWarnings: Record<string, string> = {
                   "
                 >
                   <td class="px-3 py-3">
-                    <input
-                      v-model="choices[remote.id]!.selected"
-                      data-test="select"
-                      type="checkbox"
-                      :aria-label="remote.name"
-                    />
+                    <label class="governance-checkbox-hitarea">
+                      <input
+                        v-model="choices[remote.id]!.selected"
+                        data-test="select"
+                        type="checkbox"
+                        class="governance-checkbox"
+                        :aria-label="remote.name"
+                      />
+                    </label>
                   </td>
                   <td class="px-3 py-3">
                     <span class="break-all font-medium">{{ remote.name }}</span>
