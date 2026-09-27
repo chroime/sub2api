@@ -12,7 +12,7 @@ import (
 func TestConnectorNamedKeysPreserveIdentityAndExcludeExistingNames(t *testing.T) {
 	for _, platform := range []string{"sub2api", "newapi"} {
 		t.Run(platform, func(t *testing.T) {
-			name := "codex特惠-20260927"
+			name := "codex特惠-0.06-20260927"
 			group := RemoteGroup{ID: "7", Name: "codex特惠"}
 			keys := []map[string]any{}
 			add := func(id int64, groupID string) {

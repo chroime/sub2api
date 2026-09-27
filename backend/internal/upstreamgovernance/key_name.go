@@ -1,6 +1,8 @@
 package upstreamgovernance
 
 import (
+	"math"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -20,14 +22,22 @@ func managedKeyName(group RemoteGroup, createdAt time.Time, platform string) str
 		}
 		return r
 	}, source))
-	suffix := "-" + createdAt.In(time.Local).Format("20060102")
+	rate := "未知"
+	if value := group.ResolvedRateMultiplier; value != nil && validCost(*value) {
+		rounded := math.Round(*value*10000) / 10000
+		if rounded == 0 {
+			rounded = 0 // Normalize a valid negative zero to the ordinary label 0.
+		}
+		rate = strconv.FormatFloat(rounded, 'f', -1, 64)
+	}
+	suffix := "-" + rate + "-" + createdAt.In(time.Local).Format("20060102")
 	// Native Sub2API has a 100-byte name validator. Keep a conservative
 	// 30-character budget for compatibility with older New API token forms.
 	maxRunes := 100
 	if platform == "newapi" {
 		maxRunes = 30
 	}
-	for len(name)+len(suffix) > 100 || utf8.RuneCountInString(name)+len(suffix) > maxRunes {
+	for len(name)+len(suffix) > 100 || utf8.RuneCountInString(name)+utf8.RuneCountInString(suffix) > maxRunes {
 		_, size := utf8.DecodeLastRuneInString(name)
 		name = name[:len(name)-size]
 	}

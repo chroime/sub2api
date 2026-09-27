@@ -84,7 +84,8 @@ func TestSQLManagedKeysPostgresIntegration(t *testing.T) {
 	require.NoError(t, store.SaveManagedKey(t.Context(), legacy), "legacy pending writes retain their original naming contract")
 	site := &gov.Site{Name: "Fixture", Platform: "sub2api", BaseURL: "https://upstream.example", Enabled: true, IntervalMinutes: 15, SessionCipher: sessionCipher, Status: "connected", NextSyncAt: time.Now()}
 	require.NoError(t, store.CreateSite(t.Context(), site))
-	snapshot := &gov.Snapshot{SiteID: site.ID, SiteVersion: site.Version, Catalog: gov.Catalog{Groups: []gov.RemoteGroup{{ID: "8", Name: "Visible", Platform: "openai"}, {ID: "9", Name: "Legacy", Platform: "openai"}}}}
+	rate := 0.06
+	snapshot := &gov.Snapshot{SiteID: site.ID, SiteVersion: site.Version, Catalog: gov.Catalog{Groups: []gov.RemoteGroup{{ID: "8", Name: "Visible", Platform: "openai", ResolvedRateMultiplier: &rate}, {ID: "9", Name: "Legacy", Platform: "openai"}}}}
 	require.NoError(t, store.SaveSnapshot(t.Context(), snapshot, nil))
 	posts := 0
 	remoteMarker := ""
@@ -109,7 +110,7 @@ func TestSQLManagedKeysPostgresIntegration(t *testing.T) {
 				}
 				require.NoError(t, json.NewDecoder(r.Body).Decode(&input))
 				require.Equal(t, int64(8), input.GroupID)
-				require.Regexp(t, `^Visible-[0-9]{8}$`, input.Name)
+				require.Regexp(t, `^Visible-0\.06-[0-9]{8}$`, input.Name)
 				require.Regexp(t, `^sub2api-governance-[a-f0-9]{24}$`, r.Header.Get("Idempotency-Key"))
 				require.NotEqual(t, input.Name, r.Header.Get("Idempotency-Key"), "display name must be independent of stable request identity")
 				remoteMarker = input.Name

@@ -42,14 +42,14 @@ func TestManagedKeyCreationFreezesNameAndInventoryAcrossDaysAndRename(t *testing
 	connector := &plannedKeyConnector{fakeConnector: fake}
 	connector.prepare = func(name string) ([]int64, error) {
 		require.Len(t, memory.keys, 1, "reserve ownership and name before listing remote keys")
-		require.Equal(t, "优选分组-20260927", name)
+		require.Equal(t, "优选分组-0.8-20260927", name)
 		require.Equal(t, name, memory.keys[0].CreationPlan.Name)
 		require.Nil(t, memory.keys[0].CreationPlan.ExistingIDs)
 		return []int64{3, 7}, nil
 	}
 	connector.ensure = func(stable string, plan *KeyCreationPlan) (RemoteKey, error) {
 		require.Equal(t, marker(1, "8", "openai"), stable)
-		require.Equal(t, &KeyCreationPlan{Name: "优选分组-20260927", ExistingIDs: []int64{3, 7}}, plan)
+		require.Equal(t, &KeyCreationPlan{Name: "优选分组-0.8-20260927", ExistingIDs: []int64{3, 7}}, plan)
 		require.Equal(t, plan, memory.keys[0].CreationPlan, "persist inventory before any creation")
 		if connector.keyCalls == 1 {
 			return RemoteKey{}, errConnectorUncertain
@@ -65,6 +65,8 @@ func TestManagedKeyCreationFreezesNameAndInventoryAcrossDaysAndRename(t *testing
 	require.Equal(t, "failed", first.Items[0].Status)
 	now = now.Add(48 * time.Hour)
 	fake.catalog.Groups[0].Name = "上游已改名"
+	newRate := 1.25
+	fake.catalog.Groups[0].ResolvedRateMultiplier = &newRate
 	snapshot, err = s.Sync(t.Context(), 1)
 	require.NoError(t, err)
 	request.SnapshotID = snapshot.ID
