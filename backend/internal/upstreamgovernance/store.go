@@ -352,7 +352,7 @@ func (s *sqlStore) SavePreviewResult(ctx context.Context, site int64, id string,
 	return affected(r, e, ErrNotFound)
 }
 func (s *sqlStore) ListBindings(ctx context.Context, site int64) ([]Binding, error) {
-	rows, e := s.db.QueryContext(ctx, `SELECT id,site_id,remote_group_id,platform,local_group_id,account_id,marker,key_cipher,probe_enabled,probe_model,probe_interval_minutes,next_probe_at FROM upstream_governance_bindings WHERE site_id=$1 ORDER BY id LIMIT 1000`, site)
+	rows, e := s.db.QueryContext(ctx, `SELECT id,site_id,remote_group_id,platform,local_group_id,account_id,marker,key_cipher,probe_enabled,probe_model,probe_interval_minutes,next_probe_at,COALESCE(local_group_ids,jsonb_build_array(local_group_id)) FROM upstream_governance_bindings WHERE site_id=$1 ORDER BY id LIMIT 1000`, site)
 	if e != nil {
 		return nil, e
 	}
@@ -360,7 +360,11 @@ func (s *sqlStore) ListBindings(ctx context.Context, site int64) ([]Binding, err
 	out := []Binding{}
 	for rows.Next() {
 		var v Binding
-		if e = rows.Scan(&v.ID, &v.SiteID, &v.RemoteGroupID, &v.Platform, &v.LocalGroupID, &v.AccountID, &v.Marker, &v.KeyCipher, &v.ProbeEnabled, &v.ProbeModel, &v.ProbeIntervalMinutes, &v.NextProbeAt); e != nil {
+		var groupIDs []byte
+		if e = rows.Scan(&v.ID, &v.SiteID, &v.RemoteGroupID, &v.Platform, &v.LocalGroupID, &v.AccountID, &v.Marker, &v.KeyCipher, &v.ProbeEnabled, &v.ProbeModel, &v.ProbeIntervalMinutes, &v.NextProbeAt, &groupIDs); e != nil {
+			return nil, e
+		}
+		if e = json.Unmarshal(groupIDs, &v.LocalGroupIDs); e != nil {
 			return nil, e
 		}
 		out = append(out, v)
@@ -368,7 +372,13 @@ func (s *sqlStore) ListBindings(ctx context.Context, site int64) ([]Binding, err
 	return out, rows.Err()
 }
 func (s *sqlStore) SaveBinding(ctx context.Context, v *Binding) error {
-	e := s.db.QueryRowContext(ctx, `INSERT INTO upstream_governance_bindings (site_id,remote_group_id,platform,local_group_id,account_id,marker,key_cipher,probe_enabled,probe_model,probe_interval_minutes,next_probe_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT (site_id, remote_group_id, platform) DO UPDATE SET local_group_id=EXCLUDED.local_group_id,account_id=EXCLUDED.account_id,key_cipher=EXCLUDED.key_cipher,probe_enabled=EXCLUDED.probe_enabled,probe_model=EXCLUDED.probe_model,probe_interval_minutes=EXCLUDED.probe_interval_minutes,next_probe_at=EXCLUDED.next_probe_at WHERE upstream_governance_bindings.marker=EXCLUDED.marker RETURNING id`, v.SiteID, v.RemoteGroupID, v.Platform, v.LocalGroupID, v.AccountID, v.Marker, v.KeyCipher, v.ProbeEnabled, v.ProbeModel, v.ProbeIntervalMinutes, v.NextProbeAt).Scan(&v.ID)
+	ids, e := NormalizeLocalGroupIDs(v.LocalGroupIDs, v.LocalGroupID)
+	if e != nil {
+		return e
+	}
+	v.LocalGroupIDs, v.LocalGroupID = ids, ids[0]
+	raw, _ := json.Marshal(ids)
+	e = s.db.QueryRowContext(ctx, `INSERT INTO upstream_governance_bindings (site_id,remote_group_id,platform,local_group_id,account_id,marker,key_cipher,probe_enabled,probe_model,probe_interval_minutes,next_probe_at,local_group_ids) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb) ON CONFLICT (site_id, remote_group_id, platform) DO UPDATE SET local_group_id=EXCLUDED.local_group_id,local_group_ids=EXCLUDED.local_group_ids,account_id=EXCLUDED.account_id,key_cipher=EXCLUDED.key_cipher,probe_enabled=EXCLUDED.probe_enabled,probe_model=EXCLUDED.probe_model,probe_interval_minutes=EXCLUDED.probe_interval_minutes,next_probe_at=EXCLUDED.next_probe_at WHERE upstream_governance_bindings.marker=EXCLUDED.marker RETURNING id`, v.SiteID, v.RemoteGroupID, v.Platform, v.LocalGroupID, v.AccountID, v.Marker, v.KeyCipher, v.ProbeEnabled, v.ProbeModel, v.ProbeIntervalMinutes, v.NextProbeAt, string(raw)).Scan(&v.ID)
 	if errors.Is(e, sql.ErrNoRows) {
 		return ErrConflict
 	}

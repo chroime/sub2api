@@ -17,10 +17,13 @@ import TargetGroupSelect from './TargetGroupSelect.vue'
 import { initialTransport, transportUnavailable } from './providers'
 import PriceDetails from './PriceDetails.vue'
 import Icon from '@/components/icons/Icon.vue'
+import PlatformIcon from '@/components/common/PlatformIcon.vue'
+import type { GroupPlatform } from '@/types'
 import api, {
   type Snapshot,
   type Selection,
   type Preview,
+  type PreviewRow,
   type ApplyResult,
   type Transport,
   type SiteInput,
@@ -44,9 +47,10 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ applied: []; busy: [value: boolean] }>()
 const { t } = useI18n()
-type GroupChoice = Omit<Selection, 'platform'> & {
+type GroupChoice = Omit<Selection, 'platform' | 'local_group_id' | 'local_group_ids'> & {
   selected: boolean
   platform: Transport | ''
+  local_group_ids: number[]
 }
 const choices = ref<Record<string, GroupChoice>>({})
 const preview = ref<Preview | null>(null)
@@ -57,7 +61,7 @@ const busy = ref(false),
 const query = ref(''),
   platformFilter = ref<Transport | ''>(''),
   selectedOnly = ref(false)
-const bulkTarget = ref(0),
+const bulkTarget = ref<number[]>([]),
   bulkMessage = ref(''),
   expandedGroup = ref('')
 const config = ref(defaultImportConfig()),
@@ -84,7 +88,7 @@ watch(
           selected: false,
           remote_group_id: group.id,
           platform: initialTransport(group.id, group.platform, props.bindings, props.managedKeys, props.sitePlatform),
-          local_group_id: 0,
+          local_group_ids: [],
           account_name: defaultAccountName(
             props.siteBaseUrl,
             group.resolved_rate_multiplier ?? 1,
@@ -95,7 +99,7 @@ watch(
     )
     preview.value = null
     result.value = null
-    bulkTarget.value = 0
+    bulkTarget.value = []
     bulkMessage.value = ''
     error.value = ''
     query.value = ''
@@ -149,11 +153,11 @@ const unresolved = computed(() =>
     (choice) =>
       !choice.platform ||
       !!transportUnavailable(choice.platform, props.sitePlatform, props.snapshot.catalog.groups.find(group => group.id === choice.remote_group_id)?.platform) ||
-      !props.groups.some(
-        (group) =>
-          group.id === choice.local_group_id &&
-          (group.platform === choice.platform ||
-            group.platform === 'composite'),
+      !choice.local_group_ids.length ||
+      choice.local_group_ids.length > 100 ||
+      !choice.local_group_ids.every(id =>
+        props.groups.some(group => group.id === id &&
+          (group.platform === choice.platform || group.platform === 'composite')),
       ),
   ),
 )
@@ -166,24 +170,20 @@ const emptyWhitelist = computed(() =>
   ),
 )
 function assignTarget() {
-  const group = props.groups.find((item) => item.id === bulkTarget.value)
-  if (!group) return
+  if (!bulkTarget.value.length || working.value || props.disabled) return
+  const groups = props.groups.filter(group => bulkTarget.value.includes(group.id))
   let skipped = 0
   for (const choice of selected.value) {
-    if (
-      choice.platform &&
-      (group.platform === 'composite' || group.platform === choice.platform)
-    )
-      choice.local_group_id = group.id
-    else {
-      choice.local_group_id = 0
-      skipped++
-    }
+    choice.local_group_ids = groups.filter(group => choice.platform &&
+      (group.platform === 'composite' || group.platform === choice.platform)).map(group => group.id)
+    skipped += bulkTarget.value.length - choice.local_group_ids.length
   }
-  bulkMessage.value = skipped
-    ? t('governance.bulkUnresolved', { count: skipped })
-    : t('governance.bulkAssigned', { count: selected.value.length })
+  bulkMessage.value = [
+    skipped ? t('governance.bulkSkippedTargets', { count: skipped }) : t('governance.bulkAssigned', { count: selected.value.length }),
+    unresolved.value.length ? t('governance.bulkUnresolved', { count: unresolved.value.length }) : '',
+  ].filter(Boolean).join(' ')
 }
+const previewTargets = (row: PreviewRow) => row.targets?.length ? row.targets : [row.target]
 function changeRate(choice: GroupChoice, event: Event) {
   const previous = defaultAccountName(props.siteBaseUrl, choice.cost_multiplier)
   choice.cost_multiplier = Number((event.target as HTMLInputElement).value)
@@ -393,7 +393,7 @@ const catalogWarnings: Record<string, string> = {
             data-test="assign-target"
             type="button"
             class="btn btn-secondary text-sm"
-            :disabled="!bulkTarget || !selected.length"
+            :disabled="!bulkTarget.length || !selected.length"
             @click="assignTarget"
           >
             {{ t('governance.assignSelected') }}
@@ -401,7 +401,7 @@ const catalogWarnings: Record<string, string> = {
         </div>
         <p
           class="text-xs text-gray-500"
-        >{{ t('governance.targetGroupHint') }}</p>
+        >{{ t('governance.multipleTargetsHint') }} {{ t('governance.targetGroupHint') }}</p>
         <p
           v-if="bulkMessage"
           role="status"
@@ -487,13 +487,13 @@ const catalogWarnings: Record<string, string> = {
                       :remote-platform="remote.platform"
                       :disabled="working || disabled"
                       @update:model-value="
-                        choices[remote.id]!.local_group_id = 0
+                        choices[remote.id]!.local_group_ids = []
                       "
                     />
                   </td>
                   <td class="px-3 py-3">
                     <TargetGroupSelect
-                      v-model="choices[remote.id]!.local_group_id"
+                      v-model="choices[remote.id]!.local_group_ids"
                       data-test="target"
                       class="w-full text-sm"
                       :groups="groups"
@@ -662,11 +662,19 @@ const catalogWarnings: Record<string, string> = {
         class="space-y-2 rounded-lg bg-gray-50 p-4 text-sm dark:bg-dark-900"
       >
         <h5 class="font-semibold">
-          {{ row.remote_group.name }} → {{ row.target.name }}
+          {{ row.remote_group.name }}
           <span class="text-xs font-normal text-gray-500">{{
             row.selection.platform
           }}</span>
         </h5>
+        <div data-test="preview-targets" class="flex flex-wrap items-center gap-2">
+          <span class="text-xs text-gray-500">{{ t('governance.localGroup') }}</span>
+          <span v-for="target in previewTargets(row)" :key="target.id" class="inline-flex max-w-full items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs dark:border-dark-600 dark:bg-dark-800">
+            <PlatformIcon :platform="target.platform as GroupPlatform" size="sm" />
+            <span class="break-all">{{ target.name }}</span>
+            <span class="shrink-0 text-gray-500">{{ t('governance.saleRate') }} {{ target.sale_multiplier }}×</span>
+          </span>
+        </div>
         <p class="text-xs text-gray-500">
           {{ t('governance.before') }}:
           {{
@@ -680,13 +688,15 @@ const catalogWarnings: Record<string, string> = {
           {{ row.selection.cost_multiplier }}×
         </p>
         <p class="text-xs text-gray-500">
-          {{ t('governance.saleRate') }} {{ row.target.sale_multiplier }}× ·
           {{ t('governance.resolvedRate') }}
           {{ value(row.remote_group.resolved_rate_multiplier) }}×
         </p>
         <p v-if="row.selection.account_config" class="text-xs text-gray-500">
           {{ t('governance.concurrency') }}
           {{ row.selection.account_config.concurrency }} ·
+          <template v-if="row.selection.account_config.priority != null">
+            {{ t('governance.accountPriority') }} {{ row.selection.account_config.priority }} ·
+          </template>
           {{ t('governance.dailyQuota') }}
           {{ row.selection.account_config.quota_daily_limit }} ·
           {{ t('governance.weeklyQuota') }}

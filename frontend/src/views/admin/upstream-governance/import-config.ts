@@ -7,6 +7,7 @@ export const defaultModelSelections = (): ModelSelections => Object.fromEntries<
 export const defaultAccountName = (baseURL: string, rate: number) => `${baseURL}--${Math.round(rate * 10000) / 10000}`
 export const defaultImportConfig = (): ImportAccountConfig => ({
   concurrency: 5000,
+  priority: 1,
   model_mapping: {},
   upstream_billing_rate_sync_enabled: true,
   quota_daily_limit: 10000,

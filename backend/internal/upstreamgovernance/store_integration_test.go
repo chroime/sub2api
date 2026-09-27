@@ -74,6 +74,11 @@ func TestSQLStorePostgresIntegration(t *testing.T) {
 		t.Fatal(e)
 	}
 	mustExec(string(loginMigration))
+	multiGroupMigration, e := os.ReadFile("../../migrations/252_upstream_governance_multiple_target_groups.sql")
+	if e != nil {
+		t.Fatal(e)
+	}
+	mustExec(string(multiGroupMigration))
 	ctx := context.Background()
 	s := NewSQLStore(fixture)
 	now := time.Now().UTC().Truncate(time.Microsecond)

@@ -235,6 +235,9 @@ func (r *accountRepository) CreateWithAccountGroups(ctx context.Context, account
 	if err := lockLiveGroups(ctx, txClient, groupIDs); err != nil {
 		return err
 	}
+	if err := checkGovernanceTargets(ctx, txClient); err != nil {
+		return err
+	}
 
 	if err := createAccountRecord(ctx, txClient, account); err != nil {
 		return err
@@ -495,6 +498,9 @@ func (r *accountRepository) updateAccount(
 		if err := checkGovernanceAccountCAS(ctx, client, account.ID, expectedGovernanceFingerprint); err != nil {
 			return err
 		}
+		if err := checkGovernanceTargets(ctx, client); err != nil {
+			return err
+		}
 		// Preserve unrelated configuration and runtime fields from the locked row,
 		// not the earlier AdminService read. Only confirmed import fields change.
 		fresh, err := client.Account.Get(ctx, account.ID)
@@ -507,6 +513,7 @@ func (r *accountRepository) updateAccount(
 		}
 		current.Name, current.Credentials, current.ProxyID = account.Name, account.Credentials, account.ProxyID
 		current.Notes, current.Concurrency = account.Notes, account.Concurrency
+		current.Priority = account.Priority
 		current.RateMultiplier = account.RateMultiplier
 		current.GroupIDs = append([]int64(nil), account.GroupIDs...)
 		if current.Extra == nil {

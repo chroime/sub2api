@@ -1,5 +1,5 @@
-import { mount, flushPromises } from '@vue/test-utils'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { mount, flushPromises, enableAutoUnmount } from '@vue/test-utils'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import ImportPanel from './ImportPanel.vue'
 import api from '@/api/admin/upstream-governance'
 import SiteOverview from './SiteOverview.vue'
@@ -11,12 +11,13 @@ vi.mock('./TransportSelect.vue', () => ({ default: {
 } }))
 vi.mock('./TargetGroupSelect.vue', () => ({ default: {
   props: ['modelValue', 'disabled', 'groups'], emits: ['update:modelValue'],
-  template: `<select :value="modelValue" :disabled="disabled" @change="$emit('update:modelValue', Number($event.target.value))"><option :value="0"></option><option v-for="group in groups" :value="group.id">{{ group.name }}</option></select>`,
+  template: `<select multiple :disabled="disabled" @change="$emit('update:modelValue', Array.from($event.target.selectedOptions, option => Number(option.value)))"><option v-for="group in groups" :value="group.id" :selected="modelValue.includes(group.id)">{{ group.name }}</option></select>`,
 } }))
 vi.mock('@/api/admin/upstream-governance', () => ({
   default: { preview: vi.fn(), apply: vi.fn(), keys: vi.fn().mockResolvedValue([]), createKeys: vi.fn(), revealKey: vi.fn(), modelTemplates: vi.fn().mockResolvedValue({ version: 0, templates: [] }) },
 }))
 vi.mock('vue-i18n', async (importOriginal) => ({ ...await importOriginal<typeof import('vue-i18n')>(), useI18n: () => ({ t: (key: string) => key }) }))
+enableAutoUnmount(afterEach)
 const props = {
   siteId: 1,
   siteBaseUrl: 'https://fixture.example',
@@ -47,7 +48,143 @@ const props = {
   },
 }
 describe('import confirmation', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(api.preview).mockResolvedValue({ id: 'p', site_id: 1, site_version: 1, snapshot_id: 1, created_at: '2026-09-26T15:08:02Z', expires_at: '2099-01-01', rows: [] })
+    vi.mocked(api.apply).mockResolvedValue({ preview_id: 'p', items: [] })
+  })
+  it('submits one selection for multiple destinations with priority 1 and renders every frozen target rate', async () => {
+    const targets = [
+      { id: 3, name: 'Frozen OpenAI destination', platform: 'openai', sale_multiplier: 2.25 },
+      { id: 9, name: 'Frozen composite destination', platform: 'composite', sale_multiplier: 0 },
+    ]
+    vi.mocked(api.preview).mockResolvedValue({
+      id: 'multiple-targets', site_id: 1, site_version: 1, snapshot_id: 1, created_at: '2026-09-26T15:08:02Z', expires_at: '2099-01-01',
+      rows: [{
+        selection: { remote_group_id: 'r', platform: 'openai', local_group_ids: [3, 9], account_name: 'https://fixture.example--1', cost_multiplier: 1, account_config: { ...defaultImportConfig(), priority: 1 } },
+        remote_group: props.snapshot.catalog.groups[0]!, target: targets[0]!, targets, existing: null, will_create_key: true, marker: 'one-account',
+      }],
+    })
+    const wrapper = mount(ImportPanel, { props: { ...props, groups: [
+      ...props.groups,
+      { id: 9, name: 'Current composite destination', platform: 'composite', rate_multiplier: 4 },
+    ] } })
+    await flushPromises()
+    expect((wrapper.get('[data-test=priority]').element as HTMLInputElement).value).toBe('1')
+    await wrapper.get('[data-test=select]').setValue(true)
+    await wrapper.get('[data-test=target]').setValue(['3', '9'])
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    expect(api.preview).toHaveBeenCalledTimes(1)
+    const selections = vi.mocked(api.preview).mock.calls[0]![1].selections
+    expect(selections).toHaveLength(1)
+    expect(selections[0]).toMatchObject({ remote_group_id: 'r', local_group_ids: [3, 9], account_config: { priority: 1 } })
+    expect(selections[0]).not.toHaveProperty('local_group_id')
+    const frozenTargets = wrapper.get('[data-test=preview-targets]').findAll('span.inline-flex')
+    expect(frozenTargets.map(target => ({ name: target.get('.break-all').text(), rate: target.get('span.shrink-0').text() }))).toEqual([
+      { name: 'Frozen OpenAI destination', rate: 'governance.saleRate 2.25×' },
+      { name: 'Frozen composite destination', rate: 'governance.saleRate 0×' },
+    ])
+    expect(wrapper.findAll('article')).toHaveLength(1)
+    expect(wrapper.get('article').text()).toContain('governance.accountPriority 1')
+    expect(api.createKeys).not.toHaveBeenCalled()
+    expect(api.apply).not.toHaveBeenCalled()
+  })
+  it.each([0, 7])('preserves explicitly configured account priority %i in the preview request', async priority => {
+    const wrapper = mount(ImportPanel, { props })
+    await flushPromises()
+    const input = wrapper.get('[data-test=priority]')
+    expect(input.attributes()).toMatchObject({ min: '0', step: '1' })
+    await input.setValue(priority)
+    await wrapper.get('[data-test=select]').setValue(true)
+    await wrapper.get('[data-test=target]').setValue(['3'])
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(api.preview).toHaveBeenCalledWith(1, { selections: [expect.objectContaining({ account_config: expect.objectContaining({ priority }) })] })
+  })
+  it('clears all destinations when changing a row protocol and requires a new compatible mapping', async () => {
+    const wrapper = mount(ImportPanel, { props: { ...props,
+      snapshot: { ...props.snapshot, catalog: { ...props.snapshot.catalog, groups: [{ ...props.snapshot.catalog.groups[0]!, platform: 'unknown' }] } },
+      groups: [
+        ...props.groups,
+        { id: 4, name: 'Anthropic destination', platform: 'anthropic', rate_multiplier: 1.5 },
+        { id: 9, name: 'Shared destination', platform: 'composite', rate_multiplier: 1 },
+      ],
+    } })
+    await flushPromises()
+    await wrapper.get('[data-test=select]').setValue(true)
+    await wrapper.get('[data-test=platform]').setValue('openai')
+    await flushPromises()
+    await wrapper.get('[data-test=target]').setValue(['3', '9'])
+    expect(wrapper.get('[data-test=preview]').attributes('disabled')).toBeUndefined()
+    await wrapper.get('[data-test=platform]').setValue('anthropic')
+    await flushPromises()
+    expect((wrapper.get('[data-test=target]').element as HTMLSelectElement).selectedOptions).toHaveLength(0)
+    expect(wrapper.get('[data-test=preview]').attributes('disabled')).toBeDefined()
+    await wrapper.get('form').trigger('submit')
+    expect(api.preview).not.toHaveBeenCalled()
+    await wrapper.get('[data-test=target]').setValue(['4', '9'])
+    await wrapper.get('form').trigger('submit')
+    expect(api.preview).toHaveBeenCalledWith(1, { selections: [expect.objectContaining({ platform: 'anthropic', local_group_ids: [4, 9] })] })
+  })
+  it('assigns compatible subsets of mixed bulk targets without dropping selected upstream rows', async () => {
+    const remote = props.snapshot.catalog.groups[0]!
+    const wrapper = mount(ImportPanel, { props: { ...props,
+      groups: [
+        ...props.groups,
+        { id: 4, name: 'Anthropic destination', platform: 'anthropic', rate_multiplier: 1.5 },
+        { id: 9, name: 'Shared destination', platform: 'composite', rate_multiplier: 1 },
+      ],
+      snapshot: { ...props.snapshot, catalog: { ...props.snapshot.catalog, groups: [remote, { ...remote, id: 'a', name: 'Anthropic upstream', platform: 'anthropic' }] } },
+    } })
+    await flushPromises()
+    await wrapper.get('[data-test=select-all]').setValue(true)
+    await wrapper.get('[data-test=bulk-target]').setValue(['3', '4', '9'])
+    await wrapper.get('[data-test=assign-target]').trigger('click')
+    expect(wrapper.findAll('[data-test=select]').every(input => (input.element as HTMLInputElement).checked)).toBe(true)
+    expect(wrapper.findAll('[data-test=target]').map(input => Array.from((input.element as HTMLSelectElement).selectedOptions, option => Number(option.value)))).toEqual([[3, 9], [4, 9]])
+    expect(wrapper.text()).toContain('governance.bulkSkippedTargets')
+    expect(wrapper.text()).not.toContain('governance.bulkUnresolved')
+    expect(wrapper.get('[data-test=preview]').attributes('disabled')).toBeUndefined()
+    await wrapper.get('form').trigger('submit')
+    expect(api.preview).toHaveBeenCalledTimes(1)
+    expect(api.preview).toHaveBeenCalledWith(1, { selections: [
+      expect.objectContaining({ remote_group_id: 'r', platform: 'openai', local_group_ids: [3, 9] }),
+      expect.objectContaining({ remote_group_id: 'a', platform: 'anthropic', local_group_ids: [4, 9] }),
+    ] })
+  })
+  it.each(['removed', 'incompatible'] as const)('blocks preview when one of several chosen groups becomes %s', async change => {
+    const shared = { id: 9, name: 'Shared destination', platform: 'composite', rate_multiplier: 1 }
+    const wrapper = mount(ImportPanel, { props: { ...props, groups: [...props.groups, shared] } })
+    await flushPromises()
+    await wrapper.get('[data-test=select]').setValue(true)
+    await wrapper.get('[data-test=target]').setValue(['3', '9'])
+    expect(wrapper.get('[data-test=preview]').attributes('disabled')).toBeUndefined()
+    await wrapper.setProps({ groups: change === 'removed' ? props.groups : [...props.groups, { ...shared, platform: 'anthropic' }] })
+    expect(wrapper.get('[data-test=preview]').attributes('disabled')).toBeDefined()
+    await wrapper.get('form').trigger('submit')
+    expect(api.preview).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('governance.mappingIncomplete')
+    expect((wrapper.get('[data-test=select]').element as HTMLInputElement).checked).toBe(true)
+  })
+  it('blocks more than 100 destinations and accepts 100 as one selection', async () => {
+    const groups = Array.from({ length: 101 }, (_, index) => ({ id: index + 1, name: `Destination ${index + 1}`, platform: 'openai', rate_multiplier: 1 }))
+    const wrapper = mount(ImportPanel, { props: { ...props, groups } })
+    await flushPromises()
+    await wrapper.get('[data-test=select]').setValue(true)
+    await wrapper.get('[data-test=target]').setValue(groups.map(group => String(group.id)))
+    expect(wrapper.get('[data-test=preview]').attributes('disabled')).toBeDefined()
+    await wrapper.get('form').trigger('submit')
+    expect(api.preview).not.toHaveBeenCalled()
+    await wrapper.get('[data-test=target]').setValue(groups.slice(0, 100).map(group => String(group.id)))
+    expect(wrapper.get('[data-test=preview]').attributes('disabled')).toBeUndefined()
+    await wrapper.get('form').trigger('submit')
+    expect(api.preview).toHaveBeenCalledTimes(1)
+    const selections = vi.mocked(api.preview).mock.calls[0]![1].selections
+    expect(selections).toHaveLength(1)
+    expect(selections[0]!.local_group_ids).toEqual(groups.slice(0, 100).map(group => group.id))
+  })
   it('reloads model defaults and permits preview after a new snapshot of the same site', async () => {
     vi.mocked(api.preview).mockResolvedValue({ id: 'next-snapshot', site_id: 1, site_version: 1, snapshot_id: 2, created_at: '2026-09-26T15:08:02Z', expires_at: '2099-01-01', rows: [] })
     const wrapper = mount(ImportPanel, { props })
@@ -56,7 +193,7 @@ describe('import confirmation', () => {
     await flushPromises()
     expect(api.modelTemplates).toHaveBeenCalledTimes(2)
     await wrapper.get('[data-test=select]').setValue(true)
-    await wrapper.get('[data-test=target]').setValue(3)
+    await wrapper.get('[data-test=target]').setValue(['3'])
     expect(wrapper.get('[data-test=preview]').attributes('disabled')).toBeUndefined()
     await wrapper.get('form').trigger('submit')
     await flushPromises()
@@ -70,17 +207,17 @@ describe('import confirmation', () => {
     await flushPromises()
     await wrapper.get('[data-test=select]').setValue(true)
     await wrapper.get('[data-test=platform]').setValue('openai')
-    await wrapper.get('[data-test=target]').setValue(3)
+    await wrapper.get('[data-test=target]').setValue(['3'])
     await wrapper.get('form').trigger('submit')
     await flushPromises()
-    expect(api.preview).toHaveBeenCalledWith(1, { selections: [{ remote_group_id: 'r', platform: 'openai', local_group_id: 3, account_name: 'https://fixture.example--1', cost_multiplier: 1, account_config: { ...defaultImportConfig(), model_mapping: { 'newapi-private-model': 'newapi-private-model' } } }] })
+    expect(api.preview).toHaveBeenCalledWith(1, { selections: [{ remote_group_id: 'r', platform: 'openai', local_group_ids: [3], account_name: 'https://fixture.example--1', cost_multiplier: 1, account_config: { ...defaultImportConfig(), model_mapping: { 'newapi-private-model': 'newapi-private-model' } } }] })
     wrapper.unmount()
   })
   it('prevents an empty enabled whitelist from silently turning into unrestricted models', async () => {
     const wrapper = mount(ImportPanel, { props })
     await flushPromises()
     await wrapper.get('[data-test=select]').setValue(true)
-    await wrapper.get('[data-test=target]').setValue(3)
+    await wrapper.get('[data-test=target]').setValue(['3'])
     await wrapper.get('[data-test=clear-models]').trigger('click')
     expect(wrapper.get('[data-test=preview]').attributes('disabled')).toBeDefined()
     await wrapper.get('form').trigger('submit')
@@ -99,7 +236,7 @@ describe('import confirmation', () => {
     vi.mocked(api.preview).mockResolvedValue({ id: 'priced', site_id: 1, site_version: 1, snapshot_id: 1, created_at: 'now', expires_at: '2099-01-01', rows: [{ selection: { remote_group_id: 'r', platform: 'openai', local_group_id: 3, account_name: 'Remote', cost_multiplier: 1 }, remote_group: remote, target: { id: 3, name: 'Local', platform: 'openai', sale_multiplier: 2 }, existing: null, will_create_key: true, marker: 'priced' }] })
     const wrapper = mount(ImportPanel, { props: { ...props, snapshot: { ...props.snapshot, catalog: { ...props.snapshot.catalog, groups: [remote] } } } })
     await wrapper.get('[data-test=select]').setValue(true)
-    await wrapper.get('[data-test=target]').setValue(3)
+    await wrapper.get('[data-test=target]').setValue(['3'])
     await wrapper.get('form').trigger('submit')
     await flushPromises()
     const prices = wrapper.get('[data-test=preview-prices]')
@@ -108,15 +245,19 @@ describe('import confirmation', () => {
     expect(prices.get('[data-test=price-input]').text()).toBe('2')
     expect(prices.get('[data-test=price-output]').text()).toBe('0')
     expect(prices.text()).toContain('time_pricing')
+    expect(wrapper.get('[data-test=preview-targets]').text()).toContain('Local')
+    expect(wrapper.get('[data-test=preview-targets]').text()).toContain('governance.saleRate 2×')
     expect(api.apply).not.toHaveBeenCalled()
   })
   it('does not silently drop incompatible selected groups from a bulk mapping or preview request', async () => {
     const remote = props.snapshot.catalog.groups[0]!
     const wrapper = mount(ImportPanel, { props: { ...props, snapshot: { ...props.snapshot, catalog: { ...props.snapshot.catalog, groups: [remote, { ...remote, id: 'a', platform: 'anthropic' }] } } } })
     await wrapper.get('[data-test=select-all]').setValue(true)
-    await wrapper.get('[data-test=bulk-target]').setValue(3)
+    await wrapper.get('[data-test=bulk-target]').setValue(['3'])
     await wrapper.get('[data-test=assign-target]').trigger('click')
     expect(wrapper.findAll('[data-test=select]').every(input => (input.element as HTMLInputElement).checked)).toBe(true)
+    expect(wrapper.text()).toContain('governance.bulkSkippedTargets')
+    expect(wrapper.text()).toContain('governance.bulkUnresolved')
     expect(wrapper.get('[data-test=preview]').attributes('disabled')).toBeDefined()
     await wrapper.get('form').trigger('submit')
     expect(api.preview).not.toHaveBeenCalled()
@@ -136,18 +277,18 @@ describe('import confirmation', () => {
     await wrapper.get('[data-test=select-all]').setValue(true)
     expect(wrapper.findAll('[data-test=select]').every(input => (input.element as HTMLInputElement).checked)).toBe(true)
     expect(wrapper.findAll('[data-test=platform]').map(input => (input.element as HTMLSelectElement).value)).toEqual(['openai', 'grok', ''])
-    await wrapper.get('[data-test=bulk-target]').setValue(9)
+    await wrapper.get('[data-test=bulk-target]').setValue(['9'])
     await wrapper.get('[data-test=assign-target]').trigger('click')
-    expect(wrapper.findAll('[data-test=target]').map(input => (input.element as HTMLSelectElement).value)).toEqual(['9', '9', '0'])
+    expect(wrapper.findAll('[data-test=target]').map(input => Array.from((input.element as HTMLSelectElement).selectedOptions, option => Number(option.value)))).toEqual([[9], [9], []])
     expect(wrapper.get('[data-test=preview]').attributes('disabled')).toBeDefined()
     await wrapper.findAll('[data-test=platform]')[2]!.setValue('anthropic')
     await wrapper.get('[data-test=assign-target]').trigger('click')
     expect(wrapper.get('[data-test=preview]').attributes('disabled')).toBeUndefined()
     await wrapper.get('form').trigger('submit')
     expect(api.preview).toHaveBeenCalledWith(1, { selections: [
-      { remote_group_id: 'r', platform: 'openai', local_group_id: 9, account_name: 'https://fixture.example--1', cost_multiplier: 1, account_config: { ...defaultImportConfig(), model_mapping: { 'fixture-model': 'fixture-model' } } },
-      { remote_group_id: 'grok', platform: 'grok', local_group_id: 9, account_name: 'https://fixture.example--1', cost_multiplier: 1, account_config: { ...defaultImportConfig(), model_mapping: { 'fixture-model': 'fixture-model' }, openai_long_context_billing_enabled: false } },
-      { remote_group_id: 'mixed', platform: 'anthropic', local_group_id: 9, account_name: 'https://fixture.example--1', cost_multiplier: 1, account_config: { ...defaultImportConfig(), model_mapping: { 'fixture-model': 'fixture-model' }, openai_long_context_billing_enabled: false } },
+      { remote_group_id: 'r', platform: 'openai', local_group_ids: [9], account_name: 'https://fixture.example--1', cost_multiplier: 1, account_config: { ...defaultImportConfig(), model_mapping: { 'fixture-model': 'fixture-model' } } },
+      { remote_group_id: 'grok', platform: 'grok', local_group_ids: [9], account_name: 'https://fixture.example--1', cost_multiplier: 1, account_config: { ...defaultImportConfig(), model_mapping: { 'fixture-model': 'fixture-model' }, openai_long_context_billing_enabled: false } },
+      { remote_group_id: 'mixed', platform: 'anthropic', local_group_ids: [9], account_name: 'https://fixture.example--1', cost_multiplier: 1, account_config: { ...defaultImportConfig(), model_mapping: { 'fixture-model': 'fixture-model' }, openai_long_context_billing_enabled: false } },
     ] })
   })
   it('preserves zero account balances and unknown amounts in original units', () => {
@@ -168,10 +309,10 @@ describe('import confirmation', () => {
     await flushPromises()
     await wrapper.get('[data-test=select-all]').setValue(true)
     expect(wrapper.findAll('[data-test=platform]').map(input => (input.element as HTMLSelectElement).value)).toEqual(transportPlatforms)
-    for (const [index, target] of wrapper.findAll('[data-test=target]').entries()) await target.setValue(index + 10)
+    for (const [index, target] of wrapper.findAll('[data-test=target]').entries()) await target.setValue([String(index + 10)])
     await wrapper.get('form').trigger('submit')
     expect(api.preview).toHaveBeenCalledWith(1, { selections: transportPlatforms.map((platform, index) => expect.objectContaining({
-      remote_group_id: platform, platform, local_group_id: index + 10,
+      remote_group_id: platform, platform, local_group_ids: [index + 10],
       account_config: expect.objectContaining({ model_mapping: { [platform + '-model']: platform + '-model' } }),
     })) })
     wrapper.unmount()
@@ -219,7 +360,7 @@ describe('import confirmation', () => {
     const wrapper = mount(ImportPanel, { props })
     await wrapper.get('[data-test=select]').setValue(true)
     await wrapper.get('[data-test=platform]').setValue('openai')
-    await wrapper.get('[data-test=target]').setValue(3)
+    await wrapper.get('[data-test=target]').setValue(['3'])
     await wrapper.get('form').trigger('submit')
     await flushPromises()
     expect(api.preview).toHaveBeenCalled()
@@ -234,7 +375,7 @@ describe('import confirmation', () => {
     const wrapper = mount(ImportPanel, { props })
     await wrapper.get('[data-test=select]').setValue(true)
     await wrapper.get('[data-test=platform]').setValue('openai')
-    await wrapper.get('[data-test=target]').setValue(3)
+    await wrapper.get('[data-test=target]').setValue(['3'])
     await wrapper.get('form').trigger('submit')
     await flushPromises()
     await wrapper.get('[data-test=apply]').trigger('click')

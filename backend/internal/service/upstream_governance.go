@@ -43,12 +43,18 @@ func (l *governanceLocalAccounts) Target(ctx context.Context, id int64, platform
 	if g == nil || g.Status != StatusActive || (g.Platform != platform && g.Platform != "composite") {
 		return gov.LocalTarget{}, gov.ErrInvalid
 	}
+	return gov.LocalTarget{ID: g.ID, Name: g.Name, Platform: g.Platform, SaleMultiplier: g.RateMultiplier, Fingerprint: GovernanceGroupFingerprint(g)}, nil
+}
+
+// GovernanceGroupFingerprint is also checked while every target row is locked
+// by persistence, so a concurrent group edit cannot invalidate an import.
+func GovernanceGroupFingerprint(g *Group) string {
 	// Exclude live account counters and hydration metadata from preview staleness.
 	state := *g
 	state.AccountGroups = nil
 	state.AccountCount, state.ActiveAccountCount, state.RateLimitedAccountCount = 0, 0, 0
 	state.Hydrated = false
-	return gov.LocalTarget{ID: g.ID, Name: g.Name, Platform: g.Platform, SaleMultiplier: g.RateMultiplier, Fingerprint: governanceFingerprint(state)}, nil
+	return governanceFingerprint(state)
 }
 func governanceLocal(a *Account) *gov.LocalAccount {
 	ids := append([]int64{}, a.GroupIDs...)
@@ -71,12 +77,12 @@ func governanceLocal(a *Account) *gov.LocalAccount {
 		ID                           int64
 		Name, Platform, Type, Status string
 		Notes                        *string
-		Concurrency                  int
+		Concurrency, Priority        int
 		Credentials, Extra           map[string]any
 		ProxyID, ParentAccountID     *int64
 		Groups                       []int64
 		Rate                         float64
-	}{a.ID, a.Name, a.Platform, a.Type, a.Status, a.Notes, a.Concurrency, a.Credentials, extra, a.ProxyID, a.ParentAccountID, ids, rate})}
+	}{a.ID, a.Name, a.Platform, a.Type, a.Status, a.Notes, a.Concurrency, a.Priority, a.Credentials, extra, a.ProxyID, a.ParentAccountID, ids, rate})}
 }
 func (l *governanceLocalAccounts) find(ctx context.Context, marker string) (*Account, error) {
 	var id int64
@@ -105,9 +111,10 @@ func (l *governanceLocalAccounts) FindAccount(ctx context.Context, marker string
 }
 func governanceDesired(a *Account, c gov.AccountChange) bool {
 	config := c.AccountConfig
+	ids, err := gov.NormalizeLocalGroupIDs(a.GroupIDs, 0)
 	return config != nil && a.ParentAccountID == nil && a.Extra[governanceMarkerKey] == c.Marker && a.Type == "apikey" && a.Platform == c.Platform && a.Name == c.Name &&
 		a.Notes != nil && *a.Notes == c.APIKey && a.Credentials["api_key"] == c.APIKey && a.Credentials["base_url"] == c.BaseURL &&
-		reflect.DeepEqual(a.ProxyID, c.ProxyID) && len(a.GroupIDs) == 1 && a.GroupIDs[0] == c.GroupID &&
+		reflect.DeepEqual(a.ProxyID, c.ProxyID) && err == nil && reflect.DeepEqual(ids, c.GroupIDs) &&
 		(config.UpstreamBillingRateSyncEnabled || a.BillingRateMultiplier() == c.CostMultiplier) &&
 		upstreamBillingProbeEnabled(a) == config.UpstreamBillingRateSyncEnabled && reflect.DeepEqual(governanceAccountConfig(a), config)
 }
@@ -120,12 +127,25 @@ func (l *governanceLocalAccounts) ApplyAccount(ctx context.Context, c gov.Accoun
 	if e != nil {
 		return nil, e
 	}
-	target, e := l.Target(ctx, c.GroupID, c.Platform)
+	c.GroupIDs, e = gov.NormalizeLocalGroupIDs(c.GroupIDs, c.GroupID)
 	if e != nil {
 		return nil, e
 	}
-	if c.ExpectedTargetFingerprint != "" && target.Fingerprint != c.ExpectedTargetFingerprint {
-		return nil, gov.ErrConflict
+	c.GroupID = c.GroupIDs[0]
+	targets := make(map[int64]string, len(c.GroupIDs))
+	for _, id := range c.GroupIDs {
+		target, err := l.Target(ctx, id, c.Platform)
+		if err != nil {
+			return nil, err
+		}
+		expected := c.ExpectedTargetFingerprints[id]
+		if expected == "" && id == c.GroupID {
+			expected = c.ExpectedTargetFingerprint
+		}
+		if expected != "" && target.Fingerprint != expected {
+			return nil, gov.ErrConflict
+		}
+		targets[id] = target.Fingerprint
 	}
 	a, e := l.find(ctx, c.Marker)
 	if e != nil {
@@ -145,17 +165,17 @@ func (l *governanceLocalAccounts) ApplyAccount(ctx context.Context, c gov.Accoun
 			zero := int64(0)
 			proxy = &zero
 		}
-		groups := []int64{c.GroupID}
+		groups := c.GroupIDs
 		var rate *float64
 		if !syncEnabled {
 			rate = &c.CostMultiplier
 		}
-		a, e = l.admin.UpdateAccount(withGovernanceMutation(ctx, c.ExpectedFingerprint, groups), a.ID, &UpdateAccountInput{Name: c.Name, Notes: &c.APIKey, Credentials: governanceImportCredentials(a.Credentials, c), Extra: governanceImportExtra(a.Extra, c), ProxyID: proxy, Concurrency: &config.Concurrency, RateMultiplier: rate, GroupIDs: &groups, ProbeEnabled: &syncEnabled, RateSyncEnabled: &syncEnabled})
+		a, e = l.admin.UpdateAccount(withGovernanceMutation(ctx, c.ExpectedFingerprint, groups, targets), a.ID, &UpdateAccountInput{Name: c.Name, Notes: &c.APIKey, Credentials: governanceImportCredentials(a.Credentials, c), Extra: governanceImportExtra(a.Extra, c), ProxyID: proxy, Concurrency: &config.Concurrency, Priority: config.Priority, RateMultiplier: rate, GroupIDs: &groups, ProbeEnabled: &syncEnabled, RateSyncEnabled: &syncEnabled})
 	} else {
 		if c.ExpectedFingerprint != "" {
 			return nil, gov.ErrConflict
 		}
-		a, e = l.admin.CreateAccount(withGovernanceMutation(ctx, "", []int64{c.GroupID}), &CreateAccountInput{Name: c.Name, Notes: &c.APIKey, Platform: c.Platform, Type: "apikey", Credentials: governanceImportCredentials(nil, c), Extra: governanceImportExtra(nil, c), ProxyID: c.ProxyID, Concurrency: config.Concurrency, RateMultiplier: &c.CostMultiplier, GroupIDs: []int64{c.GroupID}, ProbeEnabled: &syncEnabled, RateSyncEnabled: &syncEnabled})
+		a, e = l.admin.CreateAccount(withGovernanceMutation(ctx, "", c.GroupIDs, targets), &CreateAccountInput{Name: c.Name, Notes: &c.APIKey, Platform: c.Platform, Type: "apikey", Credentials: governanceImportCredentials(nil, c), Extra: governanceImportExtra(nil, c), ProxyID: c.ProxyID, Concurrency: config.Concurrency, Priority: *config.Priority, RateMultiplier: &c.CostMultiplier, GroupIDs: c.GroupIDs, ProbeEnabled: &syncEnabled, RateSyncEnabled: &syncEnabled})
 		if e != nil {
 			recovered, re := l.find(ctx, c.Marker)
 			if re == nil && recovered != nil && governanceDesired(recovered, c) {

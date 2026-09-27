@@ -17,6 +17,14 @@ func NormalizeAccountConfig(input *AccountConfig, platform string, models []stri
 	if input != nil {
 		config = *input
 	}
+	priority := 1
+	if config.Priority != nil {
+		priority = *config.Priority
+	}
+	if priority < 0 || int64(priority) > math.MaxInt32 {
+		return nil, ErrInvalid
+	}
+	config.Priority = &priority
 	config.ModelMapping = make(map[string]string)
 	if input == nil {
 		for _, model := range models {

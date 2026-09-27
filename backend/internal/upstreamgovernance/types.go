@@ -138,6 +138,7 @@ type Binding struct {
 	RemoteGroupID        string    `json:"remote_group_id"`
 	Platform             string    `json:"platform"`
 	LocalGroupID         int64     `json:"local_group_id"`
+	LocalGroupIDs        []int64   `json:"local_group_ids"`
 	AccountID            int64     `json:"account_id"`
 	Marker               string    `json:"marker"`
 	KeyCipher            string    `json:"-"`
@@ -150,12 +151,14 @@ type Selection struct {
 	RemoteGroupID  string         `json:"remote_group_id"`
 	Platform       string         `json:"platform"`
 	LocalGroupID   int64          `json:"local_group_id"`
+	LocalGroupIDs  []int64        `json:"local_group_ids"`
 	AccountName    string         `json:"account_name"`
 	CostMultiplier float64        `json:"cost_multiplier"`
 	AccountConfig  *AccountConfig `json:"account_config,omitempty"`
 }
 type AccountConfig struct {
 	Concurrency                     int               `json:"concurrency"`
+	Priority                        *int              `json:"priority,omitempty"`
 	ModelMapping                    map[string]string `json:"model_mapping"`
 	UpstreamBillingRateSyncEnabled  bool              `json:"upstream_billing_rate_sync_enabled"`
 	QuotaDailyLimit                 float64           `json:"quota_daily_limit"`
@@ -184,6 +187,7 @@ type PreviewRow struct {
 	Selection     Selection     `json:"selection"`
 	RemoteGroup   RemoteGroup   `json:"remote_group"`
 	Target        LocalTarget   `json:"target"`
+	Targets       []LocalTarget `json:"targets"`
 	Existing      *LocalAccount `json:"existing"`
 	Marker        string        `json:"marker"`
 	WillCreateKey bool          `json:"will_create_key"`
@@ -236,6 +240,8 @@ type AccountChange struct {
 	Marker, Name, Platform, BaseURL, APIKey, ExpectedFingerprint string
 	ExpectedTargetFingerprint                                    string
 	GroupID                                                      int64
+	GroupIDs                                                     []int64
+	ExpectedTargetFingerprints                                   map[int64]string
 	CostMultiplier                                               float64
 	ProxyID                                                      *int64
 	AccountConfig                                                *AccountConfig

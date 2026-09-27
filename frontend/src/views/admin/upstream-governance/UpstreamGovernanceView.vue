@@ -588,6 +588,7 @@ onUnmounted(() => {
                 @busy="balanceBusy = $event"
               /><GovernanceHistory
                 :bindings="bindings"
+                :groups="groups"
                 :events="events"
                 :checks="checks"
                 :disabled="working"

@@ -7,8 +7,10 @@ import (
 	"errors"
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	dbaccountgroup "github.com/Wei-Shaw/sub2api/ent/accountgroup"
+	dbgroup "github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	gov "github.com/Wei-Shaw/sub2api/internal/upstreamgovernance"
+	"slices"
 )
 
 // Check on the same transaction/row lock used by the normal account write.
@@ -20,7 +22,7 @@ func checkGovernanceAccountCAS(ctx context.Context, q sqlQueryer, id int64, expe
 	var proxy, parent sql.NullInt64
 	var notes sql.NullString
 	var rate sql.NullFloat64
-	err := scanSingleRow(ctx, q, `SELECT name,platform,type,status,credentials,extra,proxy_id,rate_multiplier,parent_account_id,notes,concurrency FROM accounts WHERE id=$1 AND deleted_at IS NULL FOR UPDATE`, []any{id}, &a.Name, &a.Platform, &a.Type, &a.Status, &credentials, &extra, &proxy, &rate, &parent, &notes, &a.Concurrency)
+	err := scanSingleRow(ctx, q, `SELECT name,platform,type,status,credentials,extra,proxy_id,rate_multiplier,parent_account_id,notes,concurrency,priority FROM accounts WHERE id=$1 AND deleted_at IS NULL FOR UPDATE`, []any{id}, &a.Name, &a.Platform, &a.Type, &a.Status, &credentials, &extra, &proxy, &rate, &parent, &notes, &a.Concurrency, &a.Priority)
 	if errors.Is(err, sql.ErrNoRows) {
 		return gov.ErrConflict
 	}
@@ -59,6 +61,39 @@ func checkGovernanceAccountCAS(ctx context.Context, q sqlQueryer, id int64, expe
 	}
 	if expected == "" || service.GovernanceAccountFingerprint(a) != expected {
 		return gov.ErrConflict
+	}
+	return nil
+}
+
+// Called inside the native account transaction. Shared target locks block both
+// deletion and configuration edits until the full account/group write commits.
+func checkGovernanceTargets(ctx context.Context, client *dbent.Client) error {
+	targets := service.GovernanceTargetsFromContext(ctx)
+	if len(targets) == 0 {
+		return nil
+	}
+	ids := make([]int64, 0, len(targets))
+	for id := range targets {
+		ids = append(ids, id)
+	}
+	slices.Sort(ids)
+	if err := lockLiveGroups(ctx, client, ids); err != nil {
+		if errors.Is(err, service.ErrGroupNotFound) {
+			return gov.ErrConflict
+		}
+		return err
+	}
+	groups, err := client.Group.Query().Where(dbgroup.IDIn(ids...)).All(ctx)
+	if err != nil {
+		return err
+	}
+	if len(groups) != len(ids) {
+		return gov.ErrConflict
+	}
+	for _, group := range groups {
+		if targets[group.ID] == "" || service.GovernanceGroupFingerprint(groupEntityToService(group)) != targets[group.ID] {
+			return gov.ErrConflict
+		}
 	}
 	return nil
 }

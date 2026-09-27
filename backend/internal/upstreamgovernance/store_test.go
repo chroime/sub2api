@@ -86,7 +86,7 @@ func TestSQLStorePreviewReplay(t *testing.T) {
 }
 func TestSQLStoreBindingPreservesSecretAndUniqueTuple(t *testing.T) {
 	s, m := storeFixture(t)
-	m.ExpectQuery(`INSERT INTO upstream_governance_bindings[\s\S]*ON CONFLICT \(site_id, remote_group_id, platform\) DO UPDATE`).WithArgs(int64(2), "remote", "openai", int64(3), int64(0), "marker", "encrypted-key", false, "", 30, sqlmock.AnyArg()).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(4))
+	m.ExpectQuery(`INSERT INTO upstream_governance_bindings[\s\S]*ON CONFLICT \(site_id, remote_group_id, platform\) DO UPDATE`).WithArgs(int64(2), "remote", "openai", int64(3), int64(0), "marker", "encrypted-key", false, "", 30, sqlmock.AnyArg(), "[3]").WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(4))
 	b := &Binding{SiteID: 2, RemoteGroupID: "remote", Platform: "openai", LocalGroupID: 3, Marker: "marker", KeyCipher: "encrypted-key", ProbeIntervalMinutes: 30}
 	if e := s.SaveBinding(context.Background(), b); e != nil {
 		t.Fatal(e)
@@ -140,7 +140,7 @@ func TestSQLStoreSnapshotReturnsCompleteCatalog(t *testing.T) {
 func TestSQLStoreBindingMarkerConflict(t *testing.T) {
 	s, m := storeFixture(t)
 	m.ExpectQuery(`INSERT INTO upstream_governance_bindings`).WillReturnError(sql.ErrNoRows)
-	if e := s.SaveBinding(context.Background(), &Binding{}); !errors.Is(e, ErrConflict) {
+	if e := s.SaveBinding(context.Background(), &Binding{LocalGroupID: 1}); !errors.Is(e, ErrConflict) {
 		t.Fatalf("want conflict got %v", e)
 	}
 }

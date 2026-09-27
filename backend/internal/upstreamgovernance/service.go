@@ -470,9 +470,14 @@ func (s *Service) Preview(ctx context.Context, id int64, selections []Selection)
 	seen := map[string]bool{}
 	for _, selection := range selections {
 		g, ok := groups[selection.RemoteGroupID]
-		if !ok || !validSiteTransport(site.Platform, selection.Platform) || selection.LocalGroupID <= 0 || !validCost(selection.CostMultiplier) {
+		if !ok || !validSiteTransport(site.Platform, selection.Platform) || !validCost(selection.CostMultiplier) {
 			return nil, ErrInvalid
 		}
+		selection.LocalGroupIDs, e = NormalizeLocalGroupIDs(selection.LocalGroupIDs, selection.LocalGroupID)
+		if e != nil {
+			return nil, e
+		}
+		selection.LocalGroupID = selection.LocalGroupIDs[0]
 		// Existing account cost storage is NUMERIC(10,4). Freeze its persisted
 		// precision in the preview so recovery compares exactly the approved cost.
 		selection.CostMultiplier = math.Round(selection.CostMultiplier*10000) / 10000
@@ -495,16 +500,20 @@ func (s *Service) Preview(ctx context.Context, id int64, selections []Selection)
 			return nil, ErrInvalid
 		}
 		seen[key] = true
-		target, e := s.local.Target(ctx, selection.LocalGroupID, selection.Platform)
-		if e != nil {
-			return nil, e
+		targets := make([]LocalTarget, 0, len(selection.LocalGroupIDs))
+		for _, targetID := range selection.LocalGroupIDs {
+			target, e := s.local.Target(ctx, targetID, selection.Platform)
+			if e != nil {
+				return nil, e
+			}
+			targets = append(targets, target)
 		}
 		existing, e := s.local.FindAccount(ctx, key)
 		if e != nil {
 			return nil, e
 		}
 		willCreateKey := byMarker[key].KeyCipher == "" && (managed[key] == nil || managed[key].KeyCipher == "")
-		p.Rows = append(p.Rows, PreviewRow{Selection: selection, RemoteGroup: g, Target: target, Existing: existing, Marker: key, WillCreateKey: willCreateKey})
+		p.Rows = append(p.Rows, PreviewRow{Selection: selection, RemoteGroup: g, Target: targets[0], Targets: targets, Existing: existing, Marker: key, WillCreateKey: willCreateKey})
 	}
 	if e = s.store.SavePreview(ctx, p); e != nil {
 		return nil, e
@@ -527,7 +536,7 @@ func accountMatches(a *LocalAccount, row PreviewRow) bool {
 	config := row.Selection.AccountConfig
 	return a != nil && config != nil && a.Name == row.Selection.AccountName &&
 		(config.UpstreamBillingRateSyncEnabled || a.CostMultiplier == row.Selection.CostMultiplier) &&
-		len(a.GroupIDs) == 1 && a.GroupIDs[0] == row.Selection.LocalGroupID &&
+		sameGroupIDs(a.GroupIDs, row.Selection.LocalGroupIDs) &&
 		a.NotesMatchAPIKey && a.BillingProbeEnabled == config.UpstreamBillingRateSyncEnabled && reflect.DeepEqual(a.AccountConfig, config)
 }
 func (s *Service) Apply(ctx context.Context, id int64, previewID string) (*ApplyResult, error) {
@@ -571,18 +580,20 @@ func (s *Service) Apply(ctx context.Context, id int64, previewID string) (*Apply
 	for _, row := range p.Rows {
 		// Previews issued before account settings were included must be refreshed;
 		// applying new defaults to an old preview would change its reviewed intent.
-		if row.Selection.AccountConfig == nil {
+		if !reviewedTargets(row) {
 			return nil, ErrConflict
 		}
 		if _, ok := completed[row.Selection.RemoteGroupID+"\x00"+row.Selection.Platform]; ok {
 			continue
 		}
-		target, e := s.local.Target(ctx, row.Selection.LocalGroupID, row.Selection.Platform)
-		if e != nil {
-			return nil, e
-		}
-		if target.Fingerprint != row.Target.Fingerprint {
-			return nil, ErrConflict
+		for _, frozen := range row.Targets {
+			target, e := s.local.Target(ctx, frozen.ID, row.Selection.Platform)
+			if e != nil {
+				return nil, e
+			}
+			if target.Fingerprint != frozen.Fingerprint {
+				return nil, ErrConflict
+			}
 		}
 		account, e := s.local.FindAccount(ctx, row.Marker)
 		if e != nil {
@@ -618,7 +629,7 @@ func (s *Service) Apply(ctx context.Context, id int64, previewID string) (*Apply
 		item := ItemResult{RemoteGroupID: row.Selection.RemoteGroupID, Platform: row.Selection.Platform, Status: "failed"}
 		binding := byMarker[row.Marker]
 		if binding.Marker == "" {
-			binding = Binding{SiteID: id, RemoteGroupID: row.Selection.RemoteGroupID, Platform: row.Selection.Platform, Marker: row.Marker, LocalGroupID: row.Selection.LocalGroupID, ProbeIntervalMinutes: 30, NextProbeAt: s.now()}
+			binding = Binding{SiteID: id, RemoteGroupID: row.Selection.RemoteGroupID, Platform: row.Selection.Platform, Marker: row.Marker, LocalGroupID: row.Selection.LocalGroupID, LocalGroupIDs: append([]int64(nil), row.Selection.LocalGroupIDs...), ProbeIntervalMinutes: 30, NextProbeAt: s.now()}
 		}
 		account, applyErr := s.applyRow(ctx, *site, session, row, &binding, managed[row.Marker])
 		if applyErr != nil {
@@ -654,12 +665,17 @@ func (s *Service) applyRow(ctx context.Context, site Site, session Session, row 
 	}
 	// The local adapter checks the full desired state, including key, origin and
 	// proxy. It can recover a committed local write without overwriting later edits.
-	account, e := s.local.ApplyAccount(ctx, AccountChange{Marker: row.Marker, Name: row.Selection.AccountName, Platform: row.Selection.Platform, BaseURL: site.BaseURL, APIKey: key.Key, ExpectedFingerprint: expected, ExpectedTargetFingerprint: row.Target.Fingerprint, GroupID: row.Selection.LocalGroupID, CostMultiplier: row.Selection.CostMultiplier, ProxyID: site.ProxyID, AccountConfig: row.Selection.AccountConfig})
+	targetFingerprints := make(map[int64]string, len(row.Targets))
+	for _, target := range row.Targets {
+		targetFingerprints[target.ID] = target.Fingerprint
+	}
+	account, e := s.local.ApplyAccount(ctx, AccountChange{Marker: row.Marker, Name: row.Selection.AccountName, Platform: row.Selection.Platform, BaseURL: site.BaseURL, APIKey: key.Key, ExpectedFingerprint: expected, ExpectedTargetFingerprint: row.Target.Fingerprint, ExpectedTargetFingerprints: targetFingerprints, GroupID: row.Selection.LocalGroupID, GroupIDs: append([]int64(nil), row.Selection.LocalGroupIDs...), CostMultiplier: row.Selection.CostMultiplier, ProxyID: site.ProxyID, AccountConfig: row.Selection.AccountConfig})
 	if e != nil {
 		return nil, e
 	}
 	binding.AccountID = account.ID
 	binding.LocalGroupID = row.Selection.LocalGroupID
+	binding.LocalGroupIDs = append([]int64(nil), row.Selection.LocalGroupIDs...)
 	if e = s.store.SaveBinding(ctx, binding); e != nil {
 		return nil, e
 	}

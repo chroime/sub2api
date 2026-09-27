@@ -171,15 +171,24 @@ func (f *fakeConnector) Probe(context.Context, Site, RemoteKey, string, string) 
 }
 
 type fakeLocal struct {
-	accounts          map[string]*LocalAccount
-	calls             int
-	fail              bool
-	targetFingerprint string
-	changes           []AccountChange
+	accounts           map[string]*LocalAccount
+	calls              int
+	fail               bool
+	targetFingerprint  string
+	targetFingerprints map[int64]string
+	invalidTarget      int64
+	changes            []AccountChange
 }
 
-func (f *fakeLocal) Target(context.Context, int64, string) (LocalTarget, error) {
-	return LocalTarget{ID: 7, Name: "Local", Platform: "openai", SaleMultiplier: 3, Fingerprint: f.targetFingerprint}, nil
+func (f *fakeLocal) Target(_ context.Context, id int64, platform string) (LocalTarget, error) {
+	if id == f.invalidTarget {
+		return LocalTarget{}, ErrNotFound
+	}
+	fingerprint := f.targetFingerprint
+	if value, ok := f.targetFingerprints[id]; ok {
+		fingerprint = value
+	}
+	return LocalTarget{ID: id, Name: "Local", Platform: platform, SaleMultiplier: 3, Fingerprint: fingerprint}, nil
 }
 func (f *fakeLocal) FindAccount(_ context.Context, marker string) (*LocalAccount, error) {
 	return f.accounts[marker], nil
@@ -190,7 +199,7 @@ func (f *fakeLocal) ApplyAccount(_ context.Context, c AccountChange) (*LocalAcco
 	if f.fail {
 		return nil, errors.New("fixture failure secret")
 	}
-	a := &LocalAccount{ID: 10, Name: c.Name, GroupIDs: []int64{c.GroupID}, CostMultiplier: c.CostMultiplier, Fingerprint: "updated", AccountConfig: c.AccountConfig, NotesMatchAPIKey: true, BillingProbeEnabled: c.AccountConfig.UpstreamBillingRateSyncEnabled}
+	a := &LocalAccount{ID: 10, Name: c.Name, GroupIDs: append([]int64(nil), c.GroupIDs...), CostMultiplier: c.CostMultiplier, Fingerprint: "updated", AccountConfig: c.AccountConfig, NotesMatchAPIKey: true, BillingProbeEnabled: c.AccountConfig.UpstreamBillingRateSyncEnabled}
 	f.accounts[c.Marker] = a
 	return a, nil
 }

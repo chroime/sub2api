@@ -59,6 +59,7 @@ func TestSQLGovernanceLoginCredentialsMigrationAndAtomicCAS(t *testing.T) {
 	err = db.QueryRow(`INSERT INTO upstream_governance_sites(name,platform,base_url,session_cipher,status) VALUES('Legacy','sub2api','https://fixture.example',$1,'connected') RETURNING id`, sessionCipher).Scan(&siteID)
 	require.NoError(t, err)
 	apply("251_upstream_governance_login_credentials.sql")
+	apply("252_upstream_governance_multiple_target_groups.sql")
 	store := gov.NewSQLStore(db)
 	svc := gov.NewService(store, nil, nil, encryptor, true)
 	legacy, err := svc.LoginCredentials(t.Context(), siteID)

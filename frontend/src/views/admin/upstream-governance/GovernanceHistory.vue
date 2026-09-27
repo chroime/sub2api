@@ -12,6 +12,7 @@ import { formatGovernanceTime } from './format'
 import { eventKeys } from './feedback'
 defineProps<{
   bindings: Binding[]
+  groups?: { id: number; name: string }[]
   events: Page<GovernanceEvent> | null
   checks: Page<Check> | null
   disabled?: boolean
@@ -55,6 +56,10 @@ const { t } = useI18n()
                 ? '#' + binding.account_id
                 : t('governance.pendingImport')
             }}
+          </p>
+          <p class="mt-1 text-xs text-gray-500" data-test="binding-targets">
+            {{ t('governance.localGroup') }}：
+            {{ (binding.local_group_ids?.length ? binding.local_group_ids : [binding.local_group_id]).map(id => groups?.find(group => group.id === id)?.name || '#' + id).join('、') }}
           </p>
           <p class="mt-1 text-xs text-gray-500">
             {{

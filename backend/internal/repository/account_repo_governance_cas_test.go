@@ -11,7 +11,7 @@ import (
 )
 
 func TestGovernanceLockedFingerprintRejectsConcurrentAccountEdits(t *testing.T) {
-	for _, field := range []string{"same", "credentials", "proxy", "groups", "extra", "name", "rate", "parent", "notes", "concurrency"} {
+	for _, field := range []string{"same", "credentials", "proxy", "groups", "extra", "name", "rate", "parent", "notes", "concurrency", "priority"} {
 		t.Run(field, func(t *testing.T) {
 			db, m, e := sqlmock.New()
 			require.NoError(t, e)
@@ -41,6 +41,8 @@ func TestGovernanceLockedFingerprintRejectsConcurrentAccountEdits(t *testing.T) 
 				a.Notes = &notes
 			case "concurrency":
 				a.Concurrency = 99
+			case "priority":
+				a.Priority = 99
 			}
 			creds, _ := json.Marshal(a.Credentials)
 			extra, _ := json.Marshal(a.Extra)
@@ -54,7 +56,7 @@ func TestGovernanceLockedFingerprintRejectsConcurrentAccountEdits(t *testing.T) 
 			if a.ProxyID != nil {
 				proxy = *a.ProxyID
 			}
-			m.ExpectQuery("SELECT name,platform,type,status,credentials,extra,proxy_id,rate_multiplier,parent_account_id,notes,concurrency.*FOR UPDATE").WithArgs(int64(9)).WillReturnRows(sqlmock.NewRows([]string{"name", "platform", "type", "status", "credentials", "extra", "proxy", "rate", "parent", "notes", "concurrency"}).AddRow(a.Name, a.Platform, a.Type, a.Status, creds, extra, proxy, rate, parent, notes, a.Concurrency))
+			m.ExpectQuery("SELECT name,platform,type,status,credentials,extra,proxy_id,rate_multiplier,parent_account_id,notes,concurrency.*FOR UPDATE").WithArgs(int64(9)).WillReturnRows(sqlmock.NewRows([]string{"name", "platform", "type", "status", "credentials", "extra", "proxy", "rate", "parent", "notes", "concurrency", "priority"}).AddRow(a.Name, a.Platform, a.Type, a.Status, creds, extra, proxy, rate, parent, notes, a.Concurrency, a.Priority))
 			m.ExpectQuery("SELECT group_id FROM account_groups").WithArgs(int64(9)).WillReturnRows(sqlmock.NewRows([]string{"group_id"}).AddRow(a.GroupIDs[0]))
 			e = checkGovernanceAccountCAS(context.Background(), db, 9, expected)
 			if field == "same" {

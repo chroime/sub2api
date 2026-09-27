@@ -44,6 +44,7 @@ export interface ModelTemplateCollection {
 }
 export interface ImportAccountConfig {
   concurrency: number
+  priority?: number
   model_mapping: Record<string, string>
   upstream_billing_rate_sync_enabled: boolean
   quota_daily_limit: number
@@ -146,20 +147,23 @@ export interface Snapshot {
 export interface Selection {
   remote_group_id: string
   platform: Transport
-  local_group_id: number
+  local_group_id?: number
+  local_group_ids?: number[]
   account_name: string
   cost_multiplier: number
   account_config?: ImportAccountConfig
 }
+export interface LocalTarget {
+  id: number
+  name: string
+  platform: string
+  sale_multiplier: number
+}
 export interface PreviewRow {
   selection: Selection
   remote_group: RemoteGroup
-  target: {
-    id: number
-    name: string
-    platform: string
-    sale_multiplier: number
-  }
+  target: LocalTarget
+  targets?: LocalTarget[]
   existing: {
     id: number
     name: string
@@ -195,6 +199,7 @@ export interface Binding {
   remote_group_id: string
   platform: string
   local_group_id: number
+  local_group_ids?: number[]
   account_id: number
   probe_enabled: boolean
   probe_model: string

@@ -51,12 +51,32 @@ func TestSQLGovernancePlatformMigration(t *testing.T) {
 	require.NoError(t, store.CreateSite(t.Context(), site))
 	legacy := &ManagedKey{SiteID: site.ID, RemoteGroupID: "legacy-grok", Platform: "openai", Marker: "legacy-openai-marker", RemoteKeyID: "legacy-key", OwnerUserID: 7, KeyCipher: "fixture-cipher"}
 	require.NoError(t, store.SaveManagedKey(t.Context(), legacy))
+	_, err = db.Exec(`INSERT INTO upstream_governance_bindings(site_id,remote_group_id,platform,local_group_id,marker) VALUES($1,'legacy','openai',1,'legacy-binding')`, site.ID)
+	require.NoError(t, err)
 	apply("250_upstream_governance_platforms.sql")
+	apply("252_upstream_governance_multiple_target_groups.sql")
+	_, err = db.Exec(`INSERT INTO groups(id) VALUES(2);`)
+	require.NoError(t, err)
+	_, err = db.Exec(`INSERT INTO upstream_governance_bindings(site_id,remote_group_id,platform,local_group_id,marker) VALUES($1,'old-writer','openai',1,'old-writer-binding')`, site.ID)
+	require.NoError(t, err, "legacy single-group INSERTs allow NULL-list read fallback")
+	legacyBindings, err := store.ListBindings(t.Context(), site.ID)
+	require.NoError(t, err)
+	require.Len(t, legacyBindings, 2)
+	for _, binding := range legacyBindings {
+		require.Equal(t, []int64{1}, binding.LocalGroupIDs)
+	}
 	for _, platform := range governanceTestPlatforms {
 		key := &ManagedKey{SiteID: site.ID, RemoteGroupID: platform, Platform: platform, Marker: "key-" + platform, OwnerUserID: 7}
 		require.NoError(t, store.SaveManagedKey(t.Context(), key), platform)
-		binding := &Binding{SiteID: site.ID, RemoteGroupID: platform, Platform: platform, LocalGroupID: 1, Marker: "binding-" + platform, ProbeIntervalMinutes: 30, NextProbeAt: time.Now()}
+		binding := &Binding{SiteID: site.ID, RemoteGroupID: platform, Platform: platform, LocalGroupID: 1, LocalGroupIDs: []int64{2, 1, 2}, Marker: "binding-" + platform, ProbeIntervalMinutes: 30, NextProbeAt: time.Now()}
 		require.NoError(t, store.SaveBinding(t.Context(), binding), platform)
+		require.Equal(t, []int64{1, 2}, binding.LocalGroupIDs)
+	}
+	allBindings, err := store.ListBindings(t.Context(), site.ID)
+	require.NoError(t, err)
+	require.Len(t, allBindings, 12)
+	for _, binding := range allBindings[2:] {
+		require.Equal(t, []int64{1, 2}, binding.LocalGroupIDs)
 	}
 	for _, invalid := range []string{"composite", "custom"} {
 		err = store.SaveManagedKey(t.Context(), &ManagedKey{SiteID: site.ID, RemoteGroupID: invalid, Platform: invalid, Marker: "invalid-" + invalid, OwnerUserID: 7})

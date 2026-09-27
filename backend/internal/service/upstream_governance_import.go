@@ -10,12 +10,13 @@ func (account *Account) usesGovernanceModelPolicy() bool {
 }
 
 func governanceAccountConfig(account *Account) *gov.AccountConfig {
+	priority := account.Priority
 	mapping := stringMappingFromRaw(account.Credentials["model_mapping"])
 	if mapping == nil {
 		mapping = map[string]string{}
 	}
 	return &gov.AccountConfig{
-		Concurrency: account.Concurrency, ModelMapping: mapping,
+		Concurrency: account.Concurrency, Priority: &priority, ModelMapping: mapping,
 		UpstreamBillingRateSyncEnabled: upstreamBillingRateSyncEnabled(account),
 		QuotaDailyLimit:                account.GetQuotaDailyLimit(), QuotaWeeklyLimit: account.GetQuotaWeeklyLimit(), QuotaLimit: account.GetQuotaLimit(),
 		OpenAILongContextBillingEnabled: account.IsOpenAILongContextBillingEnabled(),

@@ -16,11 +16,17 @@ import (
 type governanceAdminStub struct {
 	account          *Account
 	group            *Group
+	groups           map[int64]*Group
 	creates, updates int
 	input            UpdateAccountInput
 }
 
-func (s *governanceAdminStub) GetGroup(context.Context, int64) (*Group, error) { return s.group, nil }
+func (s *governanceAdminStub) GetGroup(_ context.Context, id int64) (*Group, error) {
+	if s.groups != nil {
+		return s.groups[id], nil
+	}
+	return s.group, nil
+}
 func (s *governanceAdminStub) GetAccount(context.Context, int64) (*Account, error) {
 	return s.account, nil
 }
@@ -48,6 +54,9 @@ func (s *governanceAdminStub) UpdateAccount(_ context.Context, id int64, in *Upd
 	if in.Concurrency != nil {
 		a.Concurrency = *in.Concurrency
 	}
+	if in.Priority != nil {
+		a.Priority = *in.Priority
+	}
 	a.GroupIDs = *in.GroupIDs
 	if in.RateMultiplier != nil {
 		if in.RateSyncEnabled != nil && *in.RateSyncEnabled {
@@ -70,7 +79,7 @@ func TestGovernanceAccountRecoveryChecksCredentialsAndFingerprint(t *testing.T) 
 	defer db.Close()
 	rate := 2.0
 	key := "canary-key"
-	a := &Account{ID: 9, Name: "import", Notes: &key, Concurrency: 5000, Platform: "openai", Type: "apikey", Status: StatusActive, Credentials: map[string]any{"api_key": "canary-key", "base_url": "https://fixture.example", "custom": "keep"}, Extra: map[string]any{governanceMarkerKey: "marker", "unrelated": "keep", "quota_daily_limit": 10000.0, "quota_weekly_limit": 700000.0, "quota_limit": 10000000.0, openAILongContextBillingEnabledKey: true, UpstreamBillingProbeEnabledExtraKey: true, UpstreamBillingRateSyncEnabledExtraKey: true}, GroupIDs: []int64{3}, RateMultiplier: &rate}
+	a := &Account{ID: 9, Name: "import", Notes: &key, Concurrency: 5000, Priority: 1, Platform: "openai", Type: "apikey", Status: StatusActive, Credentials: map[string]any{"api_key": "canary-key", "base_url": "https://fixture.example", "custom": "keep"}, Extra: map[string]any{governanceMarkerKey: "marker", "unrelated": "keep", "quota_daily_limit": 10000.0, "quota_weekly_limit": 700000.0, "quota_limit": 10000000.0, openAILongContextBillingEnabledKey: true, UpstreamBillingProbeEnabledExtraKey: true, UpstreamBillingRateSyncEnabledExtraKey: true}, GroupIDs: []int64{3}, RateMultiplier: &rate}
 	admin := &governanceAdminStub{account: a, group: &Group{ID: 3, Platform: "openai", Status: StatusActive}}
 	local := &governanceLocalAccounts{db: db, admin: admin}
 	change := gov.AccountChange{Marker: "marker", Name: "import", Platform: "openai", BaseURL: "https://fixture.example", APIKey: "canary-key", GroupID: 3, CostMultiplier: 2}

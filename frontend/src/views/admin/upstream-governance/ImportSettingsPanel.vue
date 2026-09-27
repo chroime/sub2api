@@ -36,6 +36,7 @@ function checked(event: Event) {
       ><span class="text-xs font-normal text-gray-500">{{
         t('governance.importSettingsSummary', {
           concurrency: config.concurrency,
+          priority: config.priority ?? 1,
         })
       }}</span>
     </summary>
@@ -55,7 +56,19 @@ function checked(event: Event) {
               emit('update:config', { ...config, concurrency: number($event) })
             "
         /></label>
-        <div class="space-y-3 self-center">
+        <label class="text-sm"
+          >{{ t('governance.accountPriority') }}<input
+            :value="config.priority ?? 1"
+            data-test="priority"
+            type="number"
+            min="0"
+            max="2147483647"
+            step="1"
+            required
+            class="input mt-1 w-full"
+            @input="emit('update:config', { ...config, priority: number($event) })"
+          /></label>
+        <div class="space-y-3 sm:col-span-2">
           <label class="flex items-center gap-2 text-sm"
             ><input
               :checked="config.upstream_billing_rate_sync_enabled"
