@@ -51,4 +51,13 @@ describe('governance confirmation boundary', () => {
     vi.mocked(apiClient.post).mockRejectedValue(conflict)
     await expect(api.apply(2, 'expired')).rejects.toBe(conflict)
   })
+  it('reads login details through the dedicated admin endpoint and atomically saves edited credentials', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue({ data: { username: 'fixture-user', password: 'fixture-password', version: 9 } })
+    expect(await api.loginCredentials(2)).toEqual({ username: 'fixture-user', password: 'fixture-password', version: 9 })
+    expect(apiClient.get).toHaveBeenCalledWith('/admin/upstream-governance/sites/2/login-credentials')
+    const input = { name: 'Fixture', platform: 'sub2api' as const, base_url: 'https://fixture.example', proxy_id: null, enabled: true, interval_minutes: 15, version: 9, login_credentials: { username: 'fixture-user', password: 'changed-password' } }
+    vi.mocked(apiClient.put).mockResolvedValue({ data: { id: 2, version: 10 } })
+    await api.update(2, input)
+    expect(apiClient.put).toHaveBeenCalledWith('/admin/upstream-governance/sites/2', input)
+  })
 })

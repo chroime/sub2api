@@ -36,3 +36,41 @@ func TestGovernanceConnectAuditOmitsAllCredentialBody(t *testing.T) {
 	require.Equal(t, "<credential-bearing body omitted>", repo.logs[0].RequestBody)
 	require.Equal(t, 200, repo.logs[0].StatusCode)
 }
+
+func TestGovernanceLoginCredentialsAuditOmitsEditBodyAndRecordsReads(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repo := &auditCaptureRepository{}
+	svc := service.NewAuditLogService(repo, nil)
+	svc.Start()
+	router := gin.New()
+	router.Use(gin.HandlerFunc(NewAuditLogMiddleware(svc)))
+	router.PUT("/api/v1/admin/upstream-governance/sites/:id", func(c *gin.Context) {
+		var input struct {
+			Login struct{ Username, Password string } `json:"login_credentials"`
+		}
+		require.NoError(t, c.ShouldBindJSON(&input))
+		require.Equal(t, "password-canary", input.Login.Password)
+		c.JSON(200, gin.H{"ok": true})
+	})
+	router.GET("/api/v1/admin/upstream-governance/sites/:id/login-credentials", func(c *gin.Context) {
+		c.JSON(200, gin.H{"username": "username-canary", "password": "password-canary"})
+	})
+	request := httptest.NewRequest("PUT", "/api/v1/admin/upstream-governance/sites/1", strings.NewReader(`{"login_credentials":{"username":"username-canary","password":"password-canary"}}`))
+	request.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(httptest.NewRecorder(), request)
+	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/api/v1/admin/upstream-governance/sites/1/login-credentials", nil))
+	svc.Stop()
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+	require.Len(t, repo.logs, 2)
+	for _, entry := range repo.logs {
+		raw, err := json.Marshal(entry)
+		require.NoError(t, err)
+		require.NotContains(t, string(raw), "canary")
+		if entry.Method == "PUT" {
+			require.Equal(t, "<credential-bearing body omitted>", entry.RequestBody)
+		} else {
+			require.Equal(t, "admin.upstream_governance.login_credentials.read", entry.Action)
+		}
+	}
+}

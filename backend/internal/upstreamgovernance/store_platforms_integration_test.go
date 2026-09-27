@@ -43,7 +43,7 @@ func TestSQLGovernancePlatformMigration(t *testing.T) {
 		_, err = db.Exec(string(raw))
 		require.NoError(t, err)
 	}
-	for _, migration := range []string{"247_upstream_governance.sql", "248_upstream_governance_keys.sql", "249_upstream_governance_balance_monitor.sql"} {
+	for _, migration := range []string{"247_upstream_governance.sql", "248_upstream_governance_keys.sql", "249_upstream_governance_balance_monitor.sql", "251_upstream_governance_login_credentials.sql"} {
 		apply(migration)
 	}
 	store := NewSQLStore(db)

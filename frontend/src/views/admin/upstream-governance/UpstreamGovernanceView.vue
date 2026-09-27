@@ -7,6 +7,7 @@ import BaseDialog from '@/components/common/BaseDialog.vue'
 import ImportPanel from './ImportPanel.vue'
 import ConnectDialog from './ConnectDialog.vue'
 import OnboardDialog from './OnboardDialog.vue'
+import SiteEditDialog from './SiteEditDialog.vue'
 import SiteOverview from './SiteOverview.vue'
 import BalanceMonitorPanel from './BalanceMonitorPanel.vue'
 import GovernanceHistory from './GovernanceHistory.vue'
@@ -14,7 +15,6 @@ import Icon from '@/components/icons/Icon.vue'
 import { formatGovernanceTime } from './format'
 import api, {
   type Site,
-  type SiteInput,
   type Snapshot,
   type Binding,
   type Page,
@@ -30,6 +30,7 @@ const query = ref('')
 const tab = ref<'import' | 'monitor'>('import')
 const importBusy = ref(false)
 const balanceBusy = ref(false)
+const editBusy = ref(false)
 let generation = 0
 const sites = ref<Site[]>([]),
   active = ref<Site | null>(null),
@@ -45,21 +46,11 @@ const busy = ref(false),
   connecting = ref(false),
   onboarding = ref(false),
   editing = ref(false),
-  deleting = ref(false),
-  editId = ref<number | null>(null),
-  editVersion = ref(0)
-const form = ref<SiteInput>({
-  name: '',
-  platform: 'sub2api',
-  base_url: '',
-  proxy_id: null,
-  enabled: true,
-  interval_minutes: 15,
-})
+  deleting = ref(false)
 const probe = ref<Binding | null>(null),
   probeAction = ref<'check' | 'monitor'>('check')
 const working = computed(
-  () => busy.value || importBusy.value || balanceBusy.value,
+  () => busy.value || importBusy.value || balanceBusy.value || editBusy.value,
 )
 const filteredSites = computed(() =>
   sites.value.filter((site) =>
@@ -103,7 +94,7 @@ async function load() {
   })
 }
 async function select(site: Site, collected?: Snapshot) {
-  if (importBusy.value || balanceBusy.value) return
+  if (importBusy.value || balanceBusy.value || editBusy.value) return
   const request = ++generation
   connecting.value = false
   editing.value = false
@@ -141,46 +132,11 @@ async function select(site: Site, collected?: Snapshot) {
     busy.value = false
   }
 }
-function edit(site?: Site) {
-  editId.value = site?.id ?? null
-  editVersion.value = site?.version ?? 0
-  form.value = site
-    ? {
-        name: site.name,
-        platform: site.platform,
-        base_url: site.base_url,
-        proxy_id: site.proxy_id,
-        enabled: site.enabled,
-        interval_minutes: site.interval_minutes,
-      }
-    : {
-        name: '',
-        platform: 'sub2api',
-        base_url: '',
-        proxy_id: null,
-        enabled: true,
-        interval_minutes: 15,
-      }
-  editing.value = true
-}
-async function save() {
-  const request = generation
-  const input = { ...form.value }
-  const id = editId.value,
-    version = editVersion.value
-  await run(async () => {
-    const saved = id
-      ? await api.update(id, {
-          ...input,
-          version,
-        })
-      : await api.create(input)
-    const list = await api.list()
-    if (request !== generation) return
-    editing.value = false
-    sites.value = list
-    await select(saved)
-  })
+async function edited(site: Site) {
+  editing.value = false
+  editBusy.value = false
+  siteCreated(site)
+  await select(site)
 }
 async function sync() {
   if (!active.value) return
@@ -435,7 +391,7 @@ onUnmounted(() => {
                   ? 'border-primary-400 bg-primary-50/60 shadow-sm dark:border-primary-600 dark:bg-primary-900/15'
                   : 'border-gray-200 bg-white hover:border-primary-300 dark:border-dark-600 dark:bg-dark-800 dark:hover:border-primary-700'
               "
-              :disabled="importBusy || balanceBusy"
+              :disabled="importBusy || balanceBusy || editBusy"
               :aria-current="active?.id === site.id ? 'true' : undefined"
               @click="select(site)"
             >
@@ -499,7 +455,7 @@ onUnmounted(() => {
               <button
                 class="btn btn-secondary text-sm"
                 :disabled="working"
-                @click="edit(active)"
+                @click="editing = true"
               >
                 {{ t('common.edit') }}</button
               ><button
@@ -662,67 +618,15 @@ onUnmounted(() => {
         @close="connecting = false"
         @connected="connected"
       />
-      <BaseDialog
-        :show="editing"
-        :title="t(editId ? 'governance.edit' : 'governance.add')"
-        :show-close-button="!busy"
-        :close-on-escape="!busy"
+      <SiteEditDialog
+        v-if="editing && active"
+        :key="active.id"
+        :site="active"
+        :proxies="proxies"
         @close="editing = false"
-        ><form class="space-y-4" @submit.prevent="save">
-          <p v-if="error" role="alert" class="text-red-600">{{ error }}</p>
-          <label class="block"
-            >{{ t('governance.name')
-            }}<input
-              v-model="form.name"
-              class="input w-full"
-              required
-              maxlength="100" /></label
-          ><label class="block"
-            >{{ t('governance.platform')
-            }}<select v-model="form.platform" class="input w-full">
-              <option value="sub2api">Sub2API</option>
-              <option value="newapi">New API</option>
-            </select></label
-          ><label class="block"
-            >{{ t('governance.url')
-            }}<input
-              v-model="form.base_url"
-              class="input w-full"
-              type="url"
-              placeholder="https://upstream.example"
-              required
-          /></label>
-          <p class="text-sm text-gray-500">{{ t('governance.urlHint') }}</p>
-          <label class="block"
-            >{{ t('governance.proxy')
-            }}<select v-model="form.proxy_id" class="input w-full">
-              <option :value="null">{{ t('governance.direct') }}</option>
-              <option
-                v-for="proxy in proxies"
-                :key="proxy.id"
-                :value="proxy.id"
-              >
-                {{ proxy.name }}
-              </option>
-            </select></label
-          ><label class="flex gap-2"
-            ><input v-model="form.enabled" type="checkbox" />{{
-              t('governance.autoOn')
-            }}</label
-          ><label class="block"
-            >{{ t('governance.interval')
-            }}<input
-              v-model.number="form.interval_minutes"
-              class="input w-full"
-              type="number"
-              min="5"
-              max="1440"
-              required /></label
-          ><button class="btn btn-primary" :disabled="busy">
-            {{ t('common.save') }}
-          </button>
-        </form></BaseDialog
-      >
+        @saved="edited"
+        @busy="editBusy = $event"
+      />
       <BaseDialog
         :show="deleting"
         :title="t('common.delete')"

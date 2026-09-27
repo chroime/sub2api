@@ -69,6 +69,11 @@ func TestSQLStorePostgresIntegration(t *testing.T) {
 		t.Fatal(e)
 	}
 	mustExec(string(platformMigration))
+	loginMigration, e := os.ReadFile("../../migrations/251_upstream_governance_login_credentials.sql")
+	if e != nil {
+		t.Fatal(e)
+	}
+	mustExec(string(loginMigration))
 	ctx := context.Background()
 	s := NewSQLStore(fixture)
 	now := time.Now().UTC().Truncate(time.Microsecond)

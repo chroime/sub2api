@@ -17,6 +17,7 @@ func registerUpstreamGovernanceRoutes(admin *gin.RouterGroup, h *handler.Handler
 	g.POST("/sites", api.Create)
 	g.POST("/sites/detect", api.Detect)
 	g.PUT("/sites/:id", api.Update)
+	g.GET("/sites/:id/login-credentials", api.LoginCredentials)
 	g.PUT("/sites/:id/balance-monitor", api.ConfigureBalanceMonitor)
 	g.DELETE("/sites/:id", api.Delete)
 	g.POST("/sites/:id/connect", api.Connect)

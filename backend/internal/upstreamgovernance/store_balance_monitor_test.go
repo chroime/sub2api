@@ -33,9 +33,9 @@ func TestBalanceMonitorStateAndTransitionEventRollBackTogether(t *testing.T) {
 
 func TestBalanceMonitorSQLScanKeepsNativeUnitAndHidesRecipientReservations(t *testing.T) {
 	store, mock := storeFixture(t)
-	columns := []string{"id", "name", "platform", "base_url", "proxy_id", "enabled", "interval_minutes", "version", "session_cipher", "status", "last_error", "last_sync_at", "next_sync_at", "created_at", "updated_at", "balance_monitor", "balance_monitor_state"}
+	columns := []string{"id", "name", "platform", "base_url", "proxy_id", "enabled", "interval_minutes", "version", "session_cipher", "status", "last_error", "last_sync_at", "next_sync_at", "created_at", "updated_at", "balance_monitor", "balance_monitor_state", "login_cipher"}
 	now := time.Now()
-	mock.ExpectQuery(`SELECT .* FROM upstream_governance_sites WHERE id`).WithArgs(int64(1)).WillReturnRows(sqlmock.NewRows(columns).AddRow(1, "Fixture", "newapi", "https://example.com", nil, true, 15, 1, "", "healthy", "", nil, now, now, now, `{"threshold":10,"cooldown_minutes":1440}`, `{"status":{"state":"low","last_error":"email_delivery_failed"},"recipients":{"fixture-hash":{"failed":true}}}`))
+	mock.ExpectQuery(`SELECT .* FROM upstream_governance_sites WHERE id`).WithArgs(int64(1)).WillReturnRows(sqlmock.NewRows(columns).AddRow(1, "Fixture", "newapi", "https://example.com", nil, true, 15, 1, "", "healthy", "", nil, now, now, now, `{"threshold":10,"cooldown_minutes":1440}`, `{"status":{"state":"low","last_error":"email_delivery_failed"},"recipients":{"fixture-hash":{"failed":true}}}`, ""))
 	site, err := store.GetSite(t.Context(), 1)
 	require.NoError(t, err)
 	require.Equal(t, "quota", site.BalanceMonitor.Unit)

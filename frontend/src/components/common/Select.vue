@@ -462,6 +462,7 @@ const onDropdownKeyDown = (e: KeyboardEvent) => {
       break
     case 'Escape':
       e.preventDefault()
+      e.stopPropagation()
       isOpen.value = false
       triggerRef.value?.focus()
       break

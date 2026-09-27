@@ -30,6 +30,7 @@ type Site struct {
 	Version              int64                `json:"version"`
 	HasCredential        bool                 `json:"has_credential"`
 	SessionCipher        string               `json:"-"`
+	LoginCipher          string               `json:"-"`
 	Status               string               `json:"status"`
 	LastError            string               `json:"last_error"`
 	LastSyncAt           *time.Time           `json:"last_sync_at"`
@@ -49,6 +50,14 @@ type LoginInput struct {
 	CaptchaToken   string `json:"captcha_token"`
 	SessionToken   string `json:"session_token"`
 	UserID         int64  `json:"user_id"`
+}
+type LoginCredentials struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+type LoginCredentialsResult struct {
+	LoginCredentials
+	Version int64 `json:"version"`
 }
 type Session struct {
 	AccessToken string            `json:"access_token,omitempty"`
@@ -255,6 +264,7 @@ type Store interface {
 	CreateSite(context.Context, *Site) error
 	GetSite(context.Context, int64) (*Site, error)
 	UpdateSite(context.Context, *Site, int64) error
+	StageLoginChallenge(context.Context, int64, int64, string) error
 	DeleteSite(context.Context, int64) error
 	LockSite(context.Context, int64) (func(), bool, error)
 	ObserveSite(context.Context, int64, string, string, time.Time, time.Time) error

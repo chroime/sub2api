@@ -18,14 +18,14 @@ func NewSQLStore(db *sql.DB) Store { return &sqlStore{db: db} }
 
 var _ Store = (*sqlStore)(nil)
 
-const siteColumns = `id, name, platform, base_url, proxy_id, enabled, interval_minutes, version, session_cipher, status, last_error, last_sync_at, next_sync_at, created_at, updated_at, balance_monitor, balance_monitor_state`
+const siteColumns = `id, name, platform, base_url, proxy_id, enabled, interval_minutes, version, session_cipher, status, last_error, last_sync_at, next_sync_at, created_at, updated_at, balance_monitor, balance_monitor_state, login_cipher`
 
 type rowScanner interface{ Scan(...any) error }
 
 func scanSite(row rowScanner) (*Site, error) {
 	var s Site
 	var monitor, monitorState []byte
-	err := row.Scan(&s.ID, &s.Name, &s.Platform, &s.BaseURL, &s.ProxyID, &s.Enabled, &s.IntervalMinutes, &s.Version, &s.SessionCipher, &s.Status, &s.LastError, &s.LastSyncAt, &s.NextSyncAt, &s.CreatedAt, &s.UpdatedAt, &monitor, &monitorState)
+	err := row.Scan(&s.ID, &s.Name, &s.Platform, &s.BaseURL, &s.ProxyID, &s.Enabled, &s.IntervalMinutes, &s.Version, &s.SessionCipher, &s.Status, &s.LastError, &s.LastSyncAt, &s.NextSyncAt, &s.CreatedAt, &s.UpdatedAt, &monitor, &monitorState, &s.LoginCipher)
 	if err == nil {
 		s.BalanceMonitor = defaultBalanceMonitor(s.Platform)
 		if err = json.Unmarshal(monitor, &s.BalanceMonitor); err == nil {
@@ -97,7 +97,7 @@ func (s *sqlStore) DueSites(ctx context.Context, now time.Time, limit int) ([]Si
 	return s.querySites(ctx, `SELECT `+siteColumns+` FROM upstream_governance_sites WHERE enabled AND ((session_cipher <> '' AND next_sync_at <= $1) OR EXISTS (SELECT 1 FROM upstream_governance_bindings b WHERE b.site_id=upstream_governance_sites.id AND b.probe_enabled AND b.next_probe_at <= $1)) ORDER BY next_sync_at, id LIMIT $2`, now, limit)
 }
 func (s *sqlStore) CreateSite(ctx context.Context, v *Site) error {
-	return s.db.QueryRowContext(ctx, `INSERT INTO upstream_governance_sites (name, platform, base_url, proxy_id, enabled, interval_minutes, session_cipher, status, last_error, next_sync_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id,version,created_at,updated_at`, v.Name, v.Platform, v.BaseURL, v.ProxyID, v.Enabled, v.IntervalMinutes, v.SessionCipher, v.Status, v.LastError, v.NextSyncAt).Scan(&v.ID, &v.Version, &v.CreatedAt, &v.UpdatedAt)
+	return s.db.QueryRowContext(ctx, `INSERT INTO upstream_governance_sites (name, platform, base_url, proxy_id, enabled, interval_minutes, session_cipher, status, last_error, next_sync_at, login_cipher) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id,version,created_at,updated_at`, v.Name, v.Platform, v.BaseURL, v.ProxyID, v.Enabled, v.IntervalMinutes, v.SessionCipher, v.Status, v.LastError, v.NextSyncAt, v.LoginCipher).Scan(&v.ID, &v.Version, &v.CreatedAt, &v.UpdatedAt)
 }
 func (s *sqlStore) GetSite(ctx context.Context, id int64) (*Site, error) {
 	return scanSite(s.db.QueryRowContext(ctx, `SELECT `+siteColumns+` FROM upstream_governance_sites WHERE id=$1`, id))
@@ -113,7 +113,7 @@ func (s *sqlStore) UpdateSite(ctx context.Context, v *Site, version int64) error
 	}
 	var next int64
 	var updated time.Time
-	e = s.db.QueryRowContext(ctx, `UPDATE upstream_governance_sites SET name=$2,platform=$3,base_url=$4,proxy_id=$5,enabled=$6,interval_minutes=$7,session_cipher=$8,status=$9,last_error=$10,next_sync_at=$11,version=version+1,updated_at=NOW(),balance_monitor=$13::jsonb,balance_monitor_state=$14::jsonb,last_sync_at=CASE WHEN base_url<>$4 OR platform<>$3 THEN NULL ELSE last_sync_at END WHERE id=$1 AND version=$12 RETURNING version,updated_at`, v.ID, v.Name, v.Platform, v.BaseURL, v.ProxyID, v.Enabled, v.IntervalMinutes, v.SessionCipher, v.Status, v.LastError, v.NextSyncAt, version, string(monitor), string(monitorState)).Scan(&next, &updated)
+	e = s.db.QueryRowContext(ctx, `UPDATE upstream_governance_sites SET name=$2,platform=$3,base_url=$4,proxy_id=$5,enabled=$6,interval_minutes=$7,session_cipher=$8,status=$9,last_error=$10,next_sync_at=$11,version=version+1,updated_at=NOW(),balance_monitor=$13::jsonb,balance_monitor_state=$14::jsonb,login_cipher=$15,last_sync_at=CASE WHEN base_url<>$4 OR platform<>$3 THEN NULL ELSE last_sync_at END WHERE id=$1 AND version=$12 RETURNING version,updated_at`, v.ID, v.Name, v.Platform, v.BaseURL, v.ProxyID, v.Enabled, v.IntervalMinutes, v.SessionCipher, v.Status, v.LastError, v.NextSyncAt, version, string(monitor), string(monitorState), v.LoginCipher).Scan(&next, &updated)
 	if errors.Is(e, sql.ErrNoRows) {
 		return ErrConflict
 	}
@@ -123,6 +123,11 @@ func (s *sqlStore) UpdateSite(ctx context.Context, v *Site, version int64) error
 		v.HasCredential = v.SessionCipher != ""
 	}
 	return e
+}
+
+func (s *sqlStore) StageLoginChallenge(ctx context.Context, siteID, version int64, encrypted string) error {
+	r, err := s.db.ExecContext(ctx, `UPDATE upstream_governance_sites SET login_cipher=$3 WHERE id=$1 AND version=$2`, siteID, version, encrypted)
+	return affected(r, err, ErrConflict)
 }
 func (s *sqlStore) DeleteSite(ctx context.Context, id int64) error {
 	tx, e := s.db.BeginTx(ctx, nil)

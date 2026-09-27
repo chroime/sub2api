@@ -42,6 +42,13 @@ func (m *memoryStore) UpdateSite(_ context.Context, s *Site, v int64) error {
 	m.site = *s
 	return nil
 }
+func (m *memoryStore) StageLoginChallenge(_ context.Context, siteID, version int64, encrypted string) error {
+	if m.site.ID != siteID || m.site.Version != version {
+		return ErrConflict
+	}
+	m.site.LoginCipher = encrypted
+	return nil
+}
 func (m *memoryStore) LockSite(context.Context, int64) (func(), bool, error) {
 	if m.locked {
 		return func() {}, false, nil
@@ -353,7 +360,7 @@ func TestPartialFailureRetainsKeyAndCanResume(t *testing.T) {
 	require.Equal(t, "applied", r.Items[0].Status)
 	require.Equal(t, 1, c.keyCalls)
 }
-func TestConnectDoesNotPersistPasswordOrChallenge(t *testing.T) {
+func TestConnectDoesNotExposePasswordOrPutItInActiveSession(t *testing.T) {
 	s, m, c, _ := setupEngine(t)
 	old := m.site.SessionCipher
 	c.challenge = &Challenge{Kind: "totp", Token: "fixture-challenge"}

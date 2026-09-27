@@ -1,4 +1,12 @@
 export default {
+  siteDetails: '站点信息', loginDetails: '登录信息', collectionSettings: '采集设置',
+  loadingSiteDetails: '正在读取站点与登录信息…', reloadSiteDetails: '重新加载站点信息',
+  loginDetailsMissing: '此站点还未保存用户名和密码，可以在下方补充。',
+  loginDetailsHint: '保存后可在此直接查看。这里保存的是登录资料，不会修改上游密码；更改后可通过「重新授权」登录。',
+  loginPairRequired: '请同时填写用户名和密码，或同时留空以清除保存的登录资料。',
+  siteEditStale: '站点已被更新，请重新加载最新信息后再保存。',
+  unavailableProxy: '代理 #{id}（不可用）',
+  originLoginReset: '站点地址或平台已变更，原登录信息会清除；如需保存新站点的登录信息，请在下方填写。',
   balanceUnavailable: '最近采集没有可用余额，暂无法判断是否需要通知。', balanceUnitChanged: '余额单位已变化，请检查阈值设置。', emailUnavailable: '系统邮件服务尚未配置，请先完成发件设置。', recipientsUnavailable: '没有可用的收件邮箱，请填写收件人。', balanceMonitorError: '余额通知暂不可用，请检查监控和邮件设置。',
   balanceLow: '上游余额偏低', balanceRecovered: '上游余额恢复', balanceNotificationSent: '余额通知已发送', balanceNotificationFailed: '余额通知发送失败',
   workspaceDescription: '集中连接上游、批量导入分组，持续掌握余额与渠道变化。',
@@ -142,7 +150,7 @@ export default {
   reconnect: '重新授权',
   sync: '立即采集',
   secretNotice:
-    '填写的凭据会完整显示，仅用于本次连接，不保存密码。',
+    '填写的凭据会完整显示。用户名和密码在成功登录后保存，可在站点编辑弹框中直接查看。',
   authMode: '授权方式',
   passwordLogin: '用户名和密码',
   sessionLogin: '控制台会话令牌',

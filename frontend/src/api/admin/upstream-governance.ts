@@ -60,6 +60,13 @@ export interface LoginInput {
   session_token?: string
   user_id?: number
 }
+export interface LoginCredentials {
+  username: string
+  password: string
+}
+export interface SavedLoginCredentials extends LoginCredentials {
+  version: number
+}
 export interface DetectedSite {
   platform: SiteInput['platform']
   name: string
@@ -239,8 +246,11 @@ const api = {
   async create(input: SiteInput) {
     return (await apiClient.post<Site>(base, input)).data
   },
-  async update(id: number, input: SiteInput & { version: number }) {
+  async update(id: number, input: SiteInput & { version: number; login_credentials?: LoginCredentials }) {
     return (await apiClient.put<Site>(site(id), input)).data
+  },
+  async loginCredentials(id: number) {
+    return (await apiClient.get<SavedLoginCredentials>(`${site(id)}/login-credentials`)).data
   },
   async remove(id: number) {
     await apiClient.delete(site(id))

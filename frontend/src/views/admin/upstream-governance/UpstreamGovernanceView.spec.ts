@@ -7,6 +7,7 @@ import View from './UpstreamGovernanceView.vue'
 import ConnectDialog from './ConnectDialog.vue'
 import BalanceMonitorPanel from './BalanceMonitorPanel.vue'
 import ImportPanel from './ImportPanel.vue'
+import SiteEditDialog from './SiteEditDialog.vue'
 import api, { type Site, type Snapshot } from '@/api/admin/upstream-governance'
 vi.mock('@/api/admin/upstream-governance', () => ({
   default: {
@@ -25,6 +26,8 @@ vi.mock('@/api/admin/upstream-governance', () => ({
     modelTemplates: vi.fn().mockResolvedValue({ version: 0, templates: [] }),
     balanceMonitor: vi.fn(),
     remove: vi.fn(),
+    loginCredentials: vi.fn(),
+    update: vi.fn(),
   },
 }))
 vi.mock('@/api/admin/groups', () => ({
@@ -36,6 +39,31 @@ vi.mock('@/api/admin/proxies', () => ({
 vi.mock('vue-i18n', async (importOriginal) => ({ ...await importOriginal<typeof import('vue-i18n')>(), useI18n: () => ({ t: (key: string) => key }) }))
 describe('governance page', () => {
   beforeEach(() => vi.clearAllMocks())
+  it('opens the site editor with saved login and refreshes metadata after saving without reconnecting', async () => {
+    const site: Site = { id: 1, name: 'Editable', platform: 'sub2api', base_url: 'https://fixture.example', enabled: true, interval_minutes: 15, proxy_id: null, version: 1, has_credential: true, status: 'healthy', last_error: '', last_sync_at: null }
+    const page = { items: [], total: 0, page: 1, pages: 0, page_size: 20 }
+    vi.mocked(api.list).mockResolvedValue([site])
+    vi.mocked(api.catalog).mockRejectedValue({ status: 404 })
+    vi.mocked(api.bindings).mockResolvedValue([])
+    vi.mocked(api.events).mockResolvedValue(page)
+    vi.mocked(api.checks).mockResolvedValue(page)
+    vi.mocked(api.loginCredentials).mockResolvedValue({ username: 'fixture-user', password: 'fixture-password', version: 1 })
+    vi.mocked(api.update).mockResolvedValue({ ...site, name: 'Renamed', version: 2 })
+    const wrapper = mount(View, { global: { stubs: { BaseDialog: { props: ['show'], template: '<div v-if="show"><slot /><slot name="footer" /></div>' } } } })
+    await flushPromises()
+    await wrapper.findAll('button').find(button => button.text() === 'common.edit')!.trigger('click')
+    await flushPromises()
+    expect(wrapper.findComponent(SiteEditDialog).exists()).toBe(true)
+    expect((wrapper.get('#governance-edit-password').element as HTMLInputElement).value).toBe('fixture-password')
+    await wrapper.get('#governance-edit-name').setValue('Renamed')
+    await wrapper.get('#governance-edit-form').trigger('submit')
+    await flushPromises()
+    expect(wrapper.findComponent(SiteEditDialog).exists()).toBe(false)
+    expect(wrapper.getComponent(BalanceMonitorPanel).props('site').name).toBe('Renamed')
+    expect(wrapper.getComponent(BalanceMonitorPanel).props('site').version).toBe(2)
+    expect(api.connect).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
   it('waits for existing key metadata before enabling imports and preserves key-only Grok compatibility', async () => {
     const site: Site = { id: 1, name: 'Legacy Grok', platform: 'sub2api', base_url: 'https://fixture.example', enabled: true, interval_minutes: 15, proxy_id: null, version: 1, has_credential: true, status: 'healthy', last_error: '', last_sync_at: null }
     const snapshot: Snapshot = { id: 1, site_id: 1, site_version: 1, created_at: '2026-09-26T15:08:02Z', catalog: { groups: [], channels: [], warnings: [] } }

@@ -107,11 +107,27 @@ func (h *UpstreamGovernanceHandler) Update(c *gin.Context) {
 	if !ok {
 		return
 	}
-	var in governanceSiteInput
+	var in struct {
+		governanceSiteInput
+		LoginCredentials *gov.LoginCredentials `json:"login_credentials"`
+	}
 	if !governanceBody(c, &in) {
 		return
 	}
-	v, e := h.svc.UpdateSite(c.Request.Context(), id, in.site())
+	v, e := h.svc.UpdateSiteWithLogin(c.Request.Context(), id, in.site(), in.LoginCredentials)
+	if !governanceError(c, e) {
+		response.Success(c, v)
+	}
+}
+
+func (h *UpstreamGovernanceHandler) LoginCredentials(c *gin.Context) {
+	c.Header("Cache-Control", "no-store")
+	c.Header("Pragma", "no-cache")
+	id, ok := governanceID(c, "id")
+	if !ok {
+		return
+	}
+	v, e := h.svc.LoginCredentials(c.Request.Context(), id)
 	if !governanceError(c, e) {
 		response.Success(c, v)
 	}

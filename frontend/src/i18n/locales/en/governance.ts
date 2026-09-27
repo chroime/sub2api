@@ -1,4 +1,12 @@
 export default {
+  siteDetails: 'Site details', loginDetails: 'Login details', collectionSettings: 'Collection settings',
+  loadingSiteDetails: 'Loading site and login details…', reloadSiteDetails: 'Reload site details',
+  loginDetailsMissing: 'No username or password has been saved for this site. You can add them below.',
+  loginDetailsHint: 'Saved details are shown here. This does not change the upstream password. Use Reconnect to sign in after changing these details.',
+  loginPairRequired: 'Enter both username and password, or leave both empty to clear the saved login details.',
+  siteEditStale: 'The site has changed. Reload the latest details before saving.',
+  unavailableProxy: 'Proxy #{id} (unavailable)',
+  originLoginReset: 'The site address or platform has changed. Previous login details will be cleared; enter the new site login below to save it.',
   balanceUnavailable: 'The latest collection has no usable balance; notification checks are waiting.', balanceUnitChanged: 'The balance unit changed. Review the threshold settings.', emailUnavailable: 'System email is not configured. Configure the sender first.', recipientsUnavailable: 'No recipient is available. Enter a recipient email address.', balanceMonitorError: 'Balance notification is unavailable. Review the monitor and email settings.',
   balanceLow: 'Low upstream balance', balanceRecovered: 'Upstream balance recovered', balanceNotificationSent: 'Balance notification sent', balanceNotificationFailed: 'Balance notification failed',
   workspaceDescription: 'Connect upstreams, import groups in bulk, and track balances and channel changes.',
@@ -150,7 +158,7 @@ export default {
   reconnect: 'Reconnect',
   sync: 'Collect now',
   secretNotice:
-    'Entered credentials are shown in full and used for this connection. Passwords are not saved.',
+    'Entered credentials are shown in full. After a successful login, the username and password are saved and can be viewed in the site editor.',
   authMode: 'Authorization method',
   passwordLogin: 'Username and password',
   sessionLogin: 'Dashboard session token',

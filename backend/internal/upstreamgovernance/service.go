@@ -94,6 +94,7 @@ func (s *Service) CreateSite(ctx context.Context, input Site) (*Site, error) {
 	input.Version = 0
 	input.HasCredential = false
 	input.SessionCipher = ""
+	input.LoginCipher = ""
 	input.Status = "disconnected"
 	input.LastError = ""
 	input.LastSyncAt = nil
@@ -124,8 +125,19 @@ func (s *Service) siteLock(ctx context.Context, id int64) (*Site, func(), error)
 	return site, release, nil
 }
 func (s *Service) UpdateSite(ctx context.Context, id int64, input Site) (*Site, error) {
+	return s.UpdateSiteWithLogin(ctx, id, input, nil)
+}
+
+func (s *Service) UpdateSiteWithLogin(ctx context.Context, id int64, input Site, login *LoginCredentials) (*Site, error) {
 	if e := validateSite(&input); e != nil {
 		return nil, e
+	}
+	if login != nil {
+		normalized, e := normalizeLoginCredentials(*login)
+		if e != nil {
+			return nil, e
+		}
+		login = &normalized
 	}
 	site, release, e := s.siteLock(ctx, id)
 	if e != nil {
@@ -152,6 +164,7 @@ func (s *Service) UpdateSite(ctx context.Context, id int64, input Site) (*Site, 
 			return nil, ErrConflict
 		}
 		site.SessionCipher = ""
+		site.LoginCipher = ""
 		site.HasCredential = false
 		site.Status = "disconnected"
 		site.LastError = ""
@@ -161,6 +174,16 @@ func (s *Service) UpdateSite(ctx context.Context, id int64, input Site) (*Site, 
 		site.BalanceMonitor = defaultBalanceMonitor(input.Platform)
 		site.balanceState = BalanceMonitorState{Status: BalanceMonitorStatus{State: "disabled"}}
 		site.BalanceMonitorStatus = site.balanceState.Status
+	}
+	if login != nil {
+		value := storedLoginCredentials{LoginCredentials: *login}
+		if previous, err := s.session(*site); err == nil {
+			value.OwnerUserID = previous.UserID
+		}
+		site.LoginCipher, e = s.encryptLogin(value)
+		if e != nil {
+			return nil, e
+		}
 	}
 	site.Name = input.Name
 	site.Platform = input.Platform
@@ -226,7 +249,10 @@ func (s *Service) Connect(ctx context.Context, id int64, input LoginInput) (*Con
 	}
 	defer release()
 	session, challenge, e := s.connector.Login(ctx, *site, input)
-	if challenge != nil && errors.Is(e, ErrUnsupported) {
+	if challenge != nil && (e == nil || errors.Is(e, ErrUnsupported)) {
+		if e = s.stageLoginChallenge(ctx, *site, input, challenge); e != nil {
+			return nil, e
+		}
 		return &ConnectResult{Challenge: challenge}, nil
 	}
 	if e != nil {
@@ -268,7 +294,12 @@ func (s *Service) Connect(ctx context.Context, id int64, input LoginInput) (*Con
 	if e != nil {
 		return nil, ErrEncryption
 	}
+	loginCipher, e := s.loginAfterConnect(*site, input, session)
+	if e != nil {
+		return nil, e
+	}
 	site.SessionCipher = cipher
+	site.LoginCipher = loginCipher
 	site.HasCredential = true
 	site.Status = "connected"
 	site.LastError = ""
