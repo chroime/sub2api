@@ -99,11 +99,82 @@ func TestGovernanceLoginCredentialsRejectInvalidAndUnavailableEncryption(t *test
 
 type loginCredentialConnector struct {
 	*fakeConnector
-	userID int64
+	userID     int64
+	loginCalls int
 }
 
 func (c *loginCredentialConnector) Login(context.Context, Site, LoginInput) (Session, *Challenge, error) {
+	c.loginCalls++
 	return Session{AccessToken: "verified-session", UserID: c.userID}, c.challenge, c.err
+}
+
+func TestGovernanceConnectExpectedSiteVersionBeforeRemoteLogin(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		expected   any
+		changeSite bool
+		wantErr    error
+	}{
+		{name: "omitted remains compatible"},
+		{name: "matching version", expected: int64(1)},
+		{name: "origin changed after credential read", expected: int64(1), changeSite: true, wantErr: ErrConflict},
+		{name: "zero is invalid", expected: int64(0), wantErr: ErrInvalid},
+		{name: "negative is invalid", expected: int64(-1), wantErr: ErrInvalid},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			svc, store, connector, _ := setupEngine(t)
+			c := &loginCredentialConnector{fakeConnector: connector, userID: 5}
+			svc.connector = c
+			payload := map[string]any{"username": "version-fixture-user", "password": "version-fixture-password"}
+			if test.expected != nil {
+				payload["expected_site_version"] = test.expected
+			}
+			raw, err := json.Marshal(payload)
+			require.NoError(t, err)
+			var input LoginInput
+			require.NoError(t, json.Unmarshal(raw, &input))
+			if test.changeSite {
+				changed := store.site
+				changed.BaseURL, changed.Platform = "https://replacement.example", "newapi"
+				_, err = svc.UpdateSite(t.Context(), changed.ID, changed)
+				require.NoError(t, err)
+			}
+			before := store.site
+			_, err = svc.Connect(t.Context(), 1, input)
+			if test.wantErr != nil {
+				require.Zero(t, c.loginCalls, "rejected credentials must not reach any upstream")
+				require.ErrorIs(t, err, test.wantErr)
+				require.Equal(t, before, store.site, "a rejected version must not modify the session or saved login")
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, 1, c.loginCalls)
+			}
+		})
+	}
+}
+
+func TestGovernanceConnectExpectedSiteVersionPersistsAcrossTOTPContinuation(t *testing.T) {
+	svc, store, connector, _ := setupEngine(t)
+	c := &loginCredentialConnector{fakeConnector: connector, userID: 5}
+	c.challenge = &Challenge{Kind: "totp", Token: "version-fixture-challenge"}
+	svc.connector = c
+	version := store.site.Version
+	var initial LoginInput
+	require.NoError(t, json.Unmarshal([]byte(`{"username":"version-fixture-user","password":"version-fixture-password","expected_site_version":1}`), &initial))
+	result, err := svc.Connect(t.Context(), 1, initial)
+	require.NoError(t, err)
+	require.Equal(t, "totp", result.Challenge.Kind)
+	require.Equal(t, version, store.site.Version, "staging TOTP must keep the captured site version valid")
+	c.challenge = nil
+	var continuation LoginInput
+	require.NoError(t, json.Unmarshal([]byte(`{"otp":"123456","challenge_token":"version-fixture-challenge","expected_site_version":1}`), &continuation))
+	_, err = svc.Connect(t.Context(), 1, continuation)
+	require.NoError(t, err)
+	require.Equal(t, 2, c.loginCalls)
+	credentials, err := svc.LoginCredentials(t.Context(), 1)
+	require.NoError(t, err)
+	require.Equal(t, "version-fixture-user", credentials.Username)
+	require.Equal(t, "version-fixture-password", credentials.Password)
 }
 
 func TestGovernanceConnectSavesVerifiedPasswordAndPreservesSameOwner(t *testing.T) {

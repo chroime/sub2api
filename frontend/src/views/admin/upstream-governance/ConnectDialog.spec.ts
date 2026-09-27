@@ -1,15 +1,22 @@
-import { mount, flushPromises } from '@vue/test-utils'
-import { describe, it, expect, vi } from 'vitest'
+import { mount, flushPromises, enableAutoUnmount } from '@vue/test-utils'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import ConnectDialog from './ConnectDialog.vue'
 import api from '@/api/admin/upstream-governance'
 vi.mock('@/api/admin/upstream-governance', () => ({
-  default: { connect: vi.fn() },
+  default: { connect: vi.fn(), loginCredentials: vi.fn() },
 }))
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
+enableAutoUnmount(afterEach)
+beforeEach(() => {
+  vi.resetAllMocks()
+  vi.mocked(api.loginCredentials).mockResolvedValue({ username: '', password: '', version: 7 })
+})
+
 describe('connection challenge', () => {
   it('keeps the transient password when a CAPTCHA response requires the same login to continue', async () => {
     vi.mocked(api.connect).mockResolvedValueOnce({ challenge: { kind: 'captcha' } })
     const wrapper = mount(ConnectDialog, { props: { siteId: 7 }, global: { stubs: { BaseDialog: { template: '<div><slot /></div>' } } } })
+    await flushPromises()
     await wrapper.get('#governance-connect-username').setValue('fixture-user')
     await wrapper.get('#governance-connect-password').setValue('fixture-password')
     await wrapper.get('form').trigger('submit')
@@ -30,6 +37,7 @@ describe('connection challenge', () => {
   })
   it('displays an entered dashboard session token in plaintext in advanced authorization', async () => {
     const wrapper = mount(ConnectDialog, { props: { siteId: 7 }, global: { stubs: { BaseDialog: { template: '<div><slot /></div>' } } } })
+    await flushPromises()
     await wrapper.get('#governance-connect-advanced-auth').trigger('click')
     await wrapper.get('#governance-connect-auth-mode').setValue('session')
     const token = wrapper.get('#governance-connect-session')
@@ -47,6 +55,7 @@ describe('connection challenge', () => {
       props: { siteId: 7 },
       global: { stubs: { BaseDialog: { template: '<div><slot /></div>' } } },
     })
+    await flushPromises()
     const inputs = wrapper.findAll('input')
     await inputs[0]!.setValue('fixture-user')
     await inputs[1]!.setValue('fixture-password')

@@ -405,6 +405,7 @@ onUnmounted(() => {
       <ConnectDialog
         v-if="connecting && active"
         :site-id="active.id"
+        :site-version="active.version"
         @close="connecting = false"
         @connected="connected"
       />

@@ -1,4 +1,8 @@
 export default {
+  loadingSavedLogin: "Loading saved login details...",
+  loginLoadFailed: "Saved login details could not be loaded. Retry or enter them manually.",
+  reloadLogin: "Reload credentials",
+  loginTargetChanged: "The site configuration changed. Reload and confirm login details before authorizing again.",
   modelMonitoringTab: "Model monitoring",
   modelMonitoring: {
     saveAndEnable: "Save and enable",

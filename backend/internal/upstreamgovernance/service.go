@@ -284,6 +284,16 @@ func (s *Service) Connect(ctx context.Context, id int64, input LoginInput) (*Con
 		return nil, e
 	}
 	defer release()
+	// Saved login details belong to the site version displayed by the editor.
+	// Check while holding the site lock before sending credentials upstream.
+	if input.ExpectedSiteVersion != nil {
+		if *input.ExpectedSiteVersion <= 0 {
+			return nil, ErrInvalid
+		}
+		if *input.ExpectedSiteVersion != site.Version {
+			return nil, ErrConflict
+		}
+	}
 	session, challenge, e := s.connector.Login(ctx, *site, input)
 	if challenge != nil && (e == nil || errors.Is(e, ErrUnsupported)) {
 		if e = s.stageLoginChallenge(ctx, *site, input, challenge); e != nil {

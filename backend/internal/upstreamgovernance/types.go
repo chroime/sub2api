@@ -43,13 +43,14 @@ type Site struct {
 }
 
 type LoginInput struct {
-	Username       string `json:"username"`
-	Password       string `json:"password"`
-	OTP            string `json:"otp"`
-	ChallengeToken string `json:"challenge_token"`
-	CaptchaToken   string `json:"captcha_token"`
-	SessionToken   string `json:"session_token"`
-	UserID         int64  `json:"user_id"`
+	ExpectedSiteVersion *int64 `json:"expected_site_version,omitempty"`
+	Username            string `json:"username"`
+	Password            string `json:"password"`
+	OTP                 string `json:"otp"`
+	ChallengeToken      string `json:"challenge_token"`
+	CaptchaToken        string `json:"captcha_token"`
+	SessionToken        string `json:"session_token"`
+	UserID              int64  `json:"user_id"`
 }
 type LoginCredentials struct {
 	Username string `json:"username"`

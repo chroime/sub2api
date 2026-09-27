@@ -1,4 +1,8 @@
 export default {
+  loadingSavedLogin: "正在读取已保存的登录信息...",
+  loginLoadFailed: "读取已保存的账号密码失败，可重试或手动填写。",
+  reloadLogin: "重新读取",
+  loginTargetChanged: "站点配置已变更，请重新读取账号密码并确认后再授权。",
   modelMonitoringTab: "模型监测",
   modelMonitoring: {
     saveAndEnable: "保存并启用",

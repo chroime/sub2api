@@ -136,6 +136,7 @@ export interface ImportAccountConfig {
   openai_long_context_billing_enabled: boolean
 }
 export interface LoginInput {
+  expected_site_version?: number
   username?: string
   password?: string
   otp?: string
