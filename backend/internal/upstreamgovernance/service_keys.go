@@ -3,6 +3,7 @@ package upstreamgovernance
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strconv"
 	"strings"
 	"time"
@@ -108,7 +109,7 @@ func (s *Service) CreateKeys(ctx context.Context, siteID int64, input CreateKeys
 		return nil, err
 	}
 	defer release()
-	session, err := s.session(*site)
+	session, err := s.managementSessionLocked(ctx, site, false)
 	if err != nil {
 		return nil, err
 	}
@@ -148,14 +149,26 @@ func (s *Service) CreateKeys(ctx context.Context, siteID int64, input CreateKeys
 		byMarker[binding.Marker] = binding
 	}
 	result := &CreateKeysResult{Items: []KeyItemResult{}}
+	unauthorized := false
 	for _, selected := range input.Selections {
 		group := groups[selected.RemoteGroupID]
 		stable := marker(siteID, group.ID, selected.Platform)
 		binding := byMarker[stable]
 		item := KeyItemResult{RemoteGroupID: group.ID, Platform: selected.Platform, Status: "failed"}
+		if unauthorized {
+			item.Error = "reauth_required"
+			result.Items = append(result.Items, item)
+			continue
+		}
 		record, key, reused, itemErr := s.ensureManagedKey(ctx, *site, session, group, selected.Platform, managed[stable], &binding)
 		if itemErr != nil {
 			item.Error = ErrorCode(itemErr)
+			if errors.Is(itemErr, ErrReauth) {
+				unauthorized = true
+				if authErr := s.requireAuthorizationLocked(ctx, site, session); !errors.Is(authErr, ErrReauth) {
+					return nil, authErr
+				}
+			}
 		} else {
 			item.Status = "created"
 			if reused {

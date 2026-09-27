@@ -6,6 +6,25 @@ vi.mock('@/api/client', () => ({
 }))
 describe('governance confirmation boundary', () => {
   beforeEach(() => vi.clearAllMocks())
+  it('keeps browser jobs scoped to the selected site and separates completion from input', async () => {
+    const job = { id: 'job/id', site_id: 2, status: 'waiting', expires_at: '2026-09-28T12:00:00Z' }
+    vi.mocked(apiClient.post).mockResolvedValue({ data: job })
+    vi.mocked(apiClient.get).mockResolvedValue({ data: job })
+    vi.mocked(apiClient.delete).mockResolvedValue({ data: { cancelled: true } })
+    const credentials = { expected_site_version: 9, username: 'fixture', password: 'fixture-password' }
+    expect(await api.startBrowserAuth(2, credentials)).toEqual(job)
+    expect(apiClient.post).toHaveBeenLastCalledWith('/admin/upstream-governance/sites/2/browser-auth', credentials)
+    expect(await api.browserAuth(2, job.id)).toEqual(job)
+    expect(apiClient.get).toHaveBeenLastCalledWith('/admin/upstream-governance/sites/2/browser-auth/job%2Fid')
+    await api.browserAuthAction(2, job.id, { type: 'key', key: 'Enter' })
+    expect(apiClient.post).toHaveBeenLastCalledWith('/admin/upstream-governance/sites/2/browser-auth/job%2Fid/actions', { type: 'key', key: 'Enter' })
+    await api.completeBrowserAuth(2, job.id)
+    expect(apiClient.post).toHaveBeenLastCalledWith('/admin/upstream-governance/sites/2/browser-auth/job%2Fid/complete', {})
+    await api.cancelBrowserAuth(2, job.id)
+    expect(apiClient.delete).toHaveBeenLastCalledWith('/admin/upstream-governance/sites/2/browser-auth/job%2Fid')
+    await api.authStatus(2)
+    expect(apiClient.get).toHaveBeenLastCalledWith('/admin/upstream-governance/sites/2/auth-status')
+  })
   it('allows long native collection and key batches to finish beyond the default client timeout', async () => {
     vi.mocked(apiClient.post).mockResolvedValue({ data: { items: [] } })
     const input = { snapshot_id: 5, selections: [{ remote_group_id: 'r', platform: 'openai' as const }] }

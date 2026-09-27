@@ -37,6 +37,33 @@ func TestGovernanceConnectAuditOmitsAllCredentialBody(t *testing.T) {
 	require.Equal(t, 200, repo.logs[0].StatusCode)
 }
 
+func TestGovernanceBrowserAuthorizationAuditOmitsCredentialsAndTypedText(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repo := &auditCaptureRepository{}
+	svc := service.NewAuditLogService(repo, nil)
+	svc.Start()
+	router := gin.New()
+	router.Use(gin.HandlerFunc(NewAuditLogMiddleware(svc)))
+	for _, path := range []string{"/api/v1/admin/upstream-governance/sites/:id/browser-auth", "/api/v1/admin/upstream-governance/sites/:id/browser-auth/:job_id/actions"} {
+		router.POST(path, func(c *gin.Context) { c.JSON(200, gin.H{"ok": true}) })
+	}
+	for _, suffix := range []string{"", "/cb104bbf-5726-4b4c-a283-3a6c94cb82db/actions"} {
+		req := httptest.NewRequest("POST", "/api/v1/admin/upstream-governance/sites/1/browser-auth"+suffix, strings.NewReader(`{"username":"username-canary","password":"password-canary","text":"otp-canary"}`))
+		req.Header.Set("Content-Type", "application/json")
+		router.ServeHTTP(httptest.NewRecorder(), req)
+	}
+	svc.Stop()
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+	require.Len(t, repo.logs, 2)
+	for _, entry := range repo.logs {
+		raw, err := json.Marshal(entry)
+		require.NoError(t, err)
+		require.NotContains(t, string(raw), "canary")
+		require.Equal(t, "<credential-bearing body omitted>", entry.RequestBody)
+	}
+}
+
 func TestGovernanceLoginCredentialsAuditOmitsEditBodyAndRecordsReads(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	repo := &auditCaptureRepository{}

@@ -43,14 +43,20 @@ type Site struct {
 }
 
 type LoginInput struct {
-	ExpectedSiteVersion *int64 `json:"expected_site_version,omitempty"`
-	Username            string `json:"username"`
-	Password            string `json:"password"`
-	OTP                 string `json:"otp"`
-	ChallengeToken      string `json:"challenge_token"`
-	CaptchaToken        string `json:"captcha_token"`
-	SessionToken        string `json:"session_token"`
-	UserID              int64  `json:"user_id"`
+	ExpectedSiteVersion   *int64 `json:"expected_site_version,omitempty"`
+	Username              string `json:"username"`
+	Password              string `json:"password"`
+	OTP                   string `json:"otp"`
+	ChallengeToken        string `json:"challenge_token"`
+	CaptchaToken          string `json:"captcha_token"`
+	TurnstileToken        string `json:"turnstile_token"`
+	TencentCaptchaTicket  string `json:"tencent_captcha_ticket"`
+	TencentCaptchaRandstr string `json:"tencent_captcha_randstr"`
+	SessionToken          string `json:"session_token"`
+	RefreshToken          string `json:"refresh_token"`
+	ExpiresIn             int64  `json:"expires_in"`
+	UserAgent             string `json:"user_agent"`
+	UserID                int64  `json:"user_id"`
 }
 type LoginCredentials struct {
 	Username string `json:"username"`
@@ -61,14 +67,31 @@ type LoginCredentialsResult struct {
 	Version int64 `json:"version"`
 }
 type Session struct {
-	AccessToken string            `json:"access_token,omitempty"`
-	Cookies     map[string]string `json:"cookies,omitempty"`
-	UserID      int64             `json:"user_id,omitempty"`
-	AuthVariant string            `json:"auth_variant,omitempty"`
+	AccessToken        string            `json:"access_token,omitempty"`
+	RefreshToken       string            `json:"refresh_token,omitempty"`
+	ExpiresAt          *time.Time        `json:"expires_at,omitempty"`
+	IssuedAt           *time.Time        `json:"issued_at,omitempty"`
+	UserAgent          string            `json:"user_agent,omitempty"`
+	RefreshState       string            `json:"refresh_state,omitempty"`
+	RefreshAttemptedAt *time.Time        `json:"refresh_attempted_at,omitempty"`
+	Cookies            map[string]string `json:"cookies,omitempty"`
+	UserID             int64             `json:"user_id,omitempty"`
+	AuthVariant        string            `json:"auth_variant,omitempty"`
 }
+
+type CaptchaProvider string
+
+const (
+	CaptchaTurnstile CaptchaProvider = "turnstile"
+	CaptchaTencent   CaptchaProvider = "tencent"
+	CaptchaAliyun    CaptchaProvider = "aliyun"
+	CaptchaUnknown   CaptchaProvider = "unknown"
+)
+
 type Challenge struct {
-	Kind  string `json:"kind"`
-	Token string `json:"token,omitempty"`
+	Kind     string          `json:"kind"`
+	Token    string          `json:"token,omitempty"`
+	Provider CaptchaProvider `json:"provider,omitempty"`
 }
 type ConnectResult struct {
 	Site      *Site      `json:"site,omitempty"`

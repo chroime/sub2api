@@ -3,12 +3,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import OnboardDialog from './OnboardDialog.vue'
 import api, { type Site, type Snapshot } from '@/api/admin/upstream-governance'
 
-vi.mock('@/api/admin/upstream-governance', () => ({ default: { detect: vi.fn(), create: vi.fn(), connect: vi.fn(), sync: vi.fn() } }))
+vi.mock('@/api/admin/upstream-governance', () => ({ default: { detect: vi.fn(), create: vi.fn(), connect: vi.fn(), sync: vi.fn(), authStatus: vi.fn(), loginCredentials: vi.fn() } }))
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
 const site: Site = { id: 8, name: 'Detected', platform: 'sub2api', base_url: 'https://fixture.example', proxy_id: null, enabled: true, interval_minutes: 15, version: 1, has_credential: false, status: 'disconnected', last_error: '', last_sync_at: null }
 const snapshot: Snapshot = { id: 10, site_id: 8, site_version: 2, created_at: 'now', catalog: { groups: [], channels: [], warnings: [] } }
 function mountDialog() {
-  return mount(OnboardDialog, { props: { proxies: [] }, global: { stubs: { BaseDialog: { template: '<div><slot /></div>' } } } })
+  return mount(OnboardDialog, { props: { proxies: [] }, global: { stubs: {
+    BaseDialog: { template: '<div><slot /></div>' },
+    BrowserAuthorizationDialog: { template: '<button data-test="complete-browser" @click="$emit(\'connected\')">Complete</button>' },
+  } } })
 }
 async function fill(wrapper: ReturnType<typeof mountDialog>) {
   await wrapper.get('#governance-onboard-url').setValue(site.base_url)
@@ -28,6 +31,19 @@ describe('native onboarding continuation', () => {
     vi.mocked(api.connect).mockResolvedValue({ site: { ...site, has_credential: true } })
     vi.mocked(api.sync).mockResolvedValue(snapshot)
   })
+  it('reloads authorization after a successful login advances the site version but collection requires reauthorization', async () => {
+    const updated={...site,version:2,has_credential:true,status:'connected'}
+    vi.mocked(api.connect).mockResolvedValue({site:updated})
+    vi.mocked(api.sync).mockRejectedValue({reason:'reauth_required'})
+    vi.mocked(api.authStatus).mockImplementation(async()=>({session:{site_id:8,site_version:vi.mocked(api.authStatus).mock.calls.length===1?1:2} as Awaited<ReturnType<typeof api.authStatus>>['session'],browser:{available:true,reason:''}}))
+    vi.mocked(api.loginCredentials).mockResolvedValue({username:'fixture-user',password:'fixture-password',version:2})
+    const wrapper=mountDialog()
+    await fill(wrapper)
+    await submit(wrapper)
+    expect(vi.mocked(api.authStatus).mock.calls.length).toBeGreaterThanOrEqual(2)
+    expect(wrapper.get('#governance-onboard-browser').attributes('disabled')).toBeUndefined()
+    expect((wrapper.get('#governance-onboard-password').element as HTMLInputElement).value).toBe('fixture-password')
+  })
   it('retains the created site when authentication fails and retries the same site', async () => {
     vi.mocked(api.connect).mockRejectedValueOnce({ reason: 'reauth_required' })
     const wrapper = mountDialog()
@@ -42,6 +58,23 @@ describe('native onboarding continuation', () => {
     expect(api.detect).toHaveBeenCalledTimes(1)
     expect(api.connect).toHaveBeenLastCalledWith(8, expect.objectContaining({ password: 'correct-password' }))
     expect(wrapper.emitted('completed')?.[0]).toEqual([{ ...site, has_credential: true }, snapshot])
+  })
+  it('offers browser authorization for an unsupported provider and collects only after explicit completion', async () => {
+    vi.mocked(api.connect).mockResolvedValueOnce({ challenge: { kind: 'captcha', provider: 'aliyun' } })
+    vi.mocked(api.authStatus).mockResolvedValue({ session: { site_id: 8, site_version: 1 } as Awaited<ReturnType<typeof api.authStatus>>['session'], browser: { available: true, reason: '' } })
+    const wrapper = mountDialog()
+    await fill(wrapper)
+    await submit(wrapper)
+    expect(wrapper.text()).toContain('governance.captchaProvider_aliyun')
+    expect(wrapper.find('#governance-onboard-captcha').exists()).toBe(false)
+    expect(wrapper.get('#governance-onboard-submit').attributes('disabled')).toBeDefined()
+    await wrapper.get('#governance-onboard-browser').trigger('click')
+    expect(api.sync).not.toHaveBeenCalled()
+    await wrapper.get('[data-test=complete-browser]').trigger('click')
+    await flushPromises()
+    expect(api.sync).toHaveBeenCalledWith(8)
+    expect(api.connect).toHaveBeenCalledTimes(1)
+    expect(wrapper.emitted('completed')).toHaveLength(1)
   })
   it('retries a failed collection without asking for another password or creating another site', async () => {
     vi.mocked(api.sync).mockRejectedValueOnce({ reason: 'timeout' }).mockResolvedValueOnce(snapshot)
@@ -101,7 +134,7 @@ describe('native onboarding continuation', () => {
     await wrapper.get('#governance-onboard-auth-mode').setValue('session')
     await wrapper.get('#governance-onboard-session').setValue('fixture-session')
     await submit(wrapper)
-    expect(api.connect).toHaveBeenLastCalledWith(8, { session_token: 'fixture-session', user_id: undefined })
+    expect(api.connect).toHaveBeenLastCalledWith(8, { session_token: 'fixture-session', user_id: undefined, expected_site_version: 1 })
     expect(api.sync).toHaveBeenCalledTimes(1)
   })
   it('does not continue onboarding if navigation occurs while platform detection is pending', async () => {

@@ -13,11 +13,12 @@ type DetectInput struct {
 }
 
 type DetectedSite struct {
-	Platform        string `json:"platform"`
-	Name            string `json:"name"`
-	BaseURL         string `json:"base_url"`
-	CaptchaRequired bool   `json:"captcha_required"`
-	CaptchaSiteKey  string `json:"captcha_site_key,omitempty"`
+	Platform        string          `json:"platform"`
+	Name            string          `json:"name"`
+	BaseURL         string          `json:"base_url"`
+	CaptchaRequired bool            `json:"captcha_required"`
+	CaptchaSiteKey  string          `json:"captcha_site_key,omitempty"`
+	CaptchaProvider CaptchaProvider `json:"captcha_provider,omitempty"`
 }
 
 type siteDetector interface {
@@ -84,7 +85,27 @@ func (c *platformConnector) Detect(ctx context.Context, site Site) (*DetectedSit
 		if len(name) > 100 || len(settings.Key) > 1024 {
 			return nil, ErrUnsupported
 		}
-		return &DetectedSite{Platform: platform, Name: name, BaseURL: site.BaseURL, CaptchaRequired: captcha != nil && *captcha || settings.Tencent || settings.Aliyun, CaptchaSiteKey: settings.Key}, nil
+		var provider CaptchaProvider
+		providerCount := 0
+		if settings.Tencent {
+			provider = CaptchaTencent
+			providerCount++
+		}
+		if settings.Aliyun {
+			provider = CaptchaAliyun
+			providerCount++
+		}
+		if captcha != nil && *captcha {
+			provider = CaptchaTurnstile
+			providerCount++
+		}
+		if providerCount > 1 {
+			provider = CaptchaUnknown
+		}
+		if provider != CaptchaTurnstile {
+			settings.Key = ""
+		}
+		return &DetectedSite{Platform: platform, Name: name, BaseURL: site.BaseURL, CaptchaRequired: provider != "", CaptchaSiteKey: settings.Key, CaptchaProvider: provider}, nil
 	}
 	return nil, ErrUnsupported
 }

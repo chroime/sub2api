@@ -21,23 +21,26 @@ import (
 )
 
 type Service struct {
-	store           Store
-	connector       Connector
-	local           LocalAccounts
-	cipher          Encryptor
-	durableKey      bool
-	slots           chan struct{}
-	now             func() time.Time
-	workerMu        sync.Mutex
-	workerCancel    context.CancelFunc
-	workerDone      chan struct{}
-	balanceNotifier BalanceNotifier
-	modelMu         sync.Mutex
-	modelCancel     context.CancelFunc
-	modelDone       chan struct{}
-	modelWake       chan struct{}
-	modelActive     map[string]modelActiveRun
-	modelNotifier   ModelNotifier
+	store                Store
+	connector            Connector
+	local                LocalAccounts
+	cipher               Encryptor
+	durableKey           bool
+	slots                chan struct{}
+	now                  func() time.Time
+	workerMu             sync.Mutex
+	workerCancel         context.CancelFunc
+	workerDone           chan struct{}
+	sessionRefreshMu     sync.Mutex
+	sessionRefreshCursor int64
+	balanceNotifier      BalanceNotifier
+	modelMu              sync.Mutex
+	modelCancel          context.CancelFunc
+	modelDone            chan struct{}
+	modelWake            chan struct{}
+	modelActive          map[string]modelActiveRun
+	modelNotifier        ModelNotifier
+	browserAuthorizer    *BrowserAuthorizer
 }
 
 func NewService(store Store, connector Connector, local LocalAccounts, cipher Encryptor, durableKey bool) *Service {
@@ -184,6 +187,7 @@ func (s *Service) UpdateSiteWithLogin(ctx context.Context, id int64, input Site,
 		return nil, ErrConflict
 	}
 	changedOrigin := site.BaseURL != input.BaseURL || site.Platform != input.Platform
+	changedProxy := !reflect.DeepEqual(site.ProxyID, input.ProxyID)
 	if changedOrigin {
 		bindings, e := s.store.ListBindings(ctx, id)
 		if e != nil {
@@ -210,6 +214,31 @@ func (s *Service) UpdateSiteWithLogin(ctx context.Context, id int64, input Site,
 		site.BalanceMonitor = defaultBalanceMonitor(input.Platform)
 		site.balanceState = BalanceMonitorState{Status: BalanceMonitorStatus{State: "disabled"}}
 		site.BalanceMonitorStatus = site.balanceState.Status
+	}
+	if changedProxy && !changedOrigin && site.SessionCipher != "" {
+		previous, err := s.session(*site)
+		if err != nil {
+			return nil, err
+		}
+		previous.RefreshState = "reauth_required"
+		raw, err := json.Marshal(previous)
+		if err != nil {
+			return nil, ErrEncryption
+		}
+		site.SessionCipher, err = s.cipher.Encrypt(string(raw))
+		if err != nil {
+			return nil, ErrEncryption
+		}
+		site.Status, site.LastError = "reauth_required", "reauth_required"
+		stored, err := s.storedLogin(*site)
+		if err != nil {
+			return nil, err
+		}
+		stored.Pending = nil
+		site.LoginCipher, err = s.encryptLogin(stored)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if login != nil {
 		value := storedLoginCredentials{LoginCredentials: *login}
@@ -264,13 +293,16 @@ func (s *Service) session(site Site) (Session, error) {
 	if json.Unmarshal([]byte(plain), &session) != nil {
 		return Session{}, ErrReauth
 	}
-	if session.AccessToken == "" && len(session.Cookies) == 0 {
+	if !hasSessionCredential(session) {
 		return Session{}, ErrReauth
 	}
 	return session, nil
 }
 
 func (s *Service) Connect(ctx context.Context, id int64, input LoginInput) (*ConnectResult, error) {
+	if e := validateLoginInput(input); e != nil {
+		return nil, e
+	}
 	if !s.durableKey || s.cipher == nil {
 		return nil, ErrEncryption
 	}
@@ -307,10 +339,14 @@ func (s *Service) Connect(ctx context.Context, id int64, input LoginInput) (*Con
 	if challenge != nil {
 		return &ConnectResult{Challenge: challenge}, nil
 	}
-	if session.AccessToken == "" && len(session.Cookies) == 0 {
+	return s.connectSessionLocked(ctx, site, input, session, nil)
+}
+
+func (s *Service) connectSessionLocked(ctx context.Context, site *Site, input LoginInput, session Session, verifiedLogin *LoginCredentials) (*ConnectResult, error) {
+	if !hasSessionCredential(session) {
 		return nil, ErrReauth
 	}
-	bindings, e := s.store.ListBindings(ctx, id)
+	bindings, e := s.store.ListBindings(ctx, site.ID)
 	if e != nil {
 		return nil, e
 	}
@@ -323,7 +359,7 @@ func (s *Service) Connect(ctx context.Context, id int64, input LoginInput) (*Con
 			return nil, ErrConflict
 		}
 	}
-	keys, e := s.store.ListManagedKeys(ctx, id)
+	keys, e := s.store.ListManagedKeys(ctx, site.ID)
 	if e != nil {
 		return nil, e
 	}
@@ -341,6 +377,9 @@ func (s *Service) Connect(ctx context.Context, id int64, input LoginInput) (*Con
 		return nil, ErrEncryption
 	}
 	loginCipher, e := s.loginAfterConnect(*site, input, session)
+	if verifiedLogin != nil {
+		loginCipher, e = s.encryptLogin(storedLoginCredentials{LoginCredentials: *verifiedLogin, OwnerUserID: session.UserID})
+	}
 	if e != nil {
 		return nil, e
 	}
@@ -423,13 +462,26 @@ func (s *Service) Sync(ctx context.Context, id int64) (*Snapshot, error) {
 	return s.syncLocked(ctx, *site)
 }
 func (s *Service) syncLocked(ctx context.Context, site Site) (*Snapshot, error) {
-	session, e := s.session(site)
+	previousCipher := site.SessionCipher
+	session, e := s.managementSessionLocked(ctx, &site, false)
 	var catalog Catalog
 	if e == nil {
 		catalog, e = s.connector.Discover(ctx, site, session)
+		if errors.Is(e, ErrReauth) && site.SessionCipher == previousCipher {
+			session, e = s.managementSessionLocked(ctx, &site, true)
+			if e == nil {
+				catalog, e = s.connector.Discover(ctx, site, session)
+			}
+		}
+		if errors.Is(e, ErrReauth) && session.AccessToken != "" {
+			e = s.requireAuthorizationLocked(ctx, &site, session)
+		}
 	}
 	if e == nil {
 		e = validateCatalog(catalog)
+	}
+	if errors.Is(e, ErrConflict) {
+		return nil, e
 	}
 	now := s.now()
 	next := addMinutes(now, int64(site.IntervalMinutes))
@@ -612,7 +664,7 @@ func (s *Service) Apply(ctx context.Context, id int64, previewID string) (*Apply
 	if site.Version != p.SiteVersion || snapshot.ID != p.SnapshotID || !s.now().Before(p.ExpiresAt) {
 		return nil, ErrConflict
 	}
-	session, e := s.session(*site)
+	session, e := s.managementSessionLocked(ctx, site, false)
 	if e != nil {
 		return nil, e
 	}
@@ -668,6 +720,7 @@ func (s *Service) Apply(ctx context.Context, id int64, previewID string) (*Apply
 		return nil, e
 	}
 	result := &ApplyResult{PreviewID: p.ID, Items: []ItemResult{}}
+	unauthorized := false
 	for _, row := range p.Rows {
 		key := row.Selection.RemoteGroupID + "\x00" + row.Selection.Platform
 		if done, ok := completed[key]; ok {
@@ -679,7 +732,17 @@ func (s *Service) Apply(ctx context.Context, id int64, previewID string) (*Apply
 		if binding.Marker == "" {
 			binding = Binding{SiteID: id, RemoteGroupID: row.Selection.RemoteGroupID, Platform: row.Selection.Platform, Marker: row.Marker, LocalGroupID: row.Selection.LocalGroupID, LocalGroupIDs: append([]int64(nil), row.Selection.LocalGroupIDs...), ProbeIntervalMinutes: 30, NextProbeAt: s.now()}
 		}
-		account, applyErr := s.applyRow(ctx, *site, session, row, &binding, managed[row.Marker])
+		var account *LocalAccount
+		applyErr := ErrReauth
+		if !unauthorized {
+			account, applyErr = s.applyRow(ctx, *site, session, row, &binding, managed[row.Marker])
+			if errors.Is(applyErr, ErrReauth) {
+				unauthorized = true
+				if authErr := s.requireAuthorizationLocked(ctx, site, session); !errors.Is(authErr, ErrReauth) {
+					return nil, authErr
+				}
+			}
+		}
 		if applyErr != nil {
 			item.Error = ErrorCode(applyErr)
 		} else {

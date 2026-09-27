@@ -193,6 +193,7 @@ func (s *Service) Start() {
 }
 
 func (s *Service) Stop() {
+	s.stopBrowserAuthorizations()
 	s.stopModelWorker()
 	s.workerMu.Lock()
 	done := s.workerDone
@@ -216,11 +217,15 @@ func (s *Service) runDue(ctx context.Context) error {
 	}
 	ctx, cancel := context.WithTimeout(ctx, 50*time.Second)
 	defer cancel()
+	// Renewal failures have their own budget; collection retains the parent
+	// context even when a session's identity endpoint consumes this phase.
+	refreshCtx, cancelRefresh := context.WithTimeout(ctx, sessionRefreshBatchTimeout)
+	firstErr := s.refreshDueSessions(refreshCtx)
+	cancelRefresh()
 	sites, err := s.store.DueSites(ctx, s.now(), 20)
 	if err != nil {
 		return err
 	}
-	var firstErr error
 	for _, candidate := range sites {
 		if ctx.Err() != nil {
 			return ctx.Err()

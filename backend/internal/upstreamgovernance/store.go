@@ -87,6 +87,9 @@ func (s *sqlStore) querySites(ctx context.Context, q string, args ...any) ([]Sit
 func (s *sqlStore) ListSites(ctx context.Context) ([]Site, error) {
 	return s.querySites(ctx, `SELECT `+siteColumns+` FROM upstream_governance_sites ORDER BY id LIMIT 1000`)
 }
+func (s *sqlStore) ListSitesAfter(ctx context.Context, afterID int64, limit int) ([]Site, error) {
+	return s.querySites(ctx, `SELECT `+siteColumns+` FROM upstream_governance_sites WHERE id>$1 ORDER BY id LIMIT $2`, afterID, limit)
+}
 func (s *sqlStore) DueSites(ctx context.Context, now time.Time, limit int) ([]Site, error) {
 	if limit < 1 {
 		limit = 10

@@ -13,6 +13,22 @@ beforeEach(() => {
 })
 
 describe('connection challenge', () => {
+  it('clears Tencent single-use proofs after failure without discarding edited credentials', async () => {
+    vi.mocked(api.connect).mockResolvedValueOnce({ challenge: { kind: 'captcha', provider: 'tencent' } }).mockRejectedValueOnce({ reason: 'reauth_required' })
+    const wrapper = mount(ConnectDialog, { props: { siteId: 7 }, global: { stubs: { BaseDialog: { template: '<div><slot /></div>' } } } })
+    await flushPromises()
+    await wrapper.get('#governance-connect-password').setValue('fixture-password')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    await wrapper.get('#governance-connect-tencent-ticket').setValue('fixture-ticket')
+    await wrapper.get('#governance-connect-tencent-randstr').setValue('fixture-random')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(api.connect).toHaveBeenLastCalledWith(7, expect.objectContaining({ password: 'fixture-password', tencent_captcha_ticket: 'fixture-ticket', tencent_captcha_randstr: 'fixture-random' }))
+    expect((wrapper.get('#governance-connect-tencent-ticket').element as HTMLInputElement).value).toBe('')
+    expect((wrapper.get('#governance-connect-tencent-randstr').element as HTMLInputElement).value).toBe('')
+    expect((wrapper.get('#governance-connect-password').element as HTMLInputElement).value).toBe('fixture-password')
+  })
   it('keeps the transient password when a CAPTCHA response requires the same login to continue', async () => {
     vi.mocked(api.connect).mockResolvedValueOnce({ challenge: { kind: 'captcha' } })
     const wrapper = mount(ConnectDialog, { props: { siteId: 7 }, global: { stubs: { BaseDialog: { template: '<div><slot /></div>' } } } })

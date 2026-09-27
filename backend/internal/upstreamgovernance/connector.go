@@ -64,6 +64,12 @@ func (c *platformConnector) request(ctx context.Context, site Site, session Sess
 		return out, nil, ErrInvalid
 	}
 	req.Header.Set("Accept", "application/json")
+	if !validHeaderValue(session.UserAgent, 1024) || !validHeaderValue(session.AccessToken, maxSessionTokenLength) {
+		return out, nil, ErrInvalid
+	}
+	if session.UserAgent != "" {
+		req.Header.Set("User-Agent", session.UserAgent)
+	}
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
@@ -77,7 +83,10 @@ func (c *platformConnector) request(ctx context.Context, site Site, session Sess
 		req.Header.Set("New-Api-User", strconv.FormatInt(session.UserID, 10))
 	}
 	for name, value := range session.Cookies {
-		if name == "session" {
+		if sessionCookieAllowed(name) {
+			if !validSessionCookie(value) {
+				return out, nil, ErrInvalid
+			}
 			req.AddCookie(&http.Cookie{Name: name, Value: value})
 		}
 	}
@@ -88,6 +97,9 @@ func (c *platformConnector) request(ctx context.Context, site Site, session Sess
 		return out, nil, ErrInvalid
 	}
 	client, e := c.factory(ctx, site)
+	if errors.Is(e, ErrConflict) {
+		return out, nil, e
+	}
 	if e != nil || client == nil {
 		return out, nil, errConnectorRemote
 	}
@@ -109,16 +121,18 @@ func (c *platformConnector) request(ctx context.Context, site Site, session Sess
 	}
 	defer resp.Body.Close()
 	out.Header = resp.Header
-	if site.Platform == "sub2api" && (resp.StatusCode == 400 || resp.StatusCode == 422) {
+	if site.Platform == "sub2api" && (resp.StatusCode == 400 || resp.StatusCode == 422 || resp.StatusCode == 403) {
 		raw, readErr := io.ReadAll(io.LimitReader(resp.Body, connectorMaxBody+1))
 		var failure struct {
 			Reason string `json:"reason"`
 		}
 		if readErr == nil && len(raw) <= connectorMaxBody && json.Unmarshal(raw, &failure) == nil {
-			switch failure.Reason {
-			case "TURNSTILE_VERIFICATION_FAILED", "TENCENT_CAPTCHA_VERIFICATION_FAILED", "ALIYUN_CAPTCHA_VERIFICATION_FAILED":
-				return out, nil, errConnectorCaptcha
+			if captcha := captchaReason(failure.Reason); captcha != nil {
+				return out, nil, captcha
 			}
+		}
+		if resp.StatusCode == 403 {
+			return out, nil, errConnectorDenied
 		}
 		return out, nil, errConnectorRemote
 	}
@@ -150,6 +164,9 @@ func (c *platformConnector) request(ctx context.Context, site Site, session Sess
 				return out, nil, ErrUnsupported
 			}
 			if *out.Code != 0 {
+				if captcha := captchaReason(out.Reason); captcha != nil {
+					return out, nil, captcha
+				}
 				return out, nil, errConnectorRemote
 			}
 		} else {
@@ -178,7 +195,19 @@ func (c *platformConnector) identity(ctx context.Context, s Site, session Sessio
 	return verified, e
 }
 func (c *platformConnector) Login(ctx context.Context, s Site, input LoginInput) (Session, *Challenge, error) {
-	session := Session{AccessToken: input.SessionToken}
+	if err := validateLoginInput(input); err != nil {
+		return Session{}, nil, err
+	}
+	if input.TurnstileToken == "" {
+		input.TurnstileToken = input.CaptchaToken
+	}
+	if input.UserAgent == "" {
+		input.UserAgent = defaultSessionUserAgent
+	}
+	session := Session{AccessToken: input.SessionToken, RefreshToken: input.RefreshToken, UserAgent: input.UserAgent}
+	if e := sessionTiming(&session, input.ExpiresIn, time.Now()); e != nil {
+		return Session{}, nil, e
+	}
 	if input.SessionToken != "" {
 		session.AuthVariant = "bearer"
 		// A supplied ID explicitly selects the pinned legacy management-PAT profile.
@@ -193,7 +222,7 @@ func (c *platformConnector) Login(ctx context.Context, s Site, input LoginInput)
 	var e error
 	if s.Platform == "sub2api" {
 		path := "/api/v1/auth/login"
-		body := map[string]any{"email": input.Username, "password": input.Password, "turnstile_token": input.CaptchaToken}
+		body := map[string]any{"email": input.Username, "password": input.Password, "turnstile_token": input.TurnstileToken, "tencent_captcha_ticket": input.TencentCaptchaTicket, "tencent_captcha_randstr": input.TencentCaptchaRandstr}
 		if input.ChallengeToken != "" {
 			if input.OTP == "" {
 				return Session{}, &Challenge{Kind: "totp", Token: input.ChallengeToken}, nil
@@ -201,7 +230,7 @@ func (c *platformConnector) Login(ctx context.Context, s Site, input LoginInput)
 			path += "/2fa"
 			body = map[string]any{"temp_token": input.ChallengeToken, "totp_code": input.OTP}
 		}
-		result, _, e = c.request(ctx, s, Session{}, "POST", path, body, nil, true)
+		result, _, e = c.request(ctx, s, Session{UserAgent: session.UserAgent}, "POST", path, body, nil, true)
 	} else if s.Platform == "newapi" {
 		path := "/api/user/login"
 		body := map[string]any{"username": input.Username, "password": input.Password}
@@ -218,8 +247,8 @@ func (c *platformConnector) Login(ctx context.Context, s Site, input LoginInput)
 			}
 			var captcha bool
 			_ = json.Unmarshal(status["turnstile_check"], &captcha)
-			if captcha && input.CaptchaToken == "" {
-				return Session{}, &Challenge{Kind: "captcha"}, nil
+			if captcha && input.TurnstileToken == "" {
+				return Session{}, &Challenge{Kind: "captcha", Provider: CaptchaTurnstile}, nil
 			}
 			var enc struct {
 				Enabled   *bool  `json:"enabled"`
@@ -240,24 +269,31 @@ func (c *platformConnector) Login(ctx context.Context, s Site, input LoginInput)
 				}
 				body = map[string]any{"username": input.Username, "password_encrypted": encrypted, "encryption_key_id": enc.KeyID}
 			}
-			if input.CaptchaToken != "" {
-				path += "?turnstile=" + url.QueryEscape(input.CaptchaToken)
+			if input.TurnstileToken != "" {
+				path += "?turnstile=" + url.QueryEscape(input.TurnstileToken)
 			}
 		}
-		result, _, e = c.request(ctx, s, Session{}, "POST", path, body, nil, true)
+		result, _, e = c.request(ctx, s, Session{UserAgent: session.UserAgent}, "POST", path, body, nil, true)
 	} else {
 		return Session{}, nil, ErrUnsupported
 	}
 	if e != nil {
 		if errors.Is(e, errConnectorCaptcha) {
-			return Session{}, &Challenge{Kind: "captcha"}, nil
+			provider := CaptchaUnknown
+			var captcha *captchaError
+			if errors.As(e, &captcha) {
+				provider = captcha.provider
+			}
+			return Session{}, &Challenge{Kind: "captcha", Provider: provider}, nil
 		}
 		return Session{}, nil, e
 	}
 	var login struct {
-		AccessToken string `json:"access_token"`
-		ID          int64  `json:"id"`
-		User        struct {
+		AccessToken  string `json:"access_token"`
+		RefreshToken string `json:"refresh_token"`
+		ExpiresIn    int64  `json:"expires_in"`
+		ID           int64  `json:"id"`
+		User         struct {
 			ID int64 `json:"id"`
 		} `json:"user"`
 		Requires2FA         bool   `json:"requires_2fa"`
@@ -288,6 +324,10 @@ func (c *platformConnector) Login(ctx context.Context, s Site, input LoginInput)
 		return Session{}, &Challenge{Kind: "interactive_verification"}, ErrUnsupported
 	}
 	session.AccessToken = login.AccessToken
+	session.RefreshToken = login.RefreshToken
+	if e = sessionTiming(&session, login.ExpiresIn, time.Now()); e != nil {
+		return Session{}, nil, e
+	}
 	session.AuthVariant = "bearer"
 	session.UserID = login.User.ID
 	if session.AccessToken == "" && s.Platform == "newapi" && login.ID > 0 {

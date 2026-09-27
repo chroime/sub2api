@@ -142,8 +142,58 @@ export interface LoginInput {
   otp?: string
   challenge_token?: string
   captcha_token?: string
+  turnstile_token?: string
+  tencent_captcha_ticket?: string
+  tencent_captcha_randstr?: string
   session_token?: string
+  refresh_token?: string
+  expires_in?: number
+  user_agent?: string
   user_id?: number
+}
+export type CaptchaProvider = 'turnstile' | 'tencent' | 'aliyun' | 'unknown'
+export interface LoginChallenge {
+  kind: string
+  token?: string
+  provider?: CaptchaProvider
+}
+export interface ConnectResult {
+  site?: Site
+  challenge?: LoginChallenge
+}
+export interface AuthorizationStatus {
+  session: {
+    site_id: number
+    site_version: number
+    platform: SiteInput['platform']
+    has_session: boolean
+    refresh_supported: boolean
+    has_refresh_token: boolean
+    auto_refresh_enabled: boolean
+    expires_at: string | null
+    issued_at: string | null
+    refresh_state: string
+    last_refresh_at: string | null
+    reauthorization_required: boolean
+  }
+  browser: { available: boolean; reason: string }
+}
+export interface BrowserAuthJob {
+  id: string
+  site_id: number
+  status: 'starting' | 'waiting' | 'ready' | 'completed' | 'failed' | 'cancelled' | 'expired'
+  expires_at: string
+  error_code?: string
+  frame?: { image: string; width: number; height: number }
+}
+export interface BrowserAuthAction {
+  type: 'pointer_down' | 'pointer_move' | 'pointer_up' | 'wheel' | 'text' | 'key'
+  x?: number
+  y?: number
+  delta_x?: number
+  delta_y?: number
+  text?: string
+  key?: string
 }
 export interface LoginCredentials {
   username: string
@@ -157,6 +207,7 @@ export interface DetectedSite {
   name: string
   base_url: string
   captcha_required: boolean
+  captcha_provider?: CaptchaProvider
   captcha_site_key?: string
 }
 export interface AccountSummary {
@@ -370,15 +421,30 @@ const api = {
   async loginCredentials(id: number) {
     return (await apiClient.get<SavedLoginCredentials>(`${site(id)}/login-credentials`)).data
   },
+  async authStatus(id: number) {
+    return (await apiClient.get<AuthorizationStatus>(`${site(id)}/auth-status`)).data
+  },
+  async startBrowserAuth(id: number, input: LoginCredentials & { expected_site_version: number }) {
+    return (await apiClient.post<BrowserAuthJob>(`${site(id)}/browser-auth`, input)).data
+  },
+  async browserAuth(id: number, jobId: string) {
+    return (await apiClient.get<BrowserAuthJob>(`${site(id)}/browser-auth/${encodeURIComponent(jobId)}`)).data
+  },
+  async browserAuthAction(id: number, jobId: string, input: BrowserAuthAction) {
+    return (await apiClient.post<{ accepted: boolean }>(`${site(id)}/browser-auth/${encodeURIComponent(jobId)}/actions`, input)).data
+  },
+  async completeBrowserAuth(id: number, jobId: string) {
+    return (await apiClient.post<ConnectResult>(`${site(id)}/browser-auth/${encodeURIComponent(jobId)}/complete`, {})).data
+  },
+  async cancelBrowserAuth(id: number, jobId: string) {
+    return (await apiClient.delete<{ cancelled: boolean }>(`${site(id)}/browser-auth/${encodeURIComponent(jobId)}`)).data
+  },
   async remove(id: number) {
     await apiClient.delete(site(id))
   },
   async connect(id: number, input: LoginInput) {
     return (
-      await apiClient.post<{
-        site?: Site
-        challenge?: { kind: string; token?: string }
-      }>(`${site(id)}/connect`, input)
+      await apiClient.post<ConnectResult>(`${site(id)}/connect`, input)
     ).data
   },
   async sync(id: number) {

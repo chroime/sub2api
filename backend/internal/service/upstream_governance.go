@@ -10,8 +10,6 @@ import (
 	"net/http"
 	"reflect"
 	"sort"
-	"strings"
-	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	gov "github.com/Wei-Shaw/sub2api/internal/upstreamgovernance"
@@ -230,24 +228,12 @@ func (c governanceHTTPClient) Do(req *http.Request) (*http.Response, error) {
 }
 func governanceClientFactory(upstream HTTPUpstream, proxies ProxyRepository) gov.ClientFactory {
 	return func(ctx context.Context, site gov.Site) (gov.HTTPDoer, error) {
-		proxyURL := ""
-		if site.ProxyID != nil {
-			if *site.ProxyID <= 0 || proxies == nil {
-				return nil, gov.ErrInvalid
-			}
-			p, e := proxies.GetByID(ctx, *site.ProxyID)
-			if e != nil {
-				return nil, gov.ErrInvalid
-			}
-			if p == nil || !p.IsActive() || p.IsExpired(time.Now()) || strings.TrimSpace(p.Host) == "" || p.Port < 1 || p.Port > 65535 {
-				return nil, gov.ErrInvalid
-			}
-			switch p.Protocol {
-			case "http", "https", "socks5", "socks5h":
-			default:
-				return nil, gov.ErrInvalid
-			}
-			proxyURL = p.URL()
+		proxyURL, err := governanceProxyURL(ctx, proxies, site)
+		if err != nil {
+			return nil, err
+		}
+		if expected, pinned := gov.BrowserAuthorizationProxy(ctx); pinned && expected != proxyURL {
+			return nil, gov.ErrConflict
 		}
 		return governanceHTTPClient{upstream: upstream, proxy: proxyURL}, nil
 	}
@@ -260,6 +246,7 @@ func ProvideUpstreamGovernanceService(db *sql.DB, admin AdminService, upstream H
 	}
 	svc.SetBalanceNotifier(notifier)
 	svc.SetModelNotifier(notifier)
+	configureGovernanceBrowser(svc, proxies)
 	svc.Start()
 	return svc
 }
