@@ -254,7 +254,8 @@ type ClientFactory func(context.Context, Site) (HTTPDoer, error)
 type Connector interface {
 	Login(context.Context, Site, LoginInput) (Session, *Challenge, error)
 	Discover(context.Context, Site, Session) (Catalog, error)
-	EnsureKey(context.Context, Site, Session, RemoteGroup, string) (RemoteKey, error)
+	PrepareKey(context.Context, Site, Session, RemoteGroup, string) ([]int64, error)
+	EnsureKey(context.Context, Site, Session, RemoteGroup, string, *KeyCreationPlan) (RemoteKey, error)
 	Probe(context.Context, Site, RemoteKey, string, string) (ProbeResult, error)
 }
 type Encryptor interface {

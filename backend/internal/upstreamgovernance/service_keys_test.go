@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"testing"
 	"time"
 
@@ -15,7 +16,7 @@ func (m *memoryStore) ListManagedKeys(_ context.Context, siteID int64) ([]Manage
 	keys := []ManagedKey{}
 	for _, key := range m.keys {
 		if key.SiteID == siteID {
-			keys = append(keys, key)
+			keys = append(keys, cloneManagedKey(key))
 		}
 	}
 	return keys, nil
@@ -24,7 +25,8 @@ func (m *memoryStore) ListManagedKeys(_ context.Context, siteID int64) ([]Manage
 func (m *memoryStore) GetManagedKey(_ context.Context, siteID, id int64) (*ManagedKey, error) {
 	for _, key := range m.keys {
 		if key.SiteID == siteID && key.ID == id {
-			return &key, nil
+			copyKey := cloneManagedKey(key)
+			return &copyKey, nil
 		}
 	}
 	return nil, ErrNotFound
@@ -38,16 +40,30 @@ func (m *memoryStore) SaveManagedKey(_ context.Context, key *ManagedKey) error {
 			if previous.OwnerUserID != key.OwnerUserID || previous.Marker != key.Marker || previous.KeyCipher != "" && (previous.KeyCipher != key.KeyCipher || previous.RemoteKeyID != key.RemoteKeyID) {
 				return ErrConflict
 			}
+			if !reflect.DeepEqual(previous.CreationPlan, key.CreationPlan) && !(previous.KeyCipher == "" && previous.CreationPlan != nil && key.CreationPlan != nil && previous.CreationPlan.Name == key.CreationPlan.Name && previous.CreationPlan.ExistingIDs == nil && key.CreationPlan.ExistingIDs != nil) {
+				return ErrConflict
+			}
 			key.ID = previous.ID
 			key.CreatedAt = previous.CreatedAt
-			m.keys[i] = *key
+			m.keys[i] = cloneManagedKey(*key)
 			return nil
 		}
 	}
 	key.ID = int64(len(m.keys) + 1)
 	key.CreatedAt = key.UpdatedAt
-	m.keys = append(m.keys, *key)
+	m.keys = append(m.keys, cloneManagedKey(*key))
 	return nil
+}
+
+func cloneManagedKey(key ManagedKey) ManagedKey {
+	if key.CreationPlan != nil {
+		plan := *key.CreationPlan
+		if plan.ExistingIDs != nil {
+			plan.ExistingIDs = append([]int64{}, plan.ExistingIDs...)
+		}
+		key.CreationPlan = &plan
+	}
+	return key
 }
 
 func TestManagedKeysCreateIndependentlyAndImportReusesThem(t *testing.T) {
@@ -153,12 +169,12 @@ type managedKeyConnector struct {
 	loginUser int64
 }
 
-func (c *managedKeyConnector) EnsureKey(ctx context.Context, site Site, session Session, group RemoteGroup, marker string) (RemoteKey, error) {
+func (c *managedKeyConnector) EnsureKey(ctx context.Context, site Site, session Session, group RemoteGroup, marker string, plan *KeyCreationPlan) (RemoteKey, error) {
 	if group.ID == c.failGroup {
 		c.keyCalls++
 		return RemoteKey{}, errors.New("upstream body with secret-canary")
 	}
-	return c.fakeConnector.EnsureKey(ctx, site, session, group, marker)
+	return c.fakeConnector.EnsureKey(ctx, site, session, group, marker, plan)
 }
 
 func (c *managedKeyConnector) Login(context.Context, Site, LoginInput) (Session, *Challenge, error) {

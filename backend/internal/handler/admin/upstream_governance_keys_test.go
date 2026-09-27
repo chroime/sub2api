@@ -54,7 +54,10 @@ func (s *governanceKeyHandlerStore) SaveManagedKey(_ context.Context, key *gov.M
 
 type governanceKeyHandlerConnector struct{ gov.Connector }
 
-func (*governanceKeyHandlerConnector) EnsureKey(context.Context, gov.Site, gov.Session, gov.RemoteGroup, string) (gov.RemoteKey, error) {
+func (*governanceKeyHandlerConnector) PrepareKey(context.Context, gov.Site, gov.Session, gov.RemoteGroup, string) ([]int64, error) {
+	return []int64{}, nil
+}
+func (*governanceKeyHandlerConnector) EnsureKey(context.Context, gov.Site, gov.Session, gov.RemoteGroup, string, *gov.KeyCreationPlan) (gov.RemoteKey, error) {
 	return gov.RemoteKey{ID: "9", Key: "inference-key-canary"}, nil
 }
 

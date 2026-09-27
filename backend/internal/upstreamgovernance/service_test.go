@@ -145,6 +145,7 @@ type fakeConnector struct {
 	catalog        Catalog
 	err            error
 	keyCalls       int
+	prepareCalls   int
 	challenge      *Challenge
 	discoveryCalls int
 	probeCalls     int
@@ -158,7 +159,11 @@ func (f *fakeConnector) Discover(context.Context, Site, Session) (Catalog, error
 	f.discoveryCalls++
 	return f.catalog, f.err
 }
-func (f *fakeConnector) EnsureKey(context.Context, Site, Session, RemoteGroup, string) (RemoteKey, error) {
+func (f *fakeConnector) PrepareKey(context.Context, Site, Session, RemoteGroup, string) ([]int64, error) {
+	f.prepareCalls++
+	return []int64{}, f.err
+}
+func (f *fakeConnector) EnsureKey(context.Context, Site, Session, RemoteGroup, string, *KeyCreationPlan) (RemoteKey, error) {
 	f.keyCalls++
 	return RemoteKey{ID: "1", Key: "fixture-inference-key"}, f.err
 }

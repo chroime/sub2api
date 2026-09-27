@@ -39,13 +39,13 @@ func TestConnectorSub2APIKeysAcceptNativeNestedGroupOnListAndRead(t *testing.T) 
 	})
 	site := Site{Platform: "sub2api", BaseURL: "https://upstream.example"}
 	session := Session{AccessToken: "fixture", UserID: 42}
-	key, err := connector.EnsureKey(t.Context(), site, session, RemoteGroup{ID: "7"}, "governance-stable")
+	key, err := connector.EnsureKey(t.Context(), site, session, RemoteGroup{ID: "7"}, "governance-stable", nil)
 	require.NoError(t, err)
 	require.Equal(t, RemoteKey{ID: "9", Key: "sk-fixture-key"}, key)
 	require.Equal(t, 1, posts)
 	require.Equal(t, 2, lists)
 	require.Equal(t, 1, reads)
-	key, err = connector.EnsureKey(t.Context(), site, session, RemoteGroup{ID: "7"}, "governance-stable")
+	key, err = connector.EnsureKey(t.Context(), site, session, RemoteGroup{ID: "7"}, "governance-stable", nil)
 	require.NoError(t, err)
 	require.Equal(t, "sk-fixture-key", key.Key)
 	require.Equal(t, 1, posts, "reconciliation must reuse the nested native group key")
@@ -64,7 +64,7 @@ func TestConnectorNewAPIKeyGroupStillRequiresStringBeforeCreate(t *testing.T) {
 				}
 				return 200, fmt.Sprintf(`{"success":true,"data":{"total":1,"items":[{"id":1,"name":"unrelated","group":%s,"key":"sk-unrelated"}]}}`, group)
 			})
-			_, err := connector.EnsureKey(t.Context(), Site{Platform: "newapi", BaseURL: "https://upstream.example"}, Session{AccessToken: "fixture", UserID: 42}, RemoteGroup{ID: "vip"}, "governance-stable")
+			_, err := connector.EnsureKey(t.Context(), Site{Platform: "newapi", BaseURL: "https://upstream.example"}, Session{AccessToken: "fixture", UserID: 42}, RemoteGroup{ID: "vip"}, "governance-stable", nil)
 			require.ErrorIs(t, err, ErrUnsupported)
 			require.Zero(t, posts, "invalid key-list data must prevent creation")
 		})
@@ -93,7 +93,7 @@ func TestConnectorSub2APIKeyCreationSupportsRequiredIdempotency(t *testing.T) {
 			return 500, ""
 		}
 	})
-	key, err := connector.EnsureKey(t.Context(), Site{Platform: "sub2api", BaseURL: "https://upstream.example"}, Session{AccessToken: "fixture", UserID: 42}, RemoteGroup{ID: "7"}, "governance-stable")
+	key, err := connector.EnsureKey(t.Context(), Site{Platform: "sub2api", BaseURL: "https://upstream.example"}, Session{AccessToken: "fixture", UserID: 42}, RemoteGroup{ID: "7"}, "governance-stable", nil)
 	require.NoError(t, err)
 	require.Equal(t, RemoteKey{ID: "9", Key: "sk-fixture-key"}, key)
 }
@@ -135,7 +135,7 @@ func TestConnectorSub2APIRetryKeepsIdempotencyWhileFirstKeyIsInvisible(t *testin
 	site := Site{Platform: "sub2api", BaseURL: "https://upstream.example"}
 	session := Session{AccessToken: "fixture", UserID: 42}
 	for attempt := 0; attempt < 2; attempt++ {
-		_, err := connector.EnsureKey(t.Context(), site, session, RemoteGroup{ID: "7"}, "governance-stable")
+		_, err := connector.EnsureKey(t.Context(), site, session, RemoteGroup{ID: "7"}, "governance-stable", nil)
 		require.ErrorIs(t, err, errConnectorUncertain)
 		require.Len(t, postedKeys, attempt+1, "at most one POST per explicit operation")
 	}
@@ -143,7 +143,7 @@ func TestConnectorSub2APIRetryKeepsIdempotencyWhileFirstKeyIsInvisible(t *testin
 	require.Equal(t, []string{`{"group_id":7,"name":"governance-stable"}`, `{"group_id":7,"name":"governance-stable"}`}, postedBodies)
 	require.Equal(t, 1, starts, "a pending upstream operation must not create a duplicate")
 	published = true
-	key, err := connector.EnsureKey(t.Context(), site, session, RemoteGroup{ID: "7"}, "governance-stable")
+	key, err := connector.EnsureKey(t.Context(), site, session, RemoteGroup{ID: "7"}, "governance-stable", nil)
 	require.NoError(t, err)
 	require.Equal(t, RemoteKey{ID: "9", Key: "sk-fixture-key"}, key)
 	require.Len(t, postedKeys, 2, "a listed key must be reused without a creation POST")

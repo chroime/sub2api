@@ -72,7 +72,7 @@ func TestConnectorNewAPIKeyRecovery(t *testing.T) {
 		t.Fatalf("unexpected %s", r.URL)
 		return 500, ""
 	})
-	k, e := c.EnsureKey(context.Background(), Site{Platform: "newapi", BaseURL: "https://upstream.example"}, Session{AccessToken: "fake", UserID: 42}, RemoteGroup{ID: "vip"}, "governance-stable")
+	k, e := c.EnsureKey(context.Background(), Site{Platform: "newapi", BaseURL: "https://upstream.example"}, Session{AccessToken: "fake", UserID: 42}, RemoteGroup{ID: "vip"}, "governance-stable", nil)
 	if e != nil || k.Key != "sk-invented-full-key" {
 		t.Fatalf("key=%+v err=%v", k, e)
 	}
@@ -150,7 +150,7 @@ func TestConnectorCreateThenReadNewAPIKey(t *testing.T) {
 		t.Fatalf("unexpected %s", r.URL)
 		return 500, ""
 	})
-	key, e := c.EnsureKey(context.Background(), Site{Platform: "newapi", BaseURL: "https://upstream.example"}, Session{AccessToken: "fake", UserID: 42}, RemoteGroup{ID: "vip"}, "marker")
+	key, e := c.EnsureKey(context.Background(), Site{Platform: "newapi", BaseURL: "https://upstream.example"}, Session{AccessToken: "fake", UserID: 42}, RemoteGroup{ID: "vip"}, "marker", nil)
 	if e != nil || key.ID != "9" || posts != 1 {
 		t.Fatalf("key=%+v e=%v posts=%d", key, e, posts)
 	}
@@ -279,7 +279,7 @@ func TestConnectorIncompleteKeyPaginationPreventsCreate(t *testing.T) {
 		}
 		return 200, `{"success":true,"data":{"total":1,"items":[]}}`
 	})
-	_, e := c.EnsureKey(context.Background(), Site{Platform: "newapi", BaseURL: "https://upstream.example"}, Session{AccessToken: "fake"}, RemoteGroup{ID: "vip"}, "marker")
+	_, e := c.EnsureKey(context.Background(), Site{Platform: "newapi", BaseURL: "https://upstream.example"}, Session{AccessToken: "fake"}, RemoteGroup{ID: "vip"}, "marker", nil)
 	if e == nil || posts != 0 {
 		t.Fatalf("incomplete list created key e=%v posts=%d", e, posts)
 	}
@@ -296,7 +296,7 @@ func TestConnectorUncertainCreateNotRetried(t *testing.T) {
 		}
 		return 200, `{"success":true,"data":{"total":0,"items":[]}}`
 	})
-	_, e := c.EnsureKey(context.Background(), Site{Platform: "newapi", BaseURL: "https://upstream.example"}, Session{AccessToken: "fake"}, RemoteGroup{ID: "vip"}, "marker")
+	_, e := c.EnsureKey(context.Background(), Site{Platform: "newapi", BaseURL: "https://upstream.example"}, Session{AccessToken: "fake"}, RemoteGroup{ID: "vip"}, "marker", nil)
 	if !errors.Is(e, errConnectorUncertain) || posts != 1 || strings.Contains(e.Error(), "secret") {
 		t.Fatalf("e=%v posts=%d", e, posts)
 	}
@@ -438,7 +438,7 @@ func TestConnectorWrongGroupMarkerAndMaskedKeyRejected(t *testing.T) {
 			t.Fatalf("unexpected %s", r.URL)
 			return 500, `{}`
 		})
-		_, e := c.EnsureKey(context.Background(), Site{Platform: "newapi", BaseURL: "https://upstream.example"}, Session{AccessToken: "fake"}, RemoteGroup{ID: "vip"}, "marker")
+		_, e := c.EnsureKey(context.Background(), Site{Platform: "newapi", BaseURL: "https://upstream.example"}, Session{AccessToken: "fake"}, RemoteGroup{ID: "vip"}, "marker", nil)
 		if !errors.Is(e, tc.want) {
 			t.Fatalf("e=%v want=%v", e, tc.want)
 		}
@@ -548,7 +548,7 @@ func TestConnectorNewAPIKeyEnvelopeFailureIsNotReauth(t *testing.T) {
 		}
 		return 200, `{"success":false,"message":"quota limit"}`
 	})
-	_, e := c.EnsureKey(context.Background(), Site{Platform: "newapi", BaseURL: "https://upstream.example"}, Session{AccessToken: "fake"}, RemoteGroup{ID: "vip"}, "marker")
+	_, e := c.EnsureKey(context.Background(), Site{Platform: "newapi", BaseURL: "https://upstream.example"}, Session{AccessToken: "fake"}, RemoteGroup{ID: "vip"}, "marker", nil)
 	if !errors.Is(e, errConnectorUncertain) || errors.Is(e, ErrReauth) {
 		t.Fatalf("key failure misclassified: %v", e)
 	}

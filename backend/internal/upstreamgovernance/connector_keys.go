@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 type connectorKey struct {
@@ -105,9 +106,95 @@ func connectorFindKey(keys []connectorKey, group RemoteGroup, marker, platform s
 	}
 	return match, nil
 }
-func (c *platformConnector) EnsureKey(ctx context.Context, s Site, session Session, group RemoteGroup, marker string) (RemoteKey, error) {
+func connectorKeyInGroup(key connectorKey, group RemoteGroup, platform string) (bool, error) {
+	if platform == "sub2api" {
+		return key.GroupID != nil && strconv.FormatInt(*key.GroupID, 10) == group.ID, nil
+	}
+	name, err := key.newAPIGroup()
+	return name == group.ID, err
+}
+
+func validKeyDisplayName(name string) bool {
+	return strings.TrimSpace(name) != "" && len(name) <= 100 && strings.IndexFunc(name, unicode.IsControl) < 0
+}
+
+// Capture same-name IDs before the first creation attempt. Human-readable names
+// need not be unique: other groups, protocols or manually created keys may use
+// the same name. Persist this inventory before POST so retries do not adopt them.
+func (c *platformConnector) PrepareKey(ctx context.Context, s Site, session Session, group RemoteGroup, name string) ([]int64, error) {
+	if !validKeyDisplayName(name) || group.ID == "" {
+		return nil, ErrInvalid
+	}
+	session, err := c.identity(ctx, s, session)
+	if err != nil {
+		return nil, connectorKeyFailure(s, "identity", err)
+	}
+	keys, err := c.keyList(ctx, s, session)
+	if err != nil {
+		return nil, err
+	}
+	ids := []int64{}
+	for _, key := range keys {
+		if key.Name != name {
+			continue
+		}
+		matches, err := connectorKeyInGroup(key, group, s.Platform)
+		if err != nil {
+			return nil, err
+		}
+		if matches {
+			ids = append(ids, key.ID)
+		}
+	}
+	return ids, nil
+}
+
+func connectorFindPlannedKey(keys []connectorKey, group RemoteGroup, marker, platform string, plan *KeyCreationPlan) (*connectorKey, error) {
+	if plan == nil {
+		return connectorFindKey(keys, group, marker, platform)
+	}
+	excluded := make(map[int64]bool, len(plan.ExistingIDs))
+	for _, id := range plan.ExistingIDs {
+		excluded[id] = true
+	}
+	var match *connectorKey
+	for i := range keys {
+		key := &keys[i]
+		if key.Name != plan.Name || excluded[key.ID] {
+			continue
+		}
+		correct, err := connectorKeyInGroup(*key, group, platform)
+		if err != nil {
+			return nil, err
+		}
+		if !correct {
+			continue
+		}
+		if match != nil {
+			return nil, ErrConflict
+		}
+		match = key
+	}
+	return match, nil
+}
+
+func (c *platformConnector) EnsureKey(ctx context.Context, s Site, session Session, group RemoteGroup, marker string, plan *KeyCreationPlan) (RemoteKey, error) {
 	if marker == "" || len(marker) > 128 || group.ID == "" {
 		return RemoteKey{}, ErrInvalid
+	}
+	name := marker
+	if plan != nil {
+		if !validKeyDisplayName(plan.Name) || plan.ExistingIDs == nil || len(plan.ExistingIDs) > 2000 {
+			return RemoteKey{}, ErrInvalid
+		}
+		seen := map[int64]bool{}
+		for _, id := range plan.ExistingIDs {
+			if id <= 0 || seen[id] {
+				return RemoteKey{}, ErrInvalid
+			}
+			seen[id] = true
+		}
+		name = plan.Name
 	}
 	session, e := c.identity(ctx, s, session)
 	if e != nil {
@@ -117,13 +204,13 @@ func (c *platformConnector) EnsureKey(ctx context.Context, s Site, session Sessi
 	if e != nil {
 		return RemoteKey{}, e
 	}
-	match, e := connectorFindKey(keys, group, marker, s.Platform)
+	match, e := connectorFindPlannedKey(keys, group, marker, s.Platform, plan)
 	if e != nil {
 		return RemoteKey{}, e
 	}
 	if match == nil {
 		path := "/api/token/"
-		body := map[string]any{"name": marker, "group": group.ID, "expired_time": -1, "unlimited_quota": true, "model_limits_enabled": false, "cross_group_retry": false, "auto_groups": []string{}}
+		body := map[string]any{"name": name, "group": group.ID, "expired_time": -1, "unlimited_quota": true, "model_limits_enabled": false, "cross_group_retry": false, "auto_groups": []string{}}
 		var headers http.Header
 		if s.Platform == "sub2api" {
 			id, e := strconv.ParseInt(group.ID, 10, 64)
@@ -131,7 +218,7 @@ func (c *platformConnector) EnsureKey(ctx context.Context, s Site, session Sessi
 				return RemoteKey{}, ErrInvalid
 			}
 			path = "/api/v1/keys"
-			body = map[string]any{"name": marker, "group_id": id}
+			body = map[string]any{"name": name, "group_id": id}
 			headers = make(http.Header)
 			headers.Set("Idempotency-Key", marker)
 		}
@@ -147,7 +234,7 @@ func (c *platformConnector) EnsureKey(ctx context.Context, s Site, session Sessi
 		if e != nil {
 			return RemoteKey{}, errConnectorUncertain
 		}
-		match, e = connectorFindKey(keys, group, marker, s.Platform)
+		match, e = connectorFindPlannedKey(keys, group, marker, s.Platform, plan)
 		if e != nil || match == nil {
 			return RemoteKey{}, errConnectorUncertain
 		}

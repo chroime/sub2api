@@ -3,24 +3,33 @@ package upstreamgovernance
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 	"strings"
 	"time"
 )
 
+// KeyCreationPlan freezes the display name and the matching keys that existed
+// before creation. A nil inventory means no remote creation may have started.
+type KeyCreationPlan struct {
+	Name        string  `json:"name"`
+	ExistingIDs []int64 `json:"existing_ids"`
+}
+
 // ManagedKey records remote ownership independently of any local import.
-// KeyCipher and OwnerUserID never appear in API metadata or audit output.
+// Private ownership, creation state and ciphertext never appear in API metadata.
 type ManagedKey struct {
-	ID            int64     `json:"id"`
-	SiteID        int64     `json:"site_id"`
-	RemoteGroupID string    `json:"remote_group_id"`
-	Platform      string    `json:"platform"`
-	RemoteKeyID   string    `json:"remote_key_id"`
-	Marker        string    `json:"marker"`
-	HasKey        bool      `json:"has_key"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
-	OwnerUserID   int64     `json:"-"`
-	KeyCipher     string    `json:"-"`
+	ID            int64            `json:"id"`
+	SiteID        int64            `json:"site_id"`
+	RemoteGroupID string           `json:"remote_group_id"`
+	Platform      string           `json:"platform"`
+	RemoteKeyID   string           `json:"remote_key_id"`
+	Marker        string           `json:"marker"`
+	HasKey        bool             `json:"has_key"`
+	CreatedAt     time.Time        `json:"created_at"`
+	UpdatedAt     time.Time        `json:"updated_at"`
+	OwnerUserID   int64            `json:"-"`
+	KeyCipher     string           `json:"-"`
+	CreationPlan  *KeyCreationPlan `json:"-"`
 }
 
 type KeySelection struct {
@@ -191,6 +200,7 @@ func (s *Service) ensureManagedKey(ctx context.Context, site Site, session Sessi
 		return nil, RemoteKey{}, false, ErrReauth
 	}
 	stable := marker(site.ID, group.ID, transport)
+	newManaged := managed == nil
 	if managed == nil {
 		managed = &ManagedKey{SiteID: site.ID, RemoteGroupID: group.ID, Platform: transport, Marker: stable, OwnerUserID: session.UserID, CreatedAt: s.now(), UpdatedAt: s.now()}
 	}
@@ -234,11 +244,30 @@ func (s *Service) ensureManagedKey(ctx context.Context, site Site, session Sessi
 		return managed, key, true, nil
 	}
 	if managed.ID == 0 {
+		if newManaged {
+			managed.CreationPlan = &KeyCreationPlan{Name: managedKeyName(group, managed.CreatedAt, site.Platform)}
+		}
 		if err := s.store.SaveManagedKey(ctx, managed); err != nil {
 			return nil, RemoteKey{}, false, err
 		}
 	}
-	key, err := s.connector.EnsureKey(ctx, site, session, group, stable)
+	if managed.CreationPlan != nil && managed.CreationPlan.ExistingIDs == nil {
+		existingIDs, err := s.connector.PrepareKey(ctx, site, session, group, managed.CreationPlan.Name)
+		if err != nil {
+			return nil, RemoteKey{}, false, err
+		}
+		// Keep an empty inventory distinct from an inventory not yet recorded.
+		// Persist it before any POST so retries cannot adopt a pre-existing key.
+		managed.CreationPlan = &KeyCreationPlan{Name: managed.CreationPlan.Name, ExistingIDs: append([]int64{}, existingIDs...)}
+		if err := s.store.SaveManagedKey(ctx, managed); err != nil {
+			return nil, RemoteKey{}, false, err
+		}
+	}
+	plan, err := s.keyCreationAttemptPlan(ctx, managed)
+	if err != nil {
+		return nil, RemoteKey{}, false, err
+	}
+	key, err := s.connector.EnsureKey(ctx, site, session, group, stable, plan)
 	if err != nil {
 		return nil, RemoteKey{}, false, err
 	}
@@ -259,4 +288,33 @@ func (s *Service) ensureManagedKey(ctx context.Context, site Site, session Sessi
 		return nil, RemoteKey{}, false, err
 	}
 	return managed, key, false, nil
+}
+
+func (s *Service) keyCreationAttemptPlan(ctx context.Context, managed *ManagedKey) (*KeyCreationPlan, error) {
+	if managed.CreationPlan == nil {
+		return nil, nil
+	}
+	plan := &KeyCreationPlan{Name: managed.CreationPlan.Name, ExistingIDs: append([]int64{}, managed.CreationPlan.ExistingIDs...)}
+	keys, err := s.store.ListManagedKeys(ctx, managed.SiteID)
+	if err != nil {
+		return nil, err
+	}
+	seen := make(map[int64]bool, len(plan.ExistingIDs))
+	for _, id := range plan.ExistingIDs {
+		seen[id] = true
+	}
+	// Another protocol may have completed after this pending operation began.
+	// Exclude its owned key only for this attempt; the persisted inventory and
+	// request name remain fixed across retries and process restarts.
+	for _, other := range keys {
+		if other.Marker == managed.Marker || other.RemoteGroupID != managed.RemoteGroupID || other.KeyCipher == "" {
+			continue
+		}
+		id, err := strconv.ParseInt(other.RemoteKeyID, 10, 64)
+		if err == nil && id > 0 && !seen[id] {
+			plan.ExistingIDs = append(plan.ExistingIDs, id)
+			seen[id] = true
+		}
+	}
+	return plan, nil
 }

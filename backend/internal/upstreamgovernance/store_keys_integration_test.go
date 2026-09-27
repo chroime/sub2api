@@ -55,6 +55,18 @@ func TestSQLManagedKeysPostgresIntegration(t *testing.T) {
 		_, err = db.Exec(string(raw))
 		require.NoError(t, err)
 	}
+	var legacySiteID, legacyKeyID int64
+	require.NoError(t, db.QueryRow(`INSERT INTO upstream_governance_sites(name,platform,base_url) VALUES('Legacy fixture','sub2api','https://legacy.example') RETURNING id`).Scan(&legacySiteID))
+	require.NoError(t, db.QueryRow(`INSERT INTO upstream_governance_keys(site_id,remote_group_id,platform,marker,owner_user_id) VALUES($1,'8','openai','legacy-pending-marker',5) RETURNING id`, legacySiteID).Scan(&legacyKeyID))
+	var legacyBefore string
+	require.NoError(t, db.QueryRow(`SELECT to_jsonb(k)::text FROM upstream_governance_keys k WHERE id=$1`, legacyKeyID).Scan(&legacyBefore))
+	migration, err := os.ReadFile("../../migrations/255_upstream_governance_key_creation_plans.sql")
+	require.NoError(t, err)
+	_, err = db.Exec(string(migration))
+	require.NoError(t, err)
+	var legacyAfter string
+	require.NoError(t, db.QueryRow(`SELECT (to_jsonb(k)-'creation_plan')::text FROM upstream_governance_keys k WHERE id=$1`, legacyKeyID).Scan(&legacyAfter))
+	require.JSONEq(t, legacyBefore, legacyAfter, "migration must preserve all old key fields")
 	encryptor, err := repository.NewAESEncryptor(&config.Config{Totp: config.TotpConfig{EncryptionKey: strings.Repeat("42", 32)}})
 	require.NoError(t, err)
 	sessionJSON, err := json.Marshal(gov.Session{AccessToken: "fixture-session-canary", UserID: 5})
@@ -62,6 +74,14 @@ func TestSQLManagedKeysPostgresIntegration(t *testing.T) {
 	sessionCipher, err := encryptor.Encrypt(string(sessionJSON))
 	require.NoError(t, err)
 	store := gov.NewSQLStore(db)
+	legacy, err := store.GetManagedKey(t.Context(), legacySiteID, legacyKeyID)
+	require.NoError(t, err)
+	require.Nil(t, legacy.CreationPlan)
+	legacy.CreationPlan = &gov.KeyCreationPlan{Name: "Do not rename legacy-20260927"}
+	require.ErrorIs(t, store.SaveManagedKey(t.Context(), legacy), gov.ErrConflict)
+	legacy.CreationPlan = nil
+	legacy.RemoteKeyID, legacy.KeyCipher = "legacy-remote-id", "legacy-cipher"
+	require.NoError(t, store.SaveManagedKey(t.Context(), legacy), "legacy pending writes retain their original naming contract")
 	site := &gov.Site{Name: "Fixture", Platform: "sub2api", BaseURL: "https://upstream.example", Enabled: true, IntervalMinutes: 15, SessionCipher: sessionCipher, Status: "connected", NextSyncAt: time.Now()}
 	require.NoError(t, store.CreateSite(t.Context(), site))
 	snapshot := &gov.Snapshot{SiteID: site.ID, SiteVersion: site.Version, Catalog: gov.Catalog{Groups: []gov.RemoteGroup{{ID: "8", Name: "Visible", Platform: "openai"}, {ID: "9", Name: "Legacy", Platform: "openai"}}}}
@@ -89,6 +109,9 @@ func TestSQLManagedKeysPostgresIntegration(t *testing.T) {
 				}
 				require.NoError(t, json.NewDecoder(r.Body).Decode(&input))
 				require.Equal(t, int64(8), input.GroupID)
+				require.Regexp(t, `^Visible-[0-9]{8}$`, input.Name)
+				require.Regexp(t, `^sub2api-governance-[a-f0-9]{24}$`, r.Header.Get("Idempotency-Key"))
+				require.NotEqual(t, input.Name, r.Header.Get("Idempotency-Key"), "display name must be independent of stable request identity")
 				remoteMarker = input.Name
 				// The upstream commits but its response fails. Explicit retry must
 				// reconcile the stable marker instead of issuing a second POST.
@@ -110,9 +133,17 @@ func TestSQLManagedKeysPostgresIntegration(t *testing.T) {
 	require.Len(t, pending, 1)
 	require.Equal(t, int64(5), pending[0].OwnerUserID)
 	require.False(t, pending[0].HasKey)
+	require.NotNil(t, pending[0].CreationPlan)
+	require.Equal(t, remoteMarker, pending[0].CreationPlan.Name)
+	require.NotNil(t, pending[0].CreationPlan.ExistingIDs)
+	require.Empty(t, pending[0].CreationPlan.ExistingIDs)
 	require.ErrorIs(t, store.DeleteSite(t.Context(), site.ID), gov.ErrSiteInUse)
 	_, err = db.Exec(`DELETE FROM upstream_governance_sites WHERE id=$1`, site.ID)
 	require.Error(t, err, "the foreign key must also protect pending ownership")
+	snapshot.Catalog.Groups[0].Name = "Renamed before restart"
+	require.NoError(t, store.SaveSnapshot(t.Context(), snapshot, nil))
+	request.SnapshotID = snapshot.ID
+	service = gov.NewService(gov.NewSQLStore(db), connector, nil, encryptor, true)
 	result, err = service.CreateKeys(t.Context(), site.ID, request)
 	require.NoError(t, err)
 	require.Equal(t, "created", result.Items[0].Status)
@@ -148,4 +179,63 @@ func TestSQLManagedKeysPostgresIntegration(t *testing.T) {
 	bindings, err := store.ListBindings(t.Context(), site.ID)
 	require.NoError(t, err)
 	require.Empty(t, bindings)
+
+	t.Run("creation plan immutable CAS", func(t *testing.T) {
+		reserved := &gov.ManagedKey{SiteID: site.ID, RemoteGroupID: "plan-cas", Platform: "openai", Marker: "plan-cas-marker", OwnerUserID: 5, CreationPlan: &gov.KeyCreationPlan{Name: "Selected-20260927"}}
+		require.NoError(t, store.SaveManagedKey(t.Context(), reserved))
+		stale, err := store.GetManagedKey(t.Context(), site.ID, reserved.ID)
+		require.NoError(t, err)
+		require.Nil(t, stale.CreationPlan.ExistingIDs)
+		reserved.CreationPlan = &gov.KeyCreationPlan{Name: "Selected-20260927", ExistingIDs: []int64{31, 44}}
+		require.NoError(t, store.SaveManagedKey(t.Context(), reserved))
+		require.ErrorIs(t, store.SaveManagedKey(t.Context(), stale), gov.ErrConflict, "a stale unprepared writer must not erase durable exclusions")
+		for _, changed := range []*gov.KeyCreationPlan{
+			nil,
+			{Name: "Renamed-20260928", ExistingIDs: []int64{31, 44}},
+			{Name: "Selected-20260927"},
+			{Name: "Selected-20260927", ExistingIDs: []int64{}},
+			{Name: "Selected-20260927", ExistingIDs: []int64{31, 44, 55}},
+		} {
+			attempt := *reserved
+			attempt.CreationPlan = changed
+			require.ErrorIs(t, store.SaveManagedKey(t.Context(), &attempt), gov.ErrConflict)
+		}
+		unchanged, err := gov.NewSQLStore(db).GetManagedKey(t.Context(), site.ID, reserved.ID)
+		require.NoError(t, err)
+		require.Equal(t, reserved.CreationPlan, unchanged.CreationPlan, "restart reads preserve the complete prepared request")
+		reserved.RemoteKeyID, reserved.KeyCipher = "67", "fixture-completed-cipher"
+		require.NoError(t, store.SaveManagedKey(t.Context(), reserved))
+		require.NoError(t, store.SaveManagedKey(t.Context(), reserved), "an identical completed write can be replayed")
+		unchanged.KeyCipher = ""
+		require.ErrorIs(t, store.SaveManagedKey(t.Context(), unchanged), gov.ErrConflict)
+	})
+
+	t.Run("concurrent inventory capture has one winner", func(t *testing.T) {
+		reserved := &gov.ManagedKey{SiteID: site.ID, RemoteGroupID: "plan-race", Platform: "openai", Marker: "plan-race-marker", OwnerUserID: 5, CreationPlan: &gov.KeyCreationPlan{Name: "Concurrent-20260927"}}
+		require.NoError(t, store.SaveManagedKey(t.Context(), reserved))
+		start := make(chan struct{})
+		results := make(chan error, 2)
+		for _, existingID := range []int64{51, 52} {
+			attempt := *reserved
+			attempt.CreationPlan = &gov.KeyCreationPlan{Name: reserved.CreationPlan.Name, ExistingIDs: []int64{existingID}}
+			go func() {
+				<-start
+				results <- store.SaveManagedKey(t.Context(), &attempt)
+			}()
+		}
+		close(start)
+		succeeded := 0
+		for range 2 {
+			if err := <-results; err == nil {
+				succeeded++
+			} else {
+				require.ErrorIs(t, err, gov.ErrConflict)
+			}
+		}
+		require.Equal(t, 1, succeeded)
+		winner, err := store.GetManagedKey(t.Context(), site.ID, reserved.ID)
+		require.NoError(t, err)
+		require.Len(t, winner.CreationPlan.ExistingIDs, 1)
+		require.Contains(t, []int64{51, 52}, winner.CreationPlan.ExistingIDs[0])
+	})
 }
