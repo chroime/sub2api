@@ -11,6 +11,8 @@ import ImportPanel from './ImportPanel.vue'
 import ReconciliationPanel from './ReconciliationPanel.vue'
 import SiteEditDialog from './SiteEditDialog.vue'
 import ManagedKeysPanel from './ManagedKeysPanel.vue'
+import ModelMonitorPanel from './ModelMonitorPanel.vue'
+import modelAPI from '@/api/admin/upstream-model-monitoring'
 import api, { type BalanceHealth, type Site, type Snapshot } from '@/api/admin/upstream-governance'
 vi.mock('@/api/admin/upstream-governance', () => ({
   default: {
@@ -42,6 +44,7 @@ vi.mock('@/api/admin/upstream-governance', () => ({
 vi.mock('@/api/admin/groups', () => ({
   default: { getAll: vi.fn().mockResolvedValue([]) },
 }))
+vi.mock('@/api/admin/upstream-model-monitoring', () => ({ default: { policies: vi.fn().mockResolvedValue([]), runs: vi.fn().mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20, counts: {} }), stats: vi.fn().mockResolvedValue({ days: 7, groups: [] }) } }))
 vi.mock('@/api/admin/proxies', () => ({
   default: { getAll: vi.fn().mockResolvedValue([]) },
 }))
@@ -49,6 +52,19 @@ vi.mock('vue-i18n', async (importOriginal) => ({ ...await importOriginal<typeof 
 enableAutoUnmount(afterEach)
 describe('governance page', () => {
   beforeEach(() => { vi.clearAllMocks(); vi.mocked(api.keys).mockResolvedValue([]) })
+  it('loads model monitoring only in its separate tab and unmounts it when returning to automation', async () => {
+    const site: Site = { id: 1, name: 'Models site', platform: 'sub2api', base_url: 'https://fixture.example', enabled: true, interval_minutes: 15, proxy_id: null, version: 1, has_credential: true, status: 'healthy', last_error: '', last_sync_at: null }
+    vi.mocked(api.list).mockResolvedValue([site]); vi.mocked(api.catalog).mockRejectedValue({ status: 404 }); vi.mocked(api.bindings).mockResolvedValue([])
+    const page = { items: [], total: 0, page: 1, pages: 0, page_size: 20 }
+    vi.mocked(api.events).mockResolvedValue(page); vi.mocked(api.checks).mockResolvedValue(page)
+    const wrapper = mount(View); await flushPromises(); await wrapper.get('#governance-site-1').trigger('click'); await flushPromises()
+    expect(modelAPI.policies).not.toHaveBeenCalled()
+    await wrapper.get('#governance-models-tab').trigger('click'); await flushPromises()
+    expect(modelAPI.policies).toHaveBeenCalledWith(1)
+    expect(wrapper.findComponent(ModelMonitorPanel).exists()).toBe(true)
+    await wrapper.get('#governance-monitor-tab').trigger('click')
+    expect(wrapper.findComponent(ModelMonitorPanel).exists()).toBe(false)
+  })
   async function setupProbeMonitor() {
     const site: Site = { id: 1, name: 'Monitor upstream', platform: 'sub2api', base_url: 'https://fixture.example', enabled: true, interval_minutes: 15, proxy_id: null, version: 1, has_credential: true, status: 'healthy', last_error: '', last_sync_at: null }
     const page = { items: [], total: 0, page: 1, pages: 0, page_size: 20 }

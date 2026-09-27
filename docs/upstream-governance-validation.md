@@ -196,3 +196,27 @@ Playwright 浏览器控制台无错误。页面截图通过人工视觉检查，
 备份目录：`C:/Users/Cracker/AppData/Local/Temp/governance-app-20260926/before-governance-binding-labels-20260927-212657/`，包含原程序、启动脚本、保持原 ACL 的加密密钥、初始及每次替换前最新数据库、最终数据指纹；各归档均已验证。
 
 另完成管理员专属模型监测设计文档 `docs/upstream-governance-model-monitoring-design.md`。按用户指定的糖果逻辑题与鹈鹕 HTML/SVG 动画题，设计模型和低/中/高思考等级选择、独立结果记录、token 口径、时延和长期任务机制。糖果标准答案 21（9 圆 + 12 星）已通过独立上下界证明及有限状态计算核对。模型监测本轮仅形成方案，没有注册新任务、调用真实上游评测或启用新定时监测。
+
+## 2026-09-27 管理员模型监测实现与验收
+
+在每个上游站点增加独立「模型监测」页签，按现有托管分组Key直接请求指定模型；不经过生产账户池。支持Chat Completions、Responses、Anthropic和Gemini，提供低/中/高思考等级、用户原文糖果题与鹈鹕题、Token核对、多位置上下文召回和随机码探活。
+
+手动批次支持1–32并发、每项1–100次采样、单批最多300请求；数据库跨工作器限制全局32并发，同目标批次互斥。独立持久化调度、UTC每日请求预算、取消、租约和身份快照避免重复发送结果未知的请求。策略默认暂停，启用后不依赖页面打开。复用系统SMTP，按策略产生失败/恢复、待核实Token差异及管理员确认质量事件，不把未复核作品自动判为能力下降。
+
+原始请求正文、输入/输出文本、upstream usage、tokenizer来源、字符/字节数和SHA-256均保留。已知tokenizer可独立计数，并按缓存及隐藏推理字段整理比较口径。未知tokenizer、缺失usage和不可比较的隐藏推理明确展示；输入包装余量是启发式，不能证明不可见的上游处理量或真实模型身份。三档对比使用同批次/模板/采样序号；糖果数值与证明复核分开，鹈鹕原件可下载。
+
+验证结果：
+
+- 完整`internal/upstreamgovernance`包在隔离PostgreSQL环境通过，包含13项并发与持久化引擎集成测试。验证真实并发、跨实例全局限制、取消/暂停、跨UTC日预算、身份变更、租约失效、未知结果不重发、旧检查互斥、通知去重/重试和人工复核。统计聚合使用真实隔离SQL数据验证。
+- 四种协议的请求/流解析、心跳不计TTFT、完整结束与中断、随机标记、Token异常口径及原题测试通过；相关service、admin handler、路由和管理员鉴权测试通过，相关包go vet通过。普通JWT请求403、未登录请求401。`-race`因CGO关闭且未安装GCC未能运行，未声称完成race检查。
+- 最终前端7个测试文件共55项通过，涵盖API载荷、策略与手动批次、旧请求隔离、详情、比较、独立预览与语言完整性；类型检查、改动文件ESLint、生产构建、嵌入式Go构建通过。
+- 实际Chromium发现原srcdoc继承管理员nonce CSP导致脚本被阻止。修复采用可信nonce bootstrap，在已经隔离的iframe内解析作品，并为最终文档重新前置固定CSP；未放宽管理员页面CSP，未在父页面解析作品。低/中/高三份合成动画均连续播放，HTML语言和body class保留。
+- 隔离fixture中，父DOM、cookie、localStorage和fetch均被阻止；外链图片、iframe、脚本、样式的拦截计数为0。HTML原始展示与下载保持原件，下载SHA-256与原文一致。该fixture的预期CSP拒绝日志与普通使用控制台分开，正常三档播放期间0错误、0警告。
+- 桌面1440px与手机390px布局经截图检查；动画过渡稳定后手机document/body宽度均为390px。10个checkbox均为16×16，浅深主题颜色正确。浏览器使用独立会话，没有操作用户的内嵌浏览器标签。
+- 浏览器内存fixture验证3档×3模板×1采样生成9项、并发3的请求载荷，取消后9项全部显示已取消。Token详情展示合成的usage差异、字符/字节、SHA-256和未知值。暂停策略的「保存并启用」同次发送enabled与明确的take_over_legacy，成功后清空一次性选择；列表冲突会展开最新配置，避免静默接管。
+- 验收没有发送真实上游模型请求、真实邮件或启用真实监测策略；最终真实模型策略/运行/通知数量仍为0/0/0。HTTP/SMTP/浏览器fixture只证明软件流程，不代表任何实际渠道的能力、延迟、token计量或邮件投递实测。
+- 本地服务已更新，健康检查HTTP200。迁移257增加独立模型监测数据表。最终替换前后站点配置、账户、分组、账户分组关联、治理绑定和托管Key指纹全部一致；保留3站点、30绑定、31Key、14个未删除账户和23条账户分组关系。
+
+备份目录：`C:/Users/Cracker/AppData/Local/Temp/governance-app-20260926/before-governance-model-monitoring-20260927-222857/`。保留初始数据库、原程序、启动脚本和保持原ACL的加密密钥；每次运行时替换前再次保存最新数据库和资源指纹。最终检查点为`immediately-before-preview-fix.dump`、`before-preview-fix.exe`、`before-preview-state.json`与`after-preview-state.json`，数据库归档经`pg_restore --list`验证可读取。
+
+最终程序SHA-256：`A8065ADEFABCFEB7632A2D6CBD4F5AB21DB6B483EE45B66F26604470A167C301`。使用说明见`docs/upstream-governance-model-monitoring.md`。当前未实现自动阶梯上下文扫描、按延迟阈值自动告警或原始作品保留期清理；这些与已实现的定时检测和Token差异核对分别记录。

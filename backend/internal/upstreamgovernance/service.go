@@ -32,6 +32,12 @@ type Service struct {
 	workerCancel    context.CancelFunc
 	workerDone      chan struct{}
 	balanceNotifier BalanceNotifier
+	modelMu         sync.Mutex
+	modelCancel     context.CancelFunc
+	modelDone       chan struct{}
+	modelWake       chan struct{}
+	modelActive     map[string]modelActiveRun
+	modelNotifier   ModelNotifier
 }
 
 func NewService(store Store, connector Connector, local LocalAccounts, cipher Encryptor, durableKey bool) *Service {

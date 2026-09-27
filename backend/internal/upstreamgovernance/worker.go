@@ -51,6 +51,13 @@ func (s *Service) ConfigureMonitor(ctx context.Context, siteID, bindingID int64,
 	}
 	b.ProbeIntervalMinutes = interval
 	if enabled {
+		conflict, e := s.modelLegacyConflict(ctx, siteID, b, model)
+		if e != nil {
+			return nil, e
+		}
+		if conflict {
+			return nil, ErrConflict
+		}
 		a, err := s.local.FindAccount(ctx, b.Marker)
 		if err != nil {
 			return nil, err
@@ -97,6 +104,11 @@ func (s *Service) Probe(ctx context.Context, siteID, bindingID int64, model stri
 
 // The caller holds both the remote-operation slot and the site's advisory lock.
 func (s *Service) probeLocked(ctx context.Context, site Site, b *Binding, model string) (*Check, error) {
+	if conflict, err := s.modelLegacyConflict(ctx, site.ID, b, model); err != nil {
+		return nil, err
+	} else if conflict {
+		return nil, ErrBusy
+	}
 	previous, err := s.store.LatestCheck(ctx, site.ID, b.ID)
 	if err != nil && !errors.Is(err, ErrNotFound) {
 		return nil, err
@@ -154,6 +166,7 @@ func (s *Service) probeLocked(ctx context.Context, site Site, b *Binding, model 
 
 // Start is idempotent. All outbound work is skipped without durable encryption.
 func (s *Service) Start() {
+	s.startModelWorker()
 	s.workerMu.Lock()
 	defer s.workerMu.Unlock()
 	if s.workerDone != nil || !s.durableKey || s.cipher == nil {
@@ -180,6 +193,7 @@ func (s *Service) Start() {
 }
 
 func (s *Service) Stop() {
+	s.stopModelWorker()
 	s.workerMu.Lock()
 	done := s.workerDone
 	if done == nil {

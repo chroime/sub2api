@@ -43,4 +43,13 @@ func registerUpstreamGovernanceRoutes(admin *gin.RouterGroup, h *handler.Handler
 	g.GET("/sites/:id/checks", api.Checks)
 	g.POST("/sites/:id/bindings/:binding_id/check", api.Probe)
 	g.PUT("/sites/:id/bindings/:binding_id/monitor", api.Monitor)
+	g.GET("/sites/:id/model-policies", api.ModelPolicies)
+	g.POST("/sites/:id/model-policies", api.SaveModelPolicy)
+	g.DELETE("/sites/:id/model-policies/:policy_id", api.DeleteModelPolicy)
+	g.POST("/sites/:id/model-batches", api.StartModelBatch)
+	g.POST("/sites/:id/model-batches/:batch_id/cancel", api.CancelModelBatch)
+	g.GET("/sites/:id/model-runs", api.ModelRuns)
+	g.GET("/sites/:id/model-stats", api.ModelStats)
+	g.GET("/sites/:id/model-runs/:run_id", api.ModelRun)
+	g.PUT("/sites/:id/model-runs/:run_id/review", api.ReviewModelRun)
 }

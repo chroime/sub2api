@@ -218,7 +218,15 @@ type governanceHTTPClient struct {
 
 func (c governanceHTTPClient) Do(req *http.Request) (*http.Response, error) {
 	ctx := WithHTTPUpstreamPublicHostsOnly(WithHTTPUpstreamRedirectsDisabled(req.Context()))
-	return c.upstream.Do(req.WithContext(ctx), c.proxy, 0, 2)
+	poolConcurrency := 2
+	if gov.ModelRequestConcurrency(ctx) > 0 {
+		// The model queue enforces its global and batch limits. Keep a stable,
+		// separate streaming pool so an account-isolated pool of two connections
+		// cannot silently serialize a larger requested test batch.
+		poolConcurrency = 32
+		ctx = WithHTTPUpstreamProfile(ctx, HTTPUpstreamProfileLongStream)
+	}
+	return c.upstream.Do(req.WithContext(ctx), c.proxy, 0, poolConcurrency)
 }
 func governanceClientFactory(upstream HTTPUpstream, proxies ProxyRepository) gov.ClientFactory {
 	return func(ctx context.Context, site gov.Site) (gov.HTTPDoer, error) {
@@ -251,6 +259,7 @@ func ProvideUpstreamGovernanceService(db *sql.DB, admin AdminService, upstream H
 		notifier.mail = email
 	}
 	svc.SetBalanceNotifier(notifier)
+	svc.SetModelNotifier(notifier)
 	svc.Start()
 	return svc
 }

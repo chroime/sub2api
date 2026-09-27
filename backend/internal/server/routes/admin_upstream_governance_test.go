@@ -14,13 +14,22 @@ func TestGovernanceRoutesRegisteredUnderAdmin(t *testing.T) {
 	h := &handler.Handlers{Admin: &handler.AdminHandlers{UpstreamGovernance: admin.NewUpstreamGovernanceHandler(nil)}}
 	registerUpstreamGovernanceRoutes(r.Group("/api/v1/admin"), h)
 	routes := r.Routes()
-	require.Len(t, routes, 32)
+	require.Len(t, routes, 41)
 	registered := map[string]bool{}
 	for _, route := range routes {
 		require.Contains(t, route.Path, "/api/v1/admin/upstream-governance/")
 		registered[route.Method+" "+route.Path] = true
 	}
 	for _, expected := range []string{
+		"GET /api/v1/admin/upstream-governance/sites/:id/model-policies",
+		"POST /api/v1/admin/upstream-governance/sites/:id/model-policies",
+		"DELETE /api/v1/admin/upstream-governance/sites/:id/model-policies/:policy_id",
+		"POST /api/v1/admin/upstream-governance/sites/:id/model-batches",
+		"POST /api/v1/admin/upstream-governance/sites/:id/model-batches/:batch_id/cancel",
+		"GET /api/v1/admin/upstream-governance/sites/:id/model-runs",
+		"GET /api/v1/admin/upstream-governance/sites/:id/model-stats",
+		"GET /api/v1/admin/upstream-governance/sites/:id/model-runs/:run_id",
+		"PUT /api/v1/admin/upstream-governance/sites/:id/model-runs/:run_id/review",
 		"GET /api/v1/admin/upstream-governance/sites/:id/login-credentials",
 		"PUT /api/v1/admin/upstream-governance/sites/:id/balance-monitor",
 		"GET /api/v1/admin/upstream-governance/sites/:id/balance-health",

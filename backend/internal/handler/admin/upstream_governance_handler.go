@@ -28,6 +28,12 @@ func governanceError(c *gin.Context, e error) bool {
 	case errors.Is(e, gov.ErrInvalid):
 		status = 400
 		message = "Invalid governance input"
+	case errors.Is(e, gov.ErrModelBudget):
+		response.ErrorWithDetails(c, http.StatusConflict, "Model monitoring daily request budget exhausted", "model_budget_exhausted", nil)
+		return true
+	case errors.Is(e, gov.ErrModelGroupGone):
+		response.ErrorWithDetails(c, http.StatusConflict, "The upstream group is no longer visible", "model_group_gone", nil)
+		return true
 	case errors.Is(e, gov.ErrNotFound):
 		status = 404
 		message = "Governance resource not found"

@@ -18,6 +18,7 @@ import ReconciliationPanel from './ReconciliationPanel.vue'
 import BalanceHealthPanel from './BalanceHealthPanel.vue'
 import RechargePlanPanel from './RechargePlanPanel.vue'
 import ManagedKeysPanel from './ManagedKeysPanel.vue'
+import ModelMonitorPanel from './ModelMonitorPanel.vue'
 import Icon from '@/components/icons/Icon.vue'
 import api, {
   type Site,
@@ -35,10 +36,10 @@ import groupsAPI from '@/api/admin/groups'
 import proxiesAPI from '@/api/admin/proxies'
 import type { AdminGroup } from '@/types'
 const { t } = useI18n()
-const tab = ref<'overview' | 'import' | 'monitor' | 'history'>('overview')
+const tab = ref<'overview' | 'import' | 'monitor' | 'models' | 'history'>('overview')
 const showOverview = ref(true)
 const automation = ref<AutomationConfiguration | null>(null), balanceHealth = ref<BalanceHealth | null>(null)
-const automationBusy = ref(false), reconciliationBusy = ref(false), keyBusy = ref(false), rechargeBusy = ref(false)
+const automationBusy = ref(false), reconciliationBusy = ref(false), keyBusy = ref(false), rechargeBusy = ref(false), modelBusy = ref(false)
 const keysOpen = ref(false), keySelections = ref<KeySelection[]>([]), reconciliationEpoch = ref(0)
 const importBusy = ref(false)
 const balanceBusy = ref(false)
@@ -64,7 +65,7 @@ const busy = ref(false),
 const probe = ref<Binding | null>(null),
   probeAction = ref<'check' | 'monitor'>('check')
 const working = computed(
-  () => busy.value || importBusy.value || balanceBusy.value || editBusy.value || automationBusy.value || reconciliationBusy.value || keyBusy.value || rechargeBusy.value,
+  () => busy.value || importBusy.value || balanceBusy.value || editBusy.value || automationBusy.value || reconciliationBusy.value || keyBusy.value || rechargeBusy.value || modelBusy.value,
 )
 function failure(e: unknown) {
   error.value = t(errorKey(e))
@@ -92,7 +93,7 @@ async function load() {
   })
 }
 async function select(site: Site, collected?: Snapshot) {
-  if (importBusy.value || balanceBusy.value || editBusy.value || automationBusy.value || reconciliationBusy.value || keyBusy.value || rechargeBusy.value) return
+  if (importBusy.value || balanceBusy.value || editBusy.value || automationBusy.value || reconciliationBusy.value || keyBusy.value || rechargeBusy.value || modelBusy.value) return
   const request = ++generation
   connecting.value = false
   editing.value = false
@@ -307,6 +308,11 @@ function openKeys(selections: KeySelection[] = []) {
   keySelections.value = [...selections]
   keysOpen.value = true
 }
+async function closeKeys() {
+  if (keyBusy.value) return
+  keysOpen.value = false
+  await reloadBindings()
+}
 async function reloadHealth() {
   if (!active.value) return
   const id = active.value.id, request = generation, healthRequest = ++healthGeneration
@@ -366,14 +372,14 @@ onUnmounted(() => {
       <header class="flex flex-wrap items-start justify-between gap-4"><div class="min-w-0"><h2 class="text-xl font-semibold tracking-tight">{{ t('governance.title') }}</h2><p class="mt-1 max-w-3xl text-sm leading-relaxed text-gray-500">{{ t('governance.workspaceDescription') }}</p></div><div class="flex flex-wrap gap-2"><button class="btn btn-secondary" :disabled="working" @click="load"><Icon name="refresh" size="sm" class="mr-2" />{{ t('common.refresh') }}</button><button id="governance-add-site" class="btn btn-primary" :disabled="working" @click="onboarding = true"><Icon name="plus" size="sm" class="mr-2" />{{ t('governance.add') }}</button></div></header>
       <p v-if="error" role="alert" class="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-600 dark:border-red-900 dark:bg-red-900/10">{{ error }}</p>
       <p v-if="!busy && !sites.length" class="rounded-xl border border-dashed border-gray-200 p-8 text-center text-sm text-gray-500 dark:border-dark-600">{{ t('governance.empty') }}</p>
-      <GovernanceSitesOverview v-show="showOverview" v-if="sites.length" :sites="sites" :disabled="importBusy || balanceBusy || editBusy || automationBusy || reconciliationBusy || keyBusy || rechargeBusy" @select="select" />
+      <GovernanceSitesOverview v-show="showOverview" v-if="sites.length" :sites="sites" :disabled="importBusy || balanceBusy || editBusy || automationBusy || reconciliationBusy || keyBusy || rechargeBusy || modelBusy" @select="select" />
       <section v-if="active" v-show="!showOverview" class="min-w-0 space-y-5">
         <div class="flex flex-wrap items-center gap-3"><button id="governance-back-sites" type="button" class="btn btn-secondary text-sm" :disabled="working" @click="showOverview = true">{{ t('governance.allSites') }}</button><div class="min-w-0 flex-1"><h3 class="break-words text-lg font-semibold">{{ active.name }}</h3><p class="mt-1 break-all text-xs text-gray-500">{{ active.base_url }} · {{ active.platform }}</p></div><span class="rounded-full bg-gray-100 px-2.5 py-1 text-xs dark:bg-dark-700">{{ t('governance.' + (siteStateKeys[active.status] || 'unknown')) }}</span></div>
         <div class="flex flex-wrap gap-2"><button id="governance-collect" class="btn btn-primary text-sm" :disabled="working || !active.has_credential" @click="sync"><Icon name="refresh" size="sm" class="mr-2" :class="busy ? 'animate-spin' : ''" />{{ busy ? t('common.loading') : t('governance.sync') }}</button><button id="governance-view-keys" data-test="view-keys" class="btn btn-secondary text-sm" :disabled="working" @click="openKeys()">{{ t('governance.viewKeys') }}</button><button class="btn btn-secondary text-sm" :disabled="working" @click="editing = true">{{ t('common.edit') }}</button><button id="governance-reconnect" class="btn btn-secondary text-sm" :disabled="working" @click="connecting = true">{{ t(active.has_credential ? 'governance.reconnect' : 'governance.connect') }}</button><button class="ml-auto rounded-lg p-2 text-gray-500 hover:bg-red-50 hover:text-red-600 focus-visible:ring-2 focus-visible:ring-primary-500 dark:hover:bg-red-900/20" :disabled="working" :aria-label="t('common.delete')" @click="deleting = true"><Icon name="trash" size="sm" /></button></div>
         <p v-if="active.status === 'reauth_required'" role="alert" class="rounded-lg bg-amber-50 p-3 text-sm text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">{{ t('governance.reauth') }}</p><p v-else-if="active.last_error" role="alert" class="text-sm text-red-600">{{ t(errorKey({ reason: active.last_error })) }}</p>
         <div class="min-w-0 overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-dark-600 dark:bg-dark-800">
           <nav class="grid grid-cols-2 gap-1 border-b border-gray-100 p-2 dark:border-dark-700 sm:flex sm:flex-wrap" :aria-label="t('governance.workspaceSections')">
-            <button v-for="entry in ([{ value: 'overview', id: 'governance-overview-tab', label: 'overviewTab' }, { value: 'import', id: 'governance-import-tab', label: 'groupImport' }, { value: 'monitor', id: 'governance-monitor-tab', label: 'automationTab' }, { value: 'history', id: 'governance-history-tab', label: 'historyTitle' }] as const)" :id="entry.id" :key="entry.value" type="button" class="min-h-11 rounded-lg px-4 py-2 text-sm transition-colors" :class="tab === entry.value ? 'bg-primary-50 font-medium text-primary-700 dark:bg-primary-900/20 dark:text-primary-300' : 'text-gray-500 hover:bg-gray-50 dark:hover:bg-dark-700'" :aria-pressed="tab === entry.value" @click="tab = entry.value">{{ t('governance.' + entry.label) }}</button>
+            <button v-for="entry in ([{ value: 'overview', id: 'governance-overview-tab', label: 'overviewTab' }, { value: 'import', id: 'governance-import-tab', label: 'groupImport' }, { value: 'monitor', id: 'governance-monitor-tab', label: 'automationTab' }, { value: 'models', id: 'governance-models-tab', label: 'modelMonitoringTab' }, { value: 'history', id: 'governance-history-tab', label: 'historyTitle' }] as const)" :id="entry.id" :key="entry.value" type="button" class="min-h-11 rounded-lg px-4 py-2 text-sm transition-colors" :class="tab === entry.value ? 'bg-primary-50 font-medium text-primary-700 dark:bg-primary-900/20 dark:text-primary-300' : 'text-gray-500 hover:bg-gray-50 dark:hover:bg-dark-700'" :aria-pressed="tab === entry.value" :disabled="working" @click="tab = entry.value">{{ t('governance.' + entry.label) }}</button>
           </nav>
           <div v-show="tab === 'overview'" data-test="site-overview-tab" class="min-w-0 space-y-5 p-4 sm:p-5">
             <SiteOverview :site="active" :snapshot="overviewSnapshot" :binding-count="bindings.filter(binding => binding.account_id > 0).length" :balance-health="balanceHealth" />
@@ -382,12 +388,13 @@ onUnmounted(() => {
             <p v-else class="rounded-lg bg-gray-50 p-4 text-sm text-gray-500 dark:bg-dark-900">{{ busy ? t('common.loading') : t('governance.noSnapshot') }}</p>
             <BalanceHealthPanel :health="balanceHealth" :disabled="working" @reload="reloadHealth" @configure="tab = 'monitor'" />
           </div>
-          <div v-show="tab === 'import'" class="min-w-0 p-4 sm:p-5"><ImportPanel v-if="snapshot && importStateReady" :key="active.id" :site-id="active.id" :site-base-url="active.base_url" :site-platform="active.platform" :bindings="bindings" :managed-keys="managedKeys" :snapshot="snapshot" :groups="groups" :disabled="busy || balanceBusy || automationBusy || reconciliationBusy || keyBusy || rechargeBusy" @busy="importBusy = $event" @applied="reloadBindings" @manage-keys="openKeys" /><p v-else class="py-8 text-center text-sm text-gray-500">{{ busy ? t('common.loading') : t(snapshot ? 'governance.importStateUnavailable' : 'governance.noSnapshot') }}</p></div>
+          <div v-show="tab === 'import'" class="min-w-0 p-4 sm:p-5"><ImportPanel v-if="snapshot && importStateReady" :key="active.id" :site-id="active.id" :site-base-url="active.base_url" :site-platform="active.platform" :bindings="bindings" :managed-keys="managedKeys" :snapshot="snapshot" :groups="groups" :disabled="busy || balanceBusy || automationBusy || reconciliationBusy || keyBusy || rechargeBusy || modelBusy" @busy="importBusy = $event" @applied="reloadBindings" @manage-keys="openKeys" /><p v-else class="py-8 text-center text-sm text-gray-500">{{ busy ? t('common.loading') : t(snapshot ? 'governance.importStateUnavailable' : 'governance.noSnapshot') }}</p></div>
           <div v-show="tab === 'monitor'" class="min-w-0 space-y-5 p-4 sm:p-5"><AutomationPolicyPanel :key="active.id" :site-id="active.id" :configuration="automation" :disabled="working" @busy="automationBusy = $event" @saved="automationSaved" @reload="reloadAutomation" /><BalanceMonitorPanel :key="active.id" :site="active" :unit="snapshot?.catalog.account?.unit" :disabled="working" @saved="balanceSaved" @busy="balanceBusy = $event" /><RechargePlanPanel :key="active.id" :site-id="active.id" :disabled="working" @busy="rechargeBusy = $event" /><GovernanceHistory mode="bindings" :bindings="bindings" :groups="groups" :remote-groups="overviewSnapshot?.catalog.groups ?? snapshot?.catalog.groups ?? []" :events="null" :checks="null" :disabled="working" @configure="configure" /></div>
+          <div v-if="tab === 'models' && !showOverview" class="min-w-0 p-4 sm:p-5"><ModelMonitorPanel :key="active.id" :site-id="active.id" :remote-groups="overviewSnapshot?.catalog.groups ?? snapshot?.catalog.groups ?? []" :managed-keys="managedKeys" :collected-at="overviewSnapshot?.created_at ?? snapshot?.created_at" :disabled="busy || importBusy || balanceBusy || editBusy || automationBusy || reconciliationBusy || keyBusy || rechargeBusy" @busy="modelBusy = $event" @manage-keys="openKeys()" /></div>
           <div v-show="tab === 'history'" class="min-w-0 p-4 sm:p-5"><GovernanceHistory mode="history" :bindings="[]" :events="events" :checks="checks" :disabled="working" @acknowledge="acknowledge" @page="page" /></div>
         </div>
       </section>
-      <BaseDialog v-if="keysOpen && active" :show="true" :title="t('governance.groupKeys')" width="wide" :show-close-button="!keyBusy" :close-on-escape="!keyBusy" @close="keysOpen = false"><ManagedKeysPanel :key="active.id" :site-id="active.id" :snapshot-id="snapshot?.id || 0" :groups="snapshot?.catalog.groups || []" :selections="keySelections" :disabled="busy || importBusy || balanceBusy || editBusy || automationBusy || reconciliationBusy || rechargeBusy" @busy="keyBusy = $event" /></BaseDialog>
+      <BaseDialog v-if="keysOpen && active" :show="true" :title="t('governance.groupKeys')" width="wide" :show-close-button="!keyBusy" :close-on-escape="!keyBusy" @close="closeKeys"><ManagedKeysPanel :key="active.id" :site-id="active.id" :snapshot-id="snapshot?.id || 0" :groups="snapshot?.catalog.groups || []" :selections="keySelections" :disabled="busy || importBusy || balanceBusy || editBusy || automationBusy || reconciliationBusy || rechargeBusy || modelBusy" @busy="keyBusy = $event" /></BaseDialog>
       <OnboardDialog
         v-if="onboarding"
         :proxies="proxies"
