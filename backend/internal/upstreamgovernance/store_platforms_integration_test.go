@@ -55,6 +55,7 @@ func TestSQLGovernancePlatformMigration(t *testing.T) {
 	require.NoError(t, err)
 	apply("250_upstream_governance_platforms.sql")
 	apply("252_upstream_governance_multiple_target_groups.sql")
+	apply("256_upstream_governance_flexible_intervals.sql")
 	_, err = db.Exec(`INSERT INTO groups(id) VALUES(2);`)
 	require.NoError(t, err)
 	_, err = db.Exec(`INSERT INTO upstream_governance_bindings(site_id,remote_group_id,platform,local_group_id,marker) VALUES($1,'old-writer','openai',1,'old-writer-binding')`, site.ID)

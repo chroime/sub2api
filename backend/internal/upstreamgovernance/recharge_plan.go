@@ -82,7 +82,7 @@ func normalizeRechargePolicy(policy RechargePolicy, platform string) (RechargePo
 	policy.Currency = strings.ToUpper(strings.TrimSpace(policy.Currency))
 	if (policy.Mode != "disabled" && policy.Mode != "plan_only") || !validRate(policy.Threshold) || policy.Unit != balanceUnit(platform) ||
 		(policy.Currency != "USD" && policy.Currency != "CNY") || policy.AmountMinor <= 0 || policy.AmountMinor > maxRechargeMinor ||
-		policy.DailyBudgetMinor < 0 || policy.DailyBudgetMinor > maxRechargeMinor || policy.CooldownMinutes < 15 || policy.CooldownMinutes > 10080 {
+		policy.DailyBudgetMinor < 0 || policy.DailyBudgetMinor > maxRechargeMinor || !validIntervalMinutes(policy.CooldownMinutes) {
 		return RechargePolicy{}, ErrInvalid
 	}
 	return policy, nil

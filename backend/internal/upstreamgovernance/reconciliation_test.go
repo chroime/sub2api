@@ -40,25 +40,25 @@ func TestReconciliationMissingRequiresDistinctCompleteSpacedObservations(t *test
 	now := time.Now().UTC()
 	state := ReconciliationState{}
 	snap := Snapshot{ID: 1, CreatedAt: now, Catalog: Catalog{GroupsComplete: true}}
-	state = advanceReconciliationObservation(state, snap, false, 5*time.Minute)
+	state = advanceReconciliationObservation(state, snap, false, 5)
 	require.Equal(t, 1, state.MissingCount)
-	state = advanceReconciliationObservation(state, snap, false, 5*time.Minute)
+	state = advanceReconciliationObservation(state, snap, false, 5)
 	require.Equal(t, 1, state.MissingCount)
 	snap.ID++
 	snap.CreatedAt = now.Add(time.Minute)
-	state = advanceReconciliationObservation(state, snap, false, 5*time.Minute)
+	state = advanceReconciliationObservation(state, snap, false, 5)
 	require.Equal(t, 1, state.MissingCount)
 	snap.ID++
 	snap.CreatedAt = now.Add(5 * time.Minute)
 	snap.Catalog.GroupsComplete = false
-	state = advanceReconciliationObservation(state, snap, false, 5*time.Minute)
+	state = advanceReconciliationObservation(state, snap, false, 5)
 	require.Equal(t, 1, state.MissingCount)
 	snap.ID++
 	snap.Catalog.GroupsComplete = true
-	state = advanceReconciliationObservation(state, snap, false, 5*time.Minute)
+	state = advanceReconciliationObservation(state, snap, false, 5)
 	require.Equal(t, 2, state.MissingCount)
 	snap.ID++
-	state = advanceReconciliationObservation(state, snap, true, 5*time.Minute)
+	state = advanceReconciliationObservation(state, snap, true, 5)
 	require.Zero(t, state.MissingCount)
 }
 

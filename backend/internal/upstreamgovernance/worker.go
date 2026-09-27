@@ -37,7 +37,7 @@ func (s *Service) ConfigureMonitor(ctx context.Context, siteID, bindingID int64,
 	if interval == 0 {
 		interval = 30
 	}
-	if interval < 15 || interval > 1440 || (enabled && !validProbeModel(model)) {
+	if !validIntervalMinutes(interval) || (enabled && !validProbeModel(model)) {
 		return nil, ErrInvalid
 	}
 	_, release, err := s.siteLock(ctx, siteID)
@@ -49,6 +49,7 @@ func (s *Service) ConfigureMonitor(ctx context.Context, siteID, bindingID int64,
 	if err != nil {
 		return nil, err
 	}
+	b.ProbeIntervalMinutes = interval
 	if enabled {
 		a, err := s.local.FindAccount(ctx, b.Marker)
 		if err != nil {
@@ -58,7 +59,6 @@ func (s *Service) ConfigureMonitor(ctx context.Context, siteID, bindingID int64,
 			return nil, ErrConflict
 		}
 		b.ProbeModel = model
-		b.ProbeIntervalMinutes = interval
 		b.NextProbeAt = s.now()
 	}
 	b.ProbeEnabled = enabled
@@ -103,7 +103,7 @@ func (s *Service) probeLocked(ctx context.Context, site Site, b *Binding, model 
 	}
 	// Reserve the next time before a potentially billable operation. A crash or
 	// cancelled request must not cause another worker to immediately bill it again.
-	b.NextProbeAt = s.now().Add(time.Duration(b.ProbeIntervalMinutes) * time.Minute)
+	b.NextProbeAt = addMinutes(s.now(), int64(b.ProbeIntervalMinutes))
 	if err = s.store.SaveBinding(ctx, b); err != nil {
 		return nil, err
 	}
@@ -236,7 +236,7 @@ func (s *Service) runSiteDue(ctx context.Context, siteID int64) error {
 	if site.SessionCipher != "" && !site.NextSyncAt.After(s.now()) {
 		// Move this site out of the next batch before network work. In particular,
 		// an interrupted collection must not stay oldest and starve other sites.
-		next := s.now().Add(time.Duration(site.IntervalMinutes) * time.Minute)
+		next := addMinutes(s.now(), int64(site.IntervalMinutes))
 		if err = s.store.ObserveSite(ctx, site.ID, site.Status, site.LastError, time.Time{}, next); err != nil {
 			return err
 		}

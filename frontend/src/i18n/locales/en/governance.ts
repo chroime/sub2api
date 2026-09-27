@@ -260,6 +260,8 @@ export default {
   proxy: 'Outbound proxy',
   direct: 'Direct connection',
   interval: 'Interval (minutes)',
+  intervalPositiveInteger: 'Enter a positive whole number of minutes.',
+  intervalTooLarge: 'The interval exceeds the storage limit of 2147483647 minutes. Enter a smaller value.',
   minutes: 'minutes',
   autoOn: 'Automatic collection enabled',
   autoOff: 'Automatic collection disabled',

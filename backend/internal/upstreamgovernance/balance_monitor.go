@@ -93,7 +93,7 @@ func normalizeBalanceRecipients(recipients []string) ([]string, error) {
 }
 
 func (s *Service) ConfigureBalanceMonitor(ctx context.Context, id, version int64, config BalanceMonitorConfig) (*Site, error) {
-	if math.IsNaN(config.Threshold) || math.IsInf(config.Threshold, 0) || config.Threshold < 0 || config.CooldownMinutes < 15 || config.CooldownMinutes > 10080 {
+	if math.IsNaN(config.Threshold) || math.IsInf(config.Threshold, 0) || config.Threshold < 0 || !validIntervalMinutes(config.CooldownMinutes) {
 		return nil, ErrInvalid
 	}
 	recipients, err := normalizeBalanceRecipients(config.Recipients)
@@ -219,7 +219,7 @@ func (s *Service) checkBalanceMonitor(ctx context.Context, site Site, snapshot *
 		state.Status.LastAttemptAt = &now
 		// Reserve before SMTP. A process interruption or an ambiguous post-send
 		// database error cannot cause immediate duplicate messages after restart.
-		delivery.NextAttemptAt = now.Add(time.Duration(config.CooldownMinutes) * time.Minute)
+		delivery.NextAttemptAt = addMinutes(now, int64(config.CooldownMinutes))
 		state.Recipients[key] = delivery
 		if !s.saveBalanceState(ctx, site.ID, state) {
 			return
@@ -227,6 +227,8 @@ func (s *Service) checkBalanceMonitor(ctx context.Context, site Site, snapshot *
 		err = s.balanceNotifier.Send(ctx, recipient, notice)
 		delivery.Failed = err != nil
 		if err != nil {
+			// Delivery failures use a separate retry backoff. The configured
+			// interval controls reminders after successful or ambiguous sends.
 			delivery.NextAttemptAt = now.Add(15 * time.Minute)
 		} else {
 			delivery.LastSentAt = &now

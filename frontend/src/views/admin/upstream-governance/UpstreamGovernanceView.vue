@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { errorKey, siteStateKeys } from './feedback'
+import { intervalValidationKey } from './interval'
 import { useI18n } from 'vue-i18n'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import BaseDialog from '@/components/common/BaseDialog.vue'
@@ -276,6 +277,10 @@ function configure(binding: Binding, action: 'check' | 'monitor') {
 }
 async function submitProbe() {
   if (!probe.value || !active.value) return
+  if (probeAction.value === 'monitor') {
+    const intervalError = intervalValidationKey(probe.value.probe_interval_minutes)
+    if (intervalError) { error.value = t(intervalError); return }
+  }
   const id = active.value.id,
     request = generation,
     b = { ...probe.value },
@@ -445,10 +450,11 @@ onUnmounted(() => {
               >{{ t('governance.interval')
               }}<input
                 v-model.number="probe.probe_interval_minutes"
+                data-test="probe-interval"
                 class="input w-full"
                 type="number"
-                min="15"
-                max="1440"
+                min="1"
+                step="1"
                 required /></label></template
           ><button class="btn btn-primary" :disabled="busy">
             {{

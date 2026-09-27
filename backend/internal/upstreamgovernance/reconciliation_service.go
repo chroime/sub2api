@@ -298,10 +298,7 @@ func (s *Service) reconcileSnapshotLocked(ctx context.Context, site Site, snapsh
 	for _, g := range snapshot.Catalog.Groups {
 		present[g.ID] = true
 	}
-	gap := time.Duration(site.IntervalMinutes) * time.Minute
-	if gap < 5*time.Minute {
-		gap = 5 * time.Minute
-	}
+	gapMinutes := max(site.IntervalMinutes, 1)
 	for _, binding := range bindings {
 		a, e := s.inspectReconciliationAccount(ctx, local, site, binding)
 		if e != nil || a == nil {
@@ -321,7 +318,7 @@ func (s *Service) reconcileSnapshotLocked(ctx context.Context, site Site, snapsh
 		if err != nil {
 			return err
 		}
-		state = advanceReconciliationObservation(state, *snapshot, present[binding.RemoteGroupID], gap)
+		state = advanceReconciliationObservation(state, *snapshot, present[binding.RemoteGroupID], gapMinutes)
 		if err = store.SaveReconciliationState(ctx, site.ID, state); err != nil {
 			return err
 		}

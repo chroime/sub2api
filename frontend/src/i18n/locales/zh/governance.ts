@@ -256,6 +256,8 @@ export default {
   proxy: '出站代理',
   direct: '直接连接',
   interval: '间隔（分钟）',
+  intervalPositiveInteger: '请输入大于 0 的整数分钟数。',
+  intervalTooLarge: '间隔超过系统可保存范围（2147483647 分钟），请填写较小的分钟数。',
   minutes: '分钟',
   autoOn: '已开启自动采集',
   autoOff: '已关闭自动采集',

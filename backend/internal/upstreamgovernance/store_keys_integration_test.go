@@ -67,6 +67,10 @@ func TestSQLManagedKeysPostgresIntegration(t *testing.T) {
 	var legacyAfter string
 	require.NoError(t, db.QueryRow(`SELECT (to_jsonb(k)-'creation_plan')::text FROM upstream_governance_keys k WHERE id=$1`, legacyKeyID).Scan(&legacyAfter))
 	require.JSONEq(t, legacyBefore, legacyAfter, "migration must preserve all old key fields")
+	intervalMigration, err := os.ReadFile("../../migrations/256_upstream_governance_flexible_intervals.sql")
+	require.NoError(t, err)
+	_, err = db.Exec(string(intervalMigration))
+	require.NoError(t, err)
 	encryptor, err := repository.NewAESEncryptor(&config.Config{Totp: config.TotpConfig{EncryptionKey: strings.Repeat("42", 32)}})
 	require.NoError(t, err)
 	sessionJSON, err := json.Marshal(gov.Session{AccessToken: "fixture-session-canary", UserID: 5})

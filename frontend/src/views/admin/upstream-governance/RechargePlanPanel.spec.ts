@@ -40,7 +40,6 @@ describe('recharge planning without a payment provider', () => {
   it.each([
     ['recharge-amount', '10000000000.01'],
     ['recharge-budget', '10000000000.01'],
-    ['recharge-cooldown', '10081'],
   ])('rejects values outside the server limit for %s', async (field, input) => {
     const wrapper = mount(RechargePlanPanel, { props: { siteId: 1 } })
     await flushPromises()
@@ -48,6 +47,29 @@ describe('recharge planning without a payment provider', () => {
     await wrapper.get('form').trigger('submit')
     expect(api.saveRechargePlan).not.toHaveBeenCalled()
     expect(wrapper.text()).toContain('governance.invalid')
+  })
+  it.each([1, 10081, 2147483647])('saves a freely entered recharge interval of %s minutes unchanged', async minutes => {
+    vi.mocked(api.saveRechargePlan).mockResolvedValue({ ...value, version: 2, policy: { ...value.policy, cooldown_minutes: minutes } })
+    const wrapper = mount(RechargePlanPanel, { props: { siteId: 1 } })
+    await flushPromises()
+    const input = wrapper.get('[data-test=recharge-cooldown]')
+    expect(input.attributes('min')).toBe('1')
+    expect(input.attributes('step')).toBe('1')
+    expect(input.attributes('max')).toBeUndefined()
+    await input.setValue(String(minutes))
+    expect((input.element as HTMLInputElement).checkValidity()).toBe(true)
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(api.saveRechargePlan).toHaveBeenCalledWith(1, { version: 1, policy: { ...value.policy, cooldown_minutes: minutes } })
+    expect((wrapper.get('[data-test=recharge-cooldown]').element as HTMLInputElement).value).toBe(String(minutes))
+  })
+  it.each(['', '0', '-1', '1.5', 'Infinity', '1e309', '2147483648'])('rejects invalid recharge interval %j before saving', async minutes => {
+    const wrapper = mount(RechargePlanPanel, { props: { siteId: 1 } })
+    await flushPromises()
+    await wrapper.get('[data-test=recharge-cooldown]').setValue(minutes)
+    await wrapper.get('form').trigger('submit')
+    expect(api.saveRechargePlan).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain(minutes === '2147483648' ? 'governance.intervalTooLarge' : 'governance.intervalPositiveInteger')
   })
   it('explains unmatched balance and collection failures while keeping evaluation blocked', async () => {
     vi.mocked(api.evaluateRechargePlan).mockResolvedValue({ ...value, status: 'blocked', evaluation: { id: 'plan', policy_matched: false, status: 'blocked', reasons: ['balance_above_threshold', 'collection_failed', 'provider_unavailable'], observed_at: null, evaluated_at: '2026-09-27T01:00:00Z', balance: 20, unit: 'quota', amount_minor: 1000, currency: 'USD', daily_budget_remaining_minor: 10000 } })

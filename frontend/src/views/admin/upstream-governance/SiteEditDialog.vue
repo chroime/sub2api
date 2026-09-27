@@ -6,6 +6,7 @@ import Select from '@/components/common/Select.vue'
 import Icon from '@/components/icons/Icon.vue'
 import api, { type LoginCredentials, type Site, type SiteInput } from '@/api/admin/upstream-governance'
 import { errorKey } from './feedback'
+import { intervalValidationKey } from './interval'
 
 const props = defineProps<{ site: Site; proxies: { id: number; name: string }[] }>()
 const emit = defineEmits<{ close: []; saved: [site: Site]; busy: [value: boolean] }>()
@@ -80,6 +81,8 @@ function close() {
 }
 async function save() {
   if (locked.value) return
+  const intervalError = intervalValidationKey(form.value.interval_minutes)
+  if (intervalError) { error.value = t(intervalError); return }
   const username = login.value.username.trim()
   if (!!username !== !!login.value.password) { error.value = t('governance.loginPairRequired'); return }
   const request = generation
@@ -163,7 +166,7 @@ onUnmounted(() => { generation++; clearLogin(); emit('busy', false) })
             <label class="flex cursor-pointer items-center gap-2 text-sm"><input id="governance-edit-enabled" v-model="form.enabled" type="checkbox" />{{ t('governance.autoOn') }}</label>
             <div class="flex items-center gap-2">
               <label for="governance-edit-interval" class="text-xs text-gray-500">{{ t('governance.interval') }}</label>
-              <input id="governance-edit-interval" v-model.number="form.interval_minutes" class="input w-24 text-sm" type="number" min="5" max="1440" required />
+              <input id="governance-edit-interval" v-model.number="form.interval_minutes" class="input w-24 text-sm" type="number" min="1" step="1" required />
             </div>
           </div>
         </section>

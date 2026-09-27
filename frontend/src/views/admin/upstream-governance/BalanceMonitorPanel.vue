@@ -8,6 +8,7 @@ import api, {
 } from '@/api/admin/upstream-governance'
 import { formatGovernanceTime } from './format'
 import { errorKey } from './feedback'
+import { intervalValidationKey } from './interval'
 const props = defineProps<{ site: Site; unit?: string; disabled?: boolean }>()
 const emit = defineEmits<{ saved: [site: Site]; busy: [value: boolean] }>()
 const { t } = useI18n()
@@ -70,6 +71,8 @@ onUnmounted(() => {
 })
 async function save() {
   if (busy.value || props.disabled) return
+  const intervalError = intervalValidationKey(form.value.cooldown_minutes)
+  if (intervalError) { error.value = t(intervalError); saved.value = false; return }
   const request = generation
   busy.value = true
   error.value = ''
@@ -215,8 +218,8 @@ async function save() {
               v-model.number="form.cooldown_minutes"
               data-test="balance-cooldown"
               type="number"
-              min="15"
-              max="10080"
+              min="1"
+              step="1"
               required
               class="input mt-1 w-full"
           /></label>

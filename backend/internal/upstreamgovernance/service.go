@@ -76,7 +76,7 @@ func validateSite(site *Site) error {
 	if site.IntervalMinutes == 0 {
 		site.IntervalMinutes = 15
 	}
-	if site.IntervalMinutes < 5 || site.IntervalMinutes > 1440 {
+	if !validIntervalMinutes(site.IntervalMinutes) {
 		return ErrInvalid
 	}
 	if site.ProxyID != nil && *site.ProxyID <= 0 {
@@ -386,7 +386,7 @@ func (s *Service) syncLocked(ctx context.Context, site Site) (*Snapshot, error) 
 		e = validateCatalog(catalog)
 	}
 	now := s.now()
-	next := now.Add(time.Duration(site.IntervalMinutes) * time.Minute)
+	next := addMinutes(now, int64(site.IntervalMinutes))
 	if e != nil {
 		state := "error"
 		if errors.Is(e, ErrReauth) {

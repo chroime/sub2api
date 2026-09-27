@@ -11,13 +11,10 @@ func newReconciliationState(binding Binding, a ManagedLocalAccount) Reconciliati
 	return ReconciliationState{BindingID: binding.ID, Identity: a.Identity, Name: a.Name, Rate: a.Rate, NativeRateSync: a.NativeRateSync}
 }
 func reconciliationSnapshotFresh(site Site, snapshot Snapshot, now time.Time) bool {
-	window := 2 * time.Duration(site.IntervalMinutes) * time.Minute
-	if window < 10*time.Minute {
-		window = 10 * time.Minute
-	}
-	return snapshot.ID > 0 && snapshot.SiteVersion == site.Version && snapshot.Catalog.GroupsComplete && !snapshot.CreatedAt.IsZero() && !snapshot.CreatedAt.After(now.Add(time.Minute)) && !now.After(snapshot.CreatedAt.Add(window))
+	windowMinutes := max(2*int64(site.IntervalMinutes), 10)
+	return snapshot.ID > 0 && snapshot.SiteVersion == site.Version && snapshot.Catalog.GroupsComplete && !snapshot.CreatedAt.IsZero() && !snapshot.CreatedAt.After(now.Add(time.Minute)) && !now.After(addMinutes(snapshot.CreatedAt, windowMinutes))
 }
-func advanceReconciliationObservation(state ReconciliationState, snapshot Snapshot, present bool, gap time.Duration) ReconciliationState {
+func advanceReconciliationObservation(state ReconciliationState, snapshot Snapshot, present bool, gapMinutes int) ReconciliationState {
 	if !snapshot.Catalog.GroupsComplete || snapshot.ID <= state.LastSnapshotID {
 		return state
 	}
@@ -27,7 +24,7 @@ func advanceReconciliationObservation(state ReconciliationState, snapshot Snapsh
 		state.LastMissingAt = nil
 		return state
 	}
-	if state.LastMissingAt == nil || !snapshot.CreatedAt.Before(state.LastMissingAt.Add(gap)) {
+	if state.LastMissingAt == nil || !snapshot.CreatedAt.Before(addMinutes(*state.LastMissingAt, int64(gapMinutes))) {
 		state.MissingCount++
 		stamp := snapshot.CreatedAt
 		state.LastMissingAt = &stamp

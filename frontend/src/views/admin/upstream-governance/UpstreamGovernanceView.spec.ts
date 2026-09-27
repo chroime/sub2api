@@ -49,6 +49,44 @@ vi.mock('vue-i18n', async (importOriginal) => ({ ...await importOriginal<typeof 
 enableAutoUnmount(afterEach)
 describe('governance page', () => {
   beforeEach(() => { vi.clearAllMocks(); vi.mocked(api.keys).mockResolvedValue([]) })
+  async function setupProbeMonitor() {
+    const site: Site = { id: 1, name: 'Monitor upstream', platform: 'sub2api', base_url: 'https://fixture.example', enabled: true, interval_minutes: 15, proxy_id: null, version: 1, has_credential: true, status: 'healthy', last_error: '', last_sync_at: null }
+    const page = { items: [], total: 0, page: 1, pages: 0, page_size: 20 }
+    vi.mocked(api.list).mockResolvedValue([site])
+    vi.mocked(api.catalog).mockRejectedValue({ status: 404 })
+    vi.mocked(api.bindings).mockResolvedValue([{ id: 5, site_id: 1, remote_group_id: 'remote', platform: 'openai', local_group_id: 3, account_id: 8, probe_enabled: true, probe_model: 'fixture-model', probe_interval_minutes: 30 }])
+    vi.mocked(api.events).mockResolvedValue(page)
+    vi.mocked(api.checks).mockResolvedValue(page)
+    const wrapper = mount(View, { global: { stubs: { BaseDialog: { props: ['show'], template: '<div v-if="show"><slot /></div>' } } } })
+    await flushPromises()
+    await wrapper.get('#governance-site-1').trigger('click')
+    await flushPromises()
+    await wrapper.get('#governance-monitor-tab').trigger('click')
+    await wrapper.findAll('button').find(button => button.text() === 'governance.monitor')!.trigger('click')
+    return wrapper
+  }
+  it.each([1, 1441, 10081, 2147483647])('saves a freely entered probe interval of %s minutes unchanged', async minutes => {
+    const wrapper = await setupProbeMonitor()
+    const input = wrapper.get('[data-test=probe-interval]')
+    expect(input.attributes('min')).toBe('1')
+    expect(input.attributes('step')).toBe('1')
+    expect(input.attributes('max')).toBeUndefined()
+    await input.setValue(String(minutes))
+    expect((input.element as HTMLInputElement).checkValidity()).toBe(true)
+    await input.element.closest('form')!.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }))
+    await flushPromises()
+    expect(api.monitor).toHaveBeenCalledWith(1, 5, { enabled: true, model: 'fixture-model', interval_minutes: minutes })
+    expect(api.check).not.toHaveBeenCalled()
+  })
+  it.each(['', '0', '-1', '1.5', 'Infinity', '1e309', '2147483648'])('rejects invalid probe interval %j before saving', async minutes => {
+    const wrapper = await setupProbeMonitor()
+    const input = wrapper.get('[data-test=probe-interval]')
+    await input.setValue(minutes)
+    await input.element.closest('form')!.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }))
+    await flushPromises()
+    expect(api.monitor).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain(minutes === '2147483648' ? 'governance.intervalTooLarge' : 'governance.intervalPositiveInteger')
+  })
   it('starts with all sites and does not fetch per-site data or plaintext keys before selection', async () => {
     const site: Site = { id: 1, name: 'First upstream', platform: 'sub2api', base_url: 'https://fixture.example', enabled: true, interval_minutes: 15, proxy_id: null, version: 1, has_credential: true, status: 'healthy', last_error: '', last_sync_at: null }
     vi.mocked(api.list).mockResolvedValue([site])

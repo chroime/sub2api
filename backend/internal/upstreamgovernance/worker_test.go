@@ -53,7 +53,7 @@ func TestMonitorValidatesBindingAndRequiresExplicitModelAndCadence(t *testing.T)
 	for _, input := range []struct {
 		model    string
 		interval int
-	}{{"", 30}, {"m\nsecret", 30}, {"m", 1}, {"m", 1441}} {
+	}{{"", 30}, {"m\nsecret", 30}, {"m", -1}} {
 		_, e := s.ConfigureMonitor(t.Context(), 1, m.bindings[0].ID, true, input.model, input.interval)
 		require.ErrorIs(t, e, ErrInvalid)
 	}

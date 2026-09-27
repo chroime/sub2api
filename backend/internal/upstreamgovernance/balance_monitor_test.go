@@ -183,7 +183,7 @@ func TestConfigureBalanceMonitorValidatesAndDoesNotSend(t *testing.T) {
 	for _, change := range []func(*BalanceMonitorConfig){
 		func(c *BalanceMonitorConfig) { c.Threshold = -1 },
 		func(c *BalanceMonitorConfig) { c.Unit = "quota" },
-		func(c *BalanceMonitorConfig) { c.CooldownMinutes = 14 },
+		func(c *BalanceMonitorConfig) { c.CooldownMinutes = 0 },
 		func(c *BalanceMonitorConfig) { c.Recipients = []string{"Admin <admin@example.com>"} },
 	} {
 		bad := config

@@ -64,8 +64,8 @@ func (s *Service) observeBalance(site Site, snapshot *Snapshot) balanceObservati
 		value.reason = "snapshot_outdated"
 		return value
 	}
-	maxAge := time.Duration(max(2*site.IntervalMinutes, 10)) * time.Minute
-	if observed.IsZero() || !s.now().Before(observed.Add(maxAge)) || observed.After(s.now().Add(time.Minute)) {
+	maxAgeMinutes := max(2*int64(site.IntervalMinutes), 10)
+	if observed.IsZero() || !s.now().Before(addMinutes(observed, maxAgeMinutes)) || observed.After(s.now().Add(time.Minute)) {
 		value.reason = "balance_stale"
 		return value
 	}
