@@ -141,6 +141,8 @@ type Binding struct {
 	LocalGroupID         int64     `json:"local_group_id"`
 	LocalGroupIDs        []int64   `json:"local_group_ids"`
 	AccountID            int64     `json:"account_id"`
+	AccountName          string    `json:"account_name,omitempty"`
+	AccountDeleted       bool      `json:"account_deleted,omitempty"`
 	Marker               string    `json:"marker"`
 	KeyCipher            string    `json:"-"`
 	ProbeEnabled         bool      `json:"probe_enabled"`
@@ -266,6 +268,16 @@ type LocalAccounts interface {
 	Target(context.Context, int64, string) (LocalTarget, error)
 	FindAccount(context.Context, string) (*LocalAccount, error)
 	ApplyAccount(context.Context, AccountChange) (*LocalAccount, error)
+}
+
+type LocalAccountName struct {
+	Name    string
+	Deleted bool
+}
+
+// LocalAccountNames includes historical names without loading account secrets.
+type LocalAccountNames interface {
+	AccountNames(context.Context, []int64) (map[int64]LocalAccountName, error)
 }
 type Store interface {
 	ListSites(context.Context) ([]Site, error)

@@ -15,6 +15,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	gov "github.com/Wei-Shaw/sub2api/internal/upstreamgovernance"
+	"github.com/lib/pq"
 )
 
 const governanceMarkerKey = "upstream_governance_marker"
@@ -108,6 +109,27 @@ func (l *governanceLocalAccounts) FindAccount(ctx context.Context, marker string
 		return nil, e
 	}
 	return governanceLocal(a), nil
+}
+
+func (l *governanceLocalAccounts) AccountNames(ctx context.Context, ids []int64) (map[int64]gov.LocalAccountName, error) {
+	names := make(map[int64]gov.LocalAccountName, len(ids))
+	if len(ids) == 0 {
+		return names, nil
+	}
+	rows, err := l.db.QueryContext(ctx, `SELECT id, name, deleted_at IS NOT NULL FROM accounts WHERE id = ANY($1)`, pq.Array(ids))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id int64
+		var label gov.LocalAccountName
+		if err := rows.Scan(&id, &label.Name, &label.Deleted); err != nil {
+			return nil, err
+		}
+		names[id] = label
+	}
+	return names, rows.Err()
 }
 func governanceDesired(a *Account, c gov.AccountChange) bool {
 	config := c.AccountConfig

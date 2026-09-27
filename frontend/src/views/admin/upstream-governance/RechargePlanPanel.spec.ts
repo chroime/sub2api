@@ -1,6 +1,7 @@
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import RechargePlanPanel from './RechargePlanPanel.vue'
+import Select from '@/components/common/Select.vue'
 import api from '@/api/admin/upstream-governance'
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
 vi.mock('@/api/admin/upstream-governance', () => ({ default: { rechargePlan: vi.fn(), saveRechargePlan: vi.fn(), evaluateRechargePlan: vi.fn() } }))
@@ -8,6 +9,63 @@ enableAutoUnmount(afterEach)
 const value = { version: 1, policy: { mode: 'disabled' as const, threshold: 10, unit: 'quota' as const, amount_minor: 1000, currency: 'USD' as const, daily_budget_minor: 10000, cooldown_minutes: 1440 }, capability: { available: false, reason: 'provider_unavailable' }, status: 'disabled' as const, evaluation: null }
 describe('recharge planning without a payment provider', () => {
   beforeEach(() => { vi.resetAllMocks(); vi.mocked(api.rechargePlan).mockResolvedValue(value) })
+  it('selects payment currency from the styled dropdown and preserves exact money amounts', async () => {
+    vi.mocked(api.saveRechargePlan).mockResolvedValue({ ...value, version: 2, policy: { ...value.policy, currency: 'CNY' } })
+    const wrapper = mount(RechargePlanPanel, { props: { siteId: 1 }, global: { stubs: { transition: true } } })
+    await flushPromises()
+    const trigger = wrapper.get('[data-test=recharge-currency] button')
+    expect(trigger.attributes('aria-label')).toBe('governance.rechargeCurrency')
+    expect(wrapper.get('label[for="governance-recharge-currency-1"]').text()).toBe('governance.rechargeCurrency')
+    expect(trigger.attributes('id')).toBe('governance-recharge-currency-1')
+    expect(trigger.text()).toContain('governance.rechargeCurrencyUSD')
+    await trigger.trigger('click')
+    const options = Array.from(document.querySelectorAll<HTMLElement>('[role=option]'))
+    expect(options.map(option => option.textContent)).toEqual(['governance.rechargeCurrencyUSD', 'governance.rechargeCurrencyCNY'])
+    options[1]!.click()
+    await flushPromises()
+    expect(wrapper.get('[data-test=recharge-currency] button').text()).toContain('governance.rechargeCurrencyCNY')
+    expect(document.querySelector('[role=listbox]')).toBeNull()
+    expect(api.saveRechargePlan).not.toHaveBeenCalled()
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(api.saveRechargePlan).toHaveBeenCalledWith(1, { version: 1, policy: { ...value.policy, currency: 'CNY' } })
+  })
+  it('closes an open currency menu when parent controls become disabled and rejects stale changes', async () => {
+    vi.mocked(api.saveRechargePlan).mockResolvedValue({ ...value, version: 2 })
+    const wrapper = mount(RechargePlanPanel, { props: { siteId: 1 }, global: { stubs: { transition: true } } })
+    await flushPromises()
+    await wrapper.get('[data-test=recharge-currency] button').trigger('click')
+    expect(document.querySelector('[role=listbox]')).not.toBeNull()
+    const staleOption = document.querySelectorAll<HTMLElement>('[role=option]')[1]!
+    await wrapper.setProps({ disabled: true })
+    expect(document.querySelector('[role=listbox]')).toBeNull()
+    expect(wrapper.get('[data-test=recharge-currency] button').attributes('disabled')).toBeDefined()
+    staleOption.click()
+    wrapper.getComponent(Select).vm.$emit('update:modelValue', 'CNY')
+    await flushPromises()
+    expect(wrapper.get('[data-test=recharge-currency] button').text()).toContain('governance.rechargeCurrencyUSD')
+    await wrapper.setProps({ disabled: false })
+    wrapper.getComponent(Select).vm.$emit('update:modelValue', 'EUR')
+    await wrapper.get('form').trigger('submit')
+    expect(api.saveRechargePlan).toHaveBeenCalledWith(1, { version: 1, policy: value.policy })
+  })
+  it('closes the currency menu and locks selection while saving', async () => {
+    let resolveSave!: (result: typeof value) => void
+    vi.mocked(api.saveRechargePlan).mockReturnValue(new Promise(resolve => { resolveSave = resolve }))
+    const wrapper = mount(RechargePlanPanel, { props: { siteId: 1 }, global: { stubs: { transition: true } } })
+    await flushPromises()
+    await wrapper.get('[data-test=recharge-currency] button').trigger('click')
+    expect(document.querySelector('[role=listbox]')).not.toBeNull()
+    await wrapper.get('form').trigger('submit')
+    expect(document.querySelector('[role=listbox]')).toBeNull()
+    expect(wrapper.get('[data-test=recharge-currency] button').attributes('disabled')).toBeDefined()
+    wrapper.getComponent(Select).vm.$emit('update:modelValue', 'CNY')
+    await flushPromises()
+    expect(wrapper.get('[data-test=recharge-currency] button').text()).toContain('governance.rechargeCurrencyUSD')
+    resolveSave(value)
+    await flushPromises()
+    expect(wrapper.get('[data-test=recharge-currency] button').attributes('disabled')).toBeUndefined()
+  })
   it('only reads on mount, explains the missing provider and persists exact minor amounts', async () => {
     vi.mocked(api.saveRechargePlan).mockResolvedValue({ ...value, version: 2, status: 'blocked', policy: { ...value.policy, mode: 'plan_only', amount_minor: 1234 } })
     const wrapper = mount(RechargePlanPanel, { props: { siteId: 1 } })

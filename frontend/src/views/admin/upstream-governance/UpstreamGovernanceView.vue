@@ -268,7 +268,7 @@ async function acknowledge(id: number) {
   })
 }
 function configure(binding: Binding, action: 'check' | 'monitor') {
-  if (binding.account_id <= 0) return
+  if (binding.account_id <= 0 || binding.account_deleted) return
   probe.value = {
     ...binding,
     probe_interval_minutes: binding.probe_interval_minutes || 30,
@@ -383,7 +383,7 @@ onUnmounted(() => {
             <BalanceHealthPanel :health="balanceHealth" :disabled="working" @reload="reloadHealth" @configure="tab = 'monitor'" />
           </div>
           <div v-show="tab === 'import'" class="min-w-0 p-4 sm:p-5"><ImportPanel v-if="snapshot && importStateReady" :key="active.id" :site-id="active.id" :site-base-url="active.base_url" :site-platform="active.platform" :bindings="bindings" :managed-keys="managedKeys" :snapshot="snapshot" :groups="groups" :disabled="busy || balanceBusy || automationBusy || reconciliationBusy || keyBusy || rechargeBusy" @busy="importBusy = $event" @applied="reloadBindings" @manage-keys="openKeys" /><p v-else class="py-8 text-center text-sm text-gray-500">{{ busy ? t('common.loading') : t(snapshot ? 'governance.importStateUnavailable' : 'governance.noSnapshot') }}</p></div>
-          <div v-show="tab === 'monitor'" class="min-w-0 space-y-5 p-4 sm:p-5"><AutomationPolicyPanel :key="active.id" :site-id="active.id" :configuration="automation" :disabled="working" @busy="automationBusy = $event" @saved="automationSaved" @reload="reloadAutomation" /><BalanceMonitorPanel :key="active.id" :site="active" :unit="snapshot?.catalog.account?.unit" :disabled="working" @saved="balanceSaved" @busy="balanceBusy = $event" /><RechargePlanPanel :key="active.id" :site-id="active.id" :disabled="working" @busy="rechargeBusy = $event" /><GovernanceHistory mode="bindings" :bindings="bindings" :groups="groups" :events="null" :checks="null" :disabled="working" @configure="configure" /></div>
+          <div v-show="tab === 'monitor'" class="min-w-0 space-y-5 p-4 sm:p-5"><AutomationPolicyPanel :key="active.id" :site-id="active.id" :configuration="automation" :disabled="working" @busy="automationBusy = $event" @saved="automationSaved" @reload="reloadAutomation" /><BalanceMonitorPanel :key="active.id" :site="active" :unit="snapshot?.catalog.account?.unit" :disabled="working" @saved="balanceSaved" @busy="balanceBusy = $event" /><RechargePlanPanel :key="active.id" :site-id="active.id" :disabled="working" @busy="rechargeBusy = $event" /><GovernanceHistory mode="bindings" :bindings="bindings" :groups="groups" :remote-groups="overviewSnapshot?.catalog.groups ?? snapshot?.catalog.groups ?? []" :events="null" :checks="null" :disabled="working" @configure="configure" /></div>
           <div v-show="tab === 'history'" class="min-w-0 p-4 sm:p-5"><GovernanceHistory mode="history" :bindings="[]" :events="events" :checks="checks" :disabled="working" @acknowledge="acknowledge" @page="page" /></div>
         </div>
       </section>

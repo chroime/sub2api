@@ -95,6 +95,8 @@ export default {
   enableRechargePlan: "Enable recharge planning",
   rechargeThreshold: "Native balance threshold",
   rechargeCurrency: "Payment currency",
+  rechargeCurrencyUSD: "US dollar USD",
+  rechargeCurrencyCNY: "Chinese yuan CNY",
   rechargeAmount: "Planned amount",
   rechargeDailyBudget: "Daily budget",
   rechargeCooldown: "Minimum interval (minutes)",
@@ -338,6 +340,9 @@ export default {
     'Successful items are retained. Failed items may be retried; upstream side effects are not rolled back.',
   channels: 'User-visible channels',
   bindings: 'Imported bindings',
+  localAccount: 'Local account',
+  accountNameUnavailable: 'Name unavailable',
+  accountDeleted: 'Deleted',
   noBindings: 'No imported bindings.',
   billable:
     'Active checks send a real minimal text inference request and may incur upstream charges. They never change account throttling, routing or sale prices. Scheduled checks are opt-in.',

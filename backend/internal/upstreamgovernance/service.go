@@ -43,7 +43,37 @@ func (s *Service) Catalog(ctx context.Context, id int64) (*Snapshot, error) {
 	return s.store.LatestSnapshot(ctx, id)
 }
 func (s *Service) Bindings(ctx context.Context, id int64) ([]Binding, error) {
-	return s.store.ListBindings(ctx, id)
+	bindings, err := s.store.ListBindings(ctx, id)
+	if err != nil || len(bindings) == 0 {
+		return bindings, err
+	}
+	reader, ok := s.local.(LocalAccountNames)
+	if !ok {
+		return bindings, nil
+	}
+	ids := make([]int64, 0, len(bindings))
+	seen := make(map[int64]bool, len(bindings))
+	for _, binding := range bindings {
+		if binding.AccountID > 0 && !seen[binding.AccountID] {
+			ids = append(ids, binding.AccountID)
+			seen[binding.AccountID] = true
+		}
+	}
+	if len(ids) == 0 {
+		return bindings, nil
+	}
+	names, err := reader.AccountNames(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	// Enrichment is response-only; never update stored bindings or accounts.
+	bindings = append([]Binding(nil), bindings...)
+	for i := range bindings {
+		label := names[bindings[i].AccountID]
+		bindings[i].AccountName = label.Name
+		bindings[i].AccountDeleted = label.Deleted
+	}
+	return bindings, nil
 }
 func (s *Service) Events(ctx context.Context, id int64, page, size int) ([]Event, int64, error) {
 	return s.store.ListEvents(ctx, id, page, size)

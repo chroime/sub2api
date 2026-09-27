@@ -284,6 +284,8 @@ export interface Binding {
   local_group_id: number
   local_group_ids?: number[]
   account_id: number
+  account_name?: string
+  account_deleted?: boolean
   probe_enabled: boolean
   probe_model: string
   probe_interval_minutes: number

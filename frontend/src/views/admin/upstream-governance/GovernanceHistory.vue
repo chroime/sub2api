@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import PlatformIcon from '@/components/common/PlatformIcon.vue'
 import type {
@@ -11,9 +11,10 @@ import type {
 } from '@/api/admin/upstream-governance'
 import { formatGovernanceTime } from './format'
 import { eventKeys } from './feedback'
-defineProps<{
+const props = defineProps<{
   bindings: Binding[]
   groups?: { id: number; name: string }[]
+  remoteGroups?: { id: string; name: string }[]
   events: Page<GovernanceEvent> | null
   checks: Page<Check> | null
   disabled?: boolean
@@ -26,6 +27,7 @@ const emit = defineEmits<{
 }>()
 const { t } = useI18n()
 const historyTab = ref<'events' | 'checks'>('events')
+const remoteNames = computed(() => new Map(props.remoteGroups?.map(group => [group.id, group.name])))
 </script>
 <template>
   <section class="space-y-6">
@@ -52,13 +54,18 @@ const historyTab = ref<'events' | 'checks'>('events')
       >
         <PlatformIcon :platform="binding.platform as Transport" size="md" />
         <div class="mr-auto min-w-0 flex-1 break-words">
-          <p class="text-sm font-medium">
-            {{ binding.remote_group_id }} →
-            {{
-              binding.account_id > 0
-                ? '#' + binding.account_id
-                : t('governance.pendingImport')
-            }}
+          <p class="text-sm font-medium" data-test="binding-upstream">
+            {{ remoteNames.get(binding.remote_group_id) || t('governance.remoteGroup') }}
+            <span class="ml-2 text-xs font-normal text-gray-400">#{{ binding.remote_group_id }}</span>
+          </p>
+          <p class="mt-1 break-all text-xs text-gray-500" data-test="binding-account">
+            {{ t('governance.localAccount') }}：
+            <template v-if="binding.account_id > 0">
+              {{ binding.account_name || t('governance.accountNameUnavailable') }}
+              <span class="ml-1 text-gray-400">#{{ binding.account_id }}</span>
+              <span v-if="binding.account_deleted" class="ml-2 rounded bg-gray-100 px-1.5 py-0.5 text-gray-500 dark:bg-dark-700 dark:text-gray-400">{{ t('governance.accountDeleted') }}</span>
+            </template>
+            <template v-else>{{ t('governance.pendingImport') }}</template>
           </p>
           <p class="mt-1 text-xs text-gray-500" data-test="binding-targets">
             {{ t('governance.localGroup') }}：
@@ -73,19 +80,21 @@ const historyTab = ref<'events' | 'checks'>('events')
             · {{ binding.probe_model || '—' }}
           </p>
         </div>
+        <div class="flex w-full flex-wrap gap-2 sm:w-auto">
         <button
           class="btn btn-secondary text-xs"
-          :disabled="disabled || binding.account_id <= 0"
+          :disabled="disabled || binding.account_id <= 0 || binding.account_deleted"
           @click="emit('configure', binding, 'check')"
         >
           {{ t('governance.check') }}</button
         ><button
           class="btn btn-secondary text-xs"
-          :disabled="disabled || binding.account_id <= 0"
+          :disabled="disabled || binding.account_id <= 0 || binding.account_deleted"
           @click="emit('configure', binding, 'monitor')"
         >
           {{ t('governance.monitor') }}
         </button>
+        </div>
       </article>
     </section>
     <nav v-if="mode === 'history'" class="flex flex-wrap gap-2" :aria-label="t('governance.historyTitle')"><button v-for="kind in (['events', 'checks'] as const)" :key="kind" type="button" class="rounded-lg px-3 py-2 text-sm" :class="historyTab === kind ? 'bg-primary-50 font-medium text-primary-700 dark:bg-primary-900/20 dark:text-primary-300' : 'text-gray-500'" :aria-pressed="historyTab === kind" @click="historyTab = kind">{{ t('governance.' + kind) }}</button></nav>

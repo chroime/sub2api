@@ -95,6 +95,8 @@ export default {
   enableRechargePlan: "启用充值预案评估",
   rechargeThreshold: "原生余额触发阈值",
   rechargeCurrency: "支付币种",
+  rechargeCurrencyUSD: "美元 USD",
+  rechargeCurrencyCNY: "人民币 CNY",
   rechargeAmount: "单次计划充值金额",
   rechargeDailyBudget: "每日预算",
   rechargeCooldown: "最短间隔（分钟）",
@@ -323,6 +325,9 @@ export default {
     '成功项目会保留，失败项目可以重试；不会回滚上游已产生的副作用。',
   channels: '用户可见渠道',
   bindings: '已导入绑定',
+  localAccount: '本地账户',
+  accountNameUnavailable: '名称暂不可用',
+  accountDeleted: '已删除',
   noBindings: '暂无导入绑定。',
   billable:
     '主动检查会发送真实的最小文本推理请求，可能产生上游费用。不会更改账户限流、路由或售价。定时检查须手动开启。',
