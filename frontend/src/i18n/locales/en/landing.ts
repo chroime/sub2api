@@ -22,6 +22,8 @@ export default {
       routeProvider: 'Upstream provider',
       routeProtocol: 'Multiple API protocols',
       exploreModels: 'Explore models',
+      modelPlazaUnavailable: 'Model Plaza is not available',
+      navigationMenu: 'Navigation menu',
       integrationLink: 'View example',
       capabilitiesEyebrow: 'Core capabilities',
       capabilitiesTitle: 'One integration, unified control',

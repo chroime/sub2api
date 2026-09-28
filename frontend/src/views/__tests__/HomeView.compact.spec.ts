@@ -9,6 +9,9 @@ const { appStore, authStore } = vi.hoisted(() => ({
     siteName: 'Fallback site',
     siteLogo: '',
     docUrl: '',
+    get backendModeEnabled() {
+      return this.cachedPublicSettings.backend_mode_enabled === true
+    },
     publicSettingsLoaded: true,
     fetchPublicSettings: vi.fn(),
   },
@@ -126,6 +129,21 @@ describe('HomeView compact mode', () => {
     expect(wrapper.get('footer').findAll('a')).toHaveLength(0)
   })
 
+  it.each([true, false])('links to the built-in guide when no document URL is configured (compact=%s)', (compact) => {
+    const wrapper = mountHome({ compact_home_enabled: compact, doc_url: '' })
+
+    expect(wrapper.findAll('header a[href="/docs"]').length).toBeGreaterThan(0)
+    expect(wrapper.get('footer').findAll('a')).toHaveLength(0)
+  })
+
+  it('keeps both navigation destinations in the default mobile menu', () => {
+    const wrapper = mountHome({ model_plaza_enabled: true, doc_url: '' })
+
+    expect(wrapper.get('.home-mobile-menu summary').attributes('aria-label')).toBeTruthy()
+    expect(wrapper.get('.home-mobile-menu .home-mobile-doc-link').attributes('href')).toBe('/docs')
+    expect(wrapper.get('.home-mobile-menu').findAllComponents(RouterLinkStub).some(link => link.props('to') === '/model-plaza')).toBe(true)
+  })
+
   it('uses the configured API base URL in the request example without repeating v1', () => {
     const wrapper = mountHome({ api_base_url: 'https://api.example.test/gateway/v1/' })
 
@@ -175,14 +193,14 @@ describe('HomeView compact mode', () => {
     expect(modelPlazaDestination(wrapper)).toBe('/model-plaza')
   })
 
-  it('hides the model plaza link from anonymous visitors when sign-in is required', () => {
+  it('keeps the model plaza link available to anonymous visitors when sign-in is required', () => {
     const wrapper = mountHome({
       compact_home_enabled: true,
       model_plaza_enabled: true,
       model_plaza_require_auth: true,
     })
 
-    expect(modelPlazaDestination(wrapper)).toBeUndefined()
+    expect(modelPlazaDestination(wrapper)).toBe('/model-plaza')
   })
 
   it('shows the model plaza link to authenticated visitors when sign-in is required', () => {
@@ -214,5 +232,29 @@ describe('HomeView compact mode', () => {
     })
 
     expect(modelPlazaDestination(wrapper)).toBeUndefined()
+    expect(wrapper.get('header [aria-disabled="true"]').text()).toContain('nav.modelPlaza')
+  })
+
+  it('shows an unavailable model plaza entry on the default header when disabled', () => {
+    const wrapper = mountHome({ model_plaza_enabled: false })
+
+    expect(modelPlazaDestination(wrapper)).toBeUndefined()
+    expect(wrapper.get('header .home-disabled-nav').attributes('aria-disabled')).toBe('true')
+  })
+
+  it('does not link a backend-mode ordinary user to the restricted model plaza', () => {
+    authStore.isAuthenticated = true
+    const wrapper = mountHome({ model_plaza_enabled: true, backend_mode_enabled: true })
+
+    expect(modelPlazaDestination(wrapper)).toBeUndefined()
+    expect(wrapper.get('header [aria-disabled="true"]').exists()).toBe(true)
+  })
+
+  it('links a backend-mode administrator to the model plaza', () => {
+    authStore.isAuthenticated = true
+    authStore.isAdmin = true
+    const wrapper = mountHome({ model_plaza_enabled: true, backend_mode_enabled: true })
+
+    expect(modelPlazaDestination(wrapper)).toBe('/model-plaza')
   })
 })

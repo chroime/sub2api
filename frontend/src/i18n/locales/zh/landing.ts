@@ -22,6 +22,8 @@ export default {
       routeProvider: '上游服务',
       routeProtocol: '兼容多种 API 协议',
       exploreModels: '浏览模型',
+      modelPlazaUnavailable: '模型广场暂未开放',
+      navigationMenu: '导航菜单',
       integrationLink: '查看接入示例',
       capabilitiesEyebrow: '核心能力',
       capabilitiesTitle: '一处接入，统一管理',

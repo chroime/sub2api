@@ -23,12 +23,12 @@
         <div class="flex max-w-full shrink-0 flex-wrap items-center justify-end gap-2">
           <LocaleSwitcher />
           <a
-            v-if="docUrl"
             :href="docUrl"
-            target="_blank"
-            rel="noopener noreferrer"
+            :target="docUrl === '/docs' ? undefined : '_blank'"
+            :rel="docUrl === '/docs' ? undefined : 'noopener noreferrer'"
             class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 dark:text-dark-400 dark:hover:bg-dark-800"
-            :title="t('home.viewDocs')"
+            :title="t('publicDocs.title')"
+            :aria-label="t('publicDocs.title')"
           >
             <Icon name="book" size="md" />
           </a>
@@ -41,6 +41,15 @@
             <Icon name="grid" size="md" />
             <span class="hidden sm:inline">{{ t('nav.modelPlaza') }}</span>
           </router-link>
+          <span
+            v-else
+            aria-disabled="true"
+            :title="t('home.experience.modelPlazaUnavailable')"
+            class="inline-flex h-10 shrink-0 items-center gap-1.5 px-2.5 text-sm text-gray-400 dark:text-dark-500"
+          >
+            <Icon name="grid" size="md" aria-hidden="true" />
+            <span class="hidden sm:inline">{{ t('nav.modelPlaza') }}</span>
+          </span>
           <button
             type="button"
             class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 dark:text-dark-400 dark:hover:bg-dark-800"
@@ -107,7 +116,7 @@ const appStore = useAppStore()
 const siteName = computed(() => appStore.cachedPublicSettings?.site_name || appStore.siteName || 'Sub2API')
 const siteLogo = computed(() => sanitizeUrl(appStore.cachedPublicSettings?.site_logo || appStore.siteLogo || '', { allowRelative: true, allowDataUrl: true }))
 const siteSubtitle = computed(() => appStore.cachedPublicSettings?.site_subtitle || 'AI API Gateway Platform')
-const docUrl = computed(() => sanitizeUrl(appStore.cachedPublicSettings?.doc_url || appStore.docUrl || ''))
+const docUrl = computed(() => sanitizeUrl(appStore.cachedPublicSettings?.doc_url || appStore.docUrl || '') || '/docs')
 const apiBaseUrl = computed(() => appStore.cachedPublicSettings?.api_base_url || appStore.apiBaseUrl || '')
 const homeContent = computed(() => appStore.cachedPublicSettings?.home_content || '')
 const hasHomeContent = computed(() => homeContent.value.trim().length > 0)
@@ -120,9 +129,8 @@ const isHomeContentUrl = computed(() => {
 const isDark = ref(document.documentElement.classList.contains('dark'))
 const isAuthenticated = computed(() => authStore.isAuthenticated)
 const modelPlazaEnabled = computed(() => isFeatureFlagEnabled(FeatureFlags.modelPlaza))
-const modelPlazaRequiresAuth = computed(() => appStore.cachedPublicSettings?.model_plaza_require_auth === true)
-const showModelPlazaEntry = computed(() => modelPlazaEnabled.value && (isAuthenticated.value || !modelPlazaRequiresAuth.value))
 const isAdmin = computed(() => authStore.isAdmin)
+const showModelPlazaEntry = computed(() => modelPlazaEnabled.value && (!appStore.backendModeEnabled || (isAuthenticated.value && isAdmin.value)))
 const dashboardPath = computed(() => isAdmin.value ? '/admin/dashboard' : '/dashboard')
 const destination = computed(() => isAuthenticated.value ? dashboardPath.value : '/login')
 const currentYear = computed(() => new Date().getFullYear())

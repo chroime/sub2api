@@ -9,22 +9,35 @@
       <RouterLink v-if="showModelPlazaEntry" to="/model-plaza" class="public-nav-link">
         {{ t('nav.modelPlaza') }}
       </RouterLink>
-      <a v-if="docUrl" :href="docUrl" target="_blank" rel="noopener noreferrer" class="public-nav-link home-desktop-doc-link">
-        {{ t('home.viewDocs') }}
+      <span v-else class="public-nav-link home-disabled-nav" aria-disabled="true" :title="t('home.experience.modelPlazaUnavailable')">
+        {{ t('nav.modelPlaza') }}<Icon name="lock" size="xs" aria-hidden="true" />
+      </span>
+      <a :href="docUrl" :target="docUrl === '/docs' ? undefined : '_blank'" :rel="docUrl === '/docs' ? undefined : 'noopener noreferrer'" class="public-nav-link home-desktop-doc-link">
+        {{ t('publicDocs.title') }}
       </a>
-      <a v-if="docUrl" :href="docUrl" target="_blank" rel="noopener noreferrer" class="home-mobile-doc-link" :title="t('home.viewDocs')" :aria-label="t('home.viewDocs')">
-        <Icon name="book" size="md" aria-hidden="true" />
-      </a>
+      <details class="home-mobile-menu">
+        <summary :aria-label="t('home.experience.navigationMenu')" :title="t('home.experience.navigationMenu')">
+          <Icon name="menu" size="md" aria-hidden="true" />
+        </summary>
+        <div class="home-mobile-menu-panel">
+          <RouterLink v-if="showModelPlazaEntry" to="/model-plaza" class="home-mobile-menu-link">
+            <Icon name="grid" size="sm" aria-hidden="true" />{{ t('nav.modelPlaza') }}
+          </RouterLink>
+          <span v-else class="home-mobile-menu-link home-disabled-nav" aria-disabled="true" :title="t('home.experience.modelPlazaUnavailable')">
+            <Icon name="grid" size="sm" aria-hidden="true" />{{ t('nav.modelPlaza') }}<Icon name="lock" size="xs" aria-hidden="true" />
+          </span>
+          <a :href="docUrl" :target="docUrl === '/docs' ? undefined : '_blank'" :rel="docUrl === '/docs' ? undefined : 'noopener noreferrer'" class="home-mobile-menu-link home-mobile-doc-link">
+            <Icon name="book" size="sm" aria-hidden="true" />{{ t('publicDocs.title') }}
+          </a>
+        </div>
+      </details>
     </PublicSiteHeader>
 
     <main>
       <section class="home-hero" :class="{ 'is-long-brand': siteName.length >= 20 }" aria-labelledby="home-title">
-        <div class="home-scene-lines" aria-hidden="true">
-          <span v-for="line in 7" :key="line" />
-        </div>
         <div class="home-hero-inner">
           <div class="home-hero-copy">
-            <p class="home-eyebrow"><span class="home-status-dot" />{{ t('home.experience.eyebrow') }}</p>
+            <p class="home-eyebrow"><span class="home-status-dot" aria-hidden="true" />{{ t('home.experience.eyebrow') }}</p>
             <h1 id="home-title">{{ siteName }}</h1>
             <p class="home-hero-subtitle">{{ subtitle }}</p>
             <div class="home-hero-actions">
@@ -52,11 +65,12 @@
                   :class="{ 'is-active': activeRoute === route.id }"
                   @click="activeRoute = route.id"
                 >
+                  <PlatformIcon :platform="route.platform" size="sm" aria-hidden="true" />
                   {{ route.label }}
                 </button>
               </div>
             </div>
-            <div class="home-flow-track" :style="{ '--route-color': selectedRoute.color }">
+            <div class="home-flow-track">
               <div class="home-flow-node">
                 <span class="home-flow-symbol"><Icon name="link" size="md" aria-hidden="true" /></span>
                 <span>{{ t('home.experience.routeInput') }}</span>
@@ -73,7 +87,6 @@
               </div>
             </div>
             <div class="home-flow-bottom">
-              <span>{{ t('home.experience.routeProvider') }}</span>
               <code data-testid="home-route-endpoint">POST {{ selectedRoute.endpoint }}</code>
             </div>
           </div>
@@ -83,7 +96,6 @@
       <section class="home-capabilities" aria-labelledby="home-capabilities-title">
         <div class="home-section-inner">
           <div class="home-section-heading">
-            <p class="home-section-eyebrow">{{ t('home.experience.capabilitiesEyebrow') }}</p>
             <h2 id="home-capabilities-title">{{ t('home.experience.capabilitiesTitle') }}</h2>
           </div>
           <div class="home-capability-grid">
@@ -99,7 +111,6 @@
       <section id="integration" class="home-integration" aria-labelledby="home-integration-title">
         <div class="home-section-inner home-integration-layout">
           <div class="home-integration-copy">
-            <p class="home-section-eyebrow">{{ t('home.experience.integrationEyebrow') }}</p>
             <h2 id="home-integration-title">{{ t('home.experience.integrationTitle') }}</h2>
             <p>{{ t('home.experience.integrationBody') }}</p>
             <div class="home-provider-list" :aria-label="t('home.experience.routeProvider')">
@@ -108,7 +119,7 @@
           </div>
           <div class="home-code-tool">
             <div class="home-code-header">
-              <span><span class="home-code-indicator" />{{ t('home.experience.codeLabel') }}</span>
+              <span><Icon name="terminal" size="sm" aria-hidden="true" />{{ t('home.experience.codeLabel') }}</span>
               <button type="button" :title="t('home.experience.copyCode')" :aria-label="t('home.experience.copyCode')" @click="copyExample">
                 <Icon :name="copyState === 'copied' ? 'check' : 'copy'" size="sm" aria-hidden="true" />
               </button>
@@ -146,9 +157,9 @@ const props = defineProps<{
 
 const { t } = useI18n()
 const routes = [
-  { id: 'openai', label: 'OpenAI', platform: 'openai', endpoint: '/v1/chat/completions', color: '#87dec0' },
-  { id: 'anthropic', label: 'Claude', platform: 'anthropic', endpoint: '/v1/messages', color: '#efbb8e' },
-  { id: 'gemini', label: 'Gemini', platform: 'gemini', endpoint: '/v1beta/models/{model}:generateContent', color: '#a3c8f5' },
+  { id: 'openai', label: 'OpenAI', platform: 'openai', endpoint: '/v1/chat/completions' },
+  { id: 'anthropic', label: 'Claude', platform: 'anthropic', endpoint: '/v1/messages' },
+  { id: 'gemini', label: 'Gemini', platform: 'gemini', endpoint: '/v1beta/models/{model}:generateContent' },
 ] as const
 const providers = [
   { id: 'openai', label: 'OpenAI' },
