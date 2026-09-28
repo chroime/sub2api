@@ -4,7 +4,7 @@ import ModelMonitorPanel from './ModelMonitorPanel.vue'
 import Select from '@/components/common/Select.vue'
 import api, { type ModelPolicy, type ModelRunPage } from '@/api/admin/upstream-model-monitoring'
 import { modelConfig, modelGroup, modelKey, modelPolicy, modelRun } from './__tests__/model-fixtures'
-vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
+vi.mock('vue-i18n', async importOriginal => ({ ...await importOriginal<typeof import('vue-i18n')>(), useI18n: () => ({ t: (key: string) => key }) }))
 vi.mock('@/api/admin/upstream-model-monitoring', () => ({ default: { policies: vi.fn(), runs: vi.fn(), stats: vi.fn(), startBatch: vi.fn(), savePolicy: vi.fn(), deletePolicy: vi.fn(), cancelBatch: vi.fn(), run: vi.fn(), review: vi.fn() } }))
 enableAutoUnmount(afterEach)
 const empty: ModelRunPage = { items: [], total: 0, page: 1, page_size: 20, counts: {} }
@@ -28,6 +28,37 @@ describe('model monitoring configuration and persistent work', () => {
     expect(id).toBe(1); expect(input.request_id).toMatch(/^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/)
     expect(input.config).toEqual({ ...modelConfig, efforts: ['medium', 'low', 'high'], samples: 2, concurrency: 4 })
     expect(api.savePolicy).not.toHaveBeenCalled()
+  })
+  it('offers platform-specific text candidates when the upstream group has no model catalog without choosing one automatically', async () => {
+    const wrapper = mount(ModelMonitorPanel, { props: { siteId: 1, remoteGroups: [{ ...modelGroup, models: [] }], managedKeys: [modelKey] } })
+    await flushPromises()
+    await wrapper.get('[data-test=model-new]').trigger('click')
+    const modelSelect = wrapper.findAllComponents(Select).find(select => select.attributes('data-test') === 'model-name')!
+    const names = (modelSelect.props('options') as { value: string }[]).map(option => option.value)
+    expect(names).toContain('gpt-5.6')
+    expect(names).not.toContain('gpt-image-1')
+    expect(modelSelect.props('modelValue')).toBe('')
+    expect(wrapper.text()).toContain('governance.modelMonitoring.candidateModelsHint')
+    modelSelect.vm.$emit('update:modelValue', 'gpt-5.6')
+    await flushPromises()
+    expect(modelSelect.props('modelValue')).toBe('gpt-5.6')
+  })
+  it('keeps discovered upstream models authoritative and avoids unrelated platform candidates', async () => {
+    const wrapper = mount(ModelMonitorPanel, { props: { siteId: 1, remoteGroups: [{ ...modelGroup, models: ['upstream-only'] }], managedKeys: [modelKey] } })
+    await flushPromises()
+    await wrapper.get('[data-test=model-new]').trigger('click')
+    const modelSelect = wrapper.findAllComponents(Select).find(select => select.attributes('data-test') === 'model-name')!
+    expect(modelSelect.props('options')).toEqual([{ value: 'upstream-only', label: 'upstream-only' }])
+    expect(wrapper.text()).not.toContain('governance.modelMonitoring.candidateModelsHint')
+  })
+  it('uses the managed key protocol for fallback candidates', async () => {
+    const wrapper = mount(ModelMonitorPanel, { props: { siteId: 1, remoteGroups: [{ ...modelGroup, platform: 'anthropic', models: [] }], managedKeys: [{ ...modelKey, platform: 'anthropic' }] } })
+    await flushPromises()
+    await wrapper.get('[data-test=model-new]').trigger('click')
+    const modelSelect = wrapper.findAllComponents(Select).find(select => select.attributes('data-test') === 'model-name')!
+    const names = (modelSelect.props('options') as { value: string }[]).map(option => option.value)
+    expect(names).toContain('claude-sonnet-4-6')
+    expect(names).not.toContain('gpt-5.6')
   })
   it('saves a new policy paused with exact cadence and only enables it through an explicit action', async () => {
     const wrapper = setup(); await flushPromises(); await wrapper.get('[data-test=model-new]').trigger('click')

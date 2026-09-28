@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import PlatformIcon from '@/components/common/PlatformIcon.vue'
+import Select from '@/components/common/Select.vue'
 import { getModelsByPlatform } from '@/composables/useModelWhitelist'
 import api, {
   type ModelTemplate,
@@ -45,6 +46,13 @@ const availableTemplates = computed(() =>
 const selectedTemplate = computed(() =>
   availableTemplates.value.find((template) => template.id === templateID.value),
 )
+const templateOptions = computed(() => [
+  { value: '', label: t('governance.selectTemplate') },
+  ...availableTemplates.value.map(template => ({
+    value: template.id,
+    label: `${template.name}${template.is_default ? ' · ' + t('governance.defaultTemplate') : ''}`,
+  })),
+])
 function upstreamModels(p: Transport) {
   return [
     ...new Set(
@@ -88,6 +96,10 @@ function loadTemplate() {
   update(selectedTemplate.value.models, true)
   templateName.value = selectedTemplate.value.name
   saveAsDefault.value = selectedTemplate.value.is_default
+}
+function chooseTemplate(value: string | number | boolean | null) {
+  templateID.value = typeof value === 'string' ? value : ''
+  loadTemplate()
 }
 function addCustom() {
   const model = custom.value.trim()
@@ -276,25 +288,15 @@ onUnmounted(() => {
         <span class="text-xs text-gray-500">{{
           t('governance.modelSelectedCount', { count: current.models.length })
         }}</span>
-        <select
-          v-model="templateID"
+        <Select
           data-test="model-template"
-          class="input ml-auto min-w-48 text-sm"
+          class="w-full min-w-0 sm:ml-auto sm:w-auto sm:min-w-48"
+          :model-value="templateID"
+          :options="templateOptions"
+          :disabled="disabled || loading || saving"
           :aria-label="t('governance.modelTemplate')"
-          @change="loadTemplate"
-        >
-          <option value="">{{ t('governance.selectTemplate') }}</option>
-          <option
-            v-for="template in availableTemplates"
-            :key="template.id"
-            :value="template.id"
-          >
-            {{ template.name
-            }}{{
-              template.is_default ? ' · ' + t('governance.defaultTemplate') : ''
-            }}
-          </option>
-        </select>
+          @update:model-value="chooseTemplate"
+        />
       </div>
       <p
         v-if="!current.enabled"

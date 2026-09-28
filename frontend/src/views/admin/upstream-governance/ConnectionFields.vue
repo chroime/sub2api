@@ -1,12 +1,17 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import Select from '@/components/common/Select.vue'
 import { clearConnectionSecrets, type ConnectionForm } from './connection-form'
 
 const form = defineModel<ConnectionForm>({ required: true })
 defineProps<{ idPrefix: string; challenge?: string; disabled?: boolean }>()
 const { t } = useI18n()
 const advanced = ref(false)
+const modeOptions = computed(() => [
+  { value: 'password', label: t('governance.passwordLogin') },
+  { value: 'session', label: t('governance.sessionLogin') },
+])
 watch(() => form.value.mode, () => clearConnectionSecrets(form.value))
 </script>
 
@@ -49,13 +54,10 @@ watch(() => form.value.mode, () => clearConnectionSecrets(form.value))
       {{ t('governance.advancedAuth') }}
     </button>
     <div v-if="advanced" class="space-y-3 border-t pt-3 dark:border-dark-600">
-      <label class="block" :for="idPrefix + '-auth-mode'">
-        {{ t('governance.authMode') }}
-        <select :id="idPrefix + '-auth-mode'" v-model="form.mode" class="input w-full">
-          <option value="password">{{ t('governance.passwordLogin') }}</option>
-          <option value="session">{{ t('governance.sessionLogin') }}</option>
-        </select>
-      </label>
+      <div>
+        <label class="mb-1 block" :for="idPrefix + '-auth-mode'">{{ t('governance.authMode') }}</label>
+        <Select :id="idPrefix + '-auth-mode'" v-model="form.mode" :options="modeOptions" :searchable="false" :disabled="disabled" :aria-label="t('governance.authMode')" />
+      </div>
     </div>
     <template v-if="form.mode === 'session'">
       <label :for="idPrefix + '-session'" class="block">

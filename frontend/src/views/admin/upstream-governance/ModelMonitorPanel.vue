@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import Select from '@/components/common/Select.vue'
 import PlatformIcon from '@/components/common/PlatformIcon.vue'
 import Icon from '@/components/icons/Icon.vue'
+import { getModelsByPlatform } from '@/composables/useModelWhitelist'
 import type { ManagedKey, RemoteGroup, Transport } from '@/api/admin/upstream-governance'
 import api, { type ModelAPIMode, type ModelBatchInput, type ModelEffort, type ModelPolicy, type ModelRun, type ModelRunPage, type ModelStats, type ModelTestConfig, type ModelTestTemplate } from '@/api/admin/upstream-model-monitoring'
 import ModelRunDetail from './ModelRunDetail.vue'
@@ -42,7 +43,13 @@ const groupNames = computed(() => new Map(props.remoteGroups.map(group => [group
 const keyOptions = computed(() => readyKeys.value.map(key => ({ value: key.id, platform: key.platform, label: `${groupNames.value.get(key.remote_group_id) || mt('unnamedGroup')} · ${key.platform}`, group: key.remote_group_id })))
 const selectedKey = computed(() => readyKeys.value.find(key => key.id === config.value.managed_key_id))
 const selectedGroup = computed(() => props.remoteGroups.find(group => group.id === selectedKey.value?.remote_group_id))
-const modelOptions = computed(() => [...new Set([...(selectedGroup.value?.models || []), ...(config.value.model ? [config.value.model] : [])])].map(value => ({ value, label: value })))
+const usingCandidateModels = computed(() => !!selectedGroup.value && !selectedGroup.value.models?.length)
+const modelOptions = computed(() => {
+  const models = usingCandidateModels.value
+    ? getModelsByPlatform(selectedKey.value!.platform).filter(model => !/(?:image|video|audio|realtime|imagine|cogview)/i.test(model))
+    : selectedGroup.value?.models || []
+  return [...new Set([...models, ...(config.value.model ? [config.value.model] : [])])].map(value => ({ value, label: value }))
+})
 function modeAvailable(mode: ModelAPIMode) {
   const platform = selectedKey.value?.platform
   if (!platform || platform === 'antigravity') return true
@@ -228,7 +235,7 @@ function comparisonDetail(id: string) { comparison.value = null; detailId.value 
           <div class="min-w-0"><label :for="`model-name-${siteId}`" class="mb-1 block text-sm font-medium">{{ t('governance.model') }}</label><Select :id="`model-name-${siteId}`" data-test="model-name" :model-value="config.model" :options="modelOptions" searchable creatable :disabled="locked" :aria-label="t('governance.model')" :placeholder="mt('modelPlaceholder')" @update:model-value="changeModel" /></div>
           <div class="min-w-0"><label :for="`model-mode-${siteId}`" class="mb-1 block text-sm font-medium">{{ mt('apiMode') }}</label><Select :id="`model-mode-${siteId}`" data-test="model-mode" :model-value="config.api_mode" :options="modeOptions" :disabled="locked" :aria-label="mt('apiMode')" @update:model-value="changeMode"><template #selected="{ option }"><span v-if="option" class="flex items-center gap-2"><PlatformIcon :platform="option.platform as Transport" size="sm" />{{ option.label }}</span></template><template #option="{ option }"><span class="flex items-center gap-2"><PlatformIcon :platform="option.platform as Transport" size="sm" />{{ option.label }}</span></template></Select></div>
         </div>
-        <p class="-mt-2 text-xs leading-relaxed text-gray-500">{{ mt('modelCandidatesHint') }}<span v-if="collectedAt"> · {{ formatGovernanceTime(collectedAt) }}</span></p>
+        <p class="-mt-2 text-xs leading-relaxed" :class="usingCandidateModels ? 'text-amber-700 dark:text-amber-300' : 'text-gray-500'">{{ mt(usingCandidateModels ? 'candidateModelsHint' : 'modelCandidatesHint') }}<span v-if="collectedAt && !usingCandidateModels"> · {{ formatGovernanceTime(collectedAt) }}</span></p>
         <div class="grid gap-5 lg:grid-cols-[1fr_2fr]"><fieldset class="space-y-2"><legend class="mb-2 text-sm font-medium">{{ mt('efforts') }}</legend><div class="flex flex-wrap gap-2"><label v-for="effort in efforts" :key="effort" class="governance-checkbox-label flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm" :class="config.efforts.includes(effort) ? 'border-primary-300 bg-primary-50 dark:border-primary-700 dark:bg-primary-900/20' : 'border-gray-200 dark:border-dark-600'"><input v-model="config.efforts" :data-test="`model-effort-${effort}`" type="checkbox" class="governance-checkbox" :value="effort" />{{ mt(`effort_${effort}`) }}</label></div><p class="text-xs leading-relaxed text-gray-500">{{ mt('effortHint') }}</p></fieldset><fieldset><legend class="mb-2 text-sm font-medium">{{ mt('templates') }}</legend><div class="flex flex-wrap gap-2"><label v-for="template in templates" :key="template" class="governance-checkbox-label flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm" :class="config.templates.includes(template) ? 'border-primary-300 bg-primary-50 dark:border-primary-700 dark:bg-primary-900/20' : 'border-gray-200 dark:border-dark-600'"><input v-model="config.templates" :data-test="`model-template-${template}`" type="checkbox" class="governance-checkbox" :value="template" />{{ mt(`template_${template}`) }}</label></div></fieldset></div>
         <div class="grid gap-4 sm:grid-cols-2"><label class="text-sm font-medium">{{ mt('samples') }}<input v-model.number="config.samples" data-test="model-samples" type="number" min="1" max="100" step="1" required class="input mt-1 w-full" /></label><label class="text-sm font-medium">{{ mt('concurrency') }}<input v-model.number="config.concurrency" data-test="model-concurrency" type="number" min="1" max="32" step="1" required class="input mt-1 w-full" /></label></div>
         <p class="-mt-2 text-xs text-gray-500">{{ mt('concurrencyHint') }}</p>

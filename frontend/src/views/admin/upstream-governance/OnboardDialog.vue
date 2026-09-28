@@ -2,6 +2,7 @@
 import { computed, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseDialog from '@/components/common/BaseDialog.vue'
+import Select from '@/components/common/Select.vue'
 import Icon from '@/components/icons/Icon.vue'
 import ConnectionFields from './ConnectionFields.vue'
 import BrowserAuthorizationDialog from './BrowserAuthorizationDialog.vue'
@@ -9,7 +10,7 @@ import { newConnectionForm, connectionInput, clearConnectionSecrets, clearConnec
 import { errorKey } from './feedback'
 import api, { type AuthorizationStatus, type Site, type SiteInput, type Snapshot } from '@/api/admin/upstream-governance'
 
-defineProps<{ proxies: { id: number; name: string }[] }>()
+const props = defineProps<{ proxies: { id: number; name: string }[] }>()
 const emit = defineEmits<{ close: []; created: [site: Site]; completed: [site: Site, snapshot: Snapshot] }>()
 const { t } = useI18n()
 const url = ref(''), name = ref(''), platform = ref<SiteInput['platform'] | ''>(''), proxyId = ref<number | null>(null)
@@ -18,6 +19,15 @@ const connected = ref(false), busy = ref(false), error = ref(''), challenge = re
 const stage = ref('')
 const browserOpen = ref(false), browserStatus = ref<AuthorizationStatus | null>(null), targetStale = ref(false)
 const browserBlocked = computed(() => busy.value || targetStale.value || !browserStatus.value?.browser.available || browserStatus.value.session.site_version !== savedSite.value?.version || form.value.mode !== 'password' || !form.value.username.trim() || !form.value.password)
+const platformOptions = computed(() => [
+  { value: '', label: t('governance.autoDetect') },
+  { value: 'sub2api', label: 'Sub2API' },
+  { value: 'newapi', label: 'New API' },
+])
+const proxyOptions = computed(() => [
+  { value: null, label: t('governance.direct') },
+  ...props.proxies.map(proxy => ({ value: proxy.id, label: proxy.name })),
+])
 let disposed = false, statusGeneration = 0
 onUnmounted(() => { disposed = true; statusGeneration++; clearConnectionSecrets(form.value) })
 function close() {
@@ -143,21 +153,21 @@ async function onboard() {
       <ConnectionFields v-if="!connected" v-model="form" id-prefix="governance-onboard" :challenge="challenge" :disabled="busy || browserOpen || targetStale" />
       <button id="governance-onboard-advanced" type="button" class="text-sm text-primary-600 underline" :aria-expanded="advanced" :disabled="busy" @click="advanced = !advanced">{{ t('governance.advancedSite') }}</button>
       <fieldset v-if="advanced" :disabled="busy || !!savedSite" class="space-y-3 rounded-lg border p-3 dark:border-dark-600">
-        <label class="block" for="governance-onboard-platform">
-          {{ t('governance.platform') }}
-          <select id="governance-onboard-platform" v-model="platform" class="input w-full">
-            <option value="">{{ t('governance.autoDetect') }}</option>
-            <option value="sub2api">Sub2API</option><option value="newapi">New API</option>
-          </select>
-        </label>
+        <div>
+          <label class="mb-1 block" for="governance-onboard-platform">{{ t('governance.platform') }}</label>
+          <Select id="governance-onboard-platform" v-model="platform" :options="platformOptions" :searchable="false" :disabled="busy || !!savedSite" :aria-label="t('governance.platform')">
+            <template #selected="{ option }"><span class="flex min-w-0 items-center gap-2"><Icon name="server" size="sm" class="shrink-0 text-primary-600" /><span class="truncate">{{ option?.label }}</span></span></template>
+            <template #option="{ option }"><span class="flex min-w-0 items-center gap-2"><Icon name="server" size="sm" class="shrink-0 text-primary-600" /><span class="truncate">{{ option.label }}</span></span></template>
+          </Select>
+        </div>
         <label class="block" for="governance-onboard-name">{{ t('governance.name') }}<input id="governance-onboard-name" v-model="name" class="input w-full" maxlength="100" :placeholder="t('governance.autoDetect')" /></label>
-        <label class="block" for="governance-onboard-proxy">
-          {{ t('governance.proxy') }}
-          <select id="governance-onboard-proxy" v-model="proxyId" class="input w-full">
-            <option :value="null">{{ t('governance.direct') }}</option>
-            <option v-for="proxy in proxies" :key="proxy.id" :value="proxy.id">{{ proxy.name }}</option>
-          </select>
-        </label>
+        <div>
+          <label class="mb-1 block" for="governance-onboard-proxy">{{ t('governance.proxy') }}</label>
+          <Select id="governance-onboard-proxy" v-model="proxyId" :options="proxyOptions" :disabled="busy || !!savedSite" :aria-label="t('governance.proxy')">
+            <template #selected="{ option }"><span class="flex min-w-0 items-center gap-2"><Icon name="globe" size="sm" class="shrink-0 text-gray-400" /><span class="truncate">{{ option?.label }}</span></span></template>
+            <template #option="{ option }"><span class="flex min-w-0 items-center gap-2"><Icon name="globe" size="sm" class="shrink-0 text-gray-400" /><span class="truncate">{{ option.label }}</span></span></template>
+          </Select>
+        </div>
         <p class="text-sm text-gray-500">{{ t('governance.urlHint') }}</p>
       </fieldset>
       <p class="text-xs text-gray-500">{{ t('governance.secretNotice') }}</p>

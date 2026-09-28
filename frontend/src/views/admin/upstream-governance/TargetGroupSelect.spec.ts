@@ -227,6 +227,25 @@ describe('target group selection', () => {
     }
   })
 
+  it('keeps the teleported menu inside a short mobile viewport', async () => {
+    const originalHeight = window.innerHeight
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 160 })
+    vi.spyOn(HTMLButtonElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      x: 8, y: 20, top: 20, right: 288, bottom: 60, left: 8,
+      width: 280, height: 40, toJSON: () => ({}),
+    })
+    try {
+      const wrapper = mountSelector([])
+      await openSelector(wrapper)
+      const menu = document.querySelector<HTMLElement>('[role="listbox"]')?.parentElement
+      expect(menu?.style.top).toBe('66px')
+      expect(menu?.style.maxHeight).toBe('86px')
+    } finally {
+      Object.defineProperty(window, 'innerHeight', { configurable: true, value: originalHeight })
+      vi.restoreAllMocks()
+    }
+  })
+
   it('closes only the popup on the first Escape inside a real dialog, then lets Escape close the dialog', async () => {
     const dialog = mount(BaseDialog, {
       props: { show: true, title: 'Import settings' },

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ModelTemplatePanel from './ModelTemplatePanel.vue'
 import api, { type RemoteGroup } from '@/api/admin/upstream-governance'
 import { defaultModelSelections } from './import-config'
+import Select from '@/components/common/Select.vue'
 vi.mock('@/api/admin/upstream-governance', () => ({ default: { modelTemplates: vi.fn(), saveModelTemplates: vi.fn() } }))
 vi.mock('vue-i18n', async (importOriginal) => ({ ...await importOriginal<typeof import('vue-i18n')>(), useI18n: () => ({ t: (key: string) => key }) }))
 const groups: RemoteGroup[] = [
@@ -45,6 +46,22 @@ describe('server-backed model templates', () => {
       { id: 'old', name: 'Old', platform: 'openai', models: ['saved-gpt'], is_default: false },
       { id: expect.stringMatching(/^tpl_/), name: 'New default', platform: 'openai', models: ['saved-gpt', 'custom-gpt'], is_default: true },
     ] })
+    wrapper.unmount()
+  })
+  it('presents templates in the shared dropdown and applies the selected model set', async () => {
+    vi.mocked(api.modelTemplates).mockResolvedValue({ version: 3, templates: [
+      { id: 'saved', name: 'Saved GPT', platform: 'openai', models: ['saved-gpt'], is_default: false },
+    ] })
+    const wrapper = setup()
+    await flushPromises()
+    expect(wrapper.findComponent(Select).exists()).toBe(true)
+    expect(wrapper.find('select').exists()).toBe(false)
+    await wrapper.get('[data-test=model-template] button').trigger('click')
+    const option = [...document.querySelectorAll<HTMLElement>('.select-dropdown-portal [role="option"]')].find(item => item.textContent?.includes('Saved GPT'))
+    expect(option).toBeDefined()
+    option!.click()
+    await flushPromises()
+    expect(wrapper.props('modelValue').openai.models).toEqual(['saved-gpt'])
     wrapper.unmount()
   })
   it('keeps Grok and DeepSeek templates independent from OpenAI', async () => {

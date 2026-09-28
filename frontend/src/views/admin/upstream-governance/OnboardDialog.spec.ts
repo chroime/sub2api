@@ -2,6 +2,7 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import OnboardDialog from './OnboardDialog.vue'
 import api, { type Site, type Snapshot } from '@/api/admin/upstream-governance'
+import Select from '@/components/common/Select.vue'
 
 vi.mock('@/api/admin/upstream-governance', () => ({ default: { detect: vi.fn(), create: vi.fn(), connect: vi.fn(), sync: vi.fn(), authStatus: vi.fn(), loginCredentials: vi.fn() } }))
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
@@ -20,6 +21,13 @@ async function fill(wrapper: ReturnType<typeof mountDialog>) {
 }
 async function submit(wrapper: ReturnType<typeof mountDialog>) {
   await wrapper.get('form').trigger('submit')
+  await flushPromises()
+}
+async function choose(selector: string, label: string, wrapper: ReturnType<typeof mountDialog>) {
+  await wrapper.get(selector).trigger('click')
+  const option = [...document.querySelectorAll<HTMLElement>('.select-dropdown-portal [role="option"]')].find(item => item.textContent?.includes(label))
+  expect(option).toBeDefined()
+  option!.click()
   await flushPromises()
 }
 
@@ -131,11 +139,25 @@ describe('native onboarding continuation', () => {
     expect(api.connect).toHaveBeenCalledTimes(1)
     expect(api.sync).not.toHaveBeenCalled()
     await wrapper.get('#governance-onboard-advanced-auth').trigger('click')
-    await wrapper.get('#governance-onboard-auth-mode').setValue('session')
+    await choose('#governance-onboard-auth-mode', 'governance.sessionLogin', wrapper)
     await wrapper.get('#governance-onboard-session').setValue('fixture-session')
     await submit(wrapper)
     expect(api.connect).toHaveBeenLastCalledWith(8, { session_token: 'fixture-session', user_id: undefined, expected_site_version: 1 })
     expect(api.sync).toHaveBeenCalledTimes(1)
+  })
+  it('uses consistent portal dropdowns for the advanced site platform and proxy', async () => {
+    const wrapper = mount(OnboardDialog, { props: { proxies: [{ id: 42, name: 'Fixture proxy' }] }, global: { stubs: { BaseDialog: { template: '<div><slot /></div>' } } } })
+    await wrapper.get('#governance-onboard-advanced').trigger('click')
+    expect(wrapper.findAllComponents(Select)).toHaveLength(2)
+    expect(wrapper.findAll('select')).toHaveLength(0)
+    await choose('#governance-onboard-platform', 'New API', wrapper)
+    await choose('#governance-onboard-proxy', 'Fixture proxy', wrapper)
+    await wrapper.get('#governance-onboard-url').setValue('https://fixture.example')
+    await wrapper.get('#governance-onboard-username').setValue('fixture-user')
+    await wrapper.get('#governance-onboard-password').setValue('fixture-password')
+    await submit(wrapper)
+    expect(api.create).toHaveBeenCalledWith(expect.objectContaining({ platform: 'newapi', proxy_id: 42 }))
+    wrapper.unmount()
   })
   it('does not continue onboarding if navigation occurs while platform detection is pending', async () => {
     let resolve!: (value: Awaited<ReturnType<typeof api.detect>>) => void

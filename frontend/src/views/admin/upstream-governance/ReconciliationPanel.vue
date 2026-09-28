@@ -8,6 +8,7 @@ const props = defineProps<{ siteId: number; refreshKey?: number | string; disabl
 const emit = defineEmits<{ busy: [value: boolean]; applied: []; loaded: [value: Reconciliation] }>()
 const { t } = useI18n()
 const data = ref<Reconciliation | null>(null), preview = ref<ReconciliationPreview | null>(null), result = ref<ReconciliationResult | null>(null)
+const resultRows = ref<ReconciliationRow[]>([])
 const selected = ref<number[]>([]), reviewed = ref<number[]>([]), loading = ref(false), busy = ref(false), error = ref('')
 let generation = 0
 const eligible = (row: ReconciliationRow) => row.action !== 'none' && (row.state === 'ready' || row.state === 'review')
@@ -24,10 +25,11 @@ function display(value: unknown, field: string) {
   return typeof value === 'object' ? JSON.stringify(value) : String(value)
 }
 const reason = (row: ReconciliationRow) => row.reason ? t('governance.' + (reasonKeys[row.reason] || (row.state === 'conflict' ? 'accountChangedReview' : row.state === 'unavailable' ? 'accountUnavailable' : row.state === 'review' ? 'changeRequiresReview' : 'changeReadyHint'))) : ''
+const resultRow = (id: number) => resultRows.value.find(row => row.binding_id === id)
 watch(busy, value => emit('busy', value), { flush: 'sync' })
 async function load() {
   const request = ++generation, id = props.siteId
-  data.value = null; preview.value = null; result.value = null; selected.value = []; reviewed.value = []; error.value = ''; loading.value = true; busy.value = false
+  data.value = null; preview.value = null; result.value = null; resultRows.value = []; selected.value = []; reviewed.value = []; error.value = ''; loading.value = true; busy.value = false
   try { const value = await api.reconciliation(id); if (request === generation) { data.value = value; emit('loaded', value) } }
   catch (e) { if (request === generation) error.value = t(errorKey(e)) }
   finally { if (request === generation) loading.value = false }
@@ -37,7 +39,7 @@ onUnmounted(() => { generation++; emit('busy', false) })
 async function prepare() {
   if (props.disabled || busy.value || !selected.value.length || selected.value.length > 100 || !selected.value.every(id => data.value?.rows.some(row => row.binding_id === id && eligible(row)))) return
   const request = generation, ids = [...selected.value]
-  busy.value = true; error.value = ''; result.value = null
+  busy.value = true; error.value = ''; result.value = null; resultRows.value = []
   try { const value = await api.reconcilePreview(props.siteId); if (request === generation) { preview.value = value; reviewed.value = ids } }
   catch (e) { if (request === generation) error.value = t(errorKey(e)) }
   finally { if (request === generation) busy.value = false }
@@ -51,6 +53,7 @@ async function apply() {
     const value = await api.applyReconciliation(props.siteId, preview.value.id, [...reviewed.value])
     if (request !== generation) return
     result.value = value
+    resultRows.value = preview.value.rows
     emit('applied')
     if (reviewed.value.every(id => value.items.some(item => item.binding_id === id && item.status === 'applied'))) {
       preview.value = null; selected.value = []; reviewed.value = []; data.value = null; loading.value = true
@@ -75,6 +78,14 @@ async function apply() {
     </article>
     <p v-if="preview && !canApply" role="alert" class="text-sm text-amber-700">{{ t('governance.reconcileRefreshRequired') }}</p>
     <p v-if="selected.length >= 100 && !preview" role="status" class="text-xs text-amber-700">{{ t('governance.reconcileSelectionLimit') }}</p><div v-if="rows.length" class="flex flex-wrap gap-2"><button v-if="!preview" data-test="reconcile-preview" type="button" class="btn btn-primary" :disabled="busy || disabled || !selected.length" @click="prepare">{{ t('governance.previewSelectedChanges') }}</button><template v-else><button data-test="reconcile-apply" type="button" class="btn btn-primary" :disabled="busy || disabled || !canApply" @click="apply">{{ t(result ? 'governance.retry' : 'governance.applySelectedChanges') }}</button><button type="button" class="btn btn-secondary" :disabled="busy || disabled" @click="preview = null; result = null">{{ t('governance.backToChanges') }}</button></template></div>
-    <div v-if="result" aria-live="polite" class="space-y-2 rounded-xl bg-gray-50 p-4 text-sm dark:bg-dark-900"><p class="font-medium">{{ t('governance.results') }}</p><p v-for="item in result.items" :key="item.binding_id">#{{ item.account_id }} · {{ t(item.status === 'applied' ? 'governance.success' : 'governance.failed') }}<span v-if="item.error"> · {{ t(errorKey({ reason: item.error })) }}</span></p></div>
+    <section v-if="result" aria-live="polite" class="space-y-3 rounded-lg border border-gray-200 p-4 text-sm dark:border-dark-600">
+      <div><h4 class="font-medium">{{ t('governance.results') }}</h4><p class="mt-1 text-xs text-gray-500">{{ t('governance.applyResultSummary', { succeeded: result.items.filter(item => item.status === 'applied').length, failed: result.items.filter(item => item.status !== 'applied').length }) }}</p></div>
+      <p v-if="result.items.some(item => item.status !== 'applied')" class="text-xs text-amber-700 dark:text-amber-400">{{ t('governance.reconcilePartialNotice') }}</p>
+      <div v-for="item in result.items" :key="item.binding_id" data-test="reconcile-result-item" class="border-t border-gray-200 pt-3 dark:border-dark-600">
+        <div class="flex flex-wrap items-start justify-between gap-2"><div class="min-w-0"><p class="break-all font-medium">{{ resultRow(item.binding_id)?.remote_group_name || resultRow(item.binding_id)?.remote_group_id || `#${item.binding_id}` }}</p><p class="mt-0.5 break-all text-xs text-gray-500">{{ resultRow(item.binding_id)?.account_name || t('governance.accountNameUnavailable') }} · #{{ item.account_id }}</p></div><span class="text-xs font-medium" :class="item.status === 'applied' ? 'text-primary-700 dark:text-primary-300' : 'text-red-600 dark:text-red-400'">{{ t(item.status === 'applied' ? 'governance.success' : 'governance.failed') }}</span></div>
+        <p v-if="resultRow(item.binding_id)" class="mt-1 text-xs text-gray-500">{{ t('governance.' + actionKeys[resultRow(item.binding_id)!.action]) }}</p>
+        <p v-if="item.status !== 'applied'" class="mt-2 text-xs text-red-600 dark:text-red-400">{{ t('governance.resultFailureReason') }}: {{ t(errorKey({ reason: item.error })) }}<span v-if="item.error" class="ml-1 text-gray-500">({{ item.error }})</span></p>
+      </div>
+    </section>
   </section>
 </template>

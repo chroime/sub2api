@@ -84,4 +84,29 @@ describe('Select keyboard focus', () => {
     expect(dialog.emitted('close')).toHaveLength(1)
     expect(dialog.props('show')).toBe(false)
   })
+
+  it.each([false, true])('keeps the dialog open when Escape is pressed on the trigger of an open dropdown (searchable=%s)', async (searchable) => {
+    wrapper = mount(defineComponent({
+      components: { BaseDialog, CommonSelect: Select },
+      setup: () => ({ show: ref(true), searchable }),
+      template: `<BaseDialog :show="show" title="Add site" @close="show = false">
+        <CommonSelect :searchable="searchable" :model-value="null" :options="[{ value: 1, label: 'Direct' }, { value: 2, label: 'Proxy' }]" />
+      </BaseDialog>`,
+    }), { attachTo: document.body })
+    await nextTick()
+    const dialog = wrapper.getComponent(BaseDialog)
+    const trigger = wrapper.getComponent(Select).get<HTMLButtonElement>('button')
+    await trigger.trigger('click')
+    await nextTick()
+    expect(trigger.attributes('aria-expanded')).toBe('true')
+
+    trigger.element.focus()
+    await press('Escape')
+    expect(trigger.attributes('aria-expanded')).toBe('false')
+    expect(dialog.emitted('close')).toBeUndefined()
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull()
+
+    await press('Escape')
+    expect(dialog.emitted('close')).toHaveLength(1)
+  })
 })

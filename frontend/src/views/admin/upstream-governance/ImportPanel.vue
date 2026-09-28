@@ -13,7 +13,7 @@ import {
 import ImportSettingsPanel from './ImportSettingsPanel.vue'
 import TransportSelect from './TransportSelect.vue'
 import TargetGroupSelect from './TargetGroupSelect.vue'
-import { initialTransport, transportUnavailable } from './providers'
+import { initialTransport, providerLabel, transportUnavailable } from './providers'
 import PriceDetails from './PriceDetails.vue'
 import Icon from '@/components/icons/Icon.vue'
 import PlatformIcon from '@/components/common/PlatformIcon.vue'
@@ -182,6 +182,7 @@ function assignTarget() {
   ].filter(Boolean).join(' ')
 }
 const previewTargets = (row: PreviewRow) => row.targets?.length ? row.targets : [row.target]
+const resultRow = (remoteGroupId: string, platform: string) => preview.value?.rows.find(row => row.selection.remote_group_id === remoteGroupId && row.selection.platform === platform)
 function changeRate(choice: GroupChoice, event: Event) {
   const previous = defaultAccountName(props.siteBaseUrl, choice.cost_multiplier)
   choice.cost_multiplier = Number((event.target as HTMLInputElement).value)
@@ -740,22 +741,16 @@ const catalogWarnings: Record<string, string> = {
     <section
       v-if="result"
       aria-live="polite"
-      class="space-y-2 rounded-xl border border-gray-200 p-4 dark:border-dark-600"
+      class="space-y-3 rounded-lg border border-gray-200 p-4 dark:border-dark-600"
     >
       <h4 class="font-semibold">{{ t('governance.results') }}</h4>
-      <p class="text-xs text-gray-500">{{ t('governance.partialNotice') }}</p>
-      <p
-        v-for="item in result.items"
-        :key="item.remote_group_id + item.platform"
-        class="text-sm"
-        :class="
-          item.error ? 'text-red-600' : 'text-primary-700 dark:text-primary-300'
-        "
-      >
-        {{ item.remote_group_id }} / {{ item.platform }}: {{ item.status }}
-        <span v-if="item.account_id">#{{ item.account_id }}</span>
-        {{ item.error }}
-      </p>
+      <p class="text-xs text-gray-500">{{ t('governance.applyResultSummary', { succeeded: result.items.filter(item => item.status === 'applied').length, failed: result.items.filter(item => item.status !== 'applied').length }) }}</p>
+      <p v-if="result.items.some(item => item.status !== 'applied')" class="text-xs text-amber-700 dark:text-amber-400">{{ t('governance.partialNotice') }}</p>
+      <div v-for="item in result.items" :key="item.remote_group_id + ':' + item.platform" data-test="import-result-item" class="border-t border-gray-200 pt-3 text-sm dark:border-dark-600">
+        <div class="flex flex-wrap items-start justify-between gap-2"><div class="min-w-0"><p class="break-all font-medium">{{ resultRow(item.remote_group_id, item.platform)?.remote_group.name || item.remote_group_id }}</p><p class="mt-0.5 text-xs text-gray-500">{{ providerLabel(item.platform) }} · {{ t('governance.localAccount') }}: {{ resultRow(item.remote_group_id, item.platform)?.selection.account_name || t('governance.accountNameUnavailable') }}<span v-if="item.account_id"> · #{{ item.account_id }}</span></p></div><span class="text-xs font-medium" :class="item.status === 'applied' ? 'text-primary-700 dark:text-primary-300' : 'text-red-600 dark:text-red-400'">{{ t(item.status === 'applied' ? 'governance.success' : 'governance.failed') }}</span></div>
+        <p v-if="item.status === 'applied'" class="mt-1 text-xs text-gray-500">{{ t('governance.importResultApplied') }}</p>
+        <p v-else class="mt-2 text-xs text-red-600 dark:text-red-400">{{ t('governance.resultFailureReason') }}: {{ t(errorKey({ reason: item.error })) }}<span v-if="item.error" class="ml-1 text-gray-500">({{ item.error }})</span></p>
+      </div>
     </section>
     <div class="flex flex-wrap items-center gap-3 rounded-xl bg-gray-50 px-4 py-3 dark:bg-dark-900"><p class="min-w-0 flex-1 text-xs text-gray-500">{{ t('governance.keysWorkspaceHint') }}</p><button id="governance-import-keys" data-test="manage-keys" type="button" class="btn btn-secondary text-sm" :disabled="working || disabled || !!preview" @click="emit('manageKeys', keySelections.filter((selection): selection is KeySelection => !!selection.platform))">{{ t('governance.viewKeys') }}</button></div>
     <details

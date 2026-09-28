@@ -18,6 +18,7 @@
       ]"
       @keydown.down.prevent="onTriggerKeyDown"
       @keydown.up.prevent="onTriggerKeyDown"
+      @keydown.esc="onTriggerEscape"
     >
       <span class="select-value">
         <slot name="selected" :option="selectedOption">
@@ -217,18 +218,24 @@ const dropdownStyle = computed(() => {
 
   const rect = triggerRect.value
   const viewportRight = Math.max(dropdownViewportPadding, window.innerWidth - dropdownViewportPadding)
+  const preferredWidth = Math.min(
+    Math.max(dropdownMinimumWidth, rect.width),
+    Math.max(0, viewportRight - dropdownViewportPadding)
+  )
   const left = Math.min(
     Math.max(dropdownViewportPadding, rect.left),
-    viewportRight
+    viewportRight - preferredWidth
   )
   const availableWidth = Math.max(0, viewportRight - left)
-  const preferredMinWidth = Math.max(dropdownMinimumWidth, rect.width)
-  const minWidth = Math.min(preferredMinWidth, availableWidth)
+  const availableHeight = dropdownPosition.value === 'top'
+    ? rect.top - dropdownViewportPadding - 4
+    : window.innerHeight - rect.bottom - dropdownViewportPadding - 4
   const style: Record<string, string> = {
     position: 'fixed',
     left: `${left}px`,
-    minWidth: `${minWidth}px`,
+    minWidth: `${preferredWidth}px`,
     maxWidth: `${availableWidth}px`,
+    maxHeight: `${Math.max(0, availableHeight)}px`,
     zIndex: '100000020'
   }
 
@@ -362,7 +369,7 @@ const calculateDropdownPosition = () => {
     const spaceBelow = window.innerHeight - triggerRect.value.bottom
     const spaceAbove = triggerRect.value.top
 
-    if (spaceBelow < dropdownHeight && spaceAbove > dropdownHeight) {
+    if (spaceBelow < dropdownHeight && spaceAbove > spaceBelow) {
       dropdownPosition.value = 'top'
     } else {
       dropdownPosition.value = 'bottom'
@@ -410,6 +417,10 @@ watch(isOpen, (open) => {
   }
 })
 
+watch(() => props.disabled, (disabled) => {
+  if (disabled) isOpen.value = false
+})
+
 // 远程搜索：输入防抖后交给父组件请求（!isOpen 抑制关闭重置 searchQuery 触发的空 query）。
 watch(searchQuery, (query) => {
   if (!props.remote || !isOpen.value) return
@@ -421,6 +432,7 @@ watch(searchQuery, (query) => {
 })
 
 const selectOption = (option: any) => {
+  if (props.disabled || !isOpen.value) return
   const value = getOptionValue(option) ?? null
   emit('update:modelValue', value)
   emit('change', value, option)
@@ -439,6 +451,13 @@ const onTriggerKeyDown = () => {
   if (!isOpen.value) {
     isOpen.value = true
   }
+}
+
+const onTriggerEscape = (event: KeyboardEvent) => {
+  if (!isOpen.value) return
+  event.preventDefault()
+  event.stopPropagation()
+  isOpen.value = false
 }
 
 const onDropdownKeyDown = (e: KeyboardEvent) => {
@@ -555,6 +574,7 @@ onUnmounted(() => {
 
 <style>
 .select-dropdown-portal {
+  @apply flex flex-col;
   @apply w-max min-w-[200px];
   @apply bg-white dark:bg-dark-800;
   @apply rounded-xl;
@@ -577,7 +597,7 @@ onUnmounted(() => {
 }
 
 .select-dropdown-portal .select-options {
-  @apply max-h-80 overflow-y-auto py-1 outline-none;
+  @apply min-h-0 max-h-80 overflow-y-auto py-1 outline-none;
 }
 
 .select-dropdown-portal .select-option {

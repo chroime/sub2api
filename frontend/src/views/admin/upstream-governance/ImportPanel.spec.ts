@@ -339,7 +339,11 @@ describe('import confirmation', () => {
   it('requires selection, mapping, preview and explicit apply; displays partial result', async () => {
     vi.mocked(api.preview).mockResolvedValue({
       id: 'p',
-      rows: [],
+      rows: [{
+        selection: { remote_group_id: 'r', platform: 'openai', local_group_ids: [3], account_name: 'Imported account', cost_multiplier: 1, account_config: defaultImportConfig() },
+        remote_group: props.snapshot.catalog.groups[0]!, target: { id: 3, name: 'Local', platform: 'openai', sale_multiplier: 2 },
+        existing: null, will_create_key: true, marker: 'import-result',
+      }],
       expires_at: '2099-01-01',
       site_id: 1,
       site_version: 1,
@@ -368,7 +372,14 @@ describe('import confirmation', () => {
     await wrapper.get('[data-test=apply]').trigger('click')
     await flushPromises()
     expect(api.apply).toHaveBeenCalledWith(1, 'p')
-    expect(wrapper.text()).toContain('fixture failure')
+    const item = wrapper.get('[data-test=import-result-item]')
+    expect(item.text()).toContain('Remote')
+    expect(item.text()).toContain('Imported account')
+    expect(item.text()).toContain('OpenAI')
+    expect(item.text()).toContain('governance.failed')
+    expect(item.text()).toContain('governance.resultFailureReason')
+    expect(item.text()).toContain('fixture failure')
+    expect(wrapper.text()).toContain('governance.applyResultSummary')
   })
   it('invalidates stale previews and requires another preview', async () => {
     vi.mocked(api.apply).mockRejectedValue({ status: 409 })

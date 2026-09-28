@@ -13,12 +13,20 @@ vi.mock('vue-i18n', async () => {
 })
 
 const originalInnerWidth = window.innerWidth
+const originalInnerHeight = window.innerHeight
 let unmountWrapper: (() => void) | undefined
 
 const setViewportWidth = (width: number) => {
   Object.defineProperty(window, 'innerWidth', {
     configurable: true,
     value: width,
+  })
+}
+
+const setViewportHeight = (height: number) => {
+  Object.defineProperty(window, 'innerHeight', {
+    configurable: true,
+    value: height,
   })
 }
 
@@ -61,6 +69,7 @@ afterEach(() => {
   unmountWrapper = undefined
   document.body.innerHTML = ''
   setViewportWidth(originalInnerWidth)
+  setViewportHeight(originalInnerHeight)
   vi.useRealTimers()
   vi.restoreAllMocks()
 })
@@ -78,16 +87,16 @@ describe('Select dropdown viewport constraints', () => {
     expect(dropdown?.style.maxWidth).toBe('996px')
   })
 
-  it('shrinks the minimum width to fit near the right viewport edge', async () => {
+  it('shifts a right-edge dropdown left so its options remain readable', async () => {
     setViewportWidth(320)
     mockTriggerRect(220, 80)
 
     const dropdown = await openSelect()
 
     expect(dropdown).not.toBeNull()
-    expect(dropdown?.style.left).toBe('220px')
-    expect(dropdown?.style.minWidth).toBe('92px')
-    expect(dropdown?.style.maxWidth).toBe('92px')
+    expect(dropdown?.style.left).toBe('112px')
+    expect(dropdown?.style.minWidth).toBe('200px')
+    expect(dropdown?.style.maxWidth).toBe('200px')
   })
 
   it('clamps a trigger left of the viewport to the safe padding', async () => {
@@ -109,9 +118,36 @@ describe('Select dropdown viewport constraints', () => {
     const dropdown = await openSelect()
 
     expect(dropdown).not.toBeNull()
-    expect(dropdown?.style.left).toBe('312px')
-    expect(dropdown?.style.minWidth).toBe('0px')
-    expect(dropdown?.style.maxWidth).toBe('0px')
+    expect(dropdown?.style.left).toBe('112px')
+    expect(dropdown?.style.minWidth).toBe('200px')
+    expect(dropdown?.style.maxWidth).toBe('200px')
+  })
+
+  it('caps a dropdown to the available height above a bottom-edge trigger', async () => {
+    setViewportHeight(300)
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      x: 20, y: 240, top: 240, right: 220, bottom: 280, left: 20,
+      width: 200, height: 40, toJSON: () => ({}),
+    })
+
+    const dropdown = await openSelect()
+    await nextTick()
+
+    expect(dropdown?.style.bottom).toBe('64px')
+    expect(dropdown?.style.maxHeight).toBe('228px')
+  })
+
+  it('caps a dropdown when there is not enough room on either side', async () => {
+    setViewportHeight(220)
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      x: 20, y: 90, top: 90, right: 220, bottom: 130, left: 20,
+      width: 200, height: 40, toJSON: () => ({}),
+    })
+
+    const dropdown = await openSelect()
+    await nextTick()
+
+    expect(dropdown?.style.maxHeight).toBe('78px')
   })
 })
 
@@ -215,5 +251,23 @@ describe('Select remote search', () => {
     const dropdown = await openDropdown()
     const labels = [...dropdown.querySelectorAll('.select-option-label')].map((el) => el.textContent)
     expect(labels).toEqual(['Alpha account'])
+  })
+})
+
+describe('Select disabled state', () => {
+  it('closes an already open portal when its parent form becomes disabled', async () => {
+    const wrapper = mount(Select, {
+      props: { modelValue: null, options: [{ value: 'newapi', label: 'New API' }] },
+    })
+    unmountWrapper = () => wrapper.unmount()
+    await wrapper.get('button').trigger('click')
+    await nextTick()
+    expect(document.body.querySelector('.select-dropdown-portal')).not.toBeNull()
+
+    await wrapper.setProps({ disabled: true })
+    await nextTick()
+    expect(wrapper.get('button').attributes('aria-expanded')).toBe('false')
+    document.body.querySelector<HTMLElement>('.select-dropdown-portal [role="option"]')?.click()
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
   })
 })
