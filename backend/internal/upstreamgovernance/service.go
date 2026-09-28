@@ -462,6 +462,10 @@ func (s *Service) Sync(ctx context.Context, id int64) (*Snapshot, error) {
 	return s.syncLocked(ctx, *site)
 }
 func (s *Service) syncLocked(ctx context.Context, site Site) (*Snapshot, error) {
+	return s.syncLockedWithAutoReauthorization(ctx, site, false)
+}
+
+func (s *Service) syncLockedWithAutoReauthorization(ctx context.Context, site Site, autoReauthorize bool) (*Snapshot, error) {
 	previousCipher := site.SessionCipher
 	session, e := s.managementSessionLocked(ctx, &site, false)
 	var catalog Catalog
@@ -475,6 +479,21 @@ func (s *Service) syncLocked(ctx context.Context, site Site) (*Snapshot, error) 
 		}
 		if errors.Is(e, ErrReauth) && session.AccessToken != "" {
 			e = s.requireAuthorizationLocked(ctx, &site, session)
+		}
+	}
+	if autoReauthorize && site.Enabled && errors.Is(e, ErrReauth) {
+		session, e = s.autoReauthorizeLocked(ctx, &site)
+		if e == nil {
+			catalog, e = s.connector.Discover(ctx, site, session)
+			if errors.Is(e, ErrReauth) {
+				// A freshly issued session that is rejected on its first read is
+				// not evidence that the saved password is still usable. Freeze
+				// automatic retries until the credentials are edited or a manual
+				// authorization replaces them.
+				persistCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+				_, e = s.recordAutoReauthorizationFailure(persistCtx, &site, session, loginCipherHash(site.LoginCipher), s.now(), autoReauthorizationCredentialsRejected)
+				cancel()
+			}
 		}
 	}
 	if e == nil {

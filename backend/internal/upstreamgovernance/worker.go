@@ -260,7 +260,7 @@ func (s *Service) runSiteDue(ctx context.Context, siteID int64) error {
 			return err
 		}
 		discoveryCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-		_, syncErr = s.syncLocked(discoveryCtx, *site)
+		_, syncErr = s.syncLockedWithAutoReauthorization(discoveryCtx, *site, true)
 		cancel()
 		// An individual discovery timeout still leaves the batch context available
 		// for saving a failure and for checks using the existing inference key.

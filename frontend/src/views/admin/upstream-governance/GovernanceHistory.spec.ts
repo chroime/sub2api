@@ -8,6 +8,27 @@ vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
 const binding: Binding = { id: 5, site_id: 1, remote_group_id: 'upstream-7', platform: 'openai', local_group_id: 3, local_group_ids: [3, 4], account_id: 8, account_name: 'upstream.example--0.2', probe_enabled: false, probe_model: '', probe_interval_minutes: 30 }
 
 describe('imported binding names', () => {
+  it('labels automatic reauthorization events without exposing credential details', () => {
+    const wrapper = mount(GovernanceHistory, {
+      props: {
+        mode: 'history',
+        bindings: [],
+        events: {
+          items: [{ id: 9, site_id: 1, kind: 'auto_reauthorization_required', resource: '', before: '', after: 'verification_required', acknowledged: false, created_at: '2026-09-28T09:00:00Z' }],
+          total: 1,
+          page: 1,
+          page_size: 20,
+          pages: 1,
+        },
+        checks: null,
+      },
+    })
+    expect(wrapper.text()).toContain('governance.autoReauthorizationRequired')
+    expect(wrapper.text()).toContain('verification_required')
+    expect(wrapper.text()).not.toContain('password')
+    wrapper.unmount()
+  })
+
   it('shows current group and account names alongside IDs and refreshes renamed groups', async () => {
     const wrapper = mount(GovernanceHistory, { props: { mode: 'bindings', bindings: [binding], remoteGroups: [{ id: 'upstream-7', name: 'Codex discount' }], groups: [{ id: 3, name: 'Local OpenAI' }, { id: 4, name: 'Local mixed' }], events: null, checks: null } })
     expect(wrapper.get('[data-test=binding-upstream]').text()).toContain('Codex discount')

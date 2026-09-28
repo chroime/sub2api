@@ -67,16 +67,21 @@ type LoginCredentialsResult struct {
 	Version int64 `json:"version"`
 }
 type Session struct {
-	AccessToken        string            `json:"access_token,omitempty"`
-	RefreshToken       string            `json:"refresh_token,omitempty"`
-	ExpiresAt          *time.Time        `json:"expires_at,omitempty"`
-	IssuedAt           *time.Time        `json:"issued_at,omitempty"`
-	UserAgent          string            `json:"user_agent,omitempty"`
-	RefreshState       string            `json:"refresh_state,omitempty"`
-	RefreshAttemptedAt *time.Time        `json:"refresh_attempted_at,omitempty"`
-	Cookies            map[string]string `json:"cookies,omitempty"`
-	UserID             int64             `json:"user_id,omitempty"`
-	AuthVariant        string            `json:"auth_variant,omitempty"`
+	AccessToken                       string            `json:"access_token,omitempty"`
+	RefreshToken                      string            `json:"refresh_token,omitempty"`
+	ExpiresAt                         *time.Time        `json:"expires_at,omitempty"`
+	IssuedAt                          *time.Time        `json:"issued_at,omitempty"`
+	UserAgent                         string            `json:"user_agent,omitempty"`
+	RefreshState                      string            `json:"refresh_state,omitempty"`
+	RefreshAttemptedAt                *time.Time        `json:"refresh_attempted_at,omitempty"`
+	AutoReauthorizationState          string            `json:"auto_reauthorization_state,omitempty"`
+	LastAutoReauthorizationAt         *time.Time        `json:"last_auto_reauthorization_at,omitempty"`
+	AutoReauthorizationRetryAt        *time.Time        `json:"auto_reauthorization_retry_at,omitempty"`
+	AutoReauthorizationFailures       int               `json:"auto_reauthorization_failures,omitempty"`
+	AutoReauthorizationCredentialHash string            `json:"auto_reauthorization_credential_hash,omitempty"`
+	Cookies                           map[string]string `json:"cookies,omitempty"`
+	UserID                            int64             `json:"user_id,omitempty"`
+	AuthVariant                       string            `json:"auth_variant,omitempty"`
 }
 
 type CaptchaProvider string

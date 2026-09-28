@@ -21,12 +21,25 @@ const authorizationStatus = ref<AuthorizationStatus | null>(null)
 const status = computed(() => authorizationStatus.value?.session.site_version === expectedVersion.value ? authorizationStatus.value : null)
 const locked = computed(() => loading.value || busy.value || stale.value || browserOpen.value)
 const browserBlocked = computed(() => locked.value || !status.value?.browser.available || !expectedVersion.value || form.value.mode !== 'password' || !form.value.username.trim() || !form.value.password)
+const autoReauthorizationLabels: Record<string, string> = {
+  ready: 'sessionAutoReauthorizationReady',
+  collection_disabled: 'sessionAutoReauthorizationCollectionDisabled',
+  missing_session: 'sessionAutoReauthorizationMissingSession',
+  missing_credentials: 'sessionAutoReauthorizationMissingCredentials',
+  identity_mismatch: 'sessionAutoReauthorizationIdentityMismatch',
+  verification_required: 'sessionAutoReauthorizationVerificationRequired',
+  credentials_rejected: 'sessionAutoReauthorizationCredentialsRejected',
+  retry_wait: 'sessionAutoReauthorizationRetryWait',
+}
+const autoReauthorizationLabel = computed(() =>
+  autoReauthorizationLabels[status.value?.session.auto_reauthorization_state ?? ''] ?? 'sessionAutoReauthorizationUnknown'
+)
 const renewalLabel = computed(() => {
   const session = status.value?.session
   if (!session?.has_session) return 'sessionMissing'
   if (session.refresh_state === 'pending') return 'sessionRefreshUncertain'
   if (session.refresh_state === 'identity_pending') return 'sessionIdentityPending'
-  if (session.reauthorization_required) return 'sessionReauthorizationRequired'
+  if (session.reauthorization_required) return session.auto_reauthorization_enabled ? 'sessionReauthorizationScheduled' : 'sessionReauthorizationRequired'
   if (!session.refresh_supported) return 'sessionRefreshUnsupported'
   if (!session.has_refresh_token) return 'sessionRefreshTokenMissing'
   if (session.refresh_state !== 'ready') return 'sessionRefreshUnknown'
@@ -139,6 +152,11 @@ async function connect() {
       <dl v-if="status" class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1 border-b pb-3 text-sm dark:border-dark-600">
         <dt class="text-gray-500">{{ t('governance.sessionExpiry') }}</dt><dd class="break-words tabular-nums">{{ status.session.expires_at ? formatGovernanceTime(status.session.expires_at) : t('governance.sessionExpiryUnknown') }}</dd>
         <dt class="text-gray-500">{{ t('governance.sessionRenewal') }}</dt><dd class="break-words">{{ t('governance.' + renewalLabel) }}</dd>
+        <dt class="text-gray-500">{{ t('governance.sessionAutoReauthorization') }}</dt>
+        <dd class="break-words">
+          {{ t('governance.' + autoReauthorizationLabel) }}
+          <span v-if="status.session.last_auto_reauthorization_at" class="block text-xs text-gray-500 tabular-nums">{{ t('governance.sessionLastAutoReauthorization') }} {{ formatGovernanceTime(status.session.last_auto_reauthorization_at) }}</span>
+        </dd>
       </dl>
       <ConnectionFields :key="siteId" v-model="form" id-prefix="governance-connect" :challenge="challenge" :disabled="locked" />
       <div class="flex flex-wrap gap-2">

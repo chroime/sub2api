@@ -175,6 +175,9 @@ export interface AuthorizationStatus {
     refresh_state: string
     last_refresh_at: string | null
     reauthorization_required: boolean
+    auto_reauthorization_enabled?: boolean
+    auto_reauthorization_state?: string
+    last_auto_reauthorization_at?: string | null
   }
   browser: { available: boolean; reason: string }
 }

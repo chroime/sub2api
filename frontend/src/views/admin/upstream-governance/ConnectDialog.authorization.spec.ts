@@ -26,6 +26,63 @@ beforeEach(() => {
 })
 
 describe('authorization status and explicit browser entry', () => {
+  it.each([
+    ['ready', 'sessionAutoReauthorizationReady'],
+    ['collection_disabled', 'sessionAutoReauthorizationCollectionDisabled'],
+    ['missing_session', 'sessionAutoReauthorizationMissingSession'],
+    ['missing_credentials', 'sessionAutoReauthorizationMissingCredentials'],
+    ['identity_mismatch', 'sessionAutoReauthorizationIdentityMismatch'],
+    ['verification_required', 'sessionAutoReauthorizationVerificationRequired'],
+    ['credentials_rejected', 'sessionAutoReauthorizationCredentialsRejected'],
+    ['retry_wait', 'sessionAutoReauthorizationRetryWait'],
+  ])('explains auto reauthorization state %s separately from token refresh', async (state, label) => {
+    const value = status()
+    value.session.auto_reauthorization_enabled = state === 'ready' || state === 'retry_wait'
+    value.session.auto_reauthorization_state = state
+    vi.mocked(api.authStatus).mockResolvedValue(value)
+    const wrapper = setup()
+    await flushPromises()
+    expect(wrapper.text()).toContain('governance.sessionAutoReauthorization')
+    expect(wrapper.text()).toContain(`governance.${label}`)
+    expect(wrapper.text()).toContain('governance.sessionRefreshEnabled')
+  })
+
+  it('shows the next automatic collection attempt for an expired session with automatic reauthorization enabled', async () => {
+    const value = status()
+    value.session.reauthorization_required = true
+    value.session.auto_reauthorization_enabled = true
+    value.session.auto_reauthorization_state = 'retry_wait'
+    value.session.last_auto_reauthorization_at = '2026-09-28T06:07:08Z'
+    vi.mocked(api.authStatus).mockResolvedValue(value)
+    const wrapper = setup()
+    await flushPromises()
+    expect(wrapper.text()).toContain('governance.sessionReauthorizationScheduled')
+    expect(wrapper.text()).not.toContain('governance.sessionReauthorizationRequired')
+    expect(wrapper.text()).toContain(formatGovernanceTime(value.session.last_auto_reauthorization_at))
+  })
+
+  it('keeps manual reauthorization guidance when automatic reauthorization is disabled', async () => {
+    const value = status()
+    value.session.reauthorization_required = true
+    value.session.auto_reauthorization_enabled = false
+    value.session.auto_reauthorization_state = 'collection_disabled'
+    vi.mocked(api.authStatus).mockResolvedValue(value)
+    const wrapper = setup()
+    await flushPromises()
+    expect(wrapper.text()).toContain('governance.sessionReauthorizationRequired')
+    expect(wrapper.text()).not.toContain('governance.sessionReauthorizationScheduled')
+  })
+
+  it('does not infer automatic reauthorization from a legacy authorization response', async () => {
+    const value = status()
+    value.session.reauthorization_required = true
+    vi.mocked(api.authStatus).mockResolvedValue(value)
+    const wrapper = setup()
+    await flushPromises()
+    expect(wrapper.text()).toContain('governance.sessionAutoReauthorizationUnknown')
+    expect(wrapper.text()).toContain('governance.sessionReauthorizationRequired')
+  })
+
   it('does not present an incomplete refresh pair as scheduled renewal', async () => {
     const value = status()
     value.session.expires_at = null

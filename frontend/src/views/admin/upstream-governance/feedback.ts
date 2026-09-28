@@ -31,6 +31,7 @@ export const eventKeys: Record<string, string> = {
   reconciliation_applied: 'reconciliationApplied',
   probe_failed: 'probeFailed',
   probe_recovered: 'probeRecovered',
+  auto_reauthorization_required: 'autoReauthorizationRequired',
 }
 
 export const siteStateKeys: Record<string, string> = {

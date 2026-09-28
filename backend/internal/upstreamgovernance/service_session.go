@@ -27,18 +27,21 @@ type sessionSitePager interface {
 }
 
 type AuthorizationStatus struct {
-	SiteID                  int64      `json:"site_id"`
-	SiteVersion             int64      `json:"site_version"`
-	Platform                string     `json:"platform"`
-	HasSession              bool       `json:"has_session"`
-	RefreshSupported        bool       `json:"refresh_supported"`
-	HasRefreshToken         bool       `json:"has_refresh_token"`
-	AutoRefreshEnabled      bool       `json:"auto_refresh_enabled"`
-	ExpiresAt               *time.Time `json:"expires_at,omitempty"`
-	IssuedAt                *time.Time `json:"issued_at,omitempty"`
-	RefreshState            string     `json:"refresh_state"`
-	LastRefreshAt           *time.Time `json:"last_refresh_at,omitempty"`
-	ReauthorizationRequired bool       `json:"reauthorization_required"`
+	SiteID                     int64      `json:"site_id"`
+	SiteVersion                int64      `json:"site_version"`
+	Platform                   string     `json:"platform"`
+	HasSession                 bool       `json:"has_session"`
+	RefreshSupported           bool       `json:"refresh_supported"`
+	HasRefreshToken            bool       `json:"has_refresh_token"`
+	AutoRefreshEnabled         bool       `json:"auto_refresh_enabled"`
+	AutoReauthorizationEnabled bool       `json:"auto_reauthorization_enabled"`
+	AutoReauthorizationState   string     `json:"auto_reauthorization_state"`
+	LastAutoReauthorizationAt  *time.Time `json:"last_auto_reauthorization_at,omitempty"`
+	ExpiresAt                  *time.Time `json:"expires_at,omitempty"`
+	IssuedAt                   *time.Time `json:"issued_at,omitempty"`
+	RefreshState               string     `json:"refresh_state"`
+	LastRefreshAt              *time.Time `json:"last_refresh_at,omitempty"`
+	ReauthorizationRequired    bool       `json:"reauthorization_required"`
 }
 
 func (s *Service) refreshSupported(site Site) bool {
@@ -69,10 +72,13 @@ func (s *Service) AuthorizationStatus(ctx context.Context, id int64) (*Authoriza
 	if err != nil {
 		return nil, err
 	}
-	result := &AuthorizationStatus{SiteID: id, SiteVersion: site.Version, Platform: site.Platform, RefreshSupported: s.refreshSupported(*site), RefreshState: "unavailable", ReauthorizationRequired: true}
+	result := &AuthorizationStatus{SiteID: id, SiteVersion: site.Version, Platform: site.Platform, RefreshSupported: s.refreshSupported(*site), RefreshState: "unavailable", ReauthorizationRequired: true, AutoReauthorizationState: autoReauthorizationMissingSession}
 	session, err := s.session(*site)
 	if err != nil {
 		if errors.Is(err, ErrReauth) || errors.Is(err, ErrEncryption) {
+			if !site.Enabled {
+				result.AutoReauthorizationState = autoReauthorizationCollectionDisabled
+			}
 			return result, nil
 		}
 		return nil, err
@@ -87,6 +93,8 @@ func (s *Service) AuthorizationStatus(ctx context.Context, id int64) (*Authoriza
 		result.LastRefreshAt = session.RefreshAttemptedAt
 	}
 	result.AutoRefreshEnabled = site.Enabled && result.RefreshSupported && result.HasRefreshToken && session.ExpiresAt != nil && !blockedSession(session)
+	result.AutoReauthorizationEnabled, result.AutoReauthorizationState = s.autoReauthorizationState(*site, session)
+	result.LastAutoReauthorizationAt = session.LastAutoReauthorizationAt
 	result.ReauthorizationRequired = blockedSession(session) || site.Status == "reauth_required" || session.ExpiresAt != nil && !s.now().Before(*session.ExpiresAt) && !result.AutoRefreshEnabled
 	return result, nil
 }
@@ -206,11 +214,17 @@ func (s *Service) refreshDueSessions(ctx context.Context) error {
 	var firstErr error
 	attempts := 0
 	err := s.scanRefreshSites(ctx, func(candidate Site) bool {
-		if !candidate.Enabled || !s.refreshSupported(candidate) {
+		if !candidate.Enabled {
 			return true
 		}
 		session, err := s.session(candidate)
-		if err != nil || blockedSession(session) || session.RefreshToken == "" || session.RefreshState != "identity_pending" && !sessionRefreshDue(session, s.now()) {
+		if err != nil {
+			return true
+		}
+		refreshDue := s.refreshSupported(candidate) && session.RefreshToken != "" && !blockedSession(session) && (session.RefreshState == "identity_pending" || sessionRefreshDue(session, s.now()))
+		_, autoState := s.autoReauthorizationState(candidate, session)
+		autoDue := autoState == autoReauthorizationReady && (blockedSession(session) || session.ExpiresAt != nil && !s.now().Before(*session.ExpiresAt))
+		if !refreshDue && !autoDue {
 			return true
 		}
 		attempts++
@@ -296,6 +310,13 @@ func (s *Service) refreshSiteSession(ctx context.Context, id int64) error {
 		return nil
 	}
 	_, err = s.managementSessionLocked(ctx, site, false)
+	if errors.Is(err, ErrReauth) {
+		_, err = s.autoReauthorizeLocked(ctx, site)
+		if err == nil {
+			// The scanner must not move collection's already-reserved next_sync_at.
+			err = s.store.ObserveSite(ctx, site.ID, "connected", "", time.Time{}, site.NextSyncAt)
+		}
+	}
 	return err
 }
 
