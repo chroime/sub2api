@@ -108,7 +108,41 @@ describe('HomeView compact mode', () => {
     const wrapper = mountHome(settings)
 
     expect(wrapper.find('[data-testid="compact-home"]').exists()).toBe(false)
-    expect(wrapper.find('.terminal-container').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="home-experience"]').exists()).toBe(true)
+    expect(wrapper.get('h1').text()).toBe('Test site')
+  })
+
+  it.each([true, false])('keeps the built-in footer free of documentation and GitHub links (compact=%s)', (compact) => {
+    const wrapper = mountHome({ compact_home_enabled: compact, doc_url: 'https://docs.example.test/start' })
+
+    expect(wrapper.get('footer').findAll('a')).toHaveLength(0)
+    expect(wrapper.get('footer').text()).toContain('Test site')
+  })
+
+  it('keeps configured documentation reachable from the default mobile header', () => {
+    const wrapper = mountHome({ doc_url: 'https://docs.example.test/start' })
+
+    expect(wrapper.get('.home-mobile-doc-link').attributes('href')).toBe('https://docs.example.test/start')
+    expect(wrapper.get('footer').findAll('a')).toHaveLength(0)
+  })
+
+  it('uses the configured API base URL in the request example without repeating v1', () => {
+    const wrapper = mountHome({ api_base_url: 'https://api.example.test/gateway/v1/' })
+
+    expect(wrapper.get('.home-code-tool code').text()).toContain('https://api.example.test/gateway/v1/chat/completions')
+    expect(wrapper.get('.home-code-tool code').text()).not.toContain('/v1/v1/')
+  })
+
+  it('shows a route preview that switches protocol without changing the login destination', async () => {
+    const wrapper = mountHome()
+
+    expect(wrapper.get('[data-testid="home-experience"]').text()).toContain('home.experience.routePreview')
+    expect(wrapper.get('[data-testid="home-route-endpoint"]').text()).toContain('/v1/chat/completions')
+    expect(wrapper.get('[data-testid="home-route-openai"]').attributes('aria-pressed')).toBe('true')
+    await wrapper.get('[data-testid="home-route-anthropic"]').trigger('click')
+    expect(wrapper.get('[data-testid="home-route-endpoint"]').text()).toContain('/v1/messages')
+    expect(wrapper.get('[data-testid="home-route-anthropic"]').attributes('aria-pressed')).toBe('true')
+    expect(wrapper.findAllComponents(RouterLinkStub).some(link => link.props('to') === '/login')).toBe(true)
   })
 
   it('links unauthenticated visitors to login', () => {
