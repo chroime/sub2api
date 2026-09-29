@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -52,6 +53,87 @@ func TestManagerUnavailableIsTokenFree(t *testing.T) {
 	}
 }
 
+func TestManagerStartPreservesBoundedAvailabilityCode(t *testing.T) {
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	missing := filepath.Join(t.TempDir(), "missing-secret-canary")
+	for _, test := range []struct {
+		name    string
+		options Options
+		want    string
+	}{
+		{"node", Options{NodePath: missing, ScriptPath: executable, ExecutablePath: executable}, "browser_node_missing"},
+		{"script", Options{NodePath: executable, ScriptPath: missing, ExecutablePath: executable}, "browser_script_missing"},
+		{"executable", Options{NodePath: executable, ScriptPath: executable, ExecutablePath: missing}, "browser_executable_missing"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := New(test.options).Start(t.Context(), Input{BaseURL: "https://upstream.example", Platform: "sub2api"})
+			if !errors.Is(err, ErrUnavailable) || Code(err) != test.want {
+				t.Fatalf("Start error = %v, code = %q, want unavailable with %q", err, Code(err), test.want)
+			}
+			if strings.Contains(err.Error(), "canary") {
+				t.Fatal("availability error exposed a configured path")
+			}
+		})
+	}
+}
+
+func TestBrowserChildEnvironmentOnlyForwardsLinuxDisplayConfiguration(t *testing.T) {
+	display := map[string]string{
+		"DISPLAY": ":77", "WAYLAND_DISPLAY": "wayland-7", "XDG_RUNTIME_DIR": "/run/user/1007", "XAUTHORITY": "/tmp/display-auth",
+	}
+	blocked := []string{"NODE_OPTIONS", "NODE_DEBUG", "DEBUG", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY", "PLAYWRIGHT_BROWSERS_PATH"}
+	for key, value := range display {
+		t.Setenv(key, value)
+	}
+	for _, key := range blocked {
+		t.Setenv(key, "blocked-secret-canary")
+	}
+	env := map[string]string{}
+	for _, entry := range childEnvironment(t.TempDir()) {
+		key, value, _ := strings.Cut(entry, "=")
+		env[key] = value
+	}
+	for key, want := range display {
+		got, forwarded := env[key]
+		if runtime.GOOS == "linux" {
+			if !forwarded || got != want {
+				t.Errorf("Linux display %s = %q (forwarded %v), want %q", key, got, forwarded, want)
+			}
+		} else if forwarded {
+			t.Errorf("display setting %s forwarded on %s", key, runtime.GOOS)
+		}
+	}
+	for _, key := range blocked {
+		if _, forwarded := env[key]; forwarded {
+			t.Errorf("unsafe environment %s was forwarded", key)
+		}
+	}
+}
+
+func TestBrowserChildEnvironmentHeadlessOptIn(t *testing.T) {
+	t.Setenv("GOVERNANCE_BROWSER_HEADLESS", "")
+	requireEnv := func(want bool) {
+		t.Helper()
+		found := false
+		for _, entry := range childEnvironment(t.TempDir()) {
+			if entry == "GOVERNANCE_BROWSER_HEADLESS=true" {
+				found = true
+			}
+		}
+		if found != want {
+			t.Fatalf("headless setting forwarded = %v, want %v", found, want)
+		}
+	}
+	requireEnv(false)
+	t.Setenv("GOVERNANCE_BROWSER_HEADLESS", "false")
+	requireEnv(false)
+	t.Setenv("GOVERNANCE_BROWSER_HEADLESS", "true")
+	requireEnv(true)
+}
+
 func TestSnapshotRejectsNonImageAndUnexpectedFields(t *testing.T) {
 	for _, raw := range []string{
 		`{"status":"waiting","width":1024,"height":720,"image":"access-token"}`,
@@ -66,6 +148,13 @@ func TestSnapshotRejectsNonImageAndUnexpectedFields(t *testing.T) {
 	}
 	if _, err := decodeView(json.RawMessage(`{"status":"ready","width":1024,"height":720}`)); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestSnapshotPreservesBoundedUnsupportedRouteDiagnostic(t *testing.T) {
+	view, err := decodeView(json.RawMessage(`{"status":"failed","width":1024,"height":720,"error_code":"browser_unsupported_route"}`))
+	if err != nil || view.Status != "failed" || view.ErrorCode != "browser_unsupported_route" {
+		t.Fatalf("unsupported route diagnostic = %#v, %v", view, err)
 	}
 }
 
@@ -121,6 +210,59 @@ func fixtureManager(t *testing.T) *Manager {
 		t.Fatal(err)
 	}
 	return New(Options{NodePath: node, ScriptPath: script, ExecutablePath: node, TempDir: t.TempDir()})
+}
+
+func TestDriverStartPreservesOnlyAllowlistedHelperErrors(t *testing.T) {
+	for _, test := range []struct {
+		origin      string
+		want        string
+		unavailable bool
+	}{
+		{"https://launch-failed.example", "browser_launch_failed", true},
+		{"https://dependency-missing.example", "browser_dependency_missing", true},
+		{"https://raw-error.example", "browser_protocol_error", false},
+	} {
+		t.Run(test.want, func(t *testing.T) {
+			m := fixtureManager(t)
+			driver, err := m.Start(t.Context(), Input{BaseURL: test.origin, Platform: "sub2api"})
+			if driver != nil {
+				_ = driver.Close()
+				t.Fatal("failed helper returned a driver")
+			}
+			if Code(err) != test.want || errors.Is(err, ErrUnavailable) != test.unavailable {
+				t.Fatalf("helper error = %v, code = %q, want %q", err, Code(err), test.want)
+			}
+			if strings.Contains(err.Error(), "canary") {
+				t.Fatal("helper error exposed raw subprocess content")
+			}
+			entries, readErr := os.ReadDir(m.options.TempDir)
+			if readErr != nil || len(entries) != 0 {
+				t.Fatalf("failed launch profile remains: %v %v", entries, readErr)
+			}
+		})
+	}
+}
+
+func TestDriverActionPreservesOnlyBoundedUnsupportedRouteError(t *testing.T) {
+	for _, test := range []struct{ origin, want string }{
+		{"https://unsupported-route.example", "browser_unsupported_route"},
+		{"https://raw-action-error.example", "browser_protocol_error"},
+	} {
+		t.Run(test.want, func(t *testing.T) {
+			driver, err := fixtureManager(t).Start(t.Context(), Input{BaseURL: test.origin, Platform: "sub2api"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = driver.Close() })
+			err = driver.Action(t.Context(), Action{Type: "key", Key: "Enter"})
+			if Code(err) != test.want || errors.Is(err, ErrUnavailable) {
+				t.Fatalf("action error = %v, code = %q, want %q without unavailable classification", err, Code(err), test.want)
+			}
+			if strings.Contains(err.Error(), "canary") {
+				t.Fatal("action error exposed raw helper content")
+			}
+		})
+	}
 }
 
 func TestDriverCancellationClosesRPCAndRemovesProfile(t *testing.T) {

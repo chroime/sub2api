@@ -1,8 +1,12 @@
 package upstreamgovernance
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
+	"image"
+	"image/jpeg"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -16,14 +20,80 @@ type browserFakeDriver struct {
 	closed  atomic.Int32
 	actions atomic.Int32
 	capture *upstreambrowser.Capture
+	failure *upstreambrowser.View
 }
 
 func (d *browserFakeDriver) Snapshot(context.Context) (upstreambrowser.View, error) {
+	if d.failure != nil {
+		return *d.failure, nil
+	}
 	status := "waiting"
 	if d.capture != nil {
 		status = "ready"
 	}
 	return upstreambrowser.View{Status: status, Width: 1024, Height: 720}, nil
+}
+
+func TestGovernanceBrowserFailurePreservesSanitizedHelperCode(t *testing.T) {
+	for _, test := range []struct{ code, want string }{
+		{"browser_navigation_failed", "browser_navigation_failed"},
+		{"browser_unsupported_route", "browser_unsupported_route"},
+		{"", "browser_login_failed"},
+		{"https://secret-canary.example/token", "browser_protocol_error"},
+	} {
+		t.Run(test.want, func(t *testing.T) {
+			svc, _, _, _ := setupEngine(t)
+			factory := &browserFakeFactory{driver: &browserFakeDriver{failure: &upstreambrowser.View{
+				Status: "failed", Width: upstreambrowser.Width, Height: upstreambrowser.Height, ErrorCode: test.code,
+			}}}
+			a := NewBrowserAuthorizer(svc, factory, nil)
+			t.Cleanup(a.Stop)
+			job, err := a.Start(t.Context(), 7, 1, BrowserAuthorizationInput{ExpectedSiteVersion: 1, Username: "user", Password: "password"})
+			require.NoError(t, err)
+			var view *BrowserJob
+			require.Eventually(t, func() bool {
+				view, err = a.Get(t.Context(), 7, 1, job.ID)
+				return err == nil && view.Status == "failed"
+			}, time.Second, time.Millisecond)
+			require.Equal(t, test.want, view.ErrorCode)
+			raw, err := json.Marshal(view)
+			require.NoError(t, err)
+			require.NotContains(t, string(raw), "canary")
+		})
+	}
+}
+
+func TestGovernanceBrowserRenderDiagnosticClearsOnNextSuccessfulFrame(t *testing.T) {
+	svc, _, _, _ := setupEngine(t)
+	driver := &browserFakeDriver{failure: &upstreambrowser.View{
+		Status: "waiting", Width: upstreambrowser.Width, Height: upstreambrowser.Height, ErrorCode: "browser_render_failed",
+	}}
+	a := NewBrowserAuthorizer(svc, &browserFakeFactory{driver: driver}, nil)
+	t.Cleanup(a.Stop)
+	job, err := a.Start(t.Context(), 7, 1, BrowserAuthorizationInput{ExpectedSiteVersion: 1, Username: "user", Password: "password"})
+	require.NoError(t, err)
+	var view *BrowserJob
+	require.Eventually(t, func() bool {
+		view, err = a.Get(t.Context(), 7, 1, job.ID)
+		// Launch can expose waiting before Get has read its first driver snapshot.
+		// Wait for the diagnostic itself, not just for the startup transition.
+		return err == nil && view.Status == "waiting" && view.ErrorCode == "browser_render_failed"
+	}, time.Second, time.Millisecond)
+	require.Equal(t, "browser_render_failed", view.ErrorCode)
+	require.Nil(t, view.Frame)
+	require.Zero(t, driver.closed.Load(), "a transient screenshot failure must not end authorization")
+	require.NoError(t, a.Action(t.Context(), 7, 1, job.ID, upstreambrowser.Action{Type: "key", Key: "Enter"}))
+	var encoded bytes.Buffer
+	require.NoError(t, jpeg.Encode(&encoded, image.NewRGBA(image.Rect(0, 0, upstreambrowser.Width, upstreambrowser.Height)), nil))
+	driver.failure = &upstreambrowser.View{
+		Status: "waiting", Width: upstreambrowser.Width, Height: upstreambrowser.Height, Image: base64.StdEncoding.EncodeToString(encoded.Bytes()),
+	}
+	view, err = a.Get(t.Context(), 7, 1, job.ID)
+	require.NoError(t, err)
+	require.Equal(t, "waiting", view.Status)
+	require.Empty(t, view.ErrorCode)
+	require.NotNil(t, view.Frame)
+	require.Zero(t, driver.closed.Load())
 }
 func (d *browserFakeDriver) Action(context.Context, upstreambrowser.Action) error {
 	d.actions.Add(1)

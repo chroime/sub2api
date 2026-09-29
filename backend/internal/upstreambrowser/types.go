@@ -13,12 +13,24 @@ const (
 )
 
 var (
-	ErrUnavailable = errors.New("browser_unavailable")
-	ErrInvalid     = errors.New("browser_invalid_input")
-	ErrClosed      = errors.New("browser_closed")
-	ErrProtocol    = errors.New("browser_protocol_error")
-	ErrCleanup     = errors.New("browser_cleanup_failed")
+	ErrUnavailable       = errors.New("browser_unavailable")
+	ErrInvalid           = errors.New("browser_invalid_input")
+	ErrClosed            = errors.New("browser_closed")
+	ErrProtocol          = errors.New("browser_protocol_error")
+	ErrCleanup           = errors.New("browser_cleanup_failed")
+	ErrUnsupportedRoute  = errors.New("browser_unsupported_route")
+	ErrNodeMissing       = unavailableError("browser_node_missing")
+	ErrScriptMissing     = unavailableError("browser_script_missing")
+	ErrExecutableMissing = unavailableError("browser_executable_missing")
+	ErrLaunchFailed      = unavailableError("browser_launch_failed")
+	ErrDependencyMissing = unavailableError("browser_dependency_missing")
 )
+
+// Keep availability classification while exposing only a bounded diagnostic.
+type unavailableError string
+
+func (err unavailableError) Error() string { return string(err) }
+func (err unavailableError) Unwrap() error { return ErrUnavailable }
 
 type Options struct {
 	NodePath       string
@@ -85,6 +97,18 @@ func Code(err error) string {
 	switch {
 	case err == nil:
 		return ""
+	case errors.Is(err, ErrUnsupportedRoute):
+		return "browser_unsupported_route"
+	case errors.Is(err, ErrNodeMissing):
+		return "browser_node_missing"
+	case errors.Is(err, ErrScriptMissing):
+		return "browser_script_missing"
+	case errors.Is(err, ErrExecutableMissing):
+		return "browser_executable_missing"
+	case errors.Is(err, ErrLaunchFailed):
+		return "browser_launch_failed"
+	case errors.Is(err, ErrDependencyMissing):
+		return "browser_dependency_missing"
 	case errors.Is(err, ErrUnavailable):
 		return "browser_unavailable"
 	case errors.Is(err, ErrInvalid):

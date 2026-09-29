@@ -15,12 +15,35 @@ const frameElement = ref<HTMLElement>()
 const imageElement = ref<HTMLImageElement>()
 const actualSize = ref(false), panMode = ref(false)
 const state = computed(() => job.value?.status || (error.value ? 'failed' : 'starting'))
-const interactive = computed(() => visible.value && job.value?.status === 'waiting' && !completing.value)
+const terminal = computed(() => ['failed', 'cancelled', 'expired'].includes(state.value))
+const renderRecovering = computed(() => ['starting', 'waiting'].includes(state.value) && job.value?.error_code === 'browser_render_failed')
+const browserErrorLabels = new Map([
+  ['browser_navigation_failed', 'browserErrorNavigationFailed'],
+  ['browser_render_failed', 'browserErrorRenderFailed'],
+  ['browser_page_closed', 'browserErrorPageClosed'],
+  ['browser_timeout', 'browserErrorTimeout'],
+  ['browser_login_failed', 'browserErrorLoginFailed'],
+  ['browser_protocol_error', 'browserErrorProtocol'],
+  ['browser_launch_failed', 'browserErrorLaunchFailed'],
+  ['browser_dependency_missing', 'browserErrorDependencyMissing'],
+  ['browser_unavailable', 'browserErrorUnavailable'],
+  ['browser_unsupported_route', 'browserErrorUnsupportedRoute'],
+  ['browser_node_missing', 'browserErrorNodeMissing'],
+  ['browser_script_missing', 'browserErrorScriptMissing'],
+  ['browser_executable_missing', 'browserErrorExecutableMissing'],
+])
+const jobErrorMessage = computed(() => {
+  if (renderRecovering.value) return 'browserRenderRecovering'
+  const code = job.value?.error_code
+  return code ? browserErrorLabels.get(code) || 'browserErrorGeneric' : ''
+})
 const frameSource = computed(() => {
   const frame = job.value?.frame
   return frame?.width === 1024 && frame.height === 720 && /^[A-Za-z0-9+/]+={0,2}$/.test(frame.image)
     ? `data:image/jpeg;base64,${frame.image}` : ''
 })
+const interactive = computed(() => visible.value && job.value?.status === 'waiting' && !!frameSource.value && !renderRecovering.value && !completing.value)
+const framePlaceholder = computed(() => state.value === 'starting' ? 'browserFrameStarting' : state.value === 'waiting' ? 'browserFrameWaiting' : `browserState_${state.value}`)
 let disposed = false, generation = 0
 let operations = Promise.resolve()
 let pollTimer: ReturnType<typeof setTimeout> | undefined
@@ -58,9 +81,10 @@ function stop() {
 function close() { if (completing.value) return; stop(); emit('close') }
 function fail(cause: unknown) {
   clearTimers()
-  if (job.value) job.value = { ...job.value, status: 'failed', frame: undefined }
-  error.value = t('governance.browserAuthFailed')
-  if ((cause as { reason?: string })?.reason === 'stale_preview') emit('invalidated')
+  if (job.value) job.value = { ...job.value, status: 'failed', frame: undefined, error_code: undefined }
+  const reason = (cause as { reason?: string })?.reason
+  error.value = t(`governance.${browserErrorLabels.get(reason || '') || 'browserAuthFailed'}`)
+  if (reason === 'stale_preview') emit('invalidated')
 }
 // Input, polling and completion share a queue; cancellation can interrupt a pending request.
 function enqueue(operation: () => Promise<void>, request = generation) {
@@ -95,8 +119,9 @@ function updateJob(next: BrowserAuthJob, request: number) {
         updateJob(await api.browserAuth(siteId, next.id), request)
       }, request)
     }, 1000)
-  } else {
-    clearTimeout(moveTimer)
+  }
+  if (!interactive.value) {
+    clearTimeout(moveTimer); moveTimer = undefined
     pendingMove = undefined; queuedMove = undefined
   }
 }
@@ -127,11 +152,24 @@ function coordinates(event: MouseEvent | PointerEvent | WheelEvent, requireInsid
     y: Math.max(0, Math.min(719, Math.floor(relativeY * 720 / rect.height))),
   }
 }
+async function sendAction(siteId: number, jobId: string, action: BrowserAuthAction, request: number) {
+  try { await api.browserAuthAction(siteId, jobId, action) } catch (cause) {
+    if (!current(request)) return
+    // Read a stored terminal diagnostic once; never replay an uncertain input action.
+    let next: BrowserAuthJob
+    try { next = await api.browserAuth(siteId, jobId) } catch { throw cause }
+    if (!current(request)) return
+    if (next.site_id !== siteId || next.id !== jobId || !['failed', 'expired', 'cancelled'].includes(next.status)) throw cause
+    updateJob(next, request)
+  }
+}
 function queueAction(action: BrowserAuthAction) {
-  if (!interactive.value) return
-  const jobId = job.value!.id, siteId = ownerSiteId
+  // An existing drag must still release the remote pointer if its image disappears.
+  const canSend = () => interactive.value || (action.type === 'pointer_up' && visible.value && job.value?.status === 'waiting' && !completing.value)
+  if (!canSend()) return
+  const jobId = job.value!.id, siteId = ownerSiteId, request = generation
   void enqueue(async () => {
-    if (interactive.value) await api.browserAuthAction(siteId, jobId, action)
+    if (canSend()) await sendAction(siteId, jobId, action, request)
   })
 }
 function flushMove() {
@@ -139,11 +177,11 @@ function flushMove() {
   if (!pendingMove || !interactive.value) return
   if (queuedMove) queuedMove.action = pendingMove
   else {
-    const next = { action: pendingMove }, jobId = job.value!.id, siteId = ownerSiteId
+    const next = { action: pendingMove }, jobId = job.value!.id, siteId = ownerSiteId, request = generation
     queuedMove = next
     void enqueue(async () => {
       if (queuedMove === next) queuedMove = undefined
-      if (interactive.value) await api.browserAuthAction(siteId, jobId, next.action)
+      if (interactive.value) await sendAction(siteId, jobId, next.action, request)
     })
   }
   pendingMove = undefined
@@ -160,7 +198,7 @@ function pointerDown(event: PointerEvent) {
   const point = coordinates(event, true)
   if (!point) return
   event.preventDefault()
-  frameElement.value?.focus()
+  frameElement.value?.focus({ preventScroll: true })
   pointerId = event.pointerId
   frameElement.value?.setPointerCapture?.(event.pointerId)
   action({ type: 'pointer_down', ...point })
@@ -265,7 +303,14 @@ function complete() {
         <p role="status" :class="state === 'ready' ? 'text-green-700 dark:text-green-400' : 'text-gray-600 dark:text-gray-300'">{{ t(`governance.browserState_${state}`) }}</p>
         <p v-if="job" class="text-xs tabular-nums text-gray-500">{{ t('governance.expires') }} {{ formatGovernanceTime(job.expires_at) }}</p>
       </div>
+      <ol v-if="!terminal && state !== 'completed'" data-test="browser-instructions" class="list-inside list-decimal space-y-1 rounded bg-gray-50 p-3 text-sm text-gray-600 dark:bg-dark-800 dark:text-gray-300">
+        <li>{{ t('governance.browserManualVerification') }}</li>
+        <li>{{ t('governance.browserManualLogin') }}</li>
+        <li>{{ t('governance.browserManualComplete') }}</li>
+      </ol>
       <p v-if="error" role="alert" class="text-sm text-red-600">{{ error }}</p>
+      <p v-if="jobErrorMessage" data-test="browser-diagnostic" :role="renderRecovering ? 'status' : 'alert'" class="text-sm" :class="renderRecovering ? 'text-amber-700 dark:text-amber-400' : 'text-red-600'">{{ t(`governance.${jobErrorMessage}`) }}</p>
+      <p v-if="terminal" class="text-sm text-gray-600 dark:text-gray-300">{{ t('governance.browserRestartHint') }}</p>
       <div v-if="frameSource" class="flex flex-wrap items-center gap-2 text-xs">
         <div role="group" :aria-label="t('governance.browserViewScale')" class="inline-flex overflow-hidden rounded border border-gray-200 dark:border-dark-600">
           <button type="button" data-test="browser-zoom-fit" :aria-pressed="!actualSize" :title="t('governance.browserFit')" class="px-3 py-1.5" :class="!actualSize ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/20 dark:text-primary-300' : 'text-gray-500'" @click="actualSize = false; panMode = false">{{ t('governance.browserFit') }}</button>
@@ -275,7 +320,7 @@ function complete() {
       </div>
       <div ref="frameElement" data-test="browser-frame" role="application" :aria-label="t('governance.browserViewport')" :aria-disabled="!interactive" :tabindex="interactive ? 0 : -1" class="relative w-full rounded border border-gray-300 bg-gray-100 outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:border-dark-600 dark:bg-dark-900" :class="actualSize ? 'overflow-auto' : 'overflow-hidden'" style="aspect-ratio: 1024 / 720; touch-action: none" @pointerdown="pointerDown" @pointermove="pointerMove" @pointerup="pointerUp" @pointercancel="pointerUp" @lostpointercapture="pointerUp" @wheel="wheel" @keydown="keyDown" @paste="paste" @contextmenu.prevent>
         <img v-if="frameSource" ref="imageElement" :src="frameSource" :alt="t('governance.browserViewport')" width="1024" height="720" draggable="false" class="pointer-events-none absolute left-0 top-0 select-none" :class="actualSize ? 'max-w-none' : 'h-full w-full'" :style="actualSize ? { width: '1024px', height: '720px' } : {}" />
-        <div v-else class="absolute inset-0 flex items-center justify-center text-sm text-gray-500">{{ t(`governance.browserState_${state}`) }}</div>
+        <div v-else class="absolute inset-0 flex items-center justify-center p-6 text-center text-sm text-gray-500">{{ t(`governance.${framePlaceholder}`) }}</div>
       </div>
       <div class="flex min-w-0 items-center gap-2">
         <label for="governance-browser-text" class="sr-only">{{ t('governance.browserText') }}</label>

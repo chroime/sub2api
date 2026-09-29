@@ -365,8 +365,19 @@ func (a *BrowserAuthorizer) Get(ctx context.Context, actorID, siteID int64, id s
 		}
 		return job.snapshot(), nil
 	}
+	// Keep the client DTO bounded even if a driver bypasses the subprocess decoder.
+	switch view.ErrorCode {
+	case "", "browser_navigation_failed", "browser_render_failed", "browser_page_closed", "browser_timeout", "browser_unsupported_route":
+	default:
+		a.finish(job, "failed", "browser_protocol_error")
+		return job.snapshot(), nil
+	}
 	if view.Status == "failed" {
-		a.finish(job, "failed", "browser_login_failed")
+		code := view.ErrorCode
+		if code == "" {
+			code = "browser_login_failed"
+		}
+		a.finish(job, "failed", code)
 		return job.snapshot(), nil
 	}
 	if view.Status != "waiting" && view.Status != "starting" && view.Status != "ready" {
@@ -388,6 +399,7 @@ func (a *BrowserAuthorizer) Get(ctx context.Context, actorID, siteID int64, id s
 	}
 	job.mu.Lock()
 	job.view.Status = view.Status
+	job.view.ErrorCode = view.ErrorCode
 	job.view.Frame = frame
 	job.mu.Unlock()
 	return job.snapshot(), nil

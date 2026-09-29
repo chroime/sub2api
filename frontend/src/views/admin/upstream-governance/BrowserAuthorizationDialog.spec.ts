@@ -121,6 +121,162 @@ describe('browser authorization lifecycle', () => {
     expect(api.browserAuth).toHaveBeenCalledTimes(1)
     expect(wrapper.get('[data-test=browser-complete]').attributes('disabled')).toBeDefined()
     expect(wrapper.text()).toContain(`governance.browserState_${status}`)
+    expect(wrapper.text()).toContain('governance.browserRestartHint')
+    expect(api.startBrowserAuth).toHaveBeenCalledTimes(1)
+    expect(api.browserAuthAction).not.toHaveBeenCalled()
+    expect(api.completeBrowserAuth).not.toHaveBeenCalled()
+  })
+
+  it('shows the sanitized helper error when a browser job fails', async () => {
+    vi.mocked(api.browserAuth).mockResolvedValue({ ...makeJob('failed'), error_code: 'browser_navigation_failed' })
+    const wrapper = setup()
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(1000)
+    await flushPromises()
+    expect(wrapper.text()).toContain('governance.browserErrorNavigationFailed')
+  })
+
+  it.each([
+    ['browser_launch_failed', 'browserErrorLaunchFailed'],
+    ['browser_dependency_missing', 'browserErrorDependencyMissing'],
+    ['browser_unavailable', 'browserErrorUnavailable'],
+    ['browser_unsupported_route', 'browserErrorUnsupportedRoute'],
+    ['browser_node_missing', 'browserErrorNodeMissing'],
+    ['browser_script_missing', 'browserErrorScriptMissing'],
+    ['browser_executable_missing', 'browserErrorExecutableMissing'],
+  ])('maps a failed helper job to actionable diagnostics: %s', async (error_code, label) => {
+    vi.mocked(api.startBrowserAuth).mockResolvedValue({ ...makeJob('failed'), frame: undefined, error_code })
+    const wrapper = setup()
+    await flushPromises()
+    expect(wrapper.get('[role=alert]').text()).toBe(`governance.${label}`)
+    expect(wrapper.text()).not.toContain(error_code)
+    expect(wrapper.text()).toContain('governance.browserRestartHint')
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(api.startBrowserAuth).toHaveBeenCalledTimes(1)
+    expect(api.browserAuth).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['browser_launch_failed', 'browserErrorLaunchFailed'],
+    ['browser_dependency_missing', 'browserErrorDependencyMissing'],
+    ['browser_unavailable', 'browserErrorUnavailable'],
+    ['browser_unsupported_route', 'browserErrorUnsupportedRoute'],
+    ['browser_node_missing', 'browserErrorNodeMissing'],
+    ['browser_script_missing', 'browserErrorScriptMissing'],
+    ['browser_executable_missing', 'browserErrorExecutableMissing'],
+  ])('maps rejected startup reasons without exposing server messages: %s', async (reason, label) => {
+    vi.mocked(api.startBrowserAuth).mockRejectedValue({ reason, message: 'private launch command /srv/helper secret=fixture' })
+    const wrapper = setup()
+    await flushPromises()
+    expect(wrapper.get('[role=alert]').text()).toBe(`governance.${label}`)
+    expect(wrapper.text()).not.toContain('private launch command')
+    expect(wrapper.text()).not.toContain(reason)
+    expect(wrapper.text()).toContain('governance.browserState_failed')
+    expect(wrapper.text()).toContain('governance.browserRestartHint')
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(api.startBrowserAuth).toHaveBeenCalledTimes(1)
+    expect(api.browserAuth).not.toHaveBeenCalled()
+  })
+
+  it.each(['untrusted secret=fixture <script>bad</script>', 'constructor', 'toString', '__proto__'])('uses only the allowlisted helper diagnostic labels: %s', async error_code => {
+    vi.mocked(api.startBrowserAuth).mockResolvedValue({ ...makeJob('failed'), frame: undefined, error_code })
+    const wrapper = setup()
+    await flushPromises()
+    expect(wrapper.get('[role=alert]').text()).toBe('governance.browserErrorGeneric')
+    expect(wrapper.find('script').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain(error_code)
+  })
+
+  it('shows safe generic text for an unrecognized startup error instead of its message or reason', async () => {
+    vi.mocked(api.startBrowserAuth).mockRejectedValue({ reason: 'constructor', message: 'private command and credential fixture' })
+    const wrapper = setup()
+    await flushPromises()
+    expect(wrapper.get('[role=alert]').text()).toBe('governance.browserAuthFailed')
+    expect(wrapper.text()).not.toContain('constructor')
+    expect(wrapper.text()).not.toContain('private command')
+  })
+
+  it('explains startup and missing frames while keeping manual instructions and inputs safe', async () => {
+    let finish!: (job: BrowserAuthJob) => void
+    vi.mocked(api.startBrowserAuth).mockReturnValue(new Promise(resolve => { finish = resolve }))
+    const wrapper = setup()
+    await flushPromises()
+    expect(wrapper.get('[data-test=browser-frame]').text()).toContain('governance.browserFrameStarting')
+    const instructions = wrapper.get('[data-test=browser-instructions]')
+    expect(instructions.text()).toContain('governance.browserManualVerification')
+    expect(instructions.text()).toContain('governance.browserManualLogin')
+    expect(instructions.text()).toContain('governance.browserManualComplete')
+    expect(wrapper.get('[data-test=browser-complete]').attributes('disabled')).toBeDefined()
+
+    finish({ ...makeJob(), frame: undefined })
+    await flushPromises()
+    const target = frame(wrapper)
+    expect(target.text()).toContain('governance.browserFrameWaiting')
+    expect(target.attributes('aria-disabled')).toBe('true')
+    expect(wrapper.get('[data-test=browser-text]').attributes('disabled')).toBeDefined()
+    await target.trigger('pointerdown', { pointerId: 1, button: 0, clientX: 100, clientY: 100 })
+    await target.trigger('keydown', { key: 'Enter' })
+    await flushPromises()
+    expect(api.browserAuthAction).not.toHaveBeenCalled()
+    expect(api.startBrowserAuth).toHaveBeenCalledTimes(1)
+    expect(api.completeBrowserAuth).not.toHaveBeenCalled()
+  })
+
+  it('recovers a transient render error by polling the same job without replaying input or leaving stale diagnostics', async () => {
+    vi.mocked(api.browserAuth)
+      .mockResolvedValueOnce({ ...makeJob(), frame: undefined, error_code: 'browser_render_failed' })
+      .mockResolvedValueOnce(makeJob())
+    const wrapper = setup()
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(1000)
+    await flushPromises()
+    expect(wrapper.get('[data-test=browser-diagnostic]').text()).toBe('governance.browserRenderRecovering')
+    expect(wrapper.get('[data-test=browser-diagnostic]').attributes('role')).toBe('status')
+    expect(wrapper.text()).toContain('governance.browserState_waiting')
+    expect(wrapper.text()).not.toContain('governance.browserRestartHint')
+    expect(wrapper.get('[data-test=browser-frame]').attributes('aria-disabled')).toBe('true')
+    expect(wrapper.get('[data-test=browser-complete]').attributes('disabled')).toBeDefined()
+
+    await vi.advanceTimersByTimeAsync(1000)
+    await flushPromises()
+    expect(wrapper.find('[data-test=browser-diagnostic]').exists()).toBe(false)
+    expect(wrapper.find('[role=alert]').exists()).toBe(false)
+    expect(wrapper.get('[data-test=browser-frame]').attributes('aria-disabled')).toBe('false')
+    expect(wrapper.find('[data-test=browser-frame] img').exists()).toBe(true)
+    expect(api.browserAuth).toHaveBeenCalledTimes(2)
+    expect(api.startBrowserAuth).toHaveBeenCalledTimes(1)
+    expect(api.browserAuthAction).not.toHaveBeenCalled()
+    expect(api.completeBrowserAuth).not.toHaveBeenCalled()
+  })
+
+  it('pauses input to a stale frame until transient rendering recovers', async () => {
+    vi.mocked(api.startBrowserAuth).mockResolvedValue({ ...makeJob(), error_code: 'browser_render_failed' })
+    const wrapper = setup()
+    await flushPromises()
+    const target = frame(wrapper)
+    expect(target.attributes('aria-disabled')).toBe('true')
+    await target.trigger('pointerdown', { pointerId: 1, button: 0, clientX: 100, clientY: 100 })
+    await target.trigger('keydown', { key: 'Enter' })
+    await flushPromises()
+    expect(api.browserAuthAction).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1000)
+    await flushPromises()
+    expect(target.attributes('aria-disabled')).toBe('false')
+    expect(wrapper.find('[data-test=browser-diagnostic]').exists()).toBe(false)
+  })
+
+  it('replaces a transient render warning with the later terminal request diagnostic', async () => {
+    vi.mocked(api.startBrowserAuth).mockResolvedValue({ ...makeJob(), frame: undefined, error_code: 'browser_render_failed' })
+    vi.mocked(api.browserAuth).mockRejectedValue({ reason: 'browser_unavailable', message: 'private helper endpoint' })
+    const wrapper = setup()
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(1000)
+    await flushPromises()
+    expect(wrapper.findAll('[role=alert]')).toHaveLength(1)
+    expect(wrapper.get('[role=alert]').text()).toBe('governance.browserErrorUnavailable')
+    expect(wrapper.text()).not.toContain('governance.browserRenderRecovering')
+    expect(wrapper.text()).not.toContain('private helper endpoint')
+    expect(wrapper.text()).toContain('governance.browserState_failed')
   })
 
   it('expires locally at the actual job deadline even while a ready job awaits confirmation', async () => {
@@ -234,6 +390,120 @@ describe('browser authorization lifecycle', () => {
 })
 
 describe('bounded browser input', () => {
+  it.each(['key', 'pointer_move'] as const)('reads one terminal job diagnostic after a rejected %s without replaying input', async type => {
+    vi.mocked(api.browserAuthAction).mockRejectedValue({ reason: 'unsupported', message: 'private helper response' })
+    vi.mocked(api.browserAuth).mockResolvedValue({ ...makeJob('failed'), frame: undefined, error_code: 'browser_unsupported_route' })
+    const wrapper = setup()
+    await flushPromises()
+    const target = frame(wrapper)
+    if (type === 'key') await target.trigger('keydown', { key: 'Enter' })
+    else {
+      await target.trigger('pointermove', { clientX: 100, clientY: 100, pointerId: 1 })
+      await vi.advanceTimersByTimeAsync(50)
+    }
+    await flushPromises()
+    expect(wrapper.get('[role=alert]').text()).toBe('governance.browserErrorUnsupportedRoute')
+    expect(wrapper.text()).toContain('governance.browserState_failed')
+    expect(wrapper.text()).not.toContain('private helper response')
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(api.browserAuth).toHaveBeenCalledTimes(1)
+    expect(api.browserAuth).toHaveBeenCalledWith(7, 'fixture-job')
+    expect(api.browserAuthAction).toHaveBeenCalledTimes(1)
+    expect(api.startBrowserAuth).toHaveBeenCalledTimes(1)
+    expect(api.completeBrowserAuth).not.toHaveBeenCalled()
+  })
+
+  it.each(['expired', 'cancelled'] as const)('respects a %s diagnostic readback after a rejected action', async status => {
+    vi.mocked(api.browserAuthAction).mockRejectedValue({ reason: 'unsupported' })
+    vi.mocked(api.browserAuth).mockResolvedValue({ ...makeJob(status), frame: undefined })
+    const wrapper = setup()
+    await flushPromises()
+    await frame(wrapper).trigger('keydown', { key: 'Enter' })
+    await flushPromises()
+    expect(wrapper.text()).toContain(`governance.browserState_${status}`)
+    expect(wrapper.text()).toContain('governance.browserRestartHint')
+    expect(wrapper.get('[data-test=browser-complete]').attributes('disabled')).toBeDefined()
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(api.browserAuth).toHaveBeenCalledTimes(1)
+    expect(api.browserAuthAction).toHaveBeenCalledTimes(1)
+  })
+
+  it.each(['readback_rejected', 'still_waiting', 'wrong_job', 'wrong_site'] as const)('falls back safely when action diagnostic readback is %s', async result => {
+    vi.mocked(api.browserAuthAction).mockRejectedValue({ reason: 'unsupported', message: 'private action error' })
+    if (result === 'readback_rejected') vi.mocked(api.browserAuth).mockRejectedValue({ reason: 'private reason', message: 'private readback error' })
+    else vi.mocked(api.browserAuth).mockResolvedValue({
+      ...makeJob(result === 'still_waiting' ? 'waiting' : 'failed'),
+      id: result === 'wrong_job' ? 'different-job' : 'fixture-job',
+      site_id: result === 'wrong_site' ? 8 : 7,
+      error_code: 'browser_unsupported_route',
+    })
+    const wrapper = setup()
+    await flushPromises()
+    await frame(wrapper).trigger('keydown', { key: 'Enter' })
+    await flushPromises()
+    expect(wrapper.get('[role=alert]').text()).toBe('governance.browserAuthFailed')
+    expect(wrapper.text()).toContain('governance.browserState_failed')
+    expect(wrapper.text()).not.toContain('private')
+    expect(wrapper.text()).not.toContain('governance.browserErrorUnsupportedRoute')
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(api.browserAuth).toHaveBeenCalledTimes(1)
+    expect(api.browserAuthAction).toHaveBeenCalledTimes(1)
+  })
+
+  it('ignores a terminal action readback arriving after the dialog is closed', async () => {
+    let finish!: (job: BrowserAuthJob) => void
+    vi.mocked(api.browserAuthAction).mockRejectedValue({ reason: 'unsupported' })
+    vi.mocked(api.browserAuth).mockReturnValue(new Promise(resolve => { finish = resolve }))
+    const wrapper = setup()
+    await flushPromises()
+    await frame(wrapper).trigger('keydown', { key: 'Enter' })
+    await flushPromises()
+    expect(api.browserAuth).toHaveBeenCalledTimes(1)
+    await wrapper.get('[data-test=browser-cancel]').trigger('click')
+    finish({ ...makeJob('failed'), error_code: 'browser_unsupported_route' })
+    await flushPromises()
+    expect(wrapper.find('[role=alert]').exists()).toBe(false)
+    expect(wrapper.emitted('close')).toHaveLength(1)
+    expect(wrapper.emitted('connected')).toBeUndefined()
+    expect(api.cancelBrowserAuth).toHaveBeenCalledTimes(1)
+    expect(api.browserAuthAction).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(api.browserAuth).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not start diagnostic readback when a pending action fails after close', async () => {
+    let reject!: (cause: unknown) => void
+    vi.mocked(api.browserAuthAction).mockReturnValue(new Promise((_resolve, rejectAction) => { reject = rejectAction }))
+    const wrapper = setup()
+    await flushPromises()
+    await frame(wrapper).trigger('keydown', { key: 'Enter' })
+    await flushPromises()
+    await wrapper.get('[data-test=browser-cancel]').trigger('click')
+    reject({ reason: 'unsupported' })
+    await flushPromises()
+    expect(api.browserAuth).not.toHaveBeenCalled()
+    expect(api.browserAuthAction).toHaveBeenCalledTimes(1)
+    expect(api.cancelBrowserAuth).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps a stationary click aligned when focusing the viewport could scroll the dialog', async () => {
+    const wrapper = setup()
+    await flushPromises()
+    const target = frame(wrapper)
+    vi.spyOn(target.element as HTMLElement, 'focus').mockImplementation(options => {
+      if (!options?.preventScroll) {
+        vi.mocked(target.element.getBoundingClientRect).mockReturnValue({ left: 10, top: -80, width: 512, height: 360, right: 522, bottom: 280, x: 10, y: -80, toJSON: () => ({}) })
+      }
+    })
+    await target.trigger('pointerdown', { clientX: 266, clientY: 200, pointerId: 1, button: 0 })
+    await target.trigger('pointerup', { clientX: 266, clientY: 200, pointerId: 1 })
+    await flushPromises()
+    expect(vi.mocked(api.browserAuthAction).mock.calls.map(call => call[2])).toEqual([
+      { type: 'pointer_down', x: 512, y: 360 },
+      { type: 'pointer_up', x: 512, y: 360 },
+    ])
+  })
+
   it('does not click blank margins of the actual-size browser image', async () => {
     const wrapper=setup()
     await flushPromises()
@@ -293,6 +563,52 @@ describe('bounded browser input', () => {
       { type: 'pointer_up', x: 1023, y: 0 },
     ])
     expect((target.element as HTMLElement).setPointerCapture).toHaveBeenCalledWith(1)
+  })
+
+  it('releases an existing drag during a render interruption while rejecting new gestures', async () => {
+    vi.mocked(api.browserAuth).mockResolvedValueOnce({ ...makeJob(), frame: undefined, error_code: 'browser_render_failed' })
+    const wrapper = setup()
+    await flushPromises()
+    const target = frame(wrapper)
+    await target.trigger('pointerdown', { clientX: 266, clientY: 200, pointerId: 1, button: 0 })
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(1000)
+    await flushPromises()
+    expect(target.attributes('aria-disabled')).toBe('true')
+    await target.trigger('pointerup', { clientX: 300, clientY: 220, pointerId: 1 })
+    await target.trigger('pointerdown', { clientX: 100, clientY: 100, pointerId: 2, button: 0 })
+    await target.trigger('pointermove', { clientX: 110, clientY: 110, pointerId: 2 })
+    await flushPromises()
+    expect(vi.mocked(api.browserAuthAction).mock.calls.map(call => call[2])).toEqual([
+      { type: 'pointer_down', x: 512, y: 360 },
+      { type: 'pointer_up', x: 580, y: 400 },
+    ])
+    await vi.advanceTimersByTimeAsync(1000)
+    await flushPromises()
+    expect(target.attributes('aria-disabled')).toBe('false')
+    expect(api.browserAuthAction).toHaveBeenCalledTimes(2)
+  })
+
+  it('discards pending hover moves during render recovery and resumes coalescing new moves', async () => {
+    let finish!: (job: BrowserAuthJob) => void
+    vi.mocked(api.browserAuth).mockReturnValueOnce(new Promise(resolve => { finish = resolve }))
+    const wrapper = setup()
+    await flushPromises()
+    const target = frame(wrapper)
+    await vi.advanceTimersByTimeAsync(1000)
+    await target.trigger('pointermove', { clientX: 100, clientY: 100, pointerId: 1 })
+    finish({ ...makeJob(), frame: undefined, error_code: 'browser_render_failed' })
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(1000)
+    await flushPromises()
+    expect(target.attributes('aria-disabled')).toBe('false')
+    expect(api.browserAuthAction).not.toHaveBeenCalled()
+
+    await target.trigger('pointermove', { clientX: 266, clientY: 200, pointerId: 1 })
+    await vi.advanceTimersByTimeAsync(50)
+    await flushPromises()
+    expect(api.browserAuthAction).toHaveBeenCalledTimes(1)
+    expect(api.browserAuthAction).toHaveBeenCalledWith(7, 'fixture-job', { type: 'pointer_move', x: 512, y: 360 })
   })
 
   it('bounds wheel events and sends explicit keys, printable text and pasted OTP', async () => {

@@ -25,9 +25,13 @@ export function validateStart(input) {
 }
 
 export function launchOptions(input) {
+  const headless = process.env.GOVERNANCE_BROWSER_HEADLESS === 'true';
   return {
     executablePath: input.executable_path,
-    headless: true,
+    // Authorization is an interactive workflow, so use a headed browser by
+    // default. Tests or deployments without a display may explicitly opt in
+    // to headless mode; neither mode guarantees upstream challenge acceptance.
+    headless,
     chromiumSandbox: true,
     serviceWorkers: 'block',
     acceptDownloads: false,
@@ -180,17 +184,25 @@ export class BrowserRuntime {
     } finally { this.captureBusy = false; }
   }
 
+  failUnsupportedRoute() {
+    if (this.status === 'failed') return true;
+    if (this.capture || this.captureBusy || loginPage(this.page.url(), this.origin)) return false;
+    this.status = 'failed';
+    this.errorCode = 'browser_unsupported_route';
+    return true;
+  }
+
   async snapshot() {
     const view = () => ({ status: this.status, width: WIDTH, height: HEIGHT, ...(this.errorCode ? { error_code: this.errorCode } : {}) });
     if (!this.context || this.closed) throw new BrowserError('browser_closed');
-    if (this.capture || this.captureBusy || this.page.isClosed() || !loginPage(this.page.url(), this.origin)) return view();
+    if (this.capture || this.captureBusy || this.page.isClosed() || this.failUnsupportedRoute()) return view();
     try {
       const image = await this.page.screenshot({ type: 'jpeg', quality: 65, fullPage: false, timeout: 5000 });
-      if (this.capture || this.captureBusy || !loginPage(this.page.url(), this.origin)) return view();
+      if (this.capture || this.captureBusy || this.page.isClosed() || this.failUnsupportedRoute()) return view();
       if (image.length > 2 * 1024 * 1024) throw new Error('oversized');
       return { ...view(), image: image.toString('base64') };
     } catch {
-      if (this.capture) return view();
+      if (this.capture || this.captureBusy || this.page.isClosed() || this.failUnsupportedRoute()) return view();
       return { ...view(), error_code: 'browser_render_failed' };
     }
   }
@@ -199,7 +211,7 @@ export class BrowserRuntime {
     if (!validateAction(action)) throw new BrowserError('browser_invalid_input');
     if (!this.context || this.closed) throw new BrowserError('browser_closed');
     if (this.capture || this.captureBusy || this.page.isClosed()) return null;
-    if (!loginPage(this.page.url(), this.origin)) throw new BrowserError('browser_invalid_input');
+    if (this.failUnsupportedRoute()) throw new BrowserError(this.errorCode);
     try {
       switch (action.type) {
         case 'pointer_down':

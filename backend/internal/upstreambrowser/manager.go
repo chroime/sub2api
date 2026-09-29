@@ -89,8 +89,17 @@ func (m *Manager) Start(ctx context.Context, input Input) (Driver, error) {
 	if !validInput(input) {
 		return nil, ErrInvalid
 	}
-	if ok, _ := m.Available(); !ok {
-		return nil, ErrUnavailable
+	if ok, code := m.Available(); !ok {
+		switch code {
+		case "browser_node_missing":
+			return nil, ErrNodeMissing
+		case "browser_script_missing":
+			return nil, ErrScriptMissing
+		case "browser_executable_missing":
+			return nil, ErrExecutableMissing
+		default:
+			return nil, ErrUnavailable
+		}
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -212,10 +221,19 @@ func (m *Manager) Start(ctx context.Context, input Input) (Driver, error) {
 // environment variables. Only the guard proxy controls browser egress.
 func childEnvironment(temp string) []string {
 	var result []string
-	for _, key := range []string{"PATH", "SystemRoot", "WINDIR", "HOME", "USERPROFILE", "LOCALAPPDATA", "APPDATA", "LANG", "LC_ALL"} {
+	keys := []string{"PATH", "SystemRoot", "WINDIR", "HOME", "USERPROFILE", "LOCALAPPDATA", "APPDATA", "LANG", "LC_ALL"}
+	if runtime.GOOS == "linux" {
+		keys = append(keys, "DISPLAY", "WAYLAND_DISPLAY", "XDG_RUNTIME_DIR", "XAUTHORITY")
+	}
+	for _, key := range keys {
 		if value, ok := os.LookupEnv(key); ok {
 			result = append(result, key+"="+value)
 		}
+	}
+	// Only the exact opt-in value reaches the helper. Interactive authorization
+	// remains headed unless an isolated test explicitly requests headless mode.
+	if os.Getenv("GOVERNANCE_BROWSER_HEADLESS") == "true" {
+		result = append(result, "GOVERNANCE_BROWSER_HEADLESS=true")
 	}
 	return append(result, "TMP="+temp, "TEMP="+temp, "TMPDIR="+temp)
 }
@@ -296,8 +314,13 @@ func (d *processDriver) rpc(ctx context.Context, method string, params any) (jso
 		response := frame.response
 		if !response.OK || response.Error != "" {
 			go d.Close()
-			if response.Error == "browser_launch_failed" || response.Error == "browser_dependency_missing" {
-				return nil, ErrUnavailable
+			switch response.Error {
+			case "browser_launch_failed":
+				return nil, ErrLaunchFailed
+			case "browser_dependency_missing":
+				return nil, ErrDependencyMissing
+			case "browser_unsupported_route":
+				return nil, ErrUnsupportedRoute
 			}
 			return nil, ErrProtocol
 		}
@@ -441,7 +464,7 @@ func decodeView(raw json.RawMessage) (View, error) {
 		return View{}, ErrProtocol
 	}
 	switch view.ErrorCode {
-	case "", "browser_navigation_failed", "browser_render_failed", "browser_page_closed", "browser_timeout":
+	case "", "browser_navigation_failed", "browser_render_failed", "browser_page_closed", "browser_timeout", "browser_unsupported_route":
 	default:
 		return View{}, ErrProtocol
 	}

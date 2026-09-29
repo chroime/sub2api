@@ -1,8 +1,9 @@
 vi.mock('@/components/layout/AppLayout.vue', () => ({
   default: { template: '<main><slot /></main>' },
 }))
-import { mount, flushPromises, enableAutoUnmount } from '@vue/test-utils'
+import { mount, flushPromises, enableAutoUnmount, config } from '@vue/test-utils'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { createRouter, createMemoryHistory, type Router } from 'vue-router'
 import View from './UpstreamGovernanceView.vue'
 import ConnectDialog from './ConnectDialog.vue'
 import BalanceMonitorPanel from './BalanceMonitorPanel.vue'
@@ -51,7 +52,188 @@ vi.mock('@/api/admin/proxies', () => ({
 vi.mock('vue-i18n', async (importOriginal) => ({ ...await importOriginal<typeof import('vue-i18n')>(), useI18n: () => ({ t: (key: string) => key }) }))
 enableAutoUnmount(afterEach)
 describe('governance page', () => {
-  beforeEach(() => { vi.clearAllMocks(); vi.mocked(api.keys).mockResolvedValue([]) })
+  let router: Router
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    vi.mocked(api.keys).mockResolvedValue([])
+    router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/admin/upstream-governance/:section?', component: View },
+        { path: '/login', component: { template: '<div>Login</div>' } },
+      ],
+    })
+    await router.push('/admin/upstream-governance')
+    await router.isReady()
+    config.global.plugins = [router]
+  })
+  afterEach(() => { config.global.plugins = [] })
+  function setupNavigationSites() {
+    const site: Site = { id: 1, name: 'Upstream A', platform: 'sub2api', base_url: 'https://fixture.example', enabled: true, interval_minutes: 15, proxy_id: null, version: 1, has_credential: true, status: 'healthy', last_error: '', last_sync_at: null }
+    const page = { items: [], total: 0, page: 1, pages: 0, page_size: 20 }
+    vi.mocked(api.list).mockResolvedValue([site, { ...site, id: 2, name: 'Upstream B' }])
+    vi.mocked(api.catalog).mockRejectedValue({ status: 404 })
+    vi.mocked(api.bindings).mockResolvedValue([])
+    vi.mocked(api.events).mockResolvedValue(page)
+    vi.mocked(api.checks).mockResolvedValue(page)
+  }
+  it('shows functional tabs before choosing an upstream without fetching site details', async () => {
+    setupNavigationSites()
+    const wrapper = mount(View)
+    await flushPromises()
+    expect(wrapper.findAll('[role=tab]')).toHaveLength(5)
+    await wrapper.get('#governance-models-tab').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/admin/upstream-governance/models')
+    expect(wrapper.get('[data-test=sites-overview]').isVisible()).toBe(true)
+    expect(api.catalog).not.toHaveBeenCalled()
+    expect(modelAPI.policies).not.toHaveBeenCalled()
+  })
+  it('restores the selected site and model section from a direct link', async () => {
+    setupNavigationSites()
+    await router.push('/admin/upstream-governance/models?site=2')
+    const wrapper = mount(View)
+    await flushPromises()
+    expect(wrapper.get('#governance-models-tab').attributes('aria-selected')).toBe('true')
+    expect(wrapper.getComponent(ModelMonitorPanel).props('siteId')).toBe(2)
+    expect(api.catalog).toHaveBeenCalledTimes(1)
+    expect(api.catalog).toHaveBeenCalledWith(2)
+    expect(api.revealKey).not.toHaveBeenCalled()
+  })
+  it('preserves the selected site across tabs and switches sites without resetting the section', async () => {
+    setupNavigationSites()
+    const wrapper = mount(View)
+    await flushPromises()
+    await wrapper.get('#governance-site-1').trigger('click')
+    await flushPromises()
+    await wrapper.get('#governance-import-tab').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.fullPath).toBe('/admin/upstream-governance/import?site=1')
+    expect(api.catalog).toHaveBeenCalledTimes(1)
+    await wrapper.get('#governance-back-sites').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.query.site).toBeUndefined()
+    await wrapper.get('#governance-site-2').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.fullPath).toBe('/admin/upstream-governance/import?site=2')
+    expect(wrapper.get('#governance-import-tab').attributes('aria-selected')).toBe('true')
+  })
+  it('responds to browser history without reloading unchanged site data', async () => {
+    setupNavigationSites()
+    await router.push('/admin/upstream-governance?site=1')
+    const wrapper = mount(View)
+    await flushPromises()
+    await wrapper.get('#governance-history-tab').trigger('click')
+    await flushPromises()
+    await new Promise<void>(resolve => {
+      const remove = router.afterEach(() => { remove(); resolve() })
+      router.back()
+    })
+    await flushPromises()
+    expect(wrapper.get('#governance-overview-tab').attributes('aria-selected')).toBe('true')
+    expect(wrapper.get('[data-test=site-overview-tab]').isVisible()).toBe(true)
+    expect(api.catalog).toHaveBeenCalledTimes(1)
+  })
+  it.each(['999', '-1', 'abc', '1&site=2'])('shows the site picker for missing or invalid selection %s', async site => {
+    setupNavigationSites()
+    await router.push(`/admin/upstream-governance/import?site=${site}`)
+    const wrapper = mount(View)
+    await flushPromises()
+    expect(wrapper.get('[data-test=sites-overview]').isVisible()).toBe(true)
+    expect(wrapper.text()).toContain('governance.smartOperations.siteNotFound')
+    expect(api.catalog).not.toHaveBeenCalled()
+  })
+  it('blocks sidebar-style route changes during a write and unlocks afterwards', async () => {
+    setupNavigationSites()
+    const wrapper = mount(View)
+    await flushPromises()
+    await wrapper.get('#governance-site-1').trigger('click')
+    await flushPromises()
+    wrapper.getComponent(BalanceMonitorPanel).vm.$emit('busy', true)
+    await flushPromises()
+    await router.push('/admin/upstream-governance/models?site=2')
+    expect(router.currentRoute.value.fullPath).toBe('/admin/upstream-governance?site=1')
+    wrapper.getComponent(BalanceMonitorPanel).vm.$emit('busy', false)
+    await flushPromises()
+    await router.push('/admin/upstream-governance/models?site=2')
+    await flushPromises()
+    expect(wrapper.getComponent(ModelMonitorPanel).props('siteId')).toBe(2)
+  })
+  it('blocks route changes during explicit collection and releases the lock on failure', async () => {
+    setupNavigationSites()
+    const wrapper = mount(View)
+    await flushPromises()
+    await wrapper.get('#governance-site-1').trigger('click')
+    await flushPromises()
+    let reject!: (reason: unknown) => void
+    vi.mocked(api.sync).mockImplementationOnce(() => new Promise((_, fail) => { reject = fail }))
+    await wrapper.get('#governance-collect').trigger('click')
+    await router.push('/admin/upstream-governance/models?site=2')
+    expect(router.currentRoute.value.fullPath).toBe('/admin/upstream-governance?site=1')
+    reject({ reason: 'timeout' })
+    await flushPromises()
+    await router.push('/admin/upstream-governance/models?site=2')
+    await flushPromises()
+    expect(wrapper.getComponent(ModelMonitorPanel).props('siteId')).toBe(2)
+  })
+  it('closes the plaintext key dialog when browser navigation returns to the site picker', async () => {
+    setupNavigationSites()
+    const wrapper = mount(View, { global: { stubs: { BaseDialog: { props: ['show'], template: '<div v-if="show"><slot /></div>' } } } })
+    await flushPromises()
+    await wrapper.get('#governance-site-1').trigger('click')
+    await flushPromises()
+    await wrapper.get('#governance-view-keys').trigger('click')
+    await flushPromises()
+    expect(wrapper.findComponent(ManagedKeysPanel).exists()).toBe(true)
+    await router.push('/admin/upstream-governance')
+    await flushPromises()
+    expect(wrapper.get('[data-test=sites-overview]').isVisible()).toBe(true)
+    expect(wrapper.findComponent(ManagedKeysPanel).exists()).toBe(false)
+  })
+  it('keeps authorization inside its site context until the dialog is closed', async () => {
+    setupNavigationSites()
+    const wrapper = mount(View, { global: { stubs: { ConnectDialog: true } } })
+    await flushPromises()
+    await wrapper.get('#governance-site-1').trigger('click')
+    await flushPromises()
+    await wrapper.get('#governance-reconnect').trigger('click')
+    await router.push('/admin/upstream-governance/models?site=2')
+    expect(router.currentRoute.value.fullPath).toBe('/admin/upstream-governance?site=1')
+    wrapper.getComponent(ConnectDialog).vm.$emit('close')
+    await flushPromises()
+    await router.push('/admin/upstream-governance/models?site=2')
+    await flushPromises()
+    expect(wrapper.getComponent(ModelMonitorPanel).props('siteId')).toBe(2)
+  })
+  it('refreshes key metadata when navigation dismisses its dialog for the retained site', async () => {
+    setupNavigationSites()
+    const wrapper = mount(View, { global: { stubs: { BaseDialog: { props: ['show'], template: '<div v-if="show"><slot /></div>' } } } })
+    await flushPromises()
+    await wrapper.get('#governance-site-1').trigger('click')
+    await flushPromises()
+    await wrapper.get('#governance-view-keys').trigger('click')
+    await flushPromises()
+    const key = { id: 9, site_id: 1, remote_group_id: 'r', platform: 'openai' as const, remote_key_id: 'created-key', marker: 'new', has_key: true, created_at: '', updated_at: '' }
+    vi.mocked(api.keys).mockResolvedValue([key])
+    await router.push('/admin/upstream-governance')
+    await flushPromises()
+    await router.push('/admin/upstream-governance/models?site=1')
+    await flushPromises()
+    expect(wrapper.getComponent(ModelMonitorPanel).props('managedKeys')).toEqual([key])
+    expect(api.catalog).toHaveBeenCalledTimes(1)
+    expect(api.revealKey).not.toHaveBeenCalled()
+  })
+  it('does not trap logout or expired-session redirects behind a write lock', async () => {
+    setupNavigationSites()
+    const wrapper = mount(View)
+    await flushPromises()
+    await wrapper.get('#governance-site-1').trigger('click')
+    await flushPromises()
+    wrapper.getComponent(BalanceMonitorPanel).vm.$emit('busy', true)
+    await flushPromises()
+    await router.push('/login')
+    expect(router.currentRoute.value.path).toBe('/login')
+  })
   it('loads model monitoring only in its separate tab and unmounts it when returning to automation', async () => {
     const site: Site = { id: 1, name: 'Models site', platform: 'sub2api', base_url: 'https://fixture.example', enabled: true, interval_minutes: 15, proxy_id: null, version: 1, has_credential: true, status: 'healthy', last_error: '', last_sync_at: null }
     vi.mocked(api.list).mockResolvedValue([site]); vi.mocked(api.catalog).mockRejectedValue({ status: 404 }); vi.mocked(api.bindings).mockResolvedValue([])
@@ -63,6 +245,7 @@ describe('governance page', () => {
     expect(modelAPI.policies).toHaveBeenCalledWith(1)
     expect(wrapper.findComponent(ModelMonitorPanel).exists()).toBe(true)
     await wrapper.get('#governance-monitor-tab').trigger('click')
+    await flushPromises()
     expect(wrapper.findComponent(ModelMonitorPanel).exists()).toBe(false)
   })
   async function setupProbeMonitor() {
@@ -139,8 +322,11 @@ describe('governance page', () => {
     await importPanel.get('[data-test=select]').setValue(true)
     await importPanel.get('[data-test=priority]').setValue(7)
     await wrapper.get('#governance-monitor-tab').trigger('click')
+    await flushPromises()
     await wrapper.get('#governance-history-tab').trigger('click')
+    await flushPromises()
     await wrapper.get('#governance-import-tab').trigger('click')
+    await flushPromises()
     expect(wrapper.getComponent(ImportPanel).element).toBe(importPanel.element)
     expect((importPanel.get('[data-test=select]').element as HTMLInputElement).checked).toBe(true)
     expect((importPanel.get('[data-test=priority]').element as HTMLInputElement).value).toBe('7')

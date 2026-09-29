@@ -18,7 +18,18 @@ import { resolveRouteDocumentTitle } from './title'
  * Route definitions with lazy loading
  */
 const routes: RouteRecordRaw[] = [
-  { path: '/admin/upstream-governance', name: 'AdminUpstreamGovernance', component: () => import('@/views/admin/upstream-governance/UpstreamGovernanceView.vue'), meta: { requiresAuth: true, requiresAdmin: true, title: 'Upstream governance', titleKey: 'governance.title', descriptionKey: 'governance.description' } },
+  {
+    path: '/admin/upstream-governance/:section(overview|import|models|monitor|history)?',
+    name: 'AdminUpstreamGovernance',
+    component: () => import('@/views/admin/upstream-governance/UpstreamGovernanceView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Smart Operations',
+      titleKey: 'governance.smartOperations.title',
+      descriptionKey: 'governance.smartOperations.description',
+    },
+  },
   // ==================== Setup Routes ====================
   {
     path: '/setup',

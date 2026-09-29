@@ -31,10 +31,19 @@ Configure the backend, not the helper command line:
 | `GOVERNANCE_BROWSER_SCRIPT` | Absolute path to this directory's `main.mjs` |
 | `GOVERNANCE_BROWSER_EXECUTABLE` | Absolute path to installed Chromium/Chrome |
 | `GOVERNANCE_BROWSER_TEMP_DIR` | Existing writable directory for per-job profiles |
+| `GOVERNANCE_BROWSER_HEADLESS` | Set exactly `true` to opt in to headless mode; otherwise a headed browser is used |
 
-`Available()` checks prerequisite paths, not an actual browser launch. Missing
-dependencies, incompatible browsers, or unavailable sandbox support still fail
-at Start. Linux must allow Chromium's normal sandbox as an unprivileged service
+Headed mode requires a desktop/display accessible to the account running the
+backend: an interactive desktop on Windows, or a configured display on Linux.
+Service deployments without a usable display must provide one or explicitly set
+`GOVERNANCE_BROWSER_HEADLESS=true` in the backend process environment. This option
+changes only the browser's display mode; neither mode guarantees that an upstream
+CAPTCHA or browser challenge will accept the session.
+
+`Available()` checks prerequisite paths, not an actual browser launch or display.
+Missing dependencies, incompatible browsers, an unavailable display, or
+unavailable sandbox support still fail at Start. Linux must allow Chromium's
+normal sandbox as an unprivileged service
 user; the implementation never substitutes `--no-sandbox`. Linux process cleanup
 also requires the service's own descendant process information under `/proc`.
 
@@ -56,9 +65,15 @@ Only `pointer_down`, `pointer_move`, `pointer_up`, `wheel`, `text`, and `key` ar
 accepted. Coordinates are within the fixed viewport, wheel deltas are at most
 2000, text is at most 2048 UTF-8 bytes without control characters, and keys come
 from a small editing/navigation allowlist. No arbitrary JavaScript, URL navigation,
-file selection, or shell commands are exposed. Screenshots are limited to the
-selected origin's `/login` page. Other login routes and cross-origin SSO are not
-supported by this version.
+file selection, or shell commands are exposed. Screenshots and input are limited
+to the selected origin's exact `/login` and `/login/` paths. Other login routes
+and cross-origin SSO are not supported by this version. Leaving those paths
+without a captured or in-flight login response ends the session with
+`browser_unsupported_route`, rather than continuing with an empty waiting frame.
+An already observed login response may finish capture after a same-origin
+redirect; no dashboard pixels or input are exposed while capture is pending.
+Transient screenshot failures report `browser_render_failed` and can recover on
+the next snapshot while the page remains on a supported login route.
 
 Capture is restricted to main-frame POST responses from the exact selected
 origin and these known endpoints:
@@ -120,19 +135,23 @@ logs; RPC errors contain bounded public error codes only.
 
 ## Tests
 
-`npm test` runs parser, configuration, input, cookie, and subprocess protocol
-tests without contacting a real upstream. A real-browser synthetic-fixture test
-is enabled with these environment variables:
+`npm test` runs parser, configuration, route/capture-race, screenshot recovery,
+input, cookie, and subprocess protocol tests without contacting a real upstream.
+A real-browser synthetic-fixture test is enabled with these environment variables:
 
 ```powershell
 $env:GOVERNANCE_BROWSER_TEST_EXECUTABLE = 'C:/Program Files/Google/Chrome/Application/chrome.exe'
 $env:GOVERNANCE_BROWSER_TEST_TEMP_DIR = 'E:/workspace/agent/.cache/sub2api-governance/browser-test'
 $env:GOVERNANCE_BROWSER_TEST_ARTIFACT_DIR = 'E:/workspace/agent/.cache/sub2api-governance/browser-smoke'
+# Optional for these synthetic tests; omit to test headed mode with a usable display.
+$env:GOVERNANCE_BROWSER_HEADLESS = 'true'
 node --test --test-reporter=tap *.test.mjs
 ```
 
-Only synthetic credentials and intercepted fixture responses are used. Optional
-artifacts are a masked login-page JPEG and a token-free verification report.
+Only synthetic credentials and intercepted fixture responses are used. The
+fixture verifies autofill, administrator-style pointer submission, recovery from
+a transient screenshot failure, and delayed capture after a same-origin redirect.
+Optional artifacts are a masked login-page JPEG and a token-free verification report.
 
 From `backend`, run `go test ./internal/upstreambrowser`. With the same explicit
 test browser variables it also exercises Go -> Node -> Chromium launch, blocked

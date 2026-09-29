@@ -52,6 +52,9 @@
                   'sidebar-link-collapsed': sidebarCollapsed
                 }"
                 :title="sidebarCollapsed ? item.label : undefined"
+                :aria-label="item.label"
+                :aria-expanded="!sidebarCollapsed && isGroupExpanded(item)"
+                :aria-controls="groupChildrenId(item)"
                 @click="handleGroupClick(item)"
               >
                 <component :is="item.icon" class="h-5 w-5 flex-shrink-0" />
@@ -68,13 +71,13 @@
                 </span>
               </button>
               <!-- Children -->
-              <div v-if="!sidebarCollapsed && isGroupExpanded(item)" class="mb-1 ml-4 border-l border-gray-200 pl-2 dark:border-dark-600">
+              <div v-if="!sidebarCollapsed && isGroupExpanded(item)" :id="groupChildrenId(item)" class="mb-1 ml-4 border-l border-gray-200 pl-2 dark:border-dark-600">
                 <router-link
                   v-for="child in item.children"
                   :key="child.path"
-                  :to="child.path"
+                  :to="childLocation(child)"
                   class="sidebar-link mb-0.5 py-1.5 text-sm"
-                  :class="{ 'sidebar-link-active': route.path === child.path }"
+                  :class="{ 'sidebar-link-active': isChildActive(child) }"
                   @click="handleMenuItemClick(child.path)"
                 >
                   <component :is="child.icon" class="h-4 w-4 flex-shrink-0" />
@@ -195,7 +198,7 @@
 
 <script setup lang="ts">
 import { computed, h, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute, useRouter, type RouteLocationRaw } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAdminSettingsStore, useAppStore, useAuthStore, useOnboardingStore } from '@/stores'
 import VersionBadge from '@/components/common/VersionBadge.vue'
@@ -206,6 +209,7 @@ import { sanitizeUrl } from '@/utils/url'
 import { FeatureFlags, makeSidebarFlag } from '@/utils/featureFlags'
 import { resolveSiteBillingMode } from '@/utils/siteBillingMode'
 import { useBatchImageAccess } from '@/composables/useBatchImageAccess'
+import { resolveSmartOperationsSection, SMART_OPERATIONS_SECTIONS, type SmartOperationsSection } from '@/config/smartOperations'
 
 interface NavItem {
   path: string
@@ -214,6 +218,7 @@ interface NavItem {
   iconSvg?: string
   hideInSimpleMode?: boolean
   children?: NavItem[]
+  smartOperationsSection?: SmartOperationsSection
   /**
    * When true, the parent item only toggles the expand/collapse state and
    * does NOT navigate to its `path`. The `path` is purely a stable key.
@@ -260,6 +265,7 @@ const sidebarNavRef = ref<HTMLElement | null>(null)
 const isDark = ref(document.documentElement.classList.contains('dark'))
 
 const homePath = computed(() => (isAdmin.value ? '/admin/dashboard' : '/dashboard'))
+const smartOperationsRootPath = SMART_OPERATIONS_SECTIONS[0].path
 
 // Per-group expand/collapse overrides. A group with no entry follows the
 // automatic behavior (expanded while the active route is one of its children);
@@ -803,7 +809,18 @@ const adminNavItems = computed((): NavItem[] => {
     // 「仅充值」站点连管理端的「订阅管理」入口也一并收起（路由本身不拦截）。
     { path: '/admin/subscriptions', label: t('nav.subscriptions'), icon: CreditCardIcon, hideInSimpleMode: true, featureFlag: flagSubscription },
     { path: '/admin/accounts', label: t('nav.accounts'), icon: GlobeIcon },
-    { path: '/admin/upstream-governance', label: t('governance.title'), icon: GlobeIcon },
+    {
+      path: smartOperationsRootPath,
+      label: t('governance.smartOperations.title'),
+      icon: GlobeIcon,
+      expandOnly: true,
+      children: SMART_OPERATIONS_SECTIONS.map((section) => ({
+        path: section.path,
+        label: t(section.labelKey),
+        icon: { render: () => h(Icon, { name: section.icon }) },
+        smartOperationsSection: section.id,
+      })),
+    },
     { path: '/admin/plugins', label: t('nav.plugins'), icon: PluginIcon, featureFlag: flagPluginManagement },
     { path: '/admin/announcements', label: t('nav.announcements'), icon: BellIcon },
     { path: '/admin/proxies', label: t('nav.proxies'), icon: ServerIcon },
@@ -908,9 +925,28 @@ function isActive(path: string): boolean {
   return route.path === path || route.path.startsWith(path + '/')
 }
 
+function isChildActive(child: NavItem): boolean {
+  if (child.smartOperationsSection) {
+    return route.name === 'AdminUpstreamGovernance'
+      && resolveSmartOperationsSection(route.params.section) === child.smartOperationsSection
+  }
+  return route.path === child.path
+}
+
+function childLocation(child: NavItem): RouteLocationRaw {
+  if (child.smartOperationsSection && route.name === 'AdminUpstreamGovernance' && route.query.site !== undefined) {
+    return { path: child.path, query: { site: route.query.site } }
+  }
+  return child.path
+}
+
+function groupChildrenId(item: NavItem): string {
+  return `sidebar-group${item.path.replace(/\//g, '-')}`
+}
+
 function isGroupActive(item: NavItem): boolean {
   if (!item.children) return false
-  return item.children.some(child => route.path === child.path)
+  return item.children.some(isChildActive)
 }
 
 function isGroupExpanded(item: NavItem): boolean {
@@ -925,13 +961,20 @@ function toggleGroup(item: NavItem) {
 
 /**
  * Click handler for collapsible parent items.
- * - When sidebar is collapsed: do nothing (children are not visible).
+ * - When sidebar is collapsed: Smart Operations opens the sidebar and its group;
+ *   other groups retain their existing behavior.
  * - When `expandOnly` is true: only toggle expand state.
  * - Otherwise (default, e.g. /admin/orders): navigate to the parent path
  *   (router-link semantics) and ensure the group is expanded.
  */
 function handleGroupClick(item: NavItem) {
-  if (sidebarCollapsed.value) return
+  if (sidebarCollapsed.value) {
+    if (item.path === smartOperationsRootPath) {
+      appStore.setSidebarCollapsed(false)
+      groupExpandOverrides.value.set(item.path, true)
+    }
+    return
+  }
   if (item.expandOnly) {
     toggleGroup(item)
     return
