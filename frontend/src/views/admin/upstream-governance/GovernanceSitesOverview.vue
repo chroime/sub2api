@@ -5,7 +5,15 @@ import Icon from '@/components/icons/Icon.vue'
 import type { Site } from '@/api/admin/upstream-governance'
 import { formatGovernanceTime } from './format'
 import { siteStateKeys } from './feedback'
-const props = defineProps<{ sites: Site[]; disabled?: boolean }>()
+const props = withDefaults(defineProps<{
+  sites: Site[]
+  disabled?: boolean
+  compact?: boolean
+  selectedSiteId?: number | null
+}>(), {
+  compact: false,
+  selectedSiteId: null
+})
 const emit = defineEmits<{ select: [site: Site] }>()
 const { t } = useI18n()
 const query = ref(''), filter = ref<'all' | 'attention' | 'paused'>('all')
@@ -15,7 +23,29 @@ const collecting = computed(() => props.sites.filter(site => site.enabled).lengt
 const visible = computed(() => props.sites.filter(site => `${site.name} ${site.base_url}`.toLowerCase().includes(query.value.trim().toLowerCase()) && (filter.value === 'all' || (filter.value === 'attention' ? needsAttention(site) : !site.enabled))).sort((a, b) => Number(needsAttention(b)) - Number(needsAttention(a)) || a.id - b.id))
 </script>
 <template>
-  <section class="min-w-0 space-y-5" data-test="sites-overview">
+  <section v-if="compact" class="min-w-0 rounded-xl border border-gray-200 bg-white p-3 dark:border-dark-600 dark:bg-dark-800" data-test="sites-overview-compact">
+    <header class="flex items-center justify-between gap-3">
+      <h2 class="truncate text-sm font-semibold">{{ t('governance.siteTotal') }}</h2>
+      <span data-test="site-count" class="shrink-0 text-sm tabular-nums text-gray-500">{{ sites.length }}</span>
+    </header>
+    <div class="mt-3 space-y-2">
+      <div class="relative min-w-0">
+        <Icon name="search" size="sm" class="absolute left-3 top-3 text-gray-400" />
+        <input v-model="query" data-test="site-search" class="input w-full pl-9 text-sm" :placeholder="t('governance.searchSites')" :aria-label="t('governance.searchSites')" />
+      </div>
+      <div class="flex flex-wrap gap-1 rounded-lg bg-gray-100 p-1 dark:bg-dark-700">
+        <button v-for="option in (['all', 'attention', 'paused'] as const)" :key="option" type="button" class="min-h-8 rounded-md px-2 py-1 text-xs transition-colors" :class="filter === option ? 'bg-white font-medium text-gray-900 shadow-sm dark:bg-dark-600 dark:text-gray-100' : 'text-gray-500'" :aria-pressed="filter === option" @click="filter = option">{{ t(`governance.siteFilter_${option}`) }}</button>
+      </div>
+    </div>
+    <nav :aria-label="t('governance.upstreamSites')" data-test="site-list" class="mt-3 max-h-[min(60vh,32rem)] overflow-y-auto rounded-lg border border-gray-200 dark:border-dark-600">
+      <button v-for="site in visible" :id="'governance-site-' + site.id" :key="site.id" type="button" class="site-row grid w-full min-w-0 gap-2 border-b border-gray-100 p-3 text-left transition-colors last:border-b-0 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-500 disabled:opacity-60 dark:border-dark-700 dark:hover:bg-dark-700" :class="selectedSiteId === site.id ? 'site-row--selected bg-primary-50 dark:bg-primary-900/20' : ''" :aria-current="selectedSiteId === site.id ? 'true' : undefined" :disabled="disabled" @click="emit('select', site)">
+        <div class="flex min-w-0 items-center gap-2"><span class="rounded-lg bg-primary-50 p-1.5 text-primary-700 dark:bg-primary-900/20 dark:text-primary-300"><Icon name="server" size="sm" /></span><div class="min-w-0"><p class="truncate text-sm font-semibold">{{ site.name }}</p><p class="truncate text-xs text-gray-500">{{ site.base_url }}</p></div></div>
+        <div class="flex min-w-0 items-center justify-between gap-2 text-xs"><span class="truncate rounded-full px-2 py-0.5 font-medium" :class="needsAttention(site) ? 'bg-amber-50 text-amber-800 dark:bg-amber-900/20 dark:text-amber-300' : 'bg-primary-50 text-primary-700 dark:bg-primary-900/20 dark:text-primary-300'">{{ t('governance.' + (siteStateKeys[site.status] || 'unknown')) }}</span><time class="shrink-0 tabular-nums text-gray-500">{{ formatGovernanceTime(site.last_sync_at) }}</time></div>
+      </button>
+      <p v-if="!visible.length" class="p-5 text-center text-sm text-gray-500">{{ t('governance.noMatchingSites') }}</p>
+    </nav>
+  </section>
+  <section v-else class="min-w-0 space-y-5" data-test="sites-overview">
     <dl class="grid grid-cols-3 gap-2 sm:gap-4"><div v-for="metric in [{ key: 'siteTotal', value: sites.length }, { key: 'sitesNeedAttention', value: attention }, { key: 'sitesCollecting', value: collecting }]" :key="metric.key" class="min-w-0 rounded-xl border border-gray-200 bg-white p-3 dark:border-dark-600 dark:bg-dark-800 sm:p-5"><dt class="text-xs text-gray-500 sm:text-sm">{{ t('governance.' + metric.key) }}</dt><dd class="mt-2 text-2xl font-semibold tabular-nums" :class="metric.key === 'sitesNeedAttention' && metric.value ? 'text-amber-700 dark:text-amber-400' : ''">{{ metric.value }}</dd></div></dl>
     <div class="flex flex-wrap items-center gap-3"><div class="relative min-w-0 basis-full sm:max-w-sm sm:flex-1"><Icon name="search" size="sm" class="absolute left-3 top-3 text-gray-400" /><input v-model="query" data-test="site-search" class="input w-full pl-9 text-sm" :placeholder="t('governance.searchSites')" :aria-label="t('governance.searchSites')" /></div><div class="flex flex-wrap gap-1 rounded-lg bg-gray-100 p-1 dark:bg-dark-800"><button v-for="option in (['all', 'attention', 'paused'] as const)" :key="option" type="button" class="min-h-9 rounded-md px-3 text-sm transition-colors" :class="filter === option ? 'bg-white font-medium text-gray-900 shadow-sm dark:bg-dark-600 dark:text-gray-100' : 'text-gray-500'" :aria-pressed="filter === option" @click="filter = option">{{ t(`governance.siteFilter_${option}`) }}</button></div></div>
     <nav :aria-label="t('governance.upstreamSites')" class="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-dark-600 dark:bg-dark-800">
