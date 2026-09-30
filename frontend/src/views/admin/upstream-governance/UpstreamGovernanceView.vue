@@ -44,12 +44,11 @@ const router = useRouter()
 const tab = computed({
   get: () => resolveSmartOperationsSection(route.params.section),
   set: (section: SmartOperationsSection) => {
-    if (working.value) return
+    if (navigationLocked.value) return
     const entry = SMART_OPERATIONS_SECTIONS.find(item => item.id === section)!
     void router.push({ path: entry.path, query: route.query })
   },
 })
-const currentSection = computed(() => SMART_OPERATIONS_SECTIONS.find(entry => entry.id === tab.value)!)
 const showOverview = ref(true)
 const siteNotFound = ref(false)
 let sitesLoaded = false
@@ -82,17 +81,22 @@ const probe = ref<Binding | null>(null),
   probeAction = ref<'check' | 'monitor'>('check')
 const mutationBusy = computed(() => actionBusy.value || importBusy.value || balanceBusy.value || editBusy.value || automationBusy.value || reconciliationBusy.value || keyBusy.value || rechargeBusy.value || modelBusy.value)
 const working = computed(() => busy.value || mutationBusy.value)
+const navigationLocked = computed(() => mutationBusy.value || connecting.value || onboarding.value)
 // The sidebar can navigate independently of this view. Protect in-flight writes there too.
 const stopNavigationGuard = router.beforeEach((to, from) => {
   // Authentication redirects must take precedence over preserving an operation.
   if (to.path === '/login') return
-  if (to.fullPath !== from.fullPath && (mutationBusy.value || connecting.value || onboarding.value)) return false
+  if (to.fullPath !== from.fullPath && navigationLocked.value) return false
 })
-function backToSites() {
-  if (working.value) return
-  const query = { ...route.query }
-  delete query.site
-  void router.push({ path: route.path, query })
+function chooseSite(site: Site) {
+  if (navigationLocked.value) return
+  if (!showOverview.value && active.value?.id === site.id) {
+    // Keep successful loads and unsaved drafts. A failed read can be retried explicitly.
+    if (error.value && !working.value) void select(site)
+    return
+  }
+  // Commit the route first so a rejected navigation cannot change the active account.
+  void router.push({ path: route.path, query: { ...route.query, site: String(site.id) } })
 }
 function restoreLocation() {
   if (!sitesLoaded) return
@@ -453,36 +457,37 @@ onUnmounted(() => {
 <template>
   <AppLayout>
     <div class="min-w-0 space-y-5 text-gray-900 dark:text-gray-100">
-      <SmartOperationsTabs v-model="tab" :disabled="working" />
       <header class="flex flex-wrap items-end justify-between gap-4">
         <div class="min-w-0">
-          <p class="mb-2 flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-dark-300">
-            <span>{{ t('governance.smartOperations.title') }}</span><span aria-hidden="true">/</span><span>{{ t(currentSection.labelKey) }}</span>
-          </p>
-          <h2 class="text-2xl font-semibold tracking-tight">{{ t(currentSection.labelKey) }}</h2>
-          <p class="mt-1.5 max-w-3xl text-sm leading-relaxed text-gray-500 dark:text-dark-300">{{ t(currentSection.descriptionKey) }}</p>
+          <h2 class="text-2xl font-semibold tracking-tight">{{ t('governance.smartOperations.title') }}</h2>
+          <p class="mt-1.5 max-w-3xl text-sm leading-relaxed text-gray-500 dark:text-dark-300">{{ t('governance.smartOperations.workspaceHint') }}</p>
         </div>
         <div class="flex flex-wrap gap-2">
-          <button class="btn btn-secondary" :disabled="working" @click="load"><Icon name="refresh" size="sm" class="mr-2" />{{ t('common.refresh') }}</button>
-          <button id="governance-add-site" class="btn btn-primary" :disabled="working" @click="onboarding = true"><Icon name="plus" size="sm" class="mr-2" />{{ t('governance.add') }}</button>
+          <button class="btn btn-secondary" :disabled="working || navigationLocked" @click="load"><Icon name="refresh" size="sm" class="mr-2" />{{ t('common.refresh') }}</button>
+          <button id="governance-add-site" class="btn btn-primary" :disabled="working || navigationLocked" @click="onboarding = true"><Icon name="plus" size="sm" class="mr-2" />{{ t('governance.add') }}</button>
         </div>
       </header>
+      <div class="grid min-w-0 items-start gap-5 xl:grid-cols-[17.5rem_minmax(0,1fr)]" data-test="smart-operations-workspace">
+      <aside class="min-w-0 xl:sticky xl:top-24" data-test="smart-operations-site-rail" :aria-label="t('governance.upstreamSites')">
+        <GovernanceSitesOverview compact :sites="sites" :selected-site-id="showOverview ? null : active?.id" :disabled="navigationLocked" @select="chooseSite" />
+      </aside>
+      <div class="min-w-0 space-y-4" data-test="smart-operations-content">
+      <SmartOperationsTabs v-model="tab" :disabled="navigationLocked" />
       <div :id="`governance-${tab}-panel`" role="tabpanel" :aria-labelledby="`governance-${tab}-tab`" tabindex="0" class="min-w-0 space-y-5 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500">
       <p v-if="error" role="alert" class="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-600 dark:border-red-900 dark:bg-red-900/10">{{ error }}</p>
       <p v-if="siteNotFound" role="status" class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-300">{{ t('governance.smartOperations.siteNotFound') }}</p>
-      <div v-if="showOverview && tab !== 'overview' && sites.length" class="flex items-start gap-3 rounded-xl border border-gray-200 bg-white p-4 dark:border-dark-600 dark:bg-dark-800">
-        <Icon name="server" size="md" class="mt-0.5 shrink-0 text-gray-500" />
-        <div><h3 class="text-sm font-medium">{{ t('governance.smartOperations.chooseSite') }}</h3><p class="mt-1 text-sm text-gray-500 dark:text-dark-300">{{ t('governance.smartOperations.chooseSiteHint') }}</p></div>
+      <div v-if="showOverview && sites.length" data-test="site-selection-empty" class="flex min-h-64 flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-gray-200 bg-white p-8 text-center dark:border-dark-600 dark:bg-dark-800">
+        <span class="rounded-2xl bg-gray-100 p-4 dark:bg-dark-700"><Icon name="server" size="lg" class="text-gray-500" /></span>
+        <div><h3 class="text-base font-semibold">{{ t('governance.smartOperations.chooseSite') }}</h3><p class="mt-2 max-w-sm text-sm leading-relaxed text-gray-500 dark:text-dark-300">{{ t('governance.smartOperations.chooseSiteHint') }}</p></div>
       </div>
+      <p v-if="busy && !active" role="status" class="p-8 text-center text-sm text-gray-500">{{ t('common.loading') }}</p>
       <p v-if="!busy && !sites.length" class="rounded-xl border border-dashed border-gray-200 p-8 text-center text-sm text-gray-500 dark:border-dark-600">{{ t('governance.empty') }}</p>
-      <GovernanceSitesOverview v-show="showOverview" v-if="sites.length" :sites="sites" :disabled="mutationBusy" @select="select" />
-      <section v-if="active" v-show="!showOverview" class="min-w-0 space-y-5">
+      <section v-if="active" v-show="!showOverview" data-test="active-site-workspace" class="min-w-0 space-y-4">
         <div class="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-dark-600 dark:bg-dark-800">
           <div class="flex flex-wrap items-center gap-3 p-4 sm:p-5">
             <span class="hidden rounded-xl bg-gray-100 p-3 text-gray-600 dark:bg-dark-700 dark:text-dark-200 sm:block"><Icon name="server" size="md" /></span>
             <div class="min-w-0 flex-1"><p class="mb-1 text-xs text-gray-500 dark:text-dark-300">{{ t('governance.smartOperations.activeSite') }}</p><h3 class="break-words text-lg font-semibold">{{ active.name }}</h3><p class="mt-1 break-all text-xs text-gray-500 dark:text-dark-300">{{ active.base_url }} · {{ active.platform }}</p></div>
             <span class="rounded-full bg-gray-100 px-2.5 py-1 text-xs dark:bg-dark-700">{{ t('governance.' + (siteStateKeys[active.status] || 'unknown')) }}</span>
-            <button id="governance-back-sites" type="button" class="btn btn-secondary text-sm" :disabled="working" @click="backToSites">{{ t('governance.smartOperations.backToSites') }}</button>
           </div>
           <div class="flex flex-wrap gap-2 border-t border-gray-100 bg-gray-50/60 px-4 py-3 dark:border-dark-700 dark:bg-dark-900/30 sm:px-5"><button id="governance-collect" class="btn btn-primary text-sm" :disabled="working || !active.has_credential" @click="sync"><Icon name="refresh" size="sm" class="mr-2" :class="busy ? 'animate-spin' : ''" />{{ busy ? t('common.loading') : t('governance.sync') }}</button><button id="governance-view-keys" data-test="view-keys" class="btn btn-secondary text-sm" :disabled="working" @click="openKeys()">{{ t('governance.viewKeys') }}</button><button class="btn btn-secondary text-sm" :disabled="working" @click="editing = true">{{ t('common.edit') }}</button><button id="governance-reconnect" class="btn btn-secondary text-sm" :disabled="working" @click="connecting = true">{{ t(active.has_credential ? 'governance.reconnect' : 'governance.connect') }}</button><button class="ml-auto flex min-h-11 min-w-11 items-center justify-center rounded-lg text-gray-500 hover:bg-red-50 hover:text-red-600 focus-visible:ring-2 focus-visible:ring-primary-500 disabled:opacity-50 dark:hover:bg-red-900/20" :disabled="working" :aria-label="t('common.delete')" @click="deleting = true"><Icon name="trash" size="sm" /></button></div>
         </div>
@@ -501,6 +506,8 @@ onUnmounted(() => {
           <div v-show="tab === 'history'" class="min-w-0 p-4 sm:p-5"><GovernanceHistory mode="history" :bindings="[]" :events="events" :checks="checks" :disabled="working" @acknowledge="acknowledge" @page="page" /></div>
         </div>
       </section>
+      </div>
+      </div>
       </div>
       <BaseDialog v-if="keysOpen && active" :show="true" :title="t('governance.groupKeys')" width="wide" :show-close-button="!keyBusy" :close-on-escape="!keyBusy" @close="closeKeys"><ManagedKeysPanel :key="active.id" :site-id="active.id" :snapshot-id="snapshot?.id || 0" :groups="snapshot?.catalog.groups || []" :selections="keySelections" :disabled="busy || importBusy || balanceBusy || editBusy || automationBusy || reconciliationBusy || rechargeBusy || modelBusy" @busy="keyBusy = $event" /></BaseDialog>
       <OnboardDialog

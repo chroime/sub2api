@@ -25,8 +25,8 @@ const visible = computed(() => props.sites.filter(site => `${site.name} ${site.b
 <template>
   <section v-if="compact" class="min-w-0 rounded-xl border border-gray-200 bg-white p-3 dark:border-dark-600 dark:bg-dark-800" data-test="sites-overview-compact">
     <header class="flex items-center justify-between gap-3">
-      <h2 class="truncate text-sm font-semibold">{{ t('governance.siteTotal') }}</h2>
-      <span data-test="site-count" class="shrink-0 text-sm tabular-nums text-gray-500">{{ sites.length }}</span>
+      <h2 class="truncate text-sm font-semibold">{{ t('governance.upstreamSites') }}</h2>
+      <span data-test="site-count" class="shrink-0 rounded-md bg-gray-100 px-2 py-0.5 text-xs tabular-nums text-gray-500 dark:bg-dark-700">{{ sites.length }}</span>
     </header>
     <div class="mt-3 space-y-2">
       <div class="relative min-w-0">
@@ -34,15 +34,26 @@ const visible = computed(() => props.sites.filter(site => `${site.name} ${site.b
         <input v-model="query" data-test="site-search" class="input w-full pl-9 text-sm" :placeholder="t('governance.searchSites')" :aria-label="t('governance.searchSites')" />
       </div>
       <div class="flex flex-wrap gap-1 rounded-lg bg-gray-100 p-1 dark:bg-dark-700">
-        <button v-for="option in (['all', 'attention', 'paused'] as const)" :key="option" type="button" class="min-h-8 rounded-md px-2 py-1 text-xs transition-colors" :class="filter === option ? 'bg-white font-medium text-gray-900 shadow-sm dark:bg-dark-600 dark:text-gray-100' : 'text-gray-500'" :aria-pressed="filter === option" @click="filter = option">{{ t(`governance.siteFilter_${option}`) }}</button>
+        <button v-for="option in (['all', 'attention', 'paused'] as const)" :key="option" type="button" class="min-h-11 flex-1 rounded-md px-2 py-1 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500" :class="filter === option ? 'bg-white font-medium text-gray-900 shadow-sm dark:bg-dark-600 dark:text-gray-100' : 'text-gray-500'" :aria-pressed="filter === option" @click="filter = option">{{ t(`governance.siteFilter_${option}`) }}</button>
       </div>
     </div>
-    <nav :aria-label="t('governance.upstreamSites')" data-test="site-list" class="mt-3 max-h-[min(60vh,32rem)] overflow-y-auto rounded-lg border border-gray-200 dark:border-dark-600">
-      <button v-for="site in visible" :id="'governance-site-' + site.id" :key="site.id" type="button" class="site-row grid w-full min-w-0 gap-2 border-b border-gray-100 p-3 text-left transition-colors last:border-b-0 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-500 disabled:opacity-60 dark:border-dark-700 dark:hover:bg-dark-700" :class="selectedSiteId === site.id ? 'site-row--selected bg-primary-50 dark:bg-primary-900/20' : ''" :aria-current="selectedSiteId === site.id ? 'true' : undefined" :disabled="disabled" @click="emit('select', site)">
-        <div class="flex min-w-0 items-center gap-2"><span class="rounded-lg bg-primary-50 p-1.5 text-primary-700 dark:bg-primary-900/20 dark:text-primary-300"><Icon name="server" size="sm" /></span><div class="min-w-0"><p class="truncate text-sm font-semibold">{{ site.name }}</p><p class="truncate text-xs text-gray-500">{{ site.base_url }}</p></div></div>
-        <div class="flex min-w-0 items-center justify-between gap-2 text-xs"><span class="truncate rounded-full px-2 py-0.5 font-medium" :class="needsAttention(site) ? 'bg-amber-50 text-amber-800 dark:bg-amber-900/20 dark:text-amber-300' : 'bg-primary-50 text-primary-700 dark:bg-primary-900/20 dark:text-primary-300'">{{ t('governance.' + (siteStateKeys[site.status] || 'unknown')) }}</span><time class="shrink-0 tabular-nums text-gray-500">{{ formatGovernanceTime(site.last_sync_at) }}</time></div>
+    <nav :aria-label="t('governance.upstreamSites')" data-test="site-list" class="mt-3 max-h-64 overflow-y-auto overscroll-contain rounded-lg border border-gray-200 dark:border-dark-600 xl:max-h-[calc(100dvh-22rem)]">
+      <button v-for="site in visible" :id="'governance-site-' + site.id" :key="site.id" type="button" class="site-row grid w-full min-w-0 gap-2 border-b border-l-2 border-b-gray-100 p-3 text-left transition-colors last:border-b-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-b-dark-700" :class="selectedSiteId === site.id ? 'site-row--selected border-l-primary-500 bg-primary-50 dark:bg-primary-900/20' : 'border-l-transparent hover:bg-gray-50 dark:hover:bg-dark-700'" :aria-current="selectedSiteId === site.id ? 'true' : undefined" :disabled="disabled" @click="emit('select', site)">
+        <div class="flex min-w-0 items-start gap-2">
+          <span class="shrink-0 rounded-lg bg-gray-100 p-1.5 text-gray-500 dark:bg-dark-700 dark:text-dark-200"><Icon name="server" size="sm" /></span>
+          <div class="min-w-0"><p class="truncate text-sm font-semibold" :title="site.name">{{ site.name }}</p><p class="mt-0.5 truncate text-xs text-gray-500" :title="site.base_url">{{ site.base_url }}</p></div>
+        </div>
+        <div class="flex min-w-0 flex-wrap items-center gap-1.5 text-xs">
+          <span class="rounded-full px-2 py-0.5 font-medium" :class="needsAttention(site) ? 'bg-amber-50 text-amber-800 dark:bg-amber-900/20 dark:text-amber-300' : 'bg-gray-100 text-gray-600 dark:bg-dark-700 dark:text-dark-200'">{{ t('governance.' + (siteStateKeys[site.status] || 'unknown')) }}</span>
+          <span v-if="site.balance_monitor_status?.state === 'low'" class="font-medium text-amber-700 dark:text-amber-400">{{ t('governance.balanceState_low') }}</span>
+          <span class="ml-auto text-gray-500">{{ site.platform === 'sub2api' ? 'Sub2API' : 'New API' }}</span>
+        </div>
+        <div class="space-y-1 text-xs text-gray-500 dark:text-dark-300">
+          <p>{{ t(site.enabled ? 'governance.autoOn' : 'governance.autoOff') }}<span v-if="site.enabled"> · {{ site.interval_minutes }} {{ t('governance.minutes') }}</span></p>
+          <time class="block tabular-nums" :datetime="site.last_sync_at || undefined">{{ formatGovernanceTime(site.last_sync_at) }}</time>
+        </div>
       </button>
-      <p v-if="!visible.length" class="p-5 text-center text-sm text-gray-500">{{ t('governance.noMatchingSites') }}</p>
+      <p v-if="!visible.length" class="p-5 text-center text-sm text-gray-500">{{ t(sites.length ? 'governance.noMatchingSites' : 'governance.empty') }}</p>
     </nav>
   </section>
   <section v-else class="min-w-0 space-y-5" data-test="sites-overview">

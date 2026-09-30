@@ -1,6 +1,7 @@
 export default {
   smartOperations: {
     title: "Smart Operations",
+    workspaceHint: "Switch upstreams while managing groups, model monitoring, and automation in one workspace.",
     description: "Manage upstream connections, group imports, model monitoring, and automation in one place.",
     sections: {
       overview: "Upstream access",

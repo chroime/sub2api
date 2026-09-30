@@ -1,6 +1,7 @@
 export default {
   smartOperations: {
     title: "智能运维",
+    workspaceHint: "随时切换上游，在同一工作台管理分组、模型监测与自动化。",
     description: "集中管理上游接入、分组导入、模型监测与自动化任务。",
     sections: {
       overview: "上游接入",
