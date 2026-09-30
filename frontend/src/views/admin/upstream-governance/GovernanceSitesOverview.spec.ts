@@ -75,4 +75,11 @@ describe('GovernanceSitesOverview compact mode', () => {
     expect(wrapper.find('#governance-site-1').exists()).toBe(false)
     expect(wrapper.get('#governance-site-2').attributes('aria-current')).toBe('true')
   })
+  it('shows confirmed upstream-key incidents in the compact site rail and attention filter', async () => {
+    const wrapper = render({ sites: [{ ...sites[0], key_issue_count: 2 }, sites[1]] })
+    expect(wrapper.get('#governance-site-1 [data-test=site-key-issues]').text()).toContain('2')
+    await wrapper.findAll('button[aria-pressed]').find(button => button.text() === en.siteFilter_attention)!.trigger('click')
+    expect(wrapper.find('#governance-site-1').exists()).toBe(true)
+    expect(wrapper.find('#governance-site-2').exists()).toBe(false)
+  })
 })

@@ -245,6 +245,7 @@ func ProvideUpstreamGovernanceService(db *sql.DB, admin AdminService, upstream H
 		notifier.mail = email
 	}
 	svc.SetBalanceNotifier(notifier)
+	svc.SetKeyNotifier(notifier)
 	svc.SetModelNotifier(notifier)
 	configureGovernanceBrowser(svc, proxies)
 	svc.Start()

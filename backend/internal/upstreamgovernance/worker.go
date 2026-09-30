@@ -252,7 +252,9 @@ func (s *Service) runSiteDue(ctx context.Context, siteID int64) error {
 		return nil
 	}
 	var syncErr error
+	didSync := false
 	if site.SessionCipher != "" && !site.NextSyncAt.After(s.now()) {
+		didSync = true
 		// Move this site out of the next batch before network work. In particular,
 		// an interrupted collection must not stay oldest and starve other sites.
 		next := addMinutes(s.now(), int64(site.IntervalMinutes))
@@ -272,6 +274,29 @@ func (s *Service) runSiteDue(ctx context.Context, siteID int64) error {
 				if err = s.store.AddEvent(ctx, &Event{SiteID: site.ID, Kind: "sync_failed", After: "timeout", CreatedAt: s.now()}); err != nil {
 					return err
 				}
+			}
+		}
+	}
+	if site.SessionCipher != "" && (!didSync || syncErr == nil) {
+		// Collection may have rotated the management session. The key inventory
+		// must use that persisted session, not the pre-collection site snapshot.
+		if didSync {
+			fresh, readErr := s.store.GetSite(ctx, site.ID)
+			if readErr != nil {
+				return readErr
+			}
+			site = fresh
+		}
+		due, dueErr := s.keyAuditDue(ctx, site.ID, s.now())
+		if dueErr != nil {
+			return dueErr
+		}
+		if didSync || due {
+			auditCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+			auditErr := s.auditManagedKeysLocked(auditCtx, *site)
+			cancel()
+			if auditErr != nil && !errors.Is(auditErr, ErrUnsupported) {
+				log.Printf("[UpstreamGovernance] scheduled key audit: %s", ErrorCode(auditErr))
 			}
 		}
 	}

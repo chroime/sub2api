@@ -15,6 +15,7 @@ export interface Site extends SiteInput {
   status: string
   last_error: string
   last_sync_at: string | null
+  key_issue_count?: number
   balance_monitor?: BalanceMonitor
   balance_monitor_status?: BalanceMonitorStatus
 }
@@ -231,6 +232,33 @@ export interface ManagedKey {
   remote_key_id: string
   marker: string
   has_key: boolean
+  health?: {
+    status: 'unknown' | 'present' | 'suspected_missing' | 'confirmed_missing' | 'group_changed'
+    last_checked_at?: string | null
+    last_verified_at?: string | null
+    missing_count: number
+    first_missing_at?: string | null
+    next_check_at?: string | null
+    error_code?: string
+  }
+  created_at: string
+  updated_at: string
+}
+export interface KeyRepairResult {
+  id: string
+  managed_key_id: number
+  site_id: number
+  remote_group_id: string
+  platform: Transport
+  account_id: number
+  account_name: string
+  old_remote_key_id: string
+  planned_key_name?: string
+  candidate_remote_key_id?: string
+  stage: 'prepared' | 'post_intent' | 'awaiting_visibility' | 'candidate_ready' | 'committed' | 'conflict' | 'abandoned'
+  can_reprepare?: boolean
+  can_abandon?: boolean
+  error_code?: string
   created_at: string
   updated_at: string
 }
@@ -461,6 +489,21 @@ const api = {
   },
   async keys(id: number) {
     return (await apiClient.get<ManagedKey[]>(`${site(id)}/keys`)).data
+  },
+  async auditKeys(id: number) {
+    return (await apiClient.post<ManagedKey[]>(`${site(id)}/keys/audit`, {}, { timeout: 30000 })).data
+  },
+  async keyRepair(id: number, keyId: number) {
+    return (await apiClient.get<KeyRepairResult | null>(`${site(id)}/keys/${keyId}/repairs`)).data
+  },
+  async prepareKeyRepair(id: number, keyId: number, input: { site_version: number }) {
+    return (await apiClient.post<KeyRepairResult>(`${site(id)}/keys/${keyId}/repairs`, input, { timeout: 30000 })).data
+  },
+  async confirmKeyRepair(id: number, keyId: number, repairId: string) {
+    return (await apiClient.post<KeyRepairResult>(`${site(id)}/keys/${keyId}/repairs/${encodeURIComponent(repairId)}/confirm`, {}, { timeout: 120000 })).data
+  },
+  async abandonKeyRepair(id: number, keyId: number, repairId: string, input: { acknowledge_uncertain_create: true }) {
+    return (await apiClient.post<KeyRepairResult>(`${site(id)}/keys/${keyId}/repairs/${encodeURIComponent(repairId)}/abandon`, input, { timeout: 30000 })).data
   },
   async createKeys(id: number, input: { snapshot_id: number; selections: KeySelection[] }) {
     return (await apiClient.post<{ items: KeyOutcome[] }>(`${site(id)}/keys`, input, { timeout: 120000 })).data

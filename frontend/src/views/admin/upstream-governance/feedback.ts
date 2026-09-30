@@ -3,6 +3,10 @@ const reasonKeys: Record<string, string> = {
   site_busy: 'siteBusy',
   site_in_use: 'siteInUse',
   reauth_required: 'reauth',
+  upstream_key_missing: 'upstreamKeyMissing',
+  upstream_key_unverifiable: 'upstreamKeyUnverifiable',
+  candidate_not_visible: 'keyCandidateNotVisible',
+  manually_abandoned: 'keyRepairAbandonedReason',
   unsupported_contract: 'unsupported',
   persistent_encryption_required: 'encryption',
   invalid_input: 'invalid',
@@ -32,6 +36,11 @@ export const eventKeys: Record<string, string> = {
   probe_failed: 'probeFailed',
   probe_recovered: 'probeRecovered',
   auto_reauthorization_required: 'autoReauthorizationRequired',
+  key_missing_suspected: 'keyMissingSuspected',
+  key_missing_confirmed: 'keyMissingConfirmed',
+  key_recovered: 'keyRecovered',
+  key_account_paused: 'keyAccountPaused',
+  key_account_restored: 'keyAccountRestored',
 }
 
 export const siteStateKeys: Record<string, string> = {

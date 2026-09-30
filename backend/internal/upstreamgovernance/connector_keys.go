@@ -104,10 +104,12 @@ func (c *platformConnector) ListKeyInventory(ctx context.Context, site Site, ses
 	for _, key := range keys {
 		groupID := ""
 		if site.Platform == "sub2api" {
-			if key.GroupID == nil || *key.GroupID <= 0 {
+			if key.GroupID != nil && *key.GroupID < 0 {
 				return nil, connectorKeyFailure(site, "inventory_group", ErrUnsupported)
 			}
-			groupID = strconv.FormatInt(*key.GroupID, 10)
+			if key.GroupID != nil && *key.GroupID > 0 {
+				groupID = strconv.FormatInt(*key.GroupID, 10)
+			}
 		} else {
 			if len(key.Group) == 0 {
 				return nil, connectorKeyFailure(site, "inventory_group", ErrUnsupported)
@@ -217,21 +219,96 @@ func connectorFindPlannedKey(keys []connectorKey, group RemoteGroup, marker, pla
 	return match, nil
 }
 
+func validKeyCreationPlan(plan KeyCreationPlan) bool {
+	if !validKeyDisplayName(plan.Name) || plan.ExistingIDs == nil || len(plan.ExistingIDs) > 2000 {
+		return false
+	}
+	seen := make(map[int64]bool, len(plan.ExistingIDs))
+	for _, id := range plan.ExistingIDs {
+		if id <= 0 || seen[id] {
+			return false
+		}
+		seen[id] = true
+	}
+	return true
+}
+
+// RecoverPlannedKey only reads the outcome of a previously attempted create.
+// In particular, an absent candidate must remain absent: it never calls POST
+// on a creation endpoint, even when the upstream list has caught up.
+func (c *platformConnector) RecoverPlannedKey(ctx context.Context, s Site, session Session, group RemoteGroup, plan KeyCreationPlan) (RemoteKey, bool, error) {
+	if session.UserID <= 0 || group.ID == "" || !validKeyCreationPlan(plan) {
+		return RemoteKey{}, false, ErrInvalid
+	}
+	if s.Platform != "sub2api" && s.Platform != "newapi" {
+		return RemoteKey{}, false, ErrUnsupported
+	}
+	verified, err := c.identity(ctx, s, session)
+	if err != nil {
+		return RemoteKey{}, false, connectorKeyFailure(s, "repair_identity", err)
+	}
+	keys, err := c.keyList(ctx, s, verified)
+	if err != nil {
+		return RemoteKey{}, false, err
+	}
+	for _, key := range keys {
+		if s.Platform == "sub2api" && key.GroupID != nil && *key.GroupID < 0 {
+			return RemoteKey{}, false, connectorKeyFailure(s, "repair_group", ErrUnsupported)
+		}
+	}
+	match, err := connectorFindPlannedKey(keys, group, plan.Name, s.Platform, &plan)
+	if err != nil {
+		return RemoteKey{}, false, err
+	}
+	if match == nil {
+		return RemoteKey{}, false, nil
+	}
+	key, err := c.readKeyPlaintext(ctx, s, verified, *match)
+	if err != nil {
+		return RemoteKey{}, false, err
+	}
+	return key, true, nil
+}
+
+// PostPlannedKey sends only the create request for an already persisted repair
+// intent. Every request failure remains uncertain, including factory errors and
+// rejected responses, because the caller cannot prove the key was not created.
+func (c *platformConnector) PostPlannedKey(ctx context.Context, s Site, session Session, group RemoteGroup, idempotencyKey string, plan KeyCreationPlan) error {
+	if session.UserID <= 0 || group.ID == "" || idempotencyKey == "" || len(idempotencyKey) > 128 || !validHeaderValue(idempotencyKey, 128) || !validKeyCreationPlan(plan) {
+		return errConnectorUncertain
+	}
+	path := "/api/token/"
+	body := map[string]any{"name": plan.Name, "group": group.ID, "expired_time": -1, "unlimited_quota": true, "model_limits_enabled": false, "cross_group_retry": false, "auto_groups": []string{}}
+	var headers http.Header
+	switch s.Platform {
+	case "sub2api":
+		id, err := strconv.ParseInt(group.ID, 10, 64)
+		if err != nil || id <= 0 {
+			return errConnectorUncertain
+		}
+		path = "/api/v1/keys"
+		body = map[string]any{"name": plan.Name, "group_id": id}
+		headers = make(http.Header)
+		headers.Set("Idempotency-Key", idempotencyKey)
+	case "newapi":
+	default:
+		return errConnectorUncertain
+	}
+	if _, _, err := c.request(ctx, s, session, http.MethodPost, path, body, headers, true); err != nil {
+		connectorKeyFailure(s, "repair_create", err)
+		return errConnectorUncertain
+	}
+	return nil
+}
+
 func (c *platformConnector) EnsureKey(ctx context.Context, s Site, session Session, group RemoteGroup, marker string, plan *KeyCreationPlan) (RemoteKey, error) {
 	if marker == "" || len(marker) > 128 || group.ID == "" {
 		return RemoteKey{}, ErrInvalid
 	}
 	name := marker
 	if plan != nil {
-		if !validKeyDisplayName(plan.Name) || plan.ExistingIDs == nil || len(plan.ExistingIDs) > 2000 {
+		if !validKeyCreationPlan(*plan) {
 			return RemoteKey{}, ErrInvalid
-		}
-		seen := map[int64]bool{}
-		for _, id := range plan.ExistingIDs {
-			if id <= 0 || seen[id] {
-				return RemoteKey{}, ErrInvalid
-			}
-			seen[id] = true
 		}
 		name = plan.Name
 	}
@@ -278,20 +355,24 @@ func (c *platformConnector) EnsureKey(ctx context.Context, s Site, session Sessi
 			return RemoteKey{}, errConnectorUncertain
 		}
 	}
+	return c.readKeyPlaintext(ctx, s, session, *match)
+}
+
+func (c *platformConnector) readKeyPlaintext(ctx context.Context, s Site, session Session, match connectorKey) (RemoteKey, error) {
 	id := strconv.FormatInt(match.ID, 10)
 	key := match.Key
 	if s.Platform == "newapi" {
 		var response struct {
 			Key string `json:"key"`
 		}
-		if e = c.data(ctx, s, session, "POST", "/api/token/"+id+"/key", nil, &response); e != nil {
-			return RemoteKey{}, connectorKeyFailure(s, "reveal", e)
+		if err := c.data(ctx, s, session, "POST", "/api/token/"+id+"/key", nil, &response); err != nil {
+			return RemoteKey{}, connectorKeyFailure(s, "reveal", err)
 		}
 		key = response.Key
 	} else if key == "" || strings.Contains(key, "*") {
 		var response connectorKey
-		if e = c.data(ctx, s, session, "GET", "/api/v1/keys/"+id, nil, &response); e != nil {
-			return RemoteKey{}, connectorKeyFailure(s, "read", e)
+		if err := c.data(ctx, s, session, "GET", "/api/v1/keys/"+id, nil, &response); err != nil {
+			return RemoteKey{}, connectorKeyFailure(s, "read", err)
 		}
 		if response.ID != match.ID {
 			return RemoteKey{}, connectorKeyFailure(s, "read_identity", ErrUnsupported)

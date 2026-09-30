@@ -6,9 +6,12 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -22,6 +25,21 @@ import (
 )
 
 type governanceImportFixtureCipher struct{}
+
+type governanceImportKeyUpstream struct{ service.HTTPUpstream }
+
+func (governanceImportKeyUpstream) Do(req *http.Request, _ string, _ int64, _ int) (*http.Response, error) {
+	var body string
+	switch {
+	case req.Method == http.MethodGet && req.URL.Host == "fixture.example" && req.URL.Path == "/api/v1/user/profile":
+		body = `{"code":0,"data":{"id":5,"username":"fixture"}}`
+	case req.Method == http.MethodGet && req.URL.Host == "fixture.example" && req.URL.Path == "/api/v1/keys" && req.URL.Query().Get("page") == "1":
+		body = `{"code":0,"data":{"items":[{"id":101,"group_id":8,"name":"fixture-first"},{"id":102,"group_id":9,"name":"fixture-second"}],"total":2,"page":1}}`
+	default:
+		return nil, fmt.Errorf("unexpected fixture key inventory request: %s %s", req.Method, req.URL.Path)
+	}
+	return &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(body)), Request: req}, nil
+}
 
 func (governanceImportFixtureCipher) Encrypt(value string) (string, error) {
 	return base64.StdEncoding.EncodeToString([]byte(value)), nil
@@ -104,8 +122,8 @@ func TestGovernancePostgresImportSettingsPreserveConcurrentUsage(t *testing.T) {
 	cfg.Totp.EncryptionKeyConfigured = true
 	admin := service.NewAdminService(cfg, nil, groups, racing, nil, nil, nil, nil, nil, nil, nil, nil, nil, client, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	cipher := governanceImportFixtureCipher{}
-	engine := service.ProvideUpstreamGovernanceService(fixture, admin, nil, nil, cipher, cfg, nil, nil, nil)
-	engine.Stop() // No worker or remote API call is part of this local fixture.
+	engine := service.ProvideUpstreamGovernanceService(fixture, admin, governanceImportKeyUpstream{}, nil, cipher, cfg, nil, nil, nil)
+	engine.Stop() // Only the synthetic inventory above is used by this local fixture.
 	store := gov.NewSQLStore(fixture)
 	session, _ := cipher.Encrypt(`{"access_token":"fixture-session","user_id":5}`)
 	site := &gov.Site{Name: "Fixture", Platform: "sub2api", BaseURL: "https://fixture.example", IntervalMinutes: 15, SessionCipher: session, NextSyncAt: time.Now()}
@@ -116,8 +134,8 @@ func TestGovernancePostgresImportSettingsPreserveConcurrentUsage(t *testing.T) {
 	selection := []gov.Selection{{RemoteGroupID: "8", Platform: "openai", LocalGroupIDs: []int64{secondGroup.ID, group.ID}, CostMultiplier: rate}}
 	preview, err := engine.Preview(ctx, site.ID, selection)
 	require.NoError(t, err)
-	keyCipher, _ := cipher.Encrypt(`{"id":"fixture-key-id","key":"fixture-inference-key"}`)
-	require.NoError(t, store.SaveManagedKey(ctx, &gov.ManagedKey{SiteID: site.ID, RemoteGroupID: "8", Platform: "openai", RemoteKeyID: "fixture-key-id", Marker: preview.Rows[0].Marker, OwnerUserID: 5, KeyCipher: keyCipher}))
+	keyCipher, _ := cipher.Encrypt(`{"id":"101","key":"fixture-inference-key"}`)
+	require.NoError(t, store.SaveManagedKey(ctx, &gov.ManagedKey{SiteID: site.ID, RemoteGroupID: "8", Platform: "openai", RemoteKeyID: "101", Marker: preview.Rows[0].Marker, OwnerUserID: 5, KeyCipher: keyCipher}))
 	// A native create with only rate sync requested must persist both switches.
 	enabled := true
 	created, err := admin.CreateAccount(ctx, &service.CreateAccountInput{Name: "before", Platform: "openai", Type: "apikey", Credentials: map[string]any{"api_key": "fixture-inference-key", "base_url": site.BaseURL, "custom": "keep"}, Extra: map[string]any{"upstream_governance_marker": preview.Rows[0].Marker, "unrelated": "keep", "quota_used": 2.0}, Concurrency: 2, RateMultiplier: &rate, RateSyncEnabled: &enabled, GroupIDs: []int64{group.ID}, SkipMixedChannelCheck: true})
@@ -222,9 +240,9 @@ func TestGovernancePostgresImportSettingsPreserveConcurrentUsage(t *testing.T) {
 	newSelection := []gov.Selection{{RemoteGroupID: "9", Platform: "openai", LocalGroupIDs: []int64{secondGroup.ID, thirdGroup.ID}, CostMultiplier: 1}}
 	newPreview, err := engine.Preview(ctx, site.ID, newSelection)
 	require.NoError(t, err)
-	secondKeyCipher, err := cipher.Encrypt(`{"id":"second-fixture-key","key":"second-inference-key"}`)
+	secondKeyCipher, err := cipher.Encrypt(`{"id":"102","key":"second-inference-key"}`)
 	require.NoError(t, err)
-	require.NoError(t, store.SaveManagedKey(ctx, &gov.ManagedKey{SiteID: site.ID, RemoteGroupID: "9", Platform: "openai", RemoteKeyID: "second-fixture-key", Marker: newPreview.Rows[0].Marker, OwnerUserID: 5, KeyCipher: secondKeyCipher}))
+	require.NoError(t, store.SaveManagedKey(ctx, &gov.ManagedKey{SiteID: site.ID, RemoteGroupID: "9", Platform: "openai", RemoteKeyID: "102", Marker: newPreview.Rows[0].Marker, OwnerUserID: 5, KeyCipher: secondKeyCipher}))
 	_, err = fixture.Exec(fmt.Sprintf(`ALTER TABLE account_groups ADD CONSTRAINT reject_partial_import CHECK (group_id<>%d OR account_id=%d)`, thirdGroup.ID, created.ID))
 	require.NoError(t, err)
 	result, err = engine.Apply(ctx, site.ID, newPreview.ID)

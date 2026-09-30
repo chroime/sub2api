@@ -8,6 +8,15 @@ vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
 const binding: Binding = { id: 5, site_id: 1, remote_group_id: 'upstream-7', platform: 'openai', local_group_id: 3, local_group_ids: [3, 4], account_id: 8, account_name: 'upstream.example--0.2', probe_enabled: false, probe_model: '', probe_interval_minutes: 30 }
 
 describe('imported binding names', () => {
+  it('names confirmed key loss and local account protection in administrator history', () => {
+    const wrapper = mount(GovernanceHistory, { props: { mode: 'history', bindings: [], events: { items: [
+      { id: 1, site_id: 1, kind: 'key_missing_confirmed', resource: 'managed-marker', before: 'suspected_missing', after: 'confirmed_missing', acknowledged: false, created_at: '2026-09-30T08:00:00Z' },
+      { id: 2, site_id: 1, kind: 'key_account_paused', resource: 'managed-marker', before: '', after: 'upstream_key_missing', acknowledged: false, created_at: '2026-09-30T08:01:00Z' },
+    ], total: 2, page: 1, page_size: 20, pages: 1 }, checks: null } })
+    expect(wrapper.text()).toContain('governance.keyMissingConfirmed')
+    expect(wrapper.text()).toContain('governance.keyAccountPaused')
+    wrapper.unmount()
+  })
   it('labels automatic reauthorization events without exposing credential details', () => {
     const wrapper = mount(GovernanceHistory, {
       props: {

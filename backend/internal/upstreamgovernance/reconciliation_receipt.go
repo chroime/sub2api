@@ -25,7 +25,7 @@ func ManagedPatchAlreadyApplied(a ManagedLocalAccount, p ManagedAccountPatch) bo
 		return false
 	}
 	if p.Availability == "pause" {
-		return a.Status == p.Expected.Status && !a.Schedulable && a.PauseToken == p.OperationID && a.PauseMarker == p.Marker && a.PauseIdentity == a.Identity
+		return a.Status == p.Expected.Status && !a.Schedulable && a.PauseToken == p.OperationID && a.PauseMarker == p.Marker && a.PauseIdentity == a.Identity && a.PauseReason == p.PauseReason
 	}
 	if p.Availability == "restore" {
 		return a.Status == p.Expected.Status && a.Schedulable && a.PauseToken == ""

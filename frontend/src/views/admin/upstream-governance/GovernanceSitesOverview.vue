@@ -17,7 +17,7 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{ select: [site: Site] }>()
 const { t } = useI18n()
 const query = ref(''), filter = ref<'all' | 'attention' | 'paused'>('all')
-const needsAttention = (site: Site) => !!site.last_error || site.status === 'reauth_required' || site.balance_monitor_status?.state === 'low' || !!site.balance_monitor_status?.last_error
+const needsAttention = (site: Site) => !!site.last_error || site.status === 'reauth_required' || site.balance_monitor_status?.state === 'low' || !!site.balance_monitor_status?.last_error || !!site.key_issue_count
 const attention = computed(() => props.sites.filter(needsAttention).length)
 const collecting = computed(() => props.sites.filter(site => site.enabled).length)
 const visible = computed(() => props.sites.filter(site => `${site.name} ${site.base_url}`.toLowerCase().includes(query.value.trim().toLowerCase()) && (filter.value === 'all' || (filter.value === 'attention' ? needsAttention(site) : !site.enabled))).sort((a, b) => Number(needsAttention(b)) - Number(needsAttention(a)) || a.id - b.id))
@@ -46,6 +46,7 @@ const visible = computed(() => props.sites.filter(site => `${site.name} ${site.b
         <div class="flex min-w-0 flex-wrap items-center gap-1.5 text-xs">
           <span class="rounded-full px-2 py-0.5 font-medium" :class="needsAttention(site) ? 'bg-amber-50 text-amber-800 dark:bg-amber-900/20 dark:text-amber-300' : 'bg-gray-100 text-gray-600 dark:bg-dark-700 dark:text-dark-200'">{{ t('governance.' + (siteStateKeys[site.status] || 'unknown')) }}</span>
           <span v-if="site.balance_monitor_status?.state === 'low'" class="font-medium text-amber-700 dark:text-amber-400">{{ t('governance.balanceState_low') }}</span>
+          <span v-if="site.key_issue_count" data-test="site-key-issues" class="font-medium text-red-700 dark:text-red-400">{{ t('governance.keyIssues', { count: site.key_issue_count }) }}</span>
           <span class="ml-auto text-gray-500">{{ site.platform === 'sub2api' ? 'Sub2API' : 'New API' }}</span>
         </div>
         <div class="space-y-1 text-xs text-gray-500 dark:text-dark-300">

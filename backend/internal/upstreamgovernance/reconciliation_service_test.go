@@ -65,6 +65,7 @@ type reconciliationLocalFixture struct {
 	LocalAccounts
 	account    ManagedLocalAccount
 	calls      int
+	failPatch  bool
 	afterApply func()
 }
 
@@ -75,7 +76,13 @@ func (l *reconciliationLocalFixture) InspectManagedAccount(_ context.Context, b 
 	v := l.account
 	return &v, nil
 }
-func (l *reconciliationLocalFixture) ApplyManagedPatch(_ context.Context, p ManagedAccountPatch) (*ManagedLocalAccount, error) {
+func (l *reconciliationLocalFixture) ApplyManagedPatch(ctx context.Context, p ManagedAccountPatch) (*ManagedLocalAccount, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if l.failPatch {
+		return nil, errors.New("fixture patch failure")
+	}
 	if ManagedPatchAlreadyApplied(l.account, p) {
 		a := l.account
 		return &a, nil
@@ -97,12 +104,14 @@ func (l *reconciliationLocalFixture) ApplyManagedPatch(_ context.Context, p Mana
 		l.account.PauseToken = p.OperationID
 		l.account.PauseMarker = p.Marker
 		l.account.PauseIdentity = l.account.Identity
+		l.account.PauseReason = p.PauseReason
 	}
 	if p.Availability == "restore" {
 		l.account.Schedulable = true
 		l.account.PauseToken = ""
 		l.account.PauseMarker = ""
 		l.account.PauseIdentity = ""
+		l.account.PauseReason = ""
 	}
 	l.account.Receipt = p.OperationID
 	l.calls++

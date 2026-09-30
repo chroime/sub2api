@@ -24,3 +24,11 @@ func TestSaveKeyHealthRejectsInvalidObservationBeforeWrite(t *testing.T) {
 	err := store.(KeyHealthStore).SaveKeyHealth(t.Context(), key, KeyHealth{Status: "confirmed_missing", MissingCount: -1})
 	require.ErrorIs(t, err, ErrInvalid)
 }
+
+func TestCountKeyIssuesReturnsConfirmedCountsOnly(t *testing.T) {
+	store, mock := storeFixture(t)
+	mock.ExpectQuery(`SELECT site_id, COUNT\(\*\) FROM upstream_governance_keys`).WillReturnRows(sqlmock.NewRows([]string{"site_id", "count"}).AddRow(int64(5), int64(2)))
+	counts, err := store.(KeyIssueCounter).CountKeyIssues(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, map[int64]int{5: 2}, counts)
+}

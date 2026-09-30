@@ -33,6 +33,20 @@ describe('governance confirmation boundary', () => {
     await api.sync(2)
     expect(apiClient.post).toHaveBeenLastCalledWith('/admin/upstream-governance/sites/2/sync', undefined, { timeout: 300000 })
   })
+  it('scopes read-only key audit and explicit replacement steps to the selected site and key', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue({ data: { stage: 'prepared' } })
+    vi.mocked(apiClient.get).mockResolvedValue({ data: null })
+    await api.auditKeys(5)
+    expect(apiClient.post).toHaveBeenLastCalledWith('/admin/upstream-governance/sites/5/keys/audit', {}, { timeout: 30000 })
+    await api.keyRepair(5, 9)
+    expect(apiClient.get).toHaveBeenLastCalledWith('/admin/upstream-governance/sites/5/keys/9/repairs')
+    await api.prepareKeyRepair(5, 9, { site_version: 3 })
+    expect(apiClient.post).toHaveBeenLastCalledWith('/admin/upstream-governance/sites/5/keys/9/repairs', { site_version: 3 }, { timeout: 30000 })
+    await api.confirmKeyRepair(5, 9, 'repair/id')
+    expect(apiClient.post).toHaveBeenLastCalledWith('/admin/upstream-governance/sites/5/keys/9/repairs/repair%2Fid/confirm', {}, { timeout: 120000 })
+    await api.abandonKeyRepair(5, 9, 'repair/id', { acknowledge_uncertain_create: true })
+    expect(apiClient.post).toHaveBeenLastCalledWith('/admin/upstream-governance/sites/5/keys/9/repairs/repair%2Fid/abandon', { acknowledge_uncertain_create: true }, { timeout: 30000 })
+  })
   it('previews selections without applying or creating keys', async () => {
     vi.mocked(apiClient.post).mockResolvedValue({ data: { id: 'frozen' } })
     const selections = [

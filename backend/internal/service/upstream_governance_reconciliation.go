@@ -53,11 +53,12 @@ func GovernanceManagedAccount(a *Account) gov.ManagedLocalAccount {
 		Token    string `json:"token"`
 		Marker   string `json:"marker"`
 		Identity string `json:"identity"`
+		Reason   string `json:"reason"`
 	}
 	// Decode through the existing canonical JSON helper to support both typed
 	// test values and maps returned from JSONB.
 	decodeGovernanceValue(a.Extra[gov.GovernancePauseExtraKey], &pause)
-	return gov.ManagedLocalAccount{ID: a.ID, Identity: identity, Name: a.Name, Rate: a.BillingRateMultiplier(), Status: a.Status, Schedulable: a.Schedulable, CanRestore: a.Status == StatusActive && (!a.AutoPauseOnExpired || a.ExpiresAt == nil || time.Now().Before(*a.ExpiresAt)), NativeRateSync: upstreamBillingRateSyncEnabled(a), RateOwner: a.GetExtraString(gov.GovernanceRateOwnerExtraKey), PauseToken: pause.Token, PauseMarker: pause.Marker, PauseIdentity: pause.Identity, Receipt: a.GetExtraString(gov.GovernanceReceiptExtraKey)}
+	return gov.ManagedLocalAccount{ID: a.ID, Identity: identity, Name: a.Name, Rate: a.BillingRateMultiplier(), Status: a.Status, Schedulable: a.Schedulable, CanRestore: a.Status == StatusActive && (!a.AutoPauseOnExpired || a.ExpiresAt == nil || time.Now().Before(*a.ExpiresAt)), NativeRateSync: upstreamBillingRateSyncEnabled(a), RateOwner: a.GetExtraString(gov.GovernanceRateOwnerExtraKey), PauseToken: pause.Token, PauseMarker: pause.Marker, PauseIdentity: pause.Identity, PauseReason: pause.Reason, Receipt: a.GetExtraString(gov.GovernanceReceiptExtraKey)}
 }
 func (l *governanceLocalAccounts) InspectManagedAccount(ctx context.Context, b gov.Binding) (*gov.ManagedLocalAccount, error) {
 	if b.AccountID <= 0 {

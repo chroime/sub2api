@@ -157,7 +157,7 @@ func TestSQLStorePaginationBounded(t *testing.T) {
 func TestSQLStoreDueSitesIncludesScheduledChecks(t *testing.T) {
 	s, m := storeFixture(t)
 	now := time.Now()
-	m.ExpectQuery(`SELECT [\s\S]+ FROM upstream_governance_sites[\s\S]+session_cipher <> ''[\s\S]+next_sync_at <= \$1[\s\S]+OR EXISTS[\s\S]+upstream_governance_bindings[\s\S]+probe_enabled[\s\S]+next_probe_at <= \$1`).WithArgs(now, 20).WillReturnRows(sqlmock.NewRows([]string{"id", "name", "platform", "base_url", "proxy_id", "enabled", "interval_minutes", "version", "session_cipher", "status", "last_error", "last_sync_at", "next_sync_at", "created_at", "updated_at"}))
+	m.ExpectQuery(`SELECT [\s\S]+ FROM upstream_governance_sites[\s\S]+session_cipher <> ''[\s\S]+next_sync_at <= \$1[\s\S]+OR EXISTS[\s\S]+upstream_governance_bindings[\s\S]+probe_enabled[\s\S]+next_probe_at <= \$1[\s\S]+ORDER BY LEAST`).WithArgs(now, 20).WillReturnRows(sqlmock.NewRows([]string{"id", "name", "platform", "base_url", "proxy_id", "enabled", "interval_minutes", "version", "session_cipher", "status", "last_error", "last_sync_at", "next_sync_at", "created_at", "updated_at"}))
 	if _, e := s.DueSites(context.Background(), now, 1000); e != nil {
 		t.Fatal(e)
 	}

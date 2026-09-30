@@ -52,7 +52,6 @@ func TestConnectorListKeyInventoryRejectsUnverifiableLists(t *testing.T) {
 		body     string
 	}{
 		{"incomplete", "sub2api", `{"code":0,"data":{"total":1,"items":[]}}`},
-		{"sub2api missing group", "sub2api", `{"code":0,"data":{"total":1,"items":[{"id":9,"name":"key"}]}}`},
 		{"newapi object group", "newapi", `{"success":true,"data":{"total":1,"items":[{"id":9,"group":{"id":7},"name":"key"}]}}`},
 		{"newapi missing group", "newapi", `{"success":true,"data":{"total":1,"items":[{"id":9,"name":"key"}]}}`},
 		{"newapi null group", "newapi", `{"success":true,"data":{"total":1,"items":[{"id":9,"group":null,"name":"key"}]}}`},

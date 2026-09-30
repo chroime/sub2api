@@ -27,17 +27,19 @@ const (
 // KeyHealth describes the last upstream inventory observation, not whether a
 // plaintext key is retained locally.
 type KeyHealth struct {
-	Status                 string     `json:"status"`
-	LastCheckedAt          *time.Time `json:"last_checked_at,omitempty"`
-	LastVerifiedAt         *time.Time `json:"last_verified_at,omitempty"`
-	MissingCount           int        `json:"missing_count"`
-	FirstMissingAt         *time.Time `json:"first_missing_at,omitempty"`
-	NextCheckAt            *time.Time `json:"next_check_at,omitempty"`
-	ErrorCode              string     `json:"error_code,omitempty"`
-	NotificationKind       string     `json:"notification_kind,omitempty"`
-	NotificationStatus     string     `json:"notification_status,omitempty"`
-	NotificationReservedAt *time.Time `json:"notification_reserved_at,omitempty"`
-	NotificationSentAt     *time.Time `json:"notification_sent_at,omitempty"`
+	Status                 string                           `json:"status"`
+	LastCheckedAt          *time.Time                       `json:"last_checked_at,omitempty"`
+	LastVerifiedAt         *time.Time                       `json:"last_verified_at,omitempty"`
+	MissingCount           int                              `json:"missing_count"`
+	FirstMissingAt         *time.Time                       `json:"first_missing_at,omitempty"`
+	NextCheckAt            *time.Time                       `json:"next_check_at,omitempty"`
+	ErrorCode              string                           `json:"error_code,omitempty"`
+	ProtectionError        string                           `json:"protection_error,omitempty"`
+	NotificationKind       string                           `json:"notification_kind,omitempty"`
+	NotificationStatus     string                           `json:"notification_status,omitempty"`
+	NotificationReservedAt *time.Time                       `json:"notification_reserved_at,omitempty"`
+	NotificationSentAt     *time.Time                       `json:"notification_sent_at,omitempty"`
+	NotificationRecipients map[string]BalanceRecipientState `json:"notification_recipients,omitempty"`
 }
 
 // ManagedKey records remote ownership independently of any local import.
@@ -192,6 +194,34 @@ func (s *Service) CreateKeys(ctx context.Context, siteID int64, input CreateKeys
 		}
 		inventory, inventoryErr = s.inventoryForSite(ctx, *site, session, allKeys)
 	}
+	batchErr := inventoryError(inventoryErr)
+	if batchErr == nil && needsInventory {
+		for _, selected := range input.Selections {
+			stable := marker(siteID, selected.RemoteGroupID, selected.Platform)
+			binding := byMarker[stable]
+			remoteID, keyErr := keyRemoteID(s, managed[stable], &binding)
+			if keyErr != nil {
+				return nil, keyErr
+			}
+			if remoteID != "" {
+				if batchErr = checkedKeyInventory(inventory, remoteID, selected.RemoteGroupID); batchErr != nil {
+					break
+				}
+			}
+		}
+	}
+	if batchErr != nil {
+		if errors.Is(batchErr, ErrReauth) {
+			if authErr := s.requireAuthorizationLocked(ctx, site, session); !errors.Is(authErr, ErrReauth) {
+				return nil, authErr
+			}
+		}
+		result := &CreateKeysResult{Items: make([]KeyItemResult, 0, len(input.Selections))}
+		for _, selected := range input.Selections {
+			result.Items = append(result.Items, KeyItemResult{RemoteGroupID: selected.RemoteGroupID, Platform: selected.Platform, Status: "failed", Error: ErrorCode(batchErr)})
+		}
+		return result, nil
+	}
 	result := &CreateKeysResult{Items: []KeyItemResult{}}
 	unauthorized := false
 	for _, selected := range input.Selections {
@@ -208,6 +238,9 @@ func (s *Service) CreateKeys(ctx context.Context, siteID int64, input CreateKeys
 		if itemErr == nil && remoteID != "" {
 			if inventoryErr != nil {
 				itemErr = ErrUpstreamKeyUnverifiable
+				if errors.Is(inventoryErr, ErrReauth) {
+					itemErr = ErrReauth
+				}
 			} else {
 				itemErr = checkedKeyInventory(inventory, remoteID, group.ID)
 			}

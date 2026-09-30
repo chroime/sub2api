@@ -24,6 +24,56 @@ type keyFixtureDoer func(*http.Request) (*http.Response, error)
 
 func (f keyFixtureDoer) Do(r *http.Request) (*http.Response, error) { return f(r) }
 
+func TestSQLDueSitesPrioritizesKeyConfirmationOverLaterCollections(t *testing.T) {
+	dsn := os.Getenv("GOVERNANCE_STORE_TEST_DSN")
+	if dsn == "" {
+		t.Skip("set isolated loopback governance fixture DSN")
+	}
+	u, err := url.Parse(dsn)
+	require.NoError(t, err)
+	require.Equal(t, "127.0.0.1", u.Hostname())
+	require.NotNil(t, u.User)
+	require.Equal(t, "governance_fixture", u.User.Username())
+	base, err := sql.Open("postgres", dsn)
+	require.NoError(t, err)
+	defer base.Close()
+	schema := fmt.Sprintf("governance_key_due_%d", time.Now().UnixNano())
+	_, err = base.Exec(`CREATE SCHEMA ` + schema)
+	require.NoError(t, err)
+	defer base.Exec(`DROP SCHEMA ` + schema + ` CASCADE`)
+	query := u.Query()
+	query.Set("search_path", schema)
+	u.RawQuery = query.Encode()
+	db, err := sql.Open("postgres", u.String())
+	require.NoError(t, err)
+	defer db.Close()
+	_, err = db.Exec(`CREATE TABLE proxies(id BIGSERIAL PRIMARY KEY); CREATE TABLE groups(id BIGSERIAL PRIMARY KEY); CREATE TABLE accounts(id BIGSERIAL PRIMARY KEY,extra JSONB NOT NULL DEFAULT '{}',deleted_at TIMESTAMPTZ); INSERT INTO groups(id) VALUES(1)`)
+	require.NoError(t, err)
+	for _, migration := range []string{"247_upstream_governance.sql", "248_upstream_governance_keys.sql", "249_upstream_governance_balance_monitor.sql", "250_upstream_governance_platforms.sql", "251_upstream_governance_login_credentials.sql", "255_upstream_governance_key_creation_plans.sql", "256_upstream_governance_flexible_intervals.sql", "258_upstream_governance_key_health.sql"} {
+		raw, readErr := os.ReadFile("../../migrations/" + migration)
+		require.NoError(t, readErr)
+		_, err = db.Exec(string(raw))
+		require.NoError(t, err)
+	}
+	store := gov.NewSQLStore(db)
+	now := time.Now().UTC()
+	for i := 0; i < 25; i++ {
+		site := &gov.Site{Name: fmt.Sprintf("ordinary-%d", i), Platform: "sub2api", BaseURL: "https://upstream.example", Enabled: true, IntervalMinutes: 15, SessionCipher: "fixture-cipher", NextSyncAt: now.Add(-20 * time.Second)}
+		require.NoError(t, store.CreateSite(t.Context(), site))
+	}
+	keySite := &gov.Site{Name: "key-confirmation", Platform: "sub2api", BaseURL: "https://upstream.example", Enabled: true, IntervalMinutes: 15, SessionCipher: "fixture-cipher", NextSyncAt: now.Add(time.Hour)}
+	require.NoError(t, store.CreateSite(t.Context(), keySite))
+	key := &gov.ManagedKey{SiteID: keySite.ID, RemoteGroupID: "8", Platform: "openai", RemoteKeyID: "12", Marker: "priority-key-marker", OwnerUserID: 5, KeyCipher: "encrypted-fixture-key"}
+	require.NoError(t, store.SaveManagedKey(t.Context(), key))
+	firstMissing := now.Add(-2 * time.Minute)
+	keyDue := now.Add(-time.Minute)
+	require.NoError(t, store.(gov.KeyHealthStore).SaveKeyHealth(t.Context(), *key, gov.KeyHealth{Status: gov.KeyHealthSuspectedMissing, MissingCount: 1, FirstMissingAt: &firstMissing, NextCheckAt: &keyDue}))
+	due, err := store.DueSites(t.Context(), now, 20)
+	require.NoError(t, err)
+	require.Len(t, due, 20)
+	require.Equal(t, keySite.ID, due[0].ID)
+}
+
 func TestSQLManagedKeysPostgresIntegration(t *testing.T) {
 	dsn := os.Getenv("GOVERNANCE_STORE_TEST_DSN")
 	if dsn == "" {

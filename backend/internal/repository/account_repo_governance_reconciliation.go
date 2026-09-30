@@ -27,6 +27,9 @@ func (r *accountRepository) ReconcileGovernanceAccount(ctx context.Context, p go
 	if p.Availability != "" && p.Availability != "pause" && p.Availability != "restore" {
 		return nil, gov.ErrInvalid
 	}
+	if p.PauseReason != "" && (p.Availability != "pause" || p.PauseReason != "upstream_key_missing") {
+		return nil, gov.ErrInvalid
+	}
 	tx, err := r.client.Tx(ctx)
 	if err != nil {
 		return nil, err
@@ -93,7 +96,7 @@ func (r *accountRepository) ReconcileGovernanceAccount(ctx context.Context, p go
 	}
 	if p.Availability == "pause" {
 		update.SetSchedulable(false)
-		extra[gov.GovernancePauseExtraKey] = map[string]any{"token": p.OperationID, "marker": p.Marker, "identity": current.Identity}
+		extra[gov.GovernancePauseExtraKey] = map[string]any{"token": p.OperationID, "marker": p.Marker, "identity": current.Identity, "reason": p.PauseReason}
 	}
 	if p.Availability == "restore" {
 		update.SetSchedulable(true)

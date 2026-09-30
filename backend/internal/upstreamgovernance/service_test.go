@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -145,6 +146,7 @@ type fakeConnector struct {
 	catalog        Catalog
 	err            error
 	keyCalls       int
+	remoteKeys     []RemoteKeyIdentity
 	prepareCalls   int
 	challenge      *Challenge
 	discoveryCalls int
@@ -163,9 +165,20 @@ func (f *fakeConnector) PrepareKey(context.Context, Site, Session, RemoteGroup, 
 	f.prepareCalls++
 	return []int64{}, f.err
 }
-func (f *fakeConnector) EnsureKey(context.Context, Site, Session, RemoteGroup, string, *KeyCreationPlan) (RemoteKey, error) {
+func (f *fakeConnector) EnsureKey(_ context.Context, _ Site, _ Session, group RemoteGroup, _ string, _ *KeyCreationPlan) (RemoteKey, error) {
 	f.keyCalls++
-	return RemoteKey{ID: "1", Key: "fixture-inference-key"}, f.err
+	if f.err != nil {
+		return RemoteKey{}, f.err
+	}
+	id := strconv.Itoa(f.keyCalls)
+	f.remoteKeys = append(f.remoteKeys, RemoteKeyIdentity{ID: id, GroupID: group.ID})
+	return RemoteKey{ID: id, Key: "fixture-inference-key"}, nil
+}
+func (f *fakeConnector) ListKeyInventory(_ context.Context, _ Site, session Session) ([]RemoteKeyIdentity, error) {
+	if session.UserID != 5 {
+		return nil, ErrReauth
+	}
+	return append([]RemoteKeyIdentity(nil), f.remoteKeys...), f.err
 }
 func (f *fakeConnector) Probe(context.Context, Site, RemoteKey, string, string) (ProbeResult, error) {
 	f.probeCalls++

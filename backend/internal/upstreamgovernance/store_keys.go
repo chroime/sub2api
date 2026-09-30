@@ -111,13 +111,35 @@ WHERE id=$2 AND site_id=$3 AND remote_group_id=$4 AND platform=$5 AND remote_key
 	return affected(r, err, ErrConflict)
 }
 
+func (s *sqlStore) CountKeyIssues(ctx context.Context) (map[int64]int, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT site_id, COUNT(*) FROM upstream_governance_keys
+WHERE key_health->>'status'='confirmed_missing' OR (key_health->>'status'='group_changed' AND COALESCE((key_health->>'missing_count')::int, 0)>=2)
+GROUP BY site_id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := map[int64]int{}
+	for rows.Next() {
+		var siteID int64
+		var count int
+		if err = rows.Scan(&siteID, &count); err != nil {
+			return nil, err
+		}
+		result[siteID] = count
+	}
+	return result, rows.Err()
+}
+
 func validateKeyHealth(health KeyHealth) error {
 	switch health.Status {
 	case KeyHealthUnknown, KeyHealthPresent, KeyHealthSuspectedMissing, KeyHealthConfirmedMissing, KeyHealthGroupChanged:
 	default:
 		return ErrInvalid
 	}
-	if health.MissingCount < 0 || len(health.ErrorCode) > 64 || strings.IndexFunc(health.ErrorCode, func(r rune) bool {
+	if health.MissingCount < 0 || len(health.ErrorCode) > 64 || len(health.ProtectionError) > 64 || strings.IndexFunc(health.ErrorCode, func(r rune) bool {
+		return r != '_' && !unicode.IsLower(r) && !unicode.IsDigit(r)
+	}) >= 0 || strings.IndexFunc(health.ProtectionError, func(r rune) bool {
 		return r != '_' && !unicode.IsLower(r) && !unicode.IsDigit(r)
 	}) >= 0 {
 		return ErrInvalid

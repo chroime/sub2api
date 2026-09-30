@@ -52,6 +52,8 @@ const tab = computed({
 const showOverview = ref(true)
 const siteNotFound = ref(false)
 let sitesLoaded = false
+let siteRefreshTimer: ReturnType<typeof setInterval> | undefined
+let summaryRefreshing = false
 const automation = ref<AutomationConfiguration | null>(null), balanceHealth = ref<BalanceHealth | null>(null)
 const automationBusy = ref(false), reconciliationBusy = ref(false), keyBusy = ref(false), rechargeBusy = ref(false), modelBusy = ref(false)
 const keysOpen = ref(false), keySelections = ref<KeySelection[]>([]), reconciliationEpoch = ref(0)
@@ -163,6 +165,22 @@ async function load() {
       active.value = data.find((s) => s.id === active.value?.id) || null
     if (sitesLoaded) restoreLocation()
   })
+}
+async function refreshSiteSummaries() {
+  if (summaryRefreshing || navigationLocked.value || busy.value) return
+  summaryRefreshing = true
+  const request = generation
+  try {
+    const data = await api.list()
+    if (request !== generation || navigationLocked.value) return
+    sites.value = data
+    if (active.value) active.value = data.find(site => site.id === active.value?.id) || null
+    restoreLocation()
+  } catch {
+    // Keep the last visible operational state when a background read fails.
+  } finally {
+    summaryRefreshing = false
+  }
 }
 async function select(site: Site, collected?: Snapshot, updateLocation = true) {
   if (mutationBusy.value) return
@@ -448,9 +466,11 @@ onMounted(async () => {
   })
   sitesLoaded = true
   restoreLocation()
+  siteRefreshTimer = setInterval(() => { void refreshSiteSummaries() }, 60_000)
 })
 onUnmounted(() => {
   generation++
+  if (siteRefreshTimer) clearInterval(siteRefreshTimer)
   stopNavigationGuard()
 })
 </script>
@@ -509,7 +529,7 @@ onUnmounted(() => {
       </div>
       </div>
       </div>
-      <BaseDialog v-if="keysOpen && active" :show="true" :title="t('governance.groupKeys')" width="wide" :show-close-button="!keyBusy" :close-on-escape="!keyBusy" @close="closeKeys"><ManagedKeysPanel :key="active.id" :site-id="active.id" :snapshot-id="snapshot?.id || 0" :groups="snapshot?.catalog.groups || []" :selections="keySelections" :disabled="busy || importBusy || balanceBusy || editBusy || automationBusy || reconciliationBusy || rechargeBusy || modelBusy" @busy="keyBusy = $event" /></BaseDialog>
+      <BaseDialog v-if="keysOpen && active" :show="true" :title="t('governance.groupKeys')" width="wide" :show-close-button="!keyBusy" :close-on-escape="!keyBusy" @close="closeKeys"><ManagedKeysPanel :key="active.id" :site-id="active.id" :site-version="active.version" :snapshot-id="snapshot?.id || 0" :groups="snapshot?.catalog.groups || []" :selections="keySelections" :disabled="busy || importBusy || balanceBusy || editBusy || automationBusy || reconciliationBusy || rechargeBusy || modelBusy" @busy="keyBusy = $event" @repaired="reloadBindings" /></BaseDialog>
       <OnboardDialog
         v-if="onboarding"
         :proxies="proxies"

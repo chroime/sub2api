@@ -121,6 +121,7 @@ func TestManagedKeysAdoptExistingImportBindingWithoutRemoteCreation(t *testing.T
 	encrypted, err := s.cipher.Encrypt(string(raw))
 	require.NoError(t, err)
 	m.bindings = []Binding{{ID: 1, SiteID: 1, RemoteGroupID: "8", Platform: "openai", Marker: marker(1, "8", "openai"), LocalGroupID: 7, AccountID: 10, KeyCipher: encrypted}}
+	c.remoteKeys = []RemoteKeyIdentity{{ID: "legacy-remote", GroupID: "8"}}
 	result, err := s.CreateKeys(t.Context(), 1, CreateKeysInput{SnapshotID: snapshot.ID, Selections: []KeySelection{{RemoteGroupID: "8", Platform: "openai"}}})
 	require.NoError(t, err)
 	require.Equal(t, "reused", result.Items[0].Status)

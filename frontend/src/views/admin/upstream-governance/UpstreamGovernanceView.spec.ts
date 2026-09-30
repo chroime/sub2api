@@ -13,6 +13,7 @@ import ImportPanel from './ImportPanel.vue'
 import ReconciliationPanel from './ReconciliationPanel.vue'
 import SiteEditDialog from './SiteEditDialog.vue'
 import ManagedKeysPanel from './ManagedKeysPanel.vue'
+import GovernanceSitesOverview from './GovernanceSitesOverview.vue'
 import ModelMonitorPanel from './ModelMonitorPanel.vue'
 import modelAPI from '@/api/admin/upstream-model-monitoring'
 import api, { type BalanceHealth, type Site, type Snapshot } from '@/api/admin/upstream-governance'
@@ -68,7 +69,7 @@ describe('governance page', () => {
     await router.isReady()
     config.global.plugins = [router]
   })
-  afterEach(() => { config.global.plugins = [] })
+  afterEach(() => { vi.useRealTimers(); config.global.plugins = [] })
   function setupNavigationSites() {
     const site: Site = { id: 1, name: 'Upstream A', platform: 'sub2api', base_url: 'https://fixture.example', enabled: true, interval_minutes: 15, proxy_id: null, version: 1, has_credential: true, status: 'healthy', last_error: '', last_sync_at: null }
     const page = { items: [], total: 0, page: 1, pages: 0, page_size: 20 }
@@ -121,6 +122,31 @@ describe('governance page', () => {
     expect(wrapper.get('#governance-site-2').attributes('aria-current')).toBe('true')
     expect(wrapper.getComponent(ModelMonitorPanel).props('siteId')).toBe(2)
     expect(wrapper.get('#governance-models-tab').attributes('aria-selected')).toBe('true')
+  })
+  it('refreshes key incident counts in the left rail without reloading the selected site', async () => {
+    let refresh!: () => void
+    const timer = vi.spyOn(globalThis, 'setInterval').mockImplementation((callback) => {
+      refresh = callback as () => void
+      return 9001 as ReturnType<typeof setInterval>
+    })
+    setupNavigationSites()
+    const wrapper = mount(View)
+    await flushPromises()
+    await wrapper.get('#governance-site-1').trigger('click')
+    await flushPromises()
+    const selected = wrapper.get('#governance-site-1')
+    vi.mocked(api.list).mockResolvedValue([
+      { id: 1, name: 'Upstream A', platform: 'sub2api', base_url: 'https://fixture.example', enabled: true, interval_minutes: 15, proxy_id: null, version: 1, has_credential: true, status: 'healthy', last_error: '', last_sync_at: null, key_issue_count: 2 },
+      { id: 2, name: 'Upstream B', platform: 'sub2api', base_url: 'https://fixture.example', enabled: true, interval_minutes: 15, proxy_id: null, version: 1, has_credential: true, status: 'healthy', last_error: '', last_sync_at: null },
+    ])
+    refresh()
+    await flushPromises()
+    expect(wrapper.get('#governance-site-1').element).toBe(selected.element)
+    expect(wrapper.get('#governance-site-1 [data-test=site-key-issues]').text()).toContain('governance.keyIssues')
+    expect(wrapper.getComponent(GovernanceSitesOverview).props('sites')[0].key_issue_count).toBe(2)
+    expect(router.currentRoute.value.query.site).toBe('1')
+    expect(api.catalog).toHaveBeenCalledTimes(1)
+    timer.mockRestore()
   })
   it('responds to browser history without reloading unchanged site data', async () => {
     setupNavigationSites()

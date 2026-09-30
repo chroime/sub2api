@@ -23,12 +23,19 @@ func (c *plannedKeyConnector) PrepareKey(_ context.Context, _ Site, _ Session, _
 	return []int64{}, nil
 }
 
-func (c *plannedKeyConnector) EnsureKey(_ context.Context, _ Site, _ Session, _ RemoteGroup, marker string, plan *KeyCreationPlan) (RemoteKey, error) {
+func (c *plannedKeyConnector) EnsureKey(_ context.Context, _ Site, _ Session, group RemoteGroup, marker string, plan *KeyCreationPlan) (RemoteKey, error) {
 	c.keyCalls++
+	var key RemoteKey
+	var err error
 	if c.ensure != nil {
-		return c.ensure(marker, plan)
+		key, err = c.ensure(marker, plan)
+	} else {
+		key = RemoteKey{ID: "10", Key: "fixture-planned-key"}
 	}
-	return RemoteKey{ID: "10", Key: "fixture-planned-key"}, nil
+	if err == nil && key.ID != "" {
+		c.remoteKeys = append(c.remoteKeys, RemoteKeyIdentity{ID: key.ID, GroupID: group.ID})
+	}
+	return key, err
 }
 
 func TestManagedKeyCreationFreezesNameAndInventoryAcrossDaysAndRename(t *testing.T) {

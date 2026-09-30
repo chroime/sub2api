@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"math"
 	"net"
 	"net/url"
@@ -34,6 +35,7 @@ type Service struct {
 	sessionRefreshMu     sync.Mutex
 	sessionRefreshCursor int64
 	balanceNotifier      BalanceNotifier
+	keyNotifier          KeyNotifier
 	modelMu              sync.Mutex
 	modelCancel          context.CancelFunc
 	modelDone            chan struct{}
@@ -47,7 +49,22 @@ func NewService(store Store, connector Connector, local LocalAccounts, cipher En
 	return &Service{store: store, connector: connector, local: local, cipher: cipher, durableKey: durableKey, slots: make(chan struct{}, 2), now: func() time.Time { return time.Now().UTC() }}
 }
 
-func (s *Service) ListSites(ctx context.Context) ([]Site, error) { return s.store.ListSites(ctx) }
+func (s *Service) ListSites(ctx context.Context) ([]Site, error) {
+	sites, err := s.store.ListSites(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if counter, ok := s.store.(KeyIssueCounter); ok {
+		counts, countErr := counter.CountKeyIssues(ctx)
+		if countErr != nil {
+			return nil, countErr
+		}
+		for i := range sites {
+			sites[i].KeyIssueCount = counts[sites[i].ID]
+		}
+	}
+	return sites, nil
+}
 func (s *Service) Catalog(ctx context.Context, id int64) (*Snapshot, error) {
 	return s.store.LatestSnapshot(ctx, id)
 }
@@ -426,6 +443,10 @@ func validateCatalog(c Catalog) error {
 
 func ErrorCode(err error) string {
 	switch {
+	case errors.Is(err, ErrUpstreamKeyMissing):
+		return "upstream_key_missing"
+	case errors.Is(err, ErrUpstreamKeyUnverifiable):
+		return "upstream_key_unverifiable"
 	case errors.Is(err, ErrReauth):
 		return "reauth_required"
 	case errors.Is(err, ErrConflict):
@@ -459,7 +480,20 @@ func (s *Service) Sync(ctx context.Context, id int64) (*Snapshot, error) {
 		return nil, e
 	}
 	defer release()
-	return s.syncLocked(ctx, *site)
+	snapshot, err := s.syncLocked(ctx, *site)
+	if err == nil {
+		fresh, readErr := s.store.GetSite(ctx, id)
+		if readErr != nil {
+			log.Printf("[UpstreamGovernance] key audit site reload: %s", ErrorCode(readErr))
+		} else {
+			auditCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+			if auditErr := s.auditManagedKeysLocked(auditCtx, *fresh); auditErr != nil && !errors.Is(auditErr, ErrUnsupported) {
+				log.Printf("[UpstreamGovernance] key audit after collection: %s", ErrorCode(auditErr))
+			}
+			cancel()
+		}
+	}
+	return snapshot, err
 }
 func (s *Service) syncLocked(ctx context.Context, site Site) (*Snapshot, error) {
 	return s.syncLockedWithAutoReauthorization(ctx, site, false)
@@ -674,6 +708,9 @@ func (s *Service) Apply(ctx context.Context, id int64, previewID string) (*Apply
 		return nil, e
 	}
 	if p.Result != nil && len(p.Result.Items) == len(p.Rows) && allApplied(p.Result) {
+		if err := s.verifyAppliedPreviewKeys(ctx, *site, p); err != nil {
+			return nil, err
+		}
 		return p.Result, nil
 	}
 	snapshot, e := s.store.LatestSnapshot(ctx, id)
@@ -738,6 +775,61 @@ func (s *Service) Apply(ctx context.Context, id int64, previewID string) (*Apply
 	if e != nil {
 		return nil, e
 	}
+	needsInventory := false
+	for _, row := range p.Rows {
+		if _, done := completed[row.Selection.RemoteGroupID+"\x00"+row.Selection.Platform]; done {
+			continue
+		}
+		binding := byMarker[row.Marker]
+		remoteID, keyErr := keyRemoteID(s, managed[row.Marker], &binding)
+		if keyErr != nil {
+			return nil, keyErr
+		}
+		needsInventory = needsInventory || remoteID != ""
+	}
+	var inventory map[string]string
+	var inventoryErr error
+	if needsInventory {
+		allKeys, listErr := s.store.ListManagedKeys(ctx, id)
+		if listErr != nil {
+			return nil, listErr
+		}
+		inventory, inventoryErr = s.inventoryForSite(ctx, *site, session, allKeys)
+	}
+	batchErr := inventoryError(inventoryErr)
+	if batchErr == nil && needsInventory {
+		for _, row := range p.Rows {
+			binding := byMarker[row.Marker]
+			remoteID, keyErr := keyRemoteID(s, managed[row.Marker], &binding)
+			if keyErr != nil {
+				return nil, keyErr
+			}
+			if remoteID != "" {
+				if batchErr = checkedKeyInventory(inventory, remoteID, row.RemoteGroup.ID); batchErr != nil {
+					if _, done := completed[row.Selection.RemoteGroupID+"\x00"+row.Selection.Platform]; done {
+						return nil, batchErr
+					}
+					break
+				}
+			}
+		}
+	}
+	if batchErr != nil {
+		if errors.Is(batchErr, ErrReauth) {
+			if authErr := s.requireAuthorizationLocked(ctx, site, session); !errors.Is(authErr, ErrReauth) {
+				return nil, authErr
+			}
+		}
+		result := &ApplyResult{PreviewID: p.ID, Items: make([]ItemResult, 0, len(p.Rows))}
+		for _, row := range p.Rows {
+			item := ItemResult{RemoteGroupID: row.Selection.RemoteGroupID, Platform: row.Selection.Platform, Status: "failed", Error: ErrorCode(batchErr)}
+			if done, ok := completed[row.Selection.RemoteGroupID+"\x00"+row.Selection.Platform]; ok {
+				item = done
+			}
+			result.Items = append(result.Items, item)
+		}
+		return result, nil
+	}
 	result := &ApplyResult{PreviewID: p.ID, Items: []ItemResult{}}
 	unauthorized := false
 	for _, row := range p.Rows {
@@ -754,7 +846,21 @@ func (s *Service) Apply(ctx context.Context, id int64, previewID string) (*Apply
 		var account *LocalAccount
 		applyErr := ErrReauth
 		if !unauthorized {
-			account, applyErr = s.applyRow(ctx, *site, session, row, &binding, managed[row.Marker])
+			remoteID, keyErr := keyRemoteID(s, managed[row.Marker], &binding)
+			applyErr = keyErr
+			if applyErr == nil && remoteID != "" {
+				if inventoryErr != nil {
+					applyErr = ErrUpstreamKeyUnverifiable
+					if errors.Is(inventoryErr, ErrReauth) {
+						applyErr = ErrReauth
+					}
+				} else {
+					applyErr = checkedKeyInventory(inventory, remoteID, row.RemoteGroup.ID)
+				}
+			}
+			if applyErr == nil {
+				account, applyErr = s.applyRow(ctx, *site, session, row, &binding, managed[row.Marker])
+			}
 			if errors.Is(applyErr, ErrReauth) {
 				unauthorized = true
 				if authErr := s.requireAuthorizationLocked(ctx, site, session); !errors.Is(authErr, ErrReauth) {

@@ -34,6 +34,7 @@ type Site struct {
 	Status               string               `json:"status"`
 	LastError            string               `json:"last_error"`
 	LastSyncAt           *time.Time           `json:"last_sync_at"`
+	KeyIssueCount        int                  `json:"key_issue_count"`
 	NextSyncAt           time.Time            `json:"next_sync_at"`
 	CreatedAt            time.Time            `json:"created_at"`
 	UpdatedAt            time.Time            `json:"updated_at"`
@@ -295,6 +296,12 @@ type RemoteKeyIdentity struct {
 }
 type KeyInventoryReader interface {
 	ListKeyInventory(context.Context, Site, Session) ([]RemoteKeyIdentity, error)
+}
+type KeyRepairRecovery interface {
+	RecoverPlannedKey(context.Context, Site, Session, RemoteGroup, KeyCreationPlan) (RemoteKey, bool, error)
+}
+type KeyRepairCreateOnce interface {
+	PostPlannedKey(context.Context, Site, Session, RemoteGroup, string, KeyCreationPlan) error
 }
 type KeyHealthStore interface {
 	SaveKeyHealth(context.Context, ManagedKey, KeyHealth) error

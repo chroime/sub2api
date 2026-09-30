@@ -5,10 +5,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	_ "github.com/lib/pq"
+	"github.com/lib/pq"
 	"net/url"
 	"os"
-	"strings"
 	"testing"
 	"time"
 )
@@ -274,7 +273,8 @@ func TestSQLStorePostgresIntegration(t *testing.T) {
 		t.Fatal("ack not persisted")
 	}
 	mustExec(`INSERT INTO accounts(extra) VALUES ('{"upstream_governance_marker":"stable"}')`)
-	if _, e = fixture.Exec(`INSERT INTO accounts(extra) VALUES ('{"upstream_governance_marker":"stable"}')`); e == nil || !strings.Contains(e.Error(), "unique") {
+	var duplicate *pq.Error
+	if _, e = fixture.Exec(`INSERT INTO accounts(extra) VALUES ('{"upstream_governance_marker":"stable"}')`); !errors.As(e, &duplicate) || duplicate.Code != "23505" {
 		t.Fatalf("duplicate marker accepted: %v", e)
 	}
 	mustExec(`UPDATE accounts SET deleted_at=NOW(); INSERT INTO accounts(extra) VALUES ('{"upstream_governance_marker":"stable"}'); INSERT INTO accounts(extra) VALUES ('{}'),('{}'),('{"upstream_governance_marker":""}'),('{"upstream_governance_marker":""}')`)

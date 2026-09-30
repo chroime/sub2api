@@ -60,6 +60,9 @@ func planReconciliationRow(site Site, config AutomationConfig, snapshot Snapshot
 	if a.RateOwner != "" && a.RateOwner != b.Marker {
 		return stop("conflict", "rate_owned_elsewhere")
 	}
+	if a.PauseReason == "upstream_key_missing" {
+		return stop("review", "upstream_key_missing")
+	}
 	var remote *RemoteGroup
 	for i := range snapshot.Catalog.Groups {
 		if snapshot.Catalog.Groups[i].ID == b.RemoteGroupID {

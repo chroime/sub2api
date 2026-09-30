@@ -22,6 +22,18 @@ func (h *UpstreamGovernanceHandler) Keys(c *gin.Context) {
 	}
 }
 
+func (h *UpstreamGovernanceHandler) AuditKeys(c *gin.Context) {
+	governanceNoStore(c)
+	id, ok := governanceID(c, "id")
+	if !ok {
+		return
+	}
+	keys, err := h.svc.AuditKeys(c.Request.Context(), id)
+	if !governanceError(c, err) {
+		response.Success(c, keys)
+	}
+}
+
 func (h *UpstreamGovernanceHandler) CreateKeys(c *gin.Context) {
 	governanceNoStore(c)
 	id, ok := governanceID(c, "id")

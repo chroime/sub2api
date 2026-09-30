@@ -14,7 +14,7 @@ func TestGovernanceRoutesRegisteredUnderAdmin(t *testing.T) {
 	h := &handler.Handlers{Admin: &handler.AdminHandlers{UpstreamGovernance: admin.NewUpstreamGovernanceHandler(nil)}}
 	registerUpstreamGovernanceRoutes(r.Group("/api/v1/admin"), h)
 	routes := r.Routes()
-	require.Len(t, routes, 47)
+	require.Len(t, routes, 52)
 	registered := map[string]bool{}
 	for _, route := range routes {
 		require.Contains(t, route.Path, "/api/v1/admin/upstream-governance/")
@@ -51,6 +51,11 @@ func TestGovernanceRoutesRegisteredUnderAdmin(t *testing.T) {
 		"PUT /api/v1/admin/upstream-governance/model-templates",
 		"POST /api/v1/admin/upstream-governance/sites/detect",
 		"GET /api/v1/admin/upstream-governance/sites/:id/keys",
+		"POST /api/v1/admin/upstream-governance/sites/:id/keys/audit",
+		"POST /api/v1/admin/upstream-governance/sites/:id/keys/:key_id/repairs",
+		"GET /api/v1/admin/upstream-governance/sites/:id/keys/:key_id/repairs",
+		"POST /api/v1/admin/upstream-governance/sites/:id/keys/:key_id/repairs/:repair_id/confirm",
+		"POST /api/v1/admin/upstream-governance/sites/:id/keys/:key_id/repairs/:repair_id/abandon",
 		"POST /api/v1/admin/upstream-governance/sites/:id/keys",
 		"POST /api/v1/admin/upstream-governance/sites/:id/keys/:key_id/reveal",
 	} {

@@ -104,6 +104,7 @@ type ManagedLocalAccount struct {
 	PauseToken     string  `json:"pause_token"`
 	PauseMarker    string  `json:"pause_marker"`
 	PauseIdentity  string  `json:"pause_identity"`
+	PauseReason    string  `json:"pause_reason"`
 	Receipt        string  `json:"receipt"`
 }
 type ManagedAccountPatch struct {
@@ -115,6 +116,7 @@ type ManagedAccountPatch struct {
 	Rate         *float64            `json:"rate,omitempty"`
 	RateOwner    *string             `json:"rate_owner,omitempty"`
 	Availability string              `json:"availability,omitempty"` // pause | restore
+	PauseReason  string              `json:"pause_reason,omitempty"`
 }
 type ReconciliationLocal interface {
 	InspectManagedAccount(context.Context, Binding) (*ManagedLocalAccount, error)
