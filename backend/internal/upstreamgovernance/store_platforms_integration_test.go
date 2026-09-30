@@ -56,6 +56,7 @@ func TestSQLGovernancePlatformMigration(t *testing.T) {
 	apply("250_upstream_governance_platforms.sql")
 	apply("252_upstream_governance_multiple_target_groups.sql")
 	apply("256_upstream_governance_flexible_intervals.sql")
+	apply("258_upstream_governance_key_health.sql")
 	_, err = db.Exec(`INSERT INTO groups(id) VALUES(2);`)
 	require.NoError(t, err)
 	_, err = db.Exec(`INSERT INTO upstream_governance_bindings(site_id,remote_group_id,platform,local_group_id,marker) VALUES($1,'old-writer','openai',1,'old-writer-binding')`, site.ID)
@@ -87,5 +88,6 @@ func TestSQLGovernancePlatformMigration(t *testing.T) {
 	}
 	stored, err := store.GetManagedKey(t.Context(), site.ID, legacy.ID)
 	require.NoError(t, err)
+	legacy.Health.Status = KeyHealthUnknown
 	require.Equal(t, legacy, stored, "platform migration must not rewrite legacy managed keys")
 }

@@ -16,6 +16,30 @@ type KeyCreationPlan struct {
 	ExistingIDs []int64 `json:"existing_ids"`
 }
 
+const (
+	KeyHealthUnknown          = "unknown"
+	KeyHealthPresent          = "present"
+	KeyHealthSuspectedMissing = "suspected_missing"
+	KeyHealthConfirmedMissing = "confirmed_missing"
+	KeyHealthGroupChanged     = "group_changed"
+)
+
+// KeyHealth describes the last upstream inventory observation, not whether a
+// plaintext key is retained locally.
+type KeyHealth struct {
+	Status                 string     `json:"status"`
+	LastCheckedAt          *time.Time `json:"last_checked_at,omitempty"`
+	LastVerifiedAt         *time.Time `json:"last_verified_at,omitempty"`
+	MissingCount           int        `json:"missing_count"`
+	FirstMissingAt         *time.Time `json:"first_missing_at,omitempty"`
+	NextCheckAt            *time.Time `json:"next_check_at,omitempty"`
+	ErrorCode              string     `json:"error_code,omitempty"`
+	NotificationKind       string     `json:"notification_kind,omitempty"`
+	NotificationStatus     string     `json:"notification_status,omitempty"`
+	NotificationReservedAt *time.Time `json:"notification_reserved_at,omitempty"`
+	NotificationSentAt     *time.Time `json:"notification_sent_at,omitempty"`
+}
+
 // ManagedKey records remote ownership independently of any local import.
 // Private ownership, creation state and ciphertext never appear in API metadata.
 type ManagedKey struct {
@@ -26,6 +50,7 @@ type ManagedKey struct {
 	RemoteKeyID   string           `json:"remote_key_id"`
 	Marker        string           `json:"marker"`
 	HasKey        bool             `json:"has_key"`
+	Health        KeyHealth        `json:"health"`
 	CreatedAt     time.Time        `json:"created_at"`
 	UpdatedAt     time.Time        `json:"updated_at"`
 	OwnerUserID   int64            `json:"-"`
@@ -148,6 +173,25 @@ func (s *Service) CreateKeys(ctx context.Context, siteID int64, input CreateKeys
 	for _, binding := range bindings {
 		byMarker[binding.Marker] = binding
 	}
+	needsInventory := false
+	for _, selected := range input.Selections {
+		stable := marker(siteID, selected.RemoteGroupID, selected.Platform)
+		binding := byMarker[stable]
+		remoteID, keyErr := keyRemoteID(s, managed[stable], &binding)
+		if keyErr != nil {
+			return nil, keyErr
+		}
+		needsInventory = needsInventory || remoteID != ""
+	}
+	var inventory map[string]string
+	var inventoryErr error
+	if needsInventory {
+		allKeys, listErr := s.store.ListManagedKeys(ctx, siteID)
+		if listErr != nil {
+			return nil, listErr
+		}
+		inventory, inventoryErr = s.inventoryForSite(ctx, *site, session, allKeys)
+	}
 	result := &CreateKeysResult{Items: []KeyItemResult{}}
 	unauthorized := false
 	for _, selected := range input.Selections {
@@ -160,7 +204,20 @@ func (s *Service) CreateKeys(ctx context.Context, siteID int64, input CreateKeys
 			result.Items = append(result.Items, item)
 			continue
 		}
-		record, key, reused, itemErr := s.ensureManagedKey(ctx, *site, session, group, selected.Platform, managed[stable], &binding)
+		remoteID, itemErr := keyRemoteID(s, managed[stable], &binding)
+		if itemErr == nil && remoteID != "" {
+			if inventoryErr != nil {
+				itemErr = ErrUpstreamKeyUnverifiable
+			} else {
+				itemErr = checkedKeyInventory(inventory, remoteID, group.ID)
+			}
+		}
+		var record *ManagedKey
+		var key RemoteKey
+		var reused bool
+		if itemErr == nil {
+			record, key, reused, itemErr = s.ensureManagedKey(ctx, *site, session, group, selected.Platform, managed[stable], &binding)
+		}
 		if itemErr != nil {
 			item.Error = ErrorCode(itemErr)
 			if errors.Is(itemErr, ErrReauth) {

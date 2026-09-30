@@ -5,14 +5,17 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"strings"
+	"unicode"
 )
 
-const managedKeyColumns = `id,site_id,remote_group_id,platform,remote_key_id,marker,owner_user_id,key_cipher,created_at,updated_at,creation_plan`
+const managedKeyColumns = `id,site_id,remote_group_id,platform,remote_key_id,marker,owner_user_id,key_cipher,created_at,updated_at,creation_plan,key_health`
 
 func scanManagedKey(row rowScanner) (*ManagedKey, error) {
 	var key ManagedKey
 	var planJSON []byte
-	err := row.Scan(&key.ID, &key.SiteID, &key.RemoteGroupID, &key.Platform, &key.RemoteKeyID, &key.Marker, &key.OwnerUserID, &key.KeyCipher, &key.CreatedAt, &key.UpdatedAt, &planJSON)
+	var healthJSON []byte
+	err := row.Scan(&key.ID, &key.SiteID, &key.RemoteGroupID, &key.Platform, &key.RemoteKeyID, &key.Marker, &key.OwnerUserID, &key.KeyCipher, &key.CreatedAt, &key.UpdatedAt, &planJSON, &healthJSON)
 	if err != nil {
 		return nil, storeError(err)
 	}
@@ -23,6 +26,9 @@ func scanManagedKey(row rowScanner) (*ManagedKey, error) {
 		if err := validateStoredKeyCreationPlan(key.CreationPlan); err != nil {
 			return nil, err
 		}
+	}
+	if err := json.Unmarshal(healthJSON, &key.Health); err != nil || validateKeyHealth(key.Health) != nil {
+		return nil, ErrInvalid
 	}
 	key.HasKey = key.KeyCipher != ""
 	return &key, nil
@@ -84,6 +90,39 @@ RETURNING id,created_at,updated_at`, key.SiteID, key.RemoteGroupID, key.Platform
 		key.HasKey = key.KeyCipher != ""
 	}
 	return err
+}
+
+// SaveKeyHealth updates only observation data for the same completed key.
+// A changed site, owner, marker, remote ID or ciphertext fails closed.
+func (s *sqlStore) SaveKeyHealth(ctx context.Context, key ManagedKey, health KeyHealth) error {
+	if key.ID <= 0 || key.SiteID <= 0 || key.RemoteGroupID == "" || key.Platform == "" || key.RemoteKeyID == "" || key.Marker == "" || key.OwnerUserID <= 0 || key.KeyCipher == "" {
+		return ErrInvalid
+	}
+	if err := validateKeyHealth(health); err != nil {
+		return err
+	}
+	raw, err := json.Marshal(health)
+	if err != nil {
+		return ErrInvalid
+	}
+	r, err := s.db.ExecContext(ctx, `UPDATE upstream_governance_keys SET key_health=$1::jsonb
+WHERE id=$2 AND site_id=$3 AND remote_group_id=$4 AND platform=$5 AND remote_key_id=$6 AND marker=$7 AND owner_user_id=$8 AND key_cipher=$9 AND key_cipher<>''`,
+		string(raw), key.ID, key.SiteID, key.RemoteGroupID, key.Platform, key.RemoteKeyID, key.Marker, key.OwnerUserID, key.KeyCipher)
+	return affected(r, err, ErrConflict)
+}
+
+func validateKeyHealth(health KeyHealth) error {
+	switch health.Status {
+	case KeyHealthUnknown, KeyHealthPresent, KeyHealthSuspectedMissing, KeyHealthConfirmedMissing, KeyHealthGroupChanged:
+	default:
+		return ErrInvalid
+	}
+	if health.MissingCount < 0 || len(health.ErrorCode) > 64 || strings.IndexFunc(health.ErrorCode, func(r rune) bool {
+		return r != '_' && !unicode.IsLower(r) && !unicode.IsDigit(r)
+	}) >= 0 {
+		return ErrInvalid
+	}
+	return nil
 }
 
 func validateStoredKeyCreationPlan(plan *KeyCreationPlan) error {

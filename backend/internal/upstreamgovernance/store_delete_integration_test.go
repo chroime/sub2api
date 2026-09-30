@@ -43,7 +43,7 @@ INSERT INTO accounts(id,credentials,extra,deleted_at) VALUES
  (1,'{"api_key":"active-fixture-key","base_url":"https://fixture.example"}','{"upstream_governance_marker":"active-marker"}',NULL),
  (2,'{"api_key":"retired-fixture-key","base_url":"https://fixture.example"}','{"upstream_governance_marker":"retired-marker"}',NOW());`)
 	require.NoError(t, err)
-	for _, migration := range []string{"247_upstream_governance.sql", "248_upstream_governance_keys.sql", "249_upstream_governance_balance_monitor.sql", "251_upstream_governance_login_credentials.sql", "252_upstream_governance_multiple_target_groups.sql", "255_upstream_governance_key_creation_plans.sql", "256_upstream_governance_flexible_intervals.sql"} {
+	for _, migration := range []string{"247_upstream_governance.sql", "248_upstream_governance_keys.sql", "249_upstream_governance_balance_monitor.sql", "251_upstream_governance_login_credentials.sql", "252_upstream_governance_multiple_target_groups.sql", "255_upstream_governance_key_creation_plans.sql", "256_upstream_governance_flexible_intervals.sql", "258_upstream_governance_key_health.sql"} {
 		raw, err := os.ReadFile("../../migrations/" + migration)
 		require.NoError(t, err)
 		_, err = db.Exec(string(raw))

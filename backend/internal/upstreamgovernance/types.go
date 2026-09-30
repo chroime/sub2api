@@ -289,6 +289,16 @@ type Connector interface {
 	EnsureKey(context.Context, Site, Session, RemoteGroup, string, *KeyCreationPlan) (RemoteKey, error)
 	Probe(context.Context, Site, RemoteKey, string, string) (ProbeResult, error)
 }
+type RemoteKeyIdentity struct {
+	ID      string `json:"id"`
+	GroupID string `json:"group_id"`
+}
+type KeyInventoryReader interface {
+	ListKeyInventory(context.Context, Site, Session) ([]RemoteKeyIdentity, error)
+}
+type KeyHealthStore interface {
+	SaveKeyHealth(context.Context, ManagedKey, KeyHealth) error
+}
 type Encryptor interface {
 	Encrypt(string) (string, error)
 	Decrypt(string) (string, error)

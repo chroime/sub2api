@@ -1,6 +1,7 @@
 package upstreamgovernance
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -8,6 +9,80 @@ import (
 
 	"github.com/stretchr/testify/require"
 )
+
+func TestConnectorListKeyInventoryReturnsCompleteReadOnlyIdentities(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		platform string
+		profile  string
+		path     string
+		body     string
+		want     []RemoteKeyIdentity
+	}{
+		{"sub2api", "sub2api", "/api/v1/user/profile", "/api/v1/keys", `{"code":0,"data":{"total":2,"page":1,"items":[{"id":9,"group_id":7,"name":"first","key":"sk-***"},{"id":10,"group_id":8,"name":"second","key":"sk-***"}]}}`, []RemoteKeyIdentity{{ID: "9", GroupID: "7"}, {ID: "10", GroupID: "8"}}},
+		{"newapi", "newapi", "/api/user/self", "/api/token/", `{"success":true,"data":{"total":2,"page":1,"items":[{"id":9,"group":"vip","name":"first","key":"sk-***"},{"id":10,"group":"basic","name":"second","key":"sk-***"}]}}`, []RemoteKeyIdentity{{ID: "9", GroupID: "vip"}, {ID: "10", GroupID: "basic"}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			requests := 0
+			connector := fixtureConnector(t, func(r *http.Request) (int, string) {
+				requests++
+				require.Equal(t, http.MethodGet, r.Method, "inventory must never create or reveal a key")
+				switch r.URL.Path {
+				case tc.profile:
+					return 200, `{"code":0,"success":true,"data":{"id":42}}`
+				case tc.path:
+					return 200, tc.body
+				default:
+					t.Fatalf("unexpected inventory request: %s", r.URL.Path)
+					return 500, ""
+				}
+			})
+			keys, err := connector.(KeyInventoryReader).ListKeyInventory(t.Context(), Site{Platform: tc.platform, BaseURL: "https://upstream.example"}, Session{AccessToken: "fixture", UserID: 42})
+			require.NoError(t, err)
+			require.Equal(t, tc.want, keys)
+			require.Equal(t, 2, requests)
+		})
+	}
+}
+
+func TestConnectorListKeyInventoryRejectsUnverifiableLists(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		platform string
+		body     string
+	}{
+		{"incomplete", "sub2api", `{"code":0,"data":{"total":1,"items":[]}}`},
+		{"sub2api missing group", "sub2api", `{"code":0,"data":{"total":1,"items":[{"id":9,"name":"key"}]}}`},
+		{"newapi object group", "newapi", `{"success":true,"data":{"total":1,"items":[{"id":9,"group":{"id":7},"name":"key"}]}}`},
+		{"newapi missing group", "newapi", `{"success":true,"data":{"total":1,"items":[{"id":9,"name":"key"}]}}`},
+		{"newapi null group", "newapi", `{"success":true,"data":{"total":1,"items":[{"id":9,"group":null,"name":"key"}]}}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			connector := fixtureConnector(t, func(r *http.Request) (int, string) {
+				require.Equal(t, http.MethodGet, r.Method)
+				if r.URL.Path == "/api/v1/user/profile" || r.URL.Path == "/api/user/self" {
+					return 200, `{"code":0,"success":true,"data":{"id":42}}`
+				}
+				return 200, tc.body
+			})
+			_, err := connector.(KeyInventoryReader).ListKeyInventory(t.Context(), Site{Platform: tc.platform, BaseURL: "https://upstream.example"}, Session{AccessToken: "fixture", UserID: 42})
+			require.ErrorIs(t, err, ErrUnsupported)
+		})
+	}
+}
+
+func TestConnectorListKeyInventoryRejectsChangedOwner(t *testing.T) {
+	requests := 0
+	connector := fixtureConnector(t, func(r *http.Request) (int, string) {
+		requests++
+		require.Equal(t, http.MethodGet, r.Method)
+		require.Equal(t, "/api/v1/user/profile", r.URL.Path)
+		return 200, `{"code":0,"data":{"id":43}}`
+	})
+	_, err := connector.(KeyInventoryReader).ListKeyInventory(t.Context(), Site{Platform: "sub2api", BaseURL: "https://upstream.example"}, Session{AccessToken: "fixture", UserID: 42})
+	require.True(t, errors.Is(err, ErrReauth))
+	require.Equal(t, 1, requests)
+}
 
 func TestConnectorSub2APIKeysAcceptNativeNestedGroupOnListAndRead(t *testing.T) {
 	posts, lists, reads := 0, 0, 0

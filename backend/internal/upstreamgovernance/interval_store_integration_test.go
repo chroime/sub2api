@@ -44,7 +44,7 @@ func TestSQLGovernanceIntervalMigrationPreservesDataAndAcceptsFlexibleCadence(t 
 		_, execErr := db.Exec(string(raw))
 		require.NoError(t, execErr)
 	}
-	for _, migration := range []string{"247_upstream_governance.sql", "248_upstream_governance_keys.sql", "249_upstream_governance_balance_monitor.sql", "250_upstream_governance_platforms.sql", "251_upstream_governance_login_credentials.sql", "252_upstream_governance_multiple_target_groups.sql", "253_upstream_governance_automation.sql", "254_upstream_governance_recharge_plans.sql", "255_upstream_governance_key_creation_plans.sql"} {
+	for _, migration := range []string{"247_upstream_governance.sql", "248_upstream_governance_keys.sql", "249_upstream_governance_balance_monitor.sql", "250_upstream_governance_platforms.sql", "251_upstream_governance_login_credentials.sql", "252_upstream_governance_multiple_target_groups.sql", "253_upstream_governance_automation.sql", "254_upstream_governance_recharge_plans.sql", "255_upstream_governance_key_creation_plans.sql", "258_upstream_governance_key_health.sql"} {
 		apply(migration)
 	}
 	var siteID, bindingID int64

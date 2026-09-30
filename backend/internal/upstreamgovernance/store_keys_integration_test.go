@@ -71,6 +71,10 @@ func TestSQLManagedKeysPostgresIntegration(t *testing.T) {
 	require.NoError(t, err)
 	_, err = db.Exec(string(intervalMigration))
 	require.NoError(t, err)
+	healthMigration, err := os.ReadFile("../../migrations/258_upstream_governance_key_health.sql")
+	require.NoError(t, err)
+	_, err = db.Exec(string(healthMigration))
+	require.NoError(t, err)
 	encryptor, err := repository.NewAESEncryptor(&config.Config{Totp: config.TotpConfig{EncryptionKey: strings.Repeat("42", 32)}})
 	require.NoError(t, err)
 	sessionJSON, err := json.Marshal(gov.Session{AccessToken: "fixture-session-canary", UserID: 5})
@@ -81,6 +85,7 @@ func TestSQLManagedKeysPostgresIntegration(t *testing.T) {
 	legacy, err := store.GetManagedKey(t.Context(), legacySiteID, legacyKeyID)
 	require.NoError(t, err)
 	require.Nil(t, legacy.CreationPlan)
+	require.Equal(t, "unknown", legacy.Health.Status)
 	legacy.CreationPlan = &gov.KeyCreationPlan{Name: "Do not rename legacy-20260927"}
 	require.ErrorIs(t, store.SaveManagedKey(t.Context(), legacy), gov.ErrConflict)
 	legacy.CreationPlan = nil
@@ -161,6 +166,27 @@ func TestSQLManagedKeysPostgresIntegration(t *testing.T) {
 	require.Equal(t, 1, posts)
 	record, err := store.GetManagedKey(t.Context(), site.ID, keyID)
 	require.NoError(t, err)
+	t.Run("health observations preserve key identity and survive reload", func(t *testing.T) {
+		checked := time.Date(2026, 9, 30, 8, 0, 0, 0, time.UTC)
+		next := checked.Add(time.Minute)
+		health := gov.KeyHealth{Status: "suspected_missing", LastCheckedAt: &checked, LastVerifiedAt: &checked, MissingCount: 1, FirstMissingAt: &checked, NextCheckAt: &next}
+		writer := store.(gov.KeyHealthStore)
+		require.NoError(t, writer.SaveKeyHealth(t.Context(), *record, health))
+		reloaded, err := gov.NewSQLStore(db).GetManagedKey(t.Context(), site.ID, keyID)
+		require.NoError(t, err)
+		require.Equal(t, health, reloaded.Health)
+		require.Equal(t, record.RemoteKeyID, reloaded.RemoteKeyID)
+		require.Equal(t, record.KeyCipher, reloaded.KeyCipher)
+		wrongOwner := *record
+		wrongOwner.OwnerUserID++
+		require.ErrorIs(t, writer.SaveKeyHealth(t.Context(), wrongOwner, gov.KeyHealth{Status: "confirmed_missing", MissingCount: 2}), gov.ErrConflict)
+		wrongCipher := *record
+		wrongCipher.KeyCipher = "changed"
+		require.ErrorIs(t, writer.SaveKeyHealth(t.Context(), wrongCipher, gov.KeyHealth{Status: "confirmed_missing", MissingCount: 2}), gov.ErrConflict)
+		reloaded, err = store.GetManagedKey(t.Context(), site.ID, keyID)
+		require.NoError(t, err)
+		require.Equal(t, health, reloaded.Health)
+	})
 	require.NotContains(t, record.KeyCipher, "canary")
 	plain, err := encryptor.Decrypt(record.KeyCipher)
 	require.NoError(t, err)

@@ -22,7 +22,7 @@ type connectorKey struct {
 // group_id. New API instead uses a string group name; retain its strict shape.
 func (key connectorKey) newAPIGroup() (string, error) {
 	var group string
-	if len(key.Group) > 0 && json.Unmarshal(key.Group, &group) != nil {
+	if len(key.Group) == 0 || strings.TrimSpace(string(key.Group)) == "null" || json.Unmarshal(key.Group, &group) != nil {
 		return "", ErrUnsupported
 	}
 	return group, nil
@@ -81,6 +81,45 @@ func (c *platformConnector) keyList(ctx context.Context, s Site, session Session
 		}
 	}
 	return nil, connectorKeyFailure(s, "list_page_limit", ErrUnsupported)
+}
+
+// ListKeyInventory returns only identities from a complete list for the pinned
+// management user. It never requests key plaintext or creates a key.
+func (c *platformConnector) ListKeyInventory(ctx context.Context, site Site, session Session) ([]RemoteKeyIdentity, error) {
+	if session.UserID <= 0 {
+		return nil, ErrReauth
+	}
+	if site.Platform != "sub2api" && site.Platform != "newapi" {
+		return nil, ErrUnsupported
+	}
+	verified, err := c.identity(ctx, site, session)
+	if err != nil {
+		return nil, connectorKeyFailure(site, "inventory_identity", err)
+	}
+	keys, err := c.keyList(ctx, site, verified)
+	if err != nil {
+		return nil, err
+	}
+	identities := make([]RemoteKeyIdentity, 0, len(keys))
+	for _, key := range keys {
+		groupID := ""
+		if site.Platform == "sub2api" {
+			if key.GroupID == nil || *key.GroupID <= 0 {
+				return nil, connectorKeyFailure(site, "inventory_group", ErrUnsupported)
+			}
+			groupID = strconv.FormatInt(*key.GroupID, 10)
+		} else {
+			if len(key.Group) == 0 {
+				return nil, connectorKeyFailure(site, "inventory_group", ErrUnsupported)
+			}
+			groupID, err = key.newAPIGroup()
+			if err != nil {
+				return nil, connectorKeyFailure(site, "inventory_group", err)
+			}
+		}
+		identities = append(identities, RemoteKeyIdentity{ID: strconv.FormatInt(key.ID, 10), GroupID: groupID})
+	}
+	return identities, nil
 }
 func connectorFindKey(keys []connectorKey, group RemoteGroup, marker, platform string) (*connectorKey, error) {
 	var match *connectorKey
