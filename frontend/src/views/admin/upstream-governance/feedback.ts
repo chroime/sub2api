@@ -7,6 +7,10 @@ const reasonKeys: Record<string, string> = {
   upstream_key_unverifiable: 'upstreamKeyUnverifiable',
   candidate_not_visible: 'keyCandidateNotVisible',
   manually_abandoned: 'keyRepairAbandonedReason',
+  repair_account_missing: 'keyRepairAccountMissing',
+  repair_account_present: 'keyRepairAccountPresent',
+  repair_context_changed: 'keyRepairContextChanged',
+  repair_catalog_stale: 'keyRepairCatalogStale',
   unsupported_contract: 'unsupported',
   persistent_encryption_required: 'encryption',
   invalid_input: 'invalid',
@@ -17,6 +21,10 @@ const reasonKeys: Record<string, string> = {
 export function errorKey(error: unknown): string {
   const e = error as { reason?: string; status?: number }
   return `governance.${reasonKeys[e?.reason || ''] || (e?.status === 409 ? 'stale' : 'error')}`
+}
+export function keyRepairErrorKey(error: unknown): string {
+  const key = errorKey(error)
+  return key === 'governance.stale' ? 'governance.keyRepairConflict' : key
 }
 export const eventKeys: Record<string, string> = {
   balance_low: 'balanceLow',

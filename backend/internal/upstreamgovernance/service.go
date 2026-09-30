@@ -443,6 +443,14 @@ func validateCatalog(c Catalog) error {
 
 func ErrorCode(err error) string {
 	switch {
+	case errors.Is(err, ErrRepairCatalogStale):
+		return "repair_catalog_stale"
+	case errors.Is(err, ErrRepairAccountMissing):
+		return "repair_account_missing"
+	case errors.Is(err, ErrRepairAccountPresent):
+		return "repair_account_present"
+	case errors.Is(err, ErrRepairContextChanged):
+		return "repair_context_changed"
 	case errors.Is(err, ErrUpstreamKeyMissing):
 		return "upstream_key_missing"
 	case errors.Is(err, ErrUpstreamKeyUnverifiable):

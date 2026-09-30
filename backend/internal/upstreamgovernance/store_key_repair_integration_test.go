@@ -37,7 +37,7 @@ func TestSQLKeyRepairPostgresReservationAndProgress(t *testing.T) {
 	defer db.Close()
 	_, err = db.Exec(`CREATE TABLE proxies(id BIGSERIAL PRIMARY KEY); CREATE TABLE groups(id BIGSERIAL PRIMARY KEY); CREATE TABLE accounts(id BIGSERIAL PRIMARY KEY,extra JSONB NOT NULL DEFAULT '{}',deleted_at TIMESTAMPTZ); INSERT INTO groups(id) VALUES(1)`)
 	require.NoError(t, err)
-	for _, migration := range []string{"247_upstream_governance.sql", "248_upstream_governance_keys.sql", "249_upstream_governance_balance_monitor.sql", "250_upstream_governance_platforms.sql", "251_upstream_governance_login_credentials.sql", "252_upstream_governance_multiple_target_groups.sql", "255_upstream_governance_key_creation_plans.sql", "256_upstream_governance_flexible_intervals.sql", "258_upstream_governance_key_health.sql", "259_upstream_governance_key_repairs.sql"} {
+	for _, migration := range []string{"247_upstream_governance.sql", "248_upstream_governance_keys.sql", "249_upstream_governance_balance_monitor.sql", "250_upstream_governance_platforms.sql", "251_upstream_governance_login_credentials.sql", "252_upstream_governance_multiple_target_groups.sql", "255_upstream_governance_key_creation_plans.sql", "256_upstream_governance_flexible_intervals.sql", "258_upstream_governance_key_health.sql", "259_upstream_governance_key_repairs.sql", "260_upstream_governance_key_only_repairs.sql"} {
 		raw, readErr := os.ReadFile("../../migrations/" + migration)
 		require.NoError(t, readErr)
 		_, err = db.Exec(string(raw))
@@ -115,4 +115,43 @@ func TestSQLKeyRepairPostgresReservationAndProgress(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "other-old", stillOld.RemoteKeyID)
 	require.Equal(t, "other-encrypted-old", stillOld.KeyCipher)
+
+	for _, historicalBinding := range []bool{false, true} {
+		t.Run(fmt.Sprintf("key_only_historical_binding_%t", historicalBinding), func(t *testing.T) {
+			groupID, marker := "10", "never-imported-marker"
+			if historicalBinding {
+				groupID, marker = "11", "deleted-account-marker"
+			}
+			managed := &ManagedKey{SiteID: site.ID, RemoteGroupID: groupID, Platform: "openai", RemoteKeyID: "missing-" + groupID, Marker: marker, OwnerUserID: 5, KeyCipher: "old-cipher-" + groupID}
+			require.NoError(t, store.SaveManagedKey(t.Context(), managed))
+			keyOnly := repairStoreFixture()
+			keyOnly.Mode = KeyRepairModeKeyOnly
+			keyOnly.ID, keyOnly.SiteID, keyOnly.SiteVersion, keyOnly.ManagedKeyID = "key-only-"+groupID, site.ID, site.Version, managed.ID
+			keyOnly.BindingID, keyOnly.AccountID, keyOnly.AccountName = 0, 0, ""
+			keyOnly.ExpectedAccountFingerprint, keyOnly.ExpectedAccountIdentity = "", ""
+			keyOnly.Marker, keyOnly.RemoteGroupID, keyOnly.OldRemoteKeyID, keyOnly.OldKeyCipher = marker, groupID, managed.RemoteKeyID, managed.KeyCipher
+			if historicalBinding {
+				historical := &Binding{SiteID: site.ID, RemoteGroupID: groupID, Platform: "openai", LocalGroupID: 1, AccountID: 23, Marker: marker, KeyCipher: managed.KeyCipher, ProbeIntervalMinutes: 30}
+				require.NoError(t, store.SaveBinding(t.Context(), historical))
+				keyOnly.BindingID, keyOnly.AccountID = historical.ID, historical.AccountID
+			}
+			require.NoError(t, repairStore.ReserveKeyRepair(t.Context(), &keyOnly))
+			reloaded, err := repairStore.GetKeyRepair(t.Context(), site.ID, managed.ID, keyOnly.ID)
+			require.NoError(t, err)
+			require.Equal(t, KeyRepairModeKeyOnly, reloaded.Mode)
+			require.Equal(t, keyOnly.BindingID, reloaded.BindingID)
+			require.Equal(t, keyOnly.AccountID, reloaded.AccountID)
+			keyOnly.Stage, keyOnly.PostIntentAt = KeyRepairPostIntent, &intent
+			require.NoError(t, repairStore.SaveKeyRepairProgress(t.Context(), &keyOnly, KeyRepairPrepared))
+			keyOnly.Stage, keyOnly.CandidateRemoteKeyID, keyOnly.CandidateKeyCipher = KeyRepairCandidateReady, "candidate-"+groupID, "candidate-cipher-"+groupID
+			require.NoError(t, repairStore.SaveKeyRepairProgress(t.Context(), &keyOnly, KeyRepairPostIntent))
+			reloaded, err = repairStore.GetKeyRepair(t.Context(), site.ID, managed.ID, keyOnly.ID)
+			require.NoError(t, err)
+			require.Equal(t, KeyRepairCandidateReady, reloaded.Stage)
+			require.Equal(t, KeyRepairModeKeyOnly, reloaded.Mode)
+			unchanged, err := store.GetManagedKey(t.Context(), site.ID, managed.ID)
+			require.NoError(t, err)
+			require.Equal(t, managed.KeyCipher, unchanged.KeyCipher)
+		})
+	}
 }

@@ -302,6 +302,44 @@ describe('governance page', () => {
     expect(api.catalog).toHaveBeenCalledTimes(1)
     expect(api.revealKey).not.toHaveBeenCalled()
   })
+  it('invalidates import previews only after a committed key repair and preserves the import draft', async () => {
+    let refresh!: () => void
+    const timer = vi.spyOn(globalThis, 'setInterval').mockImplementation(callback => {
+      refresh = callback as () => void
+      return 9002 as ReturnType<typeof setInterval>
+    })
+    setupNavigationSites()
+    vi.mocked(api.catalog).mockResolvedValue({ id: 1, site_id: 1, site_version: 1, created_at: 'now', catalog: { groups: [{ id: 'r', name: 'Remote', platform: 'openai', rate_multiplier: 1, user_rate_multiplier: null, resolved_rate_multiplier: 1, models: ['fixture-model'], prices: [], source: 'user', peak_rate_enabled: false }], channels: [], warnings: [] } })
+    const wrapper = mount(View, { global: { stubs: { BaseDialog: { props: ['show'], emits: ['close'], template: '<div v-if="show"><button data-test="close-dialog" @click="$emit(\'close\')">Close</button><slot /></div>' } } } })
+    await flushPromises()
+    await wrapper.get('#governance-site-1').trigger('click')
+    await flushPromises()
+    const importPanel = wrapper.getComponent(ImportPanel)
+    await importPanel.get('[data-test=select]').setValue(true)
+    await importPanel.get('[data-test=priority]').setValue(7)
+    const initialEpoch = importPanel.props('previewEpoch')
+    importPanel.vm.$emit('applied')
+    await flushPromises()
+    refresh()
+    await flushPromises()
+    await wrapper.get('#governance-view-keys').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-test=close-dialog]').trigger('click')
+    await flushPromises()
+    expect(importPanel.props('previewEpoch')).toBe(initialEpoch)
+
+    await wrapper.get('#governance-view-keys').trigger('click')
+    await flushPromises()
+    const bindingsBeforeRepair = vi.mocked(api.bindings).mock.calls.length
+    wrapper.getComponent(ManagedKeysPanel).vm.$emit('repaired')
+    await flushPromises()
+    expect(importPanel.props('previewEpoch')).not.toBe(initialEpoch)
+    expect(api.bindings).toHaveBeenCalledTimes(bindingsBeforeRepair + 1)
+    expect(wrapper.getComponent(ImportPanel).element).toBe(importPanel.element)
+    expect((importPanel.get('[data-test=select]').element as HTMLInputElement).checked).toBe(true)
+    expect((importPanel.get('[data-test=priority]').element as HTMLInputElement).value).toBe('7')
+    timer.mockRestore()
+  })
   it('does not trap logout or expired-session redirects behind a write lock', async () => {
     setupNavigationSites()
     const wrapper = mount(View)

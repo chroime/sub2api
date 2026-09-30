@@ -35,6 +35,7 @@ const props = defineProps<{
   sitePlatform?: SiteInput['platform']
   bindings?: Pick<Binding, 'remote_group_id' | 'platform'>[]
   managedKeys?: KeySelection[]
+  previewEpoch?: number
   disabled?: boolean
   snapshot: Snapshot
   groups: {
@@ -111,6 +112,13 @@ watch(
   },
   { immediate: true },
 )
+watch(() => props.previewEpoch, () => {
+  generation++
+  preview.value = null
+  result.value = null
+  error.value = ''
+  busy.value = false
+})
 onUnmounted(() => {
   generation++
   emit('busy', false)

@@ -246,6 +246,7 @@ export interface ManagedKey {
 }
 export interface KeyRepairResult {
   id: string
+  mode?: 'account' | 'key_only'
   managed_key_id: number
   site_id: number
   remote_group_id: string

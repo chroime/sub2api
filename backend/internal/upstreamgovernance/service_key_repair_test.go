@@ -2,6 +2,7 @@ package upstreamgovernance
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -63,12 +64,13 @@ func (m *repairMemoryStore) SaveKeyRepairProgress(_ context.Context, repair *Key
 
 type repairLocalFixture struct {
 	*fakeLocal
-	managed  ManagedLocalAccount
-	commits  int
-	store    *repairMemoryStore
-	findErr  error
-	patchErr error
-	patches  int
+	managed   ManagedLocalAccount
+	commits   int
+	store     *repairMemoryStore
+	findErr   error
+	patchErr  error
+	patches   int
+	commitErr error
 }
 
 func (l *repairLocalFixture) FindAccount(ctx context.Context, marker string) (*LocalAccount, error) {
@@ -76,6 +78,21 @@ func (l *repairLocalFixture) FindAccount(ctx context.Context, marker string) (*L
 		return nil, l.findErr
 	}
 	return l.fakeLocal.FindAccount(ctx, marker)
+}
+
+func (l *repairLocalFixture) AccountNames(_ context.Context, ids []int64) (map[int64]LocalAccountName, error) {
+	names := map[int64]LocalAccountName{}
+	for _, id := range ids {
+		if id == l.managed.ID {
+			names[id] = LocalAccountName{Name: l.managed.Name, Deleted: true}
+		}
+		for _, account := range l.accounts {
+			if account.ID == id {
+				names[id] = LocalAccountName{Name: account.Name}
+			}
+		}
+	}
+	return names, nil
 }
 
 func (l *repairLocalFixture) InspectManagedAccount(_ context.Context, binding Binding) (*ManagedLocalAccount, error) {
@@ -103,6 +120,9 @@ func (l *repairLocalFixture) ApplyManagedPatch(_ context.Context, patch ManagedA
 }
 
 func (l *repairLocalFixture) CommitKeyRepair(_ context.Context, request KeyRepairCommitRequest) error {
+	if l.commitErr != nil {
+		return l.commitErr
+	}
 	l.commits++
 	repair := l.store.repairs[request.Repair.ID]
 	repair.Stage = "committed"
@@ -120,9 +140,11 @@ func (l *repairLocalFixture) CommitKeyRepair(_ context.Context, request KeyRepai
 			l.store.bindings[i].KeyCipher = repair.CandidateKeyCipher
 		}
 	}
-	l.managed.Identity = ManagedAccountIdentity(repair.AccountID, repair.Marker, repair.Platform, repair.BaseURL, request.CandidateKey.Key)
-	if l.managed.PauseReason == "upstream_key_missing" {
-		l.managed.PauseIdentity = l.managed.Identity
+	if repair.Mode != KeyRepairModeKeyOnly {
+		l.managed.Identity = ManagedAccountIdentity(repair.AccountID, repair.Marker, repair.Platform, repair.BaseURL, request.CandidateKey.Key)
+		if l.managed.PauseReason == "upstream_key_missing" {
+			l.managed.PauseIdentity = l.managed.Identity
+		}
 	}
 	return nil
 }
@@ -135,6 +157,7 @@ type repairConnectorFixture struct {
 	recovered        *RemoteKey
 	publishCandidate bool
 	rejectEnsure     bool
+	onRecover        func()
 }
 
 func (c *repairConnectorFixture) EnsureKey(_ context.Context, _ Site, _ Session, _ RemoteGroup, _ string, _ *KeyCreationPlan) (RemoteKey, error) {
@@ -165,6 +188,9 @@ func (c *repairConnectorFixture) PostPlannedKey(context.Context, Site, Session, 
 }
 
 func (c *repairConnectorFixture) RecoverPlannedKey(context.Context, Site, Session, RemoteGroup, KeyCreationPlan) (RemoteKey, bool, error) {
+	if c.onRecover != nil {
+		c.onRecover()
+	}
 	if c.recovered == nil {
 		return RemoteKey{}, false, nil
 	}
@@ -191,6 +217,260 @@ func keyRepairFixture(t *testing.T) (*Service, *repairMemoryStore, *repairConnec
 	s.store, s.local, s.connector = store, repairLocal, repairConnector
 	s.now = func() time.Time { return base.snap.CreatedAt.Add(time.Minute) }
 	return s, store, repairConnector, repairLocal
+}
+
+func TestKeyRepairPreparesKeyOnlyWhenLocalAccountAbsent(t *testing.T) {
+	for _, historicalBinding := range []bool{true, false} {
+		t.Run(map[bool]string{true: "deleted historical account", false: "never imported"}[historicalBinding], func(t *testing.T) {
+			s, store, connector, local := keyRepairFixture(t)
+			delete(local.accounts, store.keys[0].Marker)
+			if !historicalBinding {
+				store.bindings = nil
+			}
+			repair, err := s.PrepareKeyRepair(t.Context(), 1, 4, PrepareKeyRepairInput{SiteVersion: 1})
+			require.NoError(t, err, "a missing local account must allow a reviewed key-only repair")
+			raw, err := json.Marshal(repair)
+			require.NoError(t, err)
+			var dto map[string]any
+			require.NoError(t, json.Unmarshal(raw, &dto))
+			require.Equal(t, "key_only", dto["mode"])
+			require.Empty(t, repair.ExpectedAccountFingerprint)
+			require.Empty(t, repair.ExpectedAccountIdentity)
+			if historicalBinding {
+				require.EqualValues(t, 6, repair.BindingID)
+				require.EqualValues(t, 10, repair.AccountID)
+			} else {
+				require.Zero(t, repair.BindingID)
+				require.Zero(t, repair.AccountID)
+			}
+			require.Zero(t, connector.createCalls)
+			require.Zero(t, local.calls)
+		})
+	}
+}
+
+func TestKeyOnlyRepairCommitsWithoutChangingOrRecreatingLocalAccount(t *testing.T) {
+	for _, historicalBinding := range []bool{true, false} {
+		t.Run(map[bool]string{true: "deleted historical account", false: "never imported"}[historicalBinding], func(t *testing.T) {
+			s, store, connector, local := keyRepairFixture(t)
+			delete(local.accounts, store.keys[0].Marker)
+			if !historicalBinding {
+				store.bindings = nil
+			}
+			originalAccount := local.managed
+			repair, err := s.PrepareKeyRepair(t.Context(), 1, 4, PrepareKeyRepairInput{SiteVersion: 1})
+			require.NoError(t, err)
+			repair, err = s.ConfirmKeyRepair(t.Context(), 1, 4, repair.ID)
+			require.NoError(t, err)
+			require.Equal(t, KeyRepairCommitted, repair.Stage)
+			require.Equal(t, KeyRepairModeKeyOnly, repair.Mode)
+			require.Equal(t, "replacement", store.keys[0].RemoteKeyID)
+			require.Equal(t, KeyHealthPresent, store.keys[0].Health.Status)
+			if historicalBinding {
+				require.Equal(t, store.keys[0].KeyCipher, store.bindings[0].KeyCipher)
+			} else {
+				require.Empty(t, store.bindings)
+			}
+			require.Empty(t, local.accounts)
+			require.Equal(t, originalAccount, local.managed)
+			require.Zero(t, local.calls)
+			require.Zero(t, local.patches)
+			repair, err = s.ConfirmKeyRepair(t.Context(), 1, 4, repair.ID)
+			require.NoError(t, err)
+			require.Equal(t, KeyRepairCommitted, repair.Stage)
+			require.Equal(t, 1, connector.createCalls)
+			require.Equal(t, 1, local.commits)
+			require.Zero(t, local.patches)
+		})
+	}
+}
+
+type repairReimportLocalFixture struct {
+	*repairLocalFixture
+}
+
+func (l *repairReimportLocalFixture) ApplyAccount(ctx context.Context, change AccountChange) (*LocalAccount, error) {
+	account, err := l.fakeLocal.ApplyAccount(ctx, change)
+	if err == nil {
+		account.ID = 11 // A fresh import receives a new local account identity.
+	}
+	return account, err
+}
+
+func TestKeyOnlyRepairAllowsFreshImportUsingReplacementKey(t *testing.T) {
+	s, store, connector, local := keyRepairFixture(t)
+	stable := store.keys[0].Marker
+	delete(local.accounts, stable)
+	oldAccount := local.managed
+	s.local = &repairReimportLocalFixture{repairLocalFixture: local}
+	repair, err := s.PrepareKeyRepair(t.Context(), 1, 4, PrepareKeyRepairInput{SiteVersion: 1})
+	require.NoError(t, err)
+	repair, err = s.ConfirmKeyRepair(t.Context(), 1, 4, repair.ID)
+	require.NoError(t, err)
+	require.Equal(t, KeyRepairCommitted, repair.Stage)
+	require.Empty(t, local.accounts)
+
+	preview, err := s.Preview(t.Context(), 1, selections())
+	require.NoError(t, err)
+	require.Len(t, preview.Rows, 1)
+	require.Nil(t, preview.Rows[0].Existing)
+	result, err := s.Apply(t.Context(), 1, preview.ID)
+	require.NoError(t, err)
+	require.Len(t, result.Items, 1)
+	require.Equal(t, "applied", result.Items[0].Status)
+	require.EqualValues(t, 11, result.Items[0].AccountID)
+	require.EqualValues(t, 11, store.bindings[0].AccountID)
+	require.Equal(t, store.keys[0].KeyCipher, store.bindings[0].KeyCipher)
+	require.Equal(t, "replacement-secret", local.changes[0].APIKey)
+	require.Equal(t, oldAccount, local.managed, "the deleted historical account must not be restored or changed")
+	require.Zero(t, local.patches)
+	require.Equal(t, 1, connector.createCalls)
+	require.Zero(t, connector.ensureCalls, "normal import reuses the verified replacement key")
+}
+
+func TestKeyRepairExplicitModeMustMatchLiveAccount(t *testing.T) {
+	for _, tc := range []struct {
+		name, requestedMode, errorCode string
+		removeAccount                  bool
+	}{
+		{"account repair without account", KeyRepairModeAccount, "repair_account_missing", true},
+		{"key-only repair with account", KeyRepairModeKeyOnly, "repair_account_present", false},
+		{"invalid repair mode", "unrecognized", "invalid_input", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, store, connector, local := keyRepairFixture(t)
+			if tc.removeAccount {
+				delete(local.accounts, store.keys[0].Marker)
+			}
+			_, err := s.PrepareKeyRepair(t.Context(), 1, 4, PrepareKeyRepairInput{SiteVersion: 1, Mode: tc.requestedMode})
+			require.Error(t, err)
+			require.Equal(t, tc.errorCode, ErrorCode(err))
+			require.Empty(t, store.repairs)
+			require.Zero(t, connector.createCalls)
+		})
+	}
+}
+
+func TestKeyOnlyRepairRejectsLiveHistoricalAccountWithChangedMarker(t *testing.T) {
+	s, store, connector, local := keyRepairFixture(t)
+	stable := store.keys[0].Marker
+	local.accounts["manually-detached-marker"] = local.accounts[stable]
+	delete(local.accounts, stable)
+	_, err := s.PrepareKeyRepair(t.Context(), 1, 4, PrepareKeyRepairInput{SiteVersion: 1})
+	require.ErrorIs(t, err, ErrRepairAccountPresent)
+	require.Equal(t, "repair_account_present", ErrorCode(err))
+	require.Empty(t, store.repairs)
+	require.Zero(t, connector.createCalls)
+}
+
+func TestKeyOnlyRepairRejectsLocalChangesBeforePost(t *testing.T) {
+	for _, change := range []string{"account appears", "account appears during remote read", "binding appears", "binding account changes", "binding marker changes", "binding cipher changes", "managed owner changes", "old key changes"} {
+		t.Run(change, func(t *testing.T) {
+			s, store, connector, local := keyRepairFixture(t)
+			stable := store.keys[0].Marker
+			delete(local.accounts, stable)
+			binding := store.bindings[0]
+			if change == "binding appears" {
+				store.bindings = nil
+			}
+			repair, err := s.PrepareKeyRepair(t.Context(), 1, 4, PrepareKeyRepairInput{SiteVersion: 1})
+			require.NoError(t, err)
+			switch change {
+			case "account appears":
+				local.accounts[stable] = &LocalAccount{ID: 11, Name: "New import", Fingerprint: "new-account"}
+			case "account appears during remote read":
+				connector.onRecover = func() { local.accounts[stable] = &LocalAccount{ID: 11, Name: "New import", Fingerprint: "new-account"} }
+			case "binding appears":
+				store.bindings = []Binding{binding}
+			case "binding account changes":
+				store.bindings[0].AccountID = 11
+			case "binding marker changes":
+				store.bindings[0].Marker = "changed-marker"
+			case "binding cipher changes":
+				store.bindings[0].KeyCipher = "manual-cipher"
+			case "managed owner changes":
+				store.keys[0].OwnerUserID = 11
+			case "old key changes":
+				store.keys[0].RemoteKeyID = "manual-remote-key"
+			}
+			repair, err = s.ConfirmKeyRepair(t.Context(), 1, 4, repair.ID)
+			require.NoError(t, err)
+			require.Equal(t, KeyRepairConflict, repair.Stage)
+			require.Contains(t, []string{"repair_context_changed", "repair_account_present"}, repair.ErrorCode)
+			require.Nil(t, repair.PostIntentAt)
+			require.True(t, repair.CanReprepare)
+			require.Zero(t, connector.createCalls)
+			require.Zero(t, local.commits)
+		})
+	}
+}
+
+func TestKeyOnlyRepairDoesNotInterpretReadFailureAsAccountAbsence(t *testing.T) {
+	s, store, connector, local := keyRepairFixture(t)
+	local.findErr = errors.New("local read unavailable")
+	_, err := s.PrepareKeyRepair(t.Context(), 1, 4, PrepareKeyRepairInput{SiteVersion: 1})
+	require.ErrorIs(t, err, local.findErr)
+	require.Empty(t, store.repairs)
+	require.Zero(t, connector.createCalls)
+}
+
+func TestKeyOnlyRepairUncertainPostCanRecoverWithoutSecondCreate(t *testing.T) {
+	s, store, connector, local := keyRepairFixture(t)
+	delete(local.accounts, store.keys[0].Marker)
+	store.bindings = nil
+	connector.createErr = errConnectorUncertain
+	repair, err := s.PrepareKeyRepair(t.Context(), 1, 4, PrepareKeyRepairInput{SiteVersion: 1})
+	require.NoError(t, err)
+	repair, err = s.ConfirmKeyRepair(t.Context(), 1, 4, repair.ID)
+	require.NoError(t, err)
+	require.Equal(t, KeyRepairAwaitingVisibility, repair.Stage)
+	require.NotNil(t, repair.PostIntentAt)
+	require.True(t, repair.CanAbandon)
+	_, err = s.PrepareKeyRepair(t.Context(), 1, 4, PrepareKeyRepairInput{SiteVersion: 1})
+	require.ErrorIs(t, err, ErrConflict)
+	connector.recovered = &RemoteKey{ID: "replacement", Key: "replacement-secret"}
+	connector.fakeConnector.remoteKeys = []RemoteKeyIdentity{{ID: "replacement", GroupID: "8"}}
+	repair, err = s.ConfirmKeyRepair(t.Context(), 1, 4, repair.ID)
+	require.NoError(t, err)
+	require.Equal(t, KeyRepairCommitted, repair.Stage)
+	require.Equal(t, 1, connector.createCalls)
+	require.Equal(t, 1, local.commits)
+	require.Empty(t, local.accounts)
+}
+
+func TestKeyOnlyRepairPreservesCommitRaceReason(t *testing.T) {
+	s, store, connector, local := keyRepairFixture(t)
+	delete(local.accounts, store.keys[0].Marker)
+	local.commitErr = ErrRepairAccountPresent
+	repair, err := s.PrepareKeyRepair(t.Context(), 1, 4, PrepareKeyRepairInput{SiteVersion: 1})
+	require.NoError(t, err)
+	repair, err = s.ConfirmKeyRepair(t.Context(), 1, 4, repair.ID)
+	require.NoError(t, err)
+	require.Equal(t, KeyRepairConflict, repair.Stage)
+	require.Equal(t, "repair_account_present", repair.ErrorCode)
+	require.False(t, repair.CanReprepare)
+	require.NotEmpty(t, repair.CandidateKeyCipher)
+	require.Equal(t, "old", store.keys[0].RemoteKeyID)
+	require.Equal(t, 1, connector.createCalls)
+	require.Zero(t, local.commits)
+}
+
+func TestKeyOnlyRepairRetriesBusyCommitWithoutSecondPost(t *testing.T) {
+	s, store, connector, local := keyRepairFixture(t)
+	delete(local.accounts, store.keys[0].Marker)
+	local.commitErr = ErrBusy
+	repair, err := s.PrepareKeyRepair(t.Context(), 1, 4, PrepareKeyRepairInput{SiteVersion: 1})
+	require.NoError(t, err)
+	repair, err = s.ConfirmKeyRepair(t.Context(), 1, 4, repair.ID)
+	require.ErrorIs(t, err, ErrBusy)
+	require.Equal(t, KeyRepairCandidateReady, repair.Stage)
+	require.Equal(t, KeyRepairCandidateReady, store.repairs[repair.ID].Stage)
+	local.commitErr = nil
+	repair, err = s.ConfirmKeyRepair(t.Context(), 1, 4, repair.ID)
+	require.NoError(t, err)
+	require.Equal(t, KeyRepairCommitted, repair.Stage)
+	require.Equal(t, 1, connector.createCalls)
+	require.Equal(t, 1, local.commits)
 }
 
 func TestKeyRepairReservesBeforeOneCreateAndCommitsOnExplicitConfirmation(t *testing.T) {

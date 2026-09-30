@@ -2,7 +2,7 @@
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import api, { type KeyRepairResult, type KeySelection, type ManagedKey } from '@/api/admin/upstream-governance'
-import { errorKey } from './feedback'
+import { errorKey, keyRepairErrorKey } from './feedback'
 import { formatGovernanceTime } from './format'
 import Icon from '@/components/icons/Icon.vue'
 
@@ -23,6 +23,12 @@ const outcomes = ref<{ remote_group_id: string; platform: string; status: string
 const busy = ref(false), loading = ref(false), error = ref(''), copied = ref(false)
 const repairTarget = ref<ManagedKey | null>(null)
 const repairPlan = ref<KeyRepairResult | null>(null)
+const keyOnlyRepair = computed(() => repairPlan.value?.mode === 'key_only')
+const repairStageKey = computed(() => {
+  const stage = repairPlan.value?.stage
+  const prefix = keyOnlyRepair.value && (stage === 'candidate_ready' || stage === 'committed') ? 'keyOnlyRepairStage_' : 'keyRepairStage_'
+  return `governance.${prefix}${stage}`
+})
 const repairError = ref('')
 const acknowledgeAbandon = ref(false)
 const processed = ref(0), total = ref(0)
@@ -98,7 +104,7 @@ async function openRepair(key: ManagedKey) {
     const existing = await api.keyRepair(props.siteId, key.id)
     if (request === generation) repairPlan.value = existing
   } catch (e) {
-    if (request === generation) repairError.value = t(errorKey(e))
+    if (request === generation) repairError.value = t(keyRepairErrorKey(e))
   } finally {
     if (request === generation) setBusy(false)
   }
@@ -121,7 +127,7 @@ async function prepareRepair() {
     } catch { /* Preserve the original preparation error. */ }
     if (request === generation) {
       if (recovered && recovered.id !== priorPlanId) repairPlan.value = recovered
-      else repairError.value = t(errorKey(e))
+      else repairError.value = t(keyRepairErrorKey(e))
     }
   } finally {
     if (request === generation) setBusy(false)
@@ -151,7 +157,7 @@ async function confirmRepair() {
       }
     }
   } catch (e) {
-    if (request === generation) repairError.value = t(errorKey(e))
+    if (request === generation) repairError.value = t(keyRepairErrorKey(e))
   } finally {
     if (request === generation) setBusy(false)
   }
@@ -169,7 +175,7 @@ async function abandonRepair() {
       acknowledgeAbandon.value = false
     }
   } catch (e) {
-    if (request === generation) repairError.value = t(errorKey(e))
+    if (request === generation) repairError.value = t(keyRepairErrorKey(e))
   } finally {
     if (request === generation) setBusy(false)
   }
@@ -298,12 +304,13 @@ async function copy(key?: ManagedKey) {
         <button type="button" :title="t('common.close')" :aria-label="t('common.close')" class="flex h-10 w-10 items-center justify-center text-gray-500 hover:text-gray-900 dark:hover:text-white" :disabled="busy" @click="repairTarget = null; repairPlan = null; acknowledgeAbandon = false"><Icon name="x" size="sm" /></button>
       </div>
       <p v-if="repairError" role="alert" class="text-sm text-red-600">{{ repairError }}</p>
-      <p v-if="repairPlan" data-test="repair-stage" class="text-sm">{{ t(`governance.keyRepairStage_${repairPlan.stage}`) }}<span v-if="repairPlan.error_code"> · {{ t(errorKey({ reason: repairPlan.error_code })) }}</span></p>
-      <p v-if="repairPlan" class="text-xs text-gray-500">{{ repairPlan.account_name }} #{{ repairPlan.account_id }} · {{ t('governance.keyOldRemoteID') }} #{{ repairPlan.old_remote_key_id }}</p>
+      <p v-if="keyOnlyRepair" data-test="repair-key-only-hint" class="rounded-lg bg-primary-50 p-3 text-sm leading-6 text-primary-800 dark:bg-primary-900/20 dark:text-primary-200">{{ t('governance.keyOnlyRepairHint') }}</p>
+      <p v-if="repairPlan" data-test="repair-stage" class="text-sm">{{ t(repairStageKey) }}<span v-if="repairPlan.error_code"> · {{ t(keyRepairErrorKey({ reason: repairPlan.error_code })) }}</span></p>
+      <p v-if="repairPlan" class="text-xs text-gray-500"><span v-if="!keyOnlyRepair">{{ repairPlan.account_name }} #{{ repairPlan.account_id }} · </span>{{ t('governance.keyOldRemoteID') }} #{{ repairPlan.old_remote_key_id }}</p>
       <p v-if="repairPlan?.planned_key_name" class="text-xs text-gray-500">{{ t('governance.plannedKeyName') }} <code data-test="planned-key-name" class="select-all break-all font-medium text-gray-800 dark:text-gray-200">{{ repairPlan.planned_key_name }}</code></p>
       <div class="flex flex-wrap gap-2">
         <button v-if="!repairPlan || repairPlan.can_reprepare || repairPlan.stage === 'committed'" data-test="prepare-key-repair" type="button" class="btn btn-secondary" :disabled="busy" @click="prepareRepair">{{ t('governance.prepareKeyRepair') }}</button>
-        <button v-else-if="repairPlan.stage !== 'conflict' && repairPlan.stage !== 'abandoned'" data-test="confirm-key-repair" type="button" class="btn btn-primary" :disabled="busy" @click="confirmRepair">{{ t(repairPlan.stage === 'prepared' ? 'governance.confirmKeyRepair' : 'governance.recheckKeyRepair') }}</button>
+        <button v-else-if="repairPlan.stage !== 'conflict' && repairPlan.stage !== 'abandoned'" data-test="confirm-key-repair" type="button" class="btn btn-primary" :disabled="busy" @click="confirmRepair">{{ t(repairPlan.stage === 'prepared' ? keyOnlyRepair ? 'governance.confirmKeyOnlyRepair' : 'governance.confirmKeyRepair' : 'governance.recheckKeyRepair') }}</button>
       </div>
       <div v-if="repairPlan?.can_abandon" class="space-y-2 border-t border-gray-200 pt-3 dark:border-dark-600">
         <label class="governance-checkbox-label flex items-start gap-2 text-xs leading-5 text-amber-800 dark:text-amber-300"><input v-model="acknowledgeAbandon" data-test="acknowledge-key-repair" type="checkbox" class="governance-checkbox mt-0.5" /><span>{{ t('governance.abandonKeyRepairWarning') }}</span></label>

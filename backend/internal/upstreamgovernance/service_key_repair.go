@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -12,6 +13,9 @@ import (
 )
 
 const (
+	KeyRepairModeAccount = "account"
+	KeyRepairModeKeyOnly = "key_only"
+
 	KeyRepairPrepared           = "prepared"
 	KeyRepairPostIntent         = "post_intent"
 	KeyRepairAwaitingVisibility = "awaiting_visibility"
@@ -27,6 +31,7 @@ type KeyRepair struct {
 	ID                         string           `json:"id"`
 	SiteID                     int64            `json:"site_id"`
 	ManagedKeyID               int64            `json:"managed_key_id"`
+	Mode                       string           `json:"mode"`
 	AccountID                  int64            `json:"account_id"`
 	AccountName                string           `json:"account_name"`
 	RemoteGroupID              string           `json:"remote_group_id"`
@@ -56,7 +61,8 @@ type KeyRepair struct {
 }
 
 type PrepareKeyRepairInput struct {
-	SiteVersion int64 `json:"site_version"`
+	SiteVersion int64  `json:"site_version"`
+	Mode        string `json:"mode,omitempty"`
 }
 
 type AbandonKeyRepairInput struct {
@@ -81,7 +87,13 @@ type KeyRepairStore interface {
 	SaveKeyRepairProgress(context.Context, *KeyRepair, string) error
 }
 
-var errRepairCatalogStale = errors.New("repair catalog is stale")
+var (
+	ErrRepairCatalogStale   = fmt.Errorf("repair catalog is stale: %w", ErrConflict)
+	ErrRepairAccountMissing = fmt.Errorf("repair local account is missing: %w", ErrConflict)
+	ErrRepairAccountPresent = fmt.Errorf("key-only repair has a live local account: %w", ErrConflict)
+	ErrRepairContextChanged = fmt.Errorf("repair context changed: %w", ErrConflict)
+	errRepairCatalogStale   = ErrRepairCatalogStale
+)
 
 func (s *Service) LatestKeyRepair(ctx context.Context, siteID, keyID int64) (*KeyRepair, error) {
 	if siteID <= 0 || keyID <= 0 {
@@ -99,7 +111,7 @@ func (s *Service) LatestKeyRepair(ctx context.Context, siteID, keyID int64) (*Ke
 }
 
 func (s *Service) PrepareKeyRepair(ctx context.Context, siteID, keyID int64, input PrepareKeyRepairInput) (*KeyRepair, error) {
-	if siteID <= 0 || keyID <= 0 || input.SiteVersion <= 0 {
+	if siteID <= 0 || keyID <= 0 || input.SiteVersion <= 0 || input.Mode != "" && input.Mode != KeyRepairModeAccount && input.Mode != KeyRepairModeKeyOnly {
 		return nil, ErrInvalid
 	}
 	store, ok := s.store.(KeyRepairStore)
@@ -124,23 +136,20 @@ func (s *Service) PrepareKeyRepair(ctx context.Context, siteID, keyID int64, inp
 		return nil, err
 	}
 	if key.KeyCipher == "" || key.RemoteKeyID == "" || key.Health.Status != KeyHealthConfirmedMissing || key.Health.MissingCount < 2 {
-		return nil, ErrConflict
+		return nil, ErrRepairContextChanged
 	}
 	session, err := s.managementSessionLocked(ctx, site, false)
 	if err != nil {
 		return nil, err
 	}
 	if session.UserID <= 0 || session.UserID != key.OwnerUserID {
-		return nil, ErrConflict
+		return nil, ErrRepairContextChanged
 	}
 	group, err := s.repairGroup(ctx, *site, key.RemoteGroupID, key.Platform)
 	if err != nil {
-		if errors.Is(err, errRepairCatalogStale) {
-			return nil, ErrConflict
-		}
 		return nil, err
 	}
-	binding, account, managedAccount, err := s.repairAccount(ctx, *site, *key)
+	mode, binding, account, managedAccount, err := s.repairTarget(ctx, *site, *key, input.Mode)
 	if err != nil {
 		return nil, err
 	}
@@ -152,7 +161,7 @@ func (s *Service) PrepareKeyRepair(ctx context.Context, siteID, keyID int64, inp
 		return nil, ErrUpstreamKeyUnverifiable
 	}
 	if _, exists := inventory[key.RemoteKeyID]; exists {
-		return nil, ErrConflict
+		return nil, ErrRepairContextChanged
 	}
 	id := uuid.NewString()
 	name := repairKeyName(group, s.now(), site.Platform, id)
@@ -164,7 +173,19 @@ func (s *Service) PrepareKeyRepair(ctx context.Context, siteID, keyID int64, inp
 		existing = []int64{}
 	}
 	now := s.now().UTC()
-	repair := &KeyRepair{ID: id, SiteID: site.ID, ManagedKeyID: key.ID, BindingID: binding.ID, AccountID: binding.AccountID, AccountName: account.Name, SiteVersion: site.Version, OwnerUserID: session.UserID, Marker: key.Marker, RemoteGroupID: key.RemoteGroupID, Platform: key.Platform, BaseURL: site.BaseURL, OldRemoteKeyID: key.RemoteKeyID, PlannedKeyName: name, OldKeyCipher: key.KeyCipher, OldCreationPlan: key.CreationPlan, ExpectedAccountFingerprint: account.Fingerprint, ExpectedAccountIdentity: managedAccount.Identity, Plan: KeyCreationPlan{Name: name, ExistingIDs: append([]int64{}, existing...)}, IdempotencyKey: repairIdempotencyKey(id), Stage: KeyRepairPrepared, CreatedAt: now, UpdatedAt: now}
+	repair := &KeyRepair{ID: id, SiteID: site.ID, ManagedKeyID: key.ID, Mode: mode, BindingID: binding.ID, AccountID: binding.AccountID, SiteVersion: site.Version, OwnerUserID: session.UserID, Marker: key.Marker, RemoteGroupID: key.RemoteGroupID, Platform: key.Platform, BaseURL: site.BaseURL, OldRemoteKeyID: key.RemoteKeyID, PlannedKeyName: name, OldKeyCipher: key.KeyCipher, OldCreationPlan: key.CreationPlan, Plan: KeyCreationPlan{Name: name, ExistingIDs: append([]int64{}, existing...)}, IdempotencyKey: repairIdempotencyKey(id), Stage: KeyRepairPrepared, CreatedAt: now, UpdatedAt: now}
+	if account != nil {
+		repair.AccountName, repair.ExpectedAccountFingerprint = account.Name, account.Fingerprint
+		repair.ExpectedAccountIdentity = managedAccount.Identity
+	} else if binding.AccountID > 0 {
+		// The historical label is useful in the review without authorizing any
+		// write to the deleted account.
+		names, nameErr := s.local.(LocalAccountNames).AccountNames(ctx, []int64{binding.AccountID})
+		if nameErr != nil {
+			return nil, nameErr
+		}
+		repair.AccountName = names[binding.AccountID].Name
+	}
 	if err = store.ReserveKeyRepair(ctx, repair); err != nil {
 		return nil, err
 	}
@@ -205,10 +226,10 @@ func (s *Service) ConfirmKeyRepair(ctx context.Context, siteID, keyID int64, rep
 	}
 	group, session, err := s.validateRepairContext(ctx, *site, *repair)
 	if errors.Is(err, errRepairCatalogStale) {
-		return repair, ErrConflict
+		return repair, ErrRepairCatalogStale
 	}
 	if errors.Is(err, ErrConflict) {
-		return s.conflictKeyRepair(ctx, store, repair)
+		return s.conflictKeyRepairWithCause(ctx, store, repair, err)
 	}
 	if err != nil {
 		return nil, err
@@ -240,6 +261,17 @@ func (s *Service) ConfirmKeyRepair(ctx context.Context, siteID, keyID int64, rep
 			return nil, readErr
 		} else if found {
 			return s.conflictKeyRepair(ctx, store, repair)
+		}
+		// Remote reads can take time. Recheck the frozen local target immediately
+		// before recording the single POST intent.
+		if _, _, err = s.validateRepairContext(ctx, *site, *repair); err != nil {
+			if errors.Is(err, ErrRepairCatalogStale) {
+				return repair, err
+			}
+			if errors.Is(err, ErrConflict) {
+				return s.conflictKeyRepairWithCause(ctx, store, repair, err)
+			}
+			return repair, err
 		}
 		previous := repair.Stage
 		now := s.now().UTC()
@@ -339,7 +371,7 @@ func (s *Service) ConfirmKeyRepair(ctx context.Context, siteID, keyID int64, rep
 	}
 	if err = committer.CommitKeyRepair(ctx, KeyRepairCommitRequest{Repair: *repair, OldKey: oldKey, CandidateKey: candidate, CandidateVerifiedAt: verifiedAt}); err != nil {
 		if errors.Is(err, ErrConflict) {
-			return s.conflictKeyRepair(ctx, store, repair)
+			return s.conflictKeyRepairWithCause(ctx, store, repair, err)
 		}
 		return repair, err
 	}
@@ -371,7 +403,10 @@ func (s *Service) finishCommittedKeyRepair(ctx context.Context, site Site, repai
 	if updated.OwnerUserID != repair.OwnerUserID || updated.Marker != repair.Marker || updated.RemoteGroupID != repair.RemoteGroupID || updated.Platform != repair.Platform || updated.RemoteKeyID != repair.CandidateRemoteKeyID || updated.KeyCipher != repair.CandidateKeyCipher || updated.Health.Status != KeyHealthPresent {
 		return nil
 	}
-	protectionErr := s.protectKeyAccount(postCommitCtx, site, *updated, updated.Health)
+	var protectionErr error
+	if repair.Mode != KeyRepairModeKeyOnly {
+		protectionErr = s.protectKeyAccount(postCommitCtx, site, *updated, updated.Health)
+	}
 	if healthStore, ok := s.store.(KeyHealthStore); ok {
 		health := updated.Health
 		s.notifyKeyHealth(postCommitCtx, healthStore, site, *updated, &health)
@@ -490,7 +525,7 @@ func (s *Service) repairGroup(ctx context.Context, site Site, groupID, platform 
 			return group, nil
 		}
 	}
-	return RemoteGroup{}, ErrConflict
+	return RemoteGroup{}, ErrRepairContextChanged
 }
 
 func (s *Service) repairAccount(ctx context.Context, site Site, key ManagedKey) (Binding, *LocalAccount, *ManagedLocalAccount, error) {
@@ -534,34 +569,93 @@ func (s *Service) repairAccount(ctx context.Context, site Site, key ManagedKey) 
 	return Binding{}, nil, nil, ErrConflict
 }
 
+// An absent account is a distinct, reviewed target. Never infer its absence
+// from a failed read or from a marker that was removed from a live account.
+func (s *Service) repairTarget(ctx context.Context, site Site, key ManagedKey, requestedMode string) (string, Binding, *LocalAccount, *ManagedLocalAccount, error) {
+	bindings, err := s.store.ListBindings(ctx, site.ID)
+	if err != nil {
+		return "", Binding{}, nil, nil, err
+	}
+	var target Binding
+	for _, binding := range bindings {
+		if binding.Marker != key.Marker && (binding.RemoteGroupID != key.RemoteGroupID || binding.Platform != key.Platform) {
+			continue
+		}
+		if target.ID != 0 || binding.ID <= 0 || binding.SiteID != site.ID || binding.Marker != key.Marker || binding.RemoteGroupID != key.RemoteGroupID || binding.Platform != key.Platform || binding.AccountID < 0 || binding.KeyCipher != key.KeyCipher {
+			return "", Binding{}, nil, nil, ErrRepairContextChanged
+		}
+		target = binding
+	}
+	account, err := s.local.FindAccount(ctx, key.Marker)
+	if err != nil && !errors.Is(err, ErrNotFound) {
+		if errors.Is(err, ErrConflict) {
+			err = ErrRepairContextChanged
+		}
+		return "", Binding{}, nil, nil, err
+	}
+	if errors.Is(err, ErrNotFound) {
+		account = nil
+	}
+	if account != nil {
+		if requestedMode == KeyRepairModeKeyOnly {
+			return "", Binding{}, nil, nil, ErrRepairAccountPresent
+		}
+		binding, account, managed, err := s.repairAccount(ctx, site, key)
+		if errors.Is(err, ErrConflict) {
+			err = ErrRepairContextChanged
+		}
+		return KeyRepairModeAccount, binding, account, managed, err
+	}
+	if requestedMode == KeyRepairModeAccount {
+		return "", Binding{}, nil, nil, ErrRepairAccountMissing
+	}
+	if target.AccountID > 0 {
+		reader, ok := s.local.(LocalAccountNames)
+		if !ok {
+			return "", Binding{}, nil, nil, ErrUnsupported
+		}
+		names, err := reader.AccountNames(ctx, []int64{target.AccountID})
+		if err != nil {
+			return "", Binding{}, nil, nil, err
+		}
+		if historical, exists := names[target.AccountID]; exists && !historical.Deleted {
+			return "", Binding{}, nil, nil, ErrRepairAccountPresent
+		}
+	}
+	return KeyRepairModeKeyOnly, target, nil, nil, nil
+}
+
 func (s *Service) validateRepairContext(ctx context.Context, site Site, repair KeyRepair) (RemoteGroup, Session, error) {
 	if !site.Enabled || site.ID != repair.SiteID || site.Version != repair.SiteVersion || site.BaseURL != repair.BaseURL {
-		return RemoteGroup{}, Session{}, ErrConflict
+		return RemoteGroup{}, Session{}, ErrRepairContextChanged
 	}
 	key, err := s.store.GetManagedKey(ctx, site.ID, repair.ManagedKeyID)
 	if err != nil {
 		return RemoteGroup{}, Session{}, err
 	}
 	if key.OwnerUserID != repair.OwnerUserID || key.Marker != repair.Marker || key.RemoteGroupID != repair.RemoteGroupID || key.Platform != repair.Platform || key.RemoteKeyID != repair.OldRemoteKeyID || key.KeyCipher != repair.OldKeyCipher || key.Health.Status != KeyHealthConfirmedMissing || key.Health.MissingCount < 2 {
-		return RemoteGroup{}, Session{}, ErrConflict
+		return RemoteGroup{}, Session{}, ErrRepairContextChanged
 	}
 	group, err := s.repairGroup(ctx, site, repair.RemoteGroupID, repair.Platform)
 	if err != nil {
 		return RemoteGroup{}, Session{}, err
 	}
-	binding, account, managed, err := s.repairAccount(ctx, site, *key)
+	mode, binding, account, managed, err := s.repairTarget(ctx, site, *key, normalizedRepairMode(repair.Mode))
 	if err != nil {
 		return RemoteGroup{}, Session{}, err
 	}
-	if binding.ID != repair.BindingID || binding.AccountID != repair.AccountID || account.Fingerprint != repair.ExpectedAccountFingerprint || managed.Identity != repair.ExpectedAccountIdentity {
-		return RemoteGroup{}, Session{}, ErrConflict
+	if mode != normalizedRepairMode(repair.Mode) || binding.ID != repair.BindingID || binding.AccountID != repair.AccountID {
+		return RemoteGroup{}, Session{}, ErrRepairContextChanged
+	}
+	if mode == KeyRepairModeAccount && (account.Fingerprint != repair.ExpectedAccountFingerprint || managed.Identity != repair.ExpectedAccountIdentity) {
+		return RemoteGroup{}, Session{}, ErrRepairContextChanged
 	}
 	session, err := s.managementSessionLocked(ctx, &site, false)
 	if err != nil {
 		return RemoteGroup{}, Session{}, err
 	}
 	if session.UserID <= 0 || session.UserID != repair.OwnerUserID {
-		return RemoteGroup{}, Session{}, ErrConflict
+		return RemoteGroup{}, Session{}, ErrRepairContextChanged
 	}
 	return group, session, nil
 }
@@ -577,12 +671,19 @@ func (s *Service) awaitKeyRepair(ctx context.Context, store KeyRepairStore, repa
 	if err := store.SaveKeyRepairProgress(ctx, repair, previous); err != nil {
 		return nil, err
 	}
-	return repair, nil
+	return repairCapabilities(repair), nil
 }
 
 func (s *Service) conflictKeyRepair(ctx context.Context, store KeyRepairStore, repair *KeyRepair) (*KeyRepair, error) {
+	return s.conflictKeyRepairWithCause(ctx, store, repair, ErrRepairContextChanged)
+}
+
+func (s *Service) conflictKeyRepairWithCause(ctx context.Context, store KeyRepairStore, repair *KeyRepair, cause error) (*KeyRepair, error) {
 	previous := repair.Stage
-	repair.Stage, repair.ErrorCode, repair.UpdatedAt = KeyRepairConflict, "stale_preview", s.now().UTC()
+	if cause == ErrConflict {
+		cause = ErrRepairContextChanged
+	}
+	repair.Stage, repair.ErrorCode, repair.UpdatedAt = KeyRepairConflict, ErrorCode(cause), s.now().UTC()
 	if err := store.SaveKeyRepairProgress(ctx, repair, previous); err != nil {
 		return nil, err
 	}
@@ -591,11 +692,19 @@ func (s *Service) conflictKeyRepair(ctx context.Context, store KeyRepairStore, r
 
 func repairCapabilities(repair *KeyRepair) *KeyRepair {
 	if repair != nil {
+		repair.Mode = normalizedRepairMode(repair.Mode)
 		repair.PlannedKeyName = repair.Plan.Name
 		repair.CanReprepare = repair.Stage == KeyRepairAbandoned || repair.Stage == KeyRepairConflict && repair.PostIntentAt == nil
 		repair.CanAbandon = repairMayAbandon(*repair)
 	}
 	return repair
+}
+
+func normalizedRepairMode(mode string) string {
+	if mode == "" {
+		return KeyRepairModeAccount
+	}
+	return mode
 }
 
 func repairMayAbandon(repair KeyRepair) bool {
