@@ -1,5 +1,5 @@
-/** Display-only formatting; retain ISO timestamps unchanged in API requests. */
-export function formatGovernanceTime(value: string | null | undefined, timeZone?: string): string {
+/** Display-only formatting; governance timestamps always use UTC+8. */
+export function formatGovernanceTime(value: string | null | undefined, timeZone = 'Asia/Shanghai'): string {
   if (!value) return '—'
   const date = new Date(value)
   if (!Number.isFinite(date.getTime())) return '—'

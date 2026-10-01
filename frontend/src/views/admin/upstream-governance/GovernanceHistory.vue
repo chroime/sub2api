@@ -28,6 +28,33 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const historyTab = ref<'events' | 'checks'>('events')
 const remoteNames = computed(() => new Map(props.remoteGroups?.map(group => [group.id, group.name])))
+type RateSnapshot = { Resolved?: number | null }
+function rateSnapshot(value: string): RateSnapshot | null {
+  try {
+    const parsed = JSON.parse(value) as RateSnapshot
+    return parsed && typeof parsed === 'object' ? parsed : null
+  } catch {
+    return null
+  }
+}
+function rateText(value: number | null | undefined): string {
+  return typeof value === 'number' && Number.isFinite(value) ? String(value) : '—'
+}
+function eventSummary(event: GovernanceEvent): string {
+  const group = remoteNames.value.get(event.resource) || `#${event.resource}`
+  if (event.kind === 'rate_changed') {
+    const before = rateSnapshot(event.before)?.Resolved
+    const after = rateSnapshot(event.after)?.Resolved
+    if (typeof before === 'number' && typeof after === 'number' && Number.isFinite(before) && Number.isFinite(after)) {
+      const delta = after - before
+      if (delta > 0 && before !== 0) return t('governance.rateChangedUpSummary', { group, before: rateText(before), after: rateText(after), delta: rateText(delta), percent: (Math.round(delta / before * 10000) / 100).toString() })
+      if (delta < 0 && before !== 0) return t('governance.rateChangedDownSummary', { group, before: rateText(before), after: rateText(after), delta: rateText(Math.abs(delta)), percent: (Math.round(Math.abs(delta) / before * 10000) / 100).toString() })
+      return t('governance.rateChangedStableSummary', { group, before: rateText(before), after: rateText(after) })
+    }
+  }
+  const summaryKeys: Record<string, string> = { group_added: 'groupAddedSummary', group_removed: 'groupRemovedSummary', group_changed: 'groupChangedSummary', price_changed: 'priceChangedSummary', models_changed: 'modelsChangedSummary', channels_changed: 'channelsChangedSummary' }
+  return t(`governance.${summaryKeys[event.kind] || 'eventChangeSummary'}`, { group })
+}
 </script>
 <template>
   <section class="space-y-6">
@@ -139,12 +166,13 @@ const remoteNames = computed(() => new Map(props.remoteGroups?.map(group => [gro
             }}
           </button>
         </div>
+        <p data-test="event-summary" class="mt-3 text-sm leading-6 text-gray-700 dark:text-gray-200">{{ eventSummary(event) }}</p>
         <details
           v-if="event.before || event.after"
           class="mt-2 text-xs text-gray-500"
         >
           <summary class="cursor-pointer">
-            {{ t('governance.changeDetails') }}
+            {{ t('governance.rawChangeData') }}
           </summary>
           <p class="mt-2 break-all">
             {{ t('governance.before') }}: {{ event.before || '—' }}

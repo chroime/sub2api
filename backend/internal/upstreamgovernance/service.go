@@ -689,7 +689,7 @@ func (s *Service) syncLockedWithAutoReauthorization(ctx context.Context, site Si
 	// Catalog events are persisted as notification intents while the site lock
 	// is still held; SMTP dispatch is deferred until runDue has released every
 	// site/remote lock. A notification failure never invalidates this snapshot.
-	s.enqueueCatalogChangeNotices(ctx, site, events, previous == nil)
+	s.enqueueCatalogChangeNotices(ctx, site, events, previous == nil, catalog)
 	if e = s.store.ObserveSite(ctx, site.ID, "healthy", "", now, next); e != nil {
 		return nil, e
 	}
@@ -701,26 +701,16 @@ func (s *Service) syncLockedWithAutoReauthorization(ctx context.Context, site Si
 	return snapshot, nil
 }
 
-func (s *Service) enqueueCatalogChangeNotices(ctx context.Context, site Site, events []Event, initialBaseline bool) {
+func (s *Service) enqueueCatalogChangeNotices(ctx context.Context, site Site, events []Event, initialBaseline bool, catalog Catalog) {
 	if len(events) == 0 || s.changeQueue == nil || s.changeNotifier == nil {
 		return
 	}
 	for _, event := range events {
-		kind, severity, subject := "catalog_change", "info", "上游目录发生变化 / Upstream catalog changed"
-		switch event.Kind {
-		case "group_added", "group_removed", "group_changed":
-			kind, subject = "group_change", "上游可见分组发生变化 / Upstream group changed"
-		case "rate_changed", "price_changed":
-			kind, severity, subject = "rate_change", "warning", "上游倍率或价格发生变化 / Upstream rate or price changed"
-		}
-		payload := fmt.Sprintf("事件：%s\n资源：%s\n变更前：%s\n变更后：%s", event.Kind, event.Resource, event.Before, event.After)
 		digest := sha256.Sum256([]byte(event.Kind + "\x00" + event.Resource + "\x00" + event.Before + "\x00" + event.After))
-		notice := ChangeNotice{
-			SiteID: site.ID, SiteName: site.Name, BaseURL: site.BaseURL,
-			Kind: kind, Severity: severity,
-			DedupKey: fmt.Sprintf("site:%d:event:%s", site.ID, hex.EncodeToString(digest[:])),
-			Subject:  subject, Body: payload, InitialBaseline: initialBaseline, ObservedAt: event.CreatedAt,
-		}
+		notice := renderCatalogChangeNotice(site, event, catalog)
+		notice.DedupKey = fmt.Sprintf("site:%d:event:%s", site.ID, hex.EncodeToString(digest[:]))
+		notice.InitialBaseline = initialBaseline
+		notice.ObservedAt = event.CreatedAt
 		if err := s.EnqueueChangeNotice(ctx, notice); err != nil {
 			log.Printf("[UpstreamGovernance] enqueue change notification: %s", ErrorCode(err))
 		}

@@ -11,9 +11,9 @@ describe('governance timestamp presentation', () => {
   it('uses midnight 00 rather than 24 and retains calendar rollover', () => {
     expect(formatGovernanceTime('2026-09-26T16:00:00Z', 'Asia/Shanghai')).toBe('2026-09-27 00:00:00')
   })
-  it('uses the browser system timezone by default', () => {
+  it('uses Asia/Shanghai by default', () => {
     const timestamp = '2026-09-26T15:08:02Z'
-    expect(formatGovernanceTime(timestamp)).toBe(formatGovernanceTime(timestamp, Intl.DateTimeFormat().resolvedOptions().timeZone))
+    expect(formatGovernanceTime(timestamp)).toBe('2026-09-26 23:08:02')
   })
   it('shows a neutral placeholder for unknown and invalid timestamps', () => {
     for (const value of [null, undefined, '', 'not-a-time']) expect(formatGovernanceTime(value)).toBe('—')

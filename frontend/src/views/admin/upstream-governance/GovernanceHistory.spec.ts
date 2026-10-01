@@ -38,6 +38,15 @@ describe('imported binding names', () => {
     wrapper.unmount()
   })
 
+  it('renders a readable rate summary and keeps raw JSON behind details', () => {
+    const wrapper = mount(GovernanceHistory, { props: { mode: 'history', bindings: [], remoteGroups: [{ id: '7', name: 'Claude Max' }], events: { items: [
+      { id: 10, site_id: 1, kind: 'rate_changed', resource: '7', before: '{"Resolved":0.9}', after: '{"Resolved":0.93}', acknowledged: false, created_at: '2026-09-30T08:00:00Z' },
+    ], total: 1, page: 1, page_size: 20, pages: 1 }, checks: null } })
+    expect(wrapper.get('[data-test=event-summary]').text()).toContain('governance.rateChangedUpSummary')
+    expect(wrapper.get('summary').text()).toBe('governance.rawChangeData')
+    wrapper.unmount()
+  })
+
   it('shows current group and account names alongside IDs and refreshes renamed groups', async () => {
     const wrapper = mount(GovernanceHistory, { props: { mode: 'bindings', bindings: [binding], remoteGroups: [{ id: 'upstream-7', name: 'Codex discount' }], groups: [{ id: 3, name: 'Local OpenAI' }, { id: 4, name: 'Local mixed' }], events: null, checks: null } })
     expect(wrapper.get('[data-test=binding-upstream]').text()).toContain('Codex discount')
