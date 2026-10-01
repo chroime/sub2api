@@ -31,10 +31,10 @@ ALTER TABLE upstream_governance_sites
 
 DO $$
 BEGIN
- IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='upstream_governance_sites_fast_interval_seconds_check') THEN
+ IF NOT EXISTS (SELECT 1 FROM pg_constraint c JOIN pg_class r ON r.oid=c.conrelid JOIN pg_namespace n ON n.oid=r.relnamespace WHERE c.conname='upstream_governance_sites_fast_interval_seconds_check' AND r.relname='upstream_governance_sites' AND n.nspname=current_schema()) THEN
   ALTER TABLE upstream_governance_sites ADD CONSTRAINT upstream_governance_sites_fast_interval_seconds_check CHECK (fast_interval_seconds BETWEEN 1 AND 128849018820);
  END IF;
- IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='upstream_governance_sites_full_interval_seconds_check') THEN
+ IF NOT EXISTS (SELECT 1 FROM pg_constraint c JOIN pg_class r ON r.oid=c.conrelid JOIN pg_namespace n ON n.oid=r.relnamespace WHERE c.conname='upstream_governance_sites_full_interval_seconds_check' AND r.relname='upstream_governance_sites' AND n.nspname=current_schema()) THEN
   ALTER TABLE upstream_governance_sites ADD CONSTRAINT upstream_governance_sites_full_interval_seconds_check CHECK (full_interval_seconds BETWEEN 1 AND 128849018820);
  END IF;
 END $$;
