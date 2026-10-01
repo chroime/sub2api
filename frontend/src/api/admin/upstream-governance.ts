@@ -448,6 +448,7 @@ export interface GovernanceEvent {
   id: number
   kind: string
   resource: string
+  resource_name?: string
   before: string
   after: string
   acknowledged: boolean

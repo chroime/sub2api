@@ -8,6 +8,7 @@ import (
 )
 
 type catalogRateNoticeValue struct {
+	Name     string   `json:"Name"`
 	Resolved *float64 `json:"Resolved"`
 }
 
@@ -40,6 +41,11 @@ func renderCatalogChangeNotice(site Site, event Event, catalog Catalog) ChangeNo
 	case "rate_changed":
 		var before, after catalogRateNoticeValue
 		if json.Unmarshal([]byte(event.Before), &before) == nil && json.Unmarshal([]byte(event.After), &after) == nil && before.Resolved != nil && after.Resolved != nil {
+			if after.Name != "" {
+				groupName = after.Name
+			} else if before.Name != "" {
+				groupName = before.Name
+			}
 			delta := *after.Resolved - *before.Resolved
 			verb := "倍率未变化"
 			change := ""

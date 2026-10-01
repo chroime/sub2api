@@ -153,7 +153,20 @@ func (s *Service) Bindings(ctx context.Context, id int64) ([]Binding, error) {
 	return bindings, nil
 }
 func (s *Service) Events(ctx context.Context, id int64, page, size int) ([]Event, int64, error) {
-	return s.store.ListEvents(ctx, id, page, size)
+	events, total, err := s.store.ListEvents(ctx, id, page, size)
+	if err != nil {
+		return nil, 0, err
+	}
+	if reader, ok := s.store.(EventGroupNameReader); ok {
+		for i := range events {
+			if events[i].ResourceName == "" && events[i].Resource != "" {
+				if name, nameErr := reader.EventGroupName(ctx, id, events[i].Resource, events[i].CreatedAt); nameErr == nil {
+					events[i].ResourceName = name
+				}
+			}
+		}
+	}
+	return events, total, nil
 }
 func (s *Service) Checks(ctx context.Context, id int64, page, size int) ([]Check, int64, error) {
 	return s.store.ListChecks(ctx, id, page, size)
@@ -1062,10 +1075,11 @@ func canonical(v any) string            { b, _ := json.Marshal(v); return string
 func sortedStrings(s []string) []string { r := append([]string{}, s...); sort.Strings(r); return r }
 func groupRates(g RemoteGroup) any {
 	return struct {
+		Name                       string
 		Base, User, Resolved, Peak *float64
 		Enabled                    bool
 		Start, End                 string
-	}{g.RateMultiplier, g.UserRateMultiplier, g.ResolvedRateMultiplier, g.PeakRateMultiplier, g.PeakRateEnabled, g.PeakStart, g.PeakEnd}
+	}{g.Name, g.RateMultiplier, g.UserRateMultiplier, g.ResolvedRateMultiplier, g.PeakRateMultiplier, g.PeakRateEnabled, g.PeakStart, g.PeakEnd}
 }
 func prices(g RemoteGroup) []RemotePrice {
 	p := append([]RemotePrice{}, g.Prices...)

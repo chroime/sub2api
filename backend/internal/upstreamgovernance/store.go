@@ -448,6 +448,30 @@ func (s *sqlStore) LatestSnapshot(ctx context.Context, id int64) (*Snapshot, err
 	}
 	return &v, nil
 }
+
+func (s *sqlStore) EventGroupName(ctx context.Context, siteID int64, resource string, at time.Time) (string, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT catalog FROM upstream_governance_snapshots WHERE site_id=$1 AND created_at <= $2 ORDER BY id DESC LIMIT 20`, siteID, at)
+	if err != nil {
+		return "", err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var raw []byte
+		if err := rows.Scan(&raw); err != nil {
+			return "", err
+		}
+		var catalog Catalog
+		if err := json.Unmarshal(raw, &catalog); err != nil {
+			continue
+		}
+		for _, group := range catalog.Groups {
+			if group.ID == resource && group.Name != "" {
+				return group.Name, nil
+			}
+		}
+	}
+	return "", rows.Err()
+}
 func (s *sqlStore) SaveSnapshot(ctx context.Context, v *Snapshot, events []Event) error {
 	data, e := json.Marshal(v.Catalog)
 	if e != nil {

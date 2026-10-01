@@ -41,7 +41,7 @@ function rateText(value: number | null | undefined): string {
   return typeof value === 'number' && Number.isFinite(value) ? String(value) : '—'
 }
 function eventSummary(event: GovernanceEvent): string {
-  const group = remoteNames.value.get(event.resource) || `#${event.resource}`
+  const group = event.resource_name || remoteNames.value.get(event.resource) || `#${event.resource}`
   if (event.kind === 'rate_changed') {
     const before = rateSnapshot(event.before)?.Resolved
     const after = rateSnapshot(event.after)?.Resolved

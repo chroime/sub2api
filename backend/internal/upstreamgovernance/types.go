@@ -291,6 +291,7 @@ type Event struct {
 	SiteID       int64     `json:"site_id"`
 	Kind         string    `json:"kind"`
 	Resource     string    `json:"resource"`
+	ResourceName string    `json:"resource_name,omitempty"`
 	Before       string    `json:"before"`
 	After        string    `json:"after"`
 	Acknowledged bool      `json:"acknowledged"`
@@ -392,6 +393,12 @@ type Store interface {
 	AddCheck(context.Context, *Check) error
 	LatestCheck(context.Context, int64, int64) (*Check, error)
 	ListChecks(context.Context, int64, int, int) ([]Check, int64, error)
+}
+
+// EventGroupNameReader enriches historical event responses without changing
+// the persisted raw event payload.
+type EventGroupNameReader interface {
+	EventGroupName(context.Context, int64, string, time.Time) (string, error)
 }
 
 // FastObservationStore is optional so existing Store implementations can keep
