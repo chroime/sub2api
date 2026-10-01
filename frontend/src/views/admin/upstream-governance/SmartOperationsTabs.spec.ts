@@ -46,7 +46,7 @@ describe('Smart Operations tabs', () => {
 
     expect(tablist.attributes('aria-label')).toBe('智能运维')
     expect(tablist.attributes('aria-orientation')).toBe('horizontal')
-    expect(tabs.map(tab => tab.text())).toEqual(['上游接入', '分组导入', '模型监测', '自动化策略', '运行记录'])
+    expect(tabs.map(tab => tab.text())).toEqual(['运维总览', '分组导入', '模型监测', '自动化策略', '运行记录'])
     expect(tabs.map(tab => tab.attributes('id'))).toEqual([
       'governance-overview-tab', 'governance-import-tab', 'governance-models-tab', 'governance-monitor-tab', 'governance-history-tab'
     ])
@@ -201,7 +201,7 @@ describe('Smart Operations tabs', () => {
     const wrapper = renderTabs('overview', false, 'en')
     expect(wrapper.get('[role="tablist"]').attributes('aria-label')).toBe('Smart Operations')
     expect(wrapper.findAll('[role="tab"]').map(tab => tab.text())).toEqual([
-      'Upstream access', 'Group import', 'Model monitoring', 'Automation policies', 'Run history'
+      'Operations overview', 'Group import', 'Model monitoring', 'Automation policies', 'Run history'
     ])
   })
 })

@@ -101,9 +101,37 @@ func (s *Service) DispatchChangeNotifications(ctx context.Context, limit int) er
 }
 
 func (s *Service) ListSites(ctx context.Context) ([]Site, error) {
-	sites, err := s.store.ListSites(ctx)
-	if err != nil {
-		return nil, err
+	var sites []Site
+	// The administration rail must contain every workbench destination, including
+	// sites beyond the legacy store's 1,000-row window. Reuse cursor reads without
+	// changing the bounded store method used by background-worker fallbacks.
+	if pager, ok := s.store.(sessionSitePager); ok {
+		const batchSize = 1000
+		sites = []Site{}
+		var after int64
+		for {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			page, err := pager.ListSitesAfter(ctx, after, batchSize)
+			if err != nil {
+				return nil, err
+			}
+			if len(page) > 0 && page[len(page)-1].ID <= after {
+				return nil, ErrInvalid
+			}
+			sites = append(sites, page...)
+			if len(page) < batchSize {
+				break
+			}
+			after = page[len(page)-1].ID
+		}
+	} else {
+		var err error
+		sites, err = s.store.ListSites(ctx)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if counter, ok := s.store.(KeyIssueCounter); ok {
 		counts, countErr := counter.CountKeyIssues(ctx)

@@ -16,6 +16,7 @@ import ManagedKeysPanel from './ManagedKeysPanel.vue'
 import GovernanceSitesOverview from './GovernanceSitesOverview.vue'
 import ModelMonitorPanel from './ModelMonitorPanel.vue'
 import modelAPI from '@/api/admin/upstream-model-monitoring'
+import operationsAPI from '@/api/admin/upstream-operations'
 import api, { type BalanceHealth, type Site, type Snapshot } from '@/api/admin/upstream-governance'
 vi.mock('@/api/admin/upstream-governance', () => ({
   default: {
@@ -52,6 +53,7 @@ vi.mock('@/api/admin/groups', () => ({
   default: { getAll: vi.fn().mockResolvedValue([]) },
 }))
 vi.mock('@/api/admin/upstream-model-monitoring', () => ({ default: { policies: vi.fn().mockResolvedValue([]), runs: vi.fn().mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20, counts: {} }), stats: vi.fn().mockResolvedValue({ days: 7, groups: [] }) } }))
+vi.mock('@/api/admin/upstream-operations', () => ({ default: { workbench: vi.fn(), timeline: vi.fn() } }))
 vi.mock('@/api/admin/proxies', () => ({
   default: { getAll: vi.fn().mockResolvedValue([]) },
 }))
@@ -62,6 +64,8 @@ describe('governance page', () => {
   beforeEach(async () => {
     vi.clearAllMocks()
     vi.mocked(api.keys).mockResolvedValue([])
+    vi.mocked(operationsAPI.workbench).mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20, evaluated_at: '2026-10-01T14:00:00Z', summary: { critical: 0, warning: 0, info: 0 } })
+    vi.mocked(operationsAPI.timeline).mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20, evaluated_at: '2026-10-01T14:00:00Z' })
     router = createRouter({
       history: createMemoryHistory(),
       routes: [
@@ -83,6 +87,75 @@ describe('governance page', () => {
     vi.mocked(api.events).mockResolvedValue(page)
     vi.mocked(api.checks).mockResolvedValue(page)
   }
+  it('shows the all-site current workbench before selection without running upstream operations', async () => {
+    setupNavigationSites()
+    const wrapper = mount(View)
+    await flushPromises()
+    expect(wrapper.get('[data-test=operations-workbench]').isVisible()).toBe(true)
+    expect(operationsAPI.workbench).toHaveBeenCalled()
+    expect(vi.mocked(operationsAPI.workbench).mock.calls.every(([query]) => !query?.site_id)).toBe(true)
+    expect(api.catalog).not.toHaveBeenCalled()
+    expect(api.sync).not.toHaveBeenCalled()
+    expect(api.connect).not.toHaveBeenCalled()
+    expect(api.check).not.toHaveBeenCalled()
+  })
+  it('scopes current tasks to the selected site and offers a route back to all-site overview', async () => {
+    setupNavigationSites()
+    await router.push('/admin/upstream-governance?site=2')
+    const wrapper = mount(View)
+    await flushPromises()
+    expect(wrapper.getComponent({ name: 'GovernanceWorkbench' }).props('siteId')).toBe(2)
+    await wrapper.get('#governance-all-sites').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.fullPath).toBe('/admin/upstream-governance')
+    expect(wrapper.getComponent({ name: 'GovernanceWorkbench' }).props('siteId')).toBeUndefined()
+    expect(wrapper.findAll('[data-test=operations-workbench]')).toHaveLength(1)
+  })
+  it('opens a task destination without applying actions and rejects missing sites or unknown sections', async () => {
+    setupNavigationSites()
+    const wrapper = mount(View)
+    await flushPromises()
+    const board = wrapper.getComponent({ name: 'GovernanceWorkbench' })
+    board.vm.$emit('navigate', { siteId: 99, section: 'monitor' })
+    board.vm.$emit('navigate', { siteId: 2, section: 'external' })
+    await flushPromises()
+    expect(router.currentRoute.value.fullPath).toBe('/admin/upstream-governance')
+    board.vm.$emit('navigate', { siteId: 2, section: 'monitor' })
+    await flushPromises()
+    expect(router.currentRoute.value.fullPath).toBe('/admin/upstream-governance/monitor?site=2')
+    expect(wrapper.get('#governance-site-2').attributes('aria-current')).toBe('true')
+    expect(api.sync).not.toHaveBeenCalled()
+    expect(api.connect).not.toHaveBeenCalled()
+    expect(api.check).not.toHaveBeenCalled()
+  })
+  it('keeps task navigation and all-site navigation blocked during authorization', async () => {
+    setupNavigationSites()
+    await router.push('/admin/upstream-governance?site=1')
+    const wrapper = mount(View)
+    await flushPromises()
+    await wrapper.get('#governance-reconnect').trigger('click')
+    wrapper.getComponent({ name: 'GovernanceWorkbench' }).vm.$emit('navigate', { siteId: 2, section: 'monitor' })
+    await wrapper.get('#governance-all-sites').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.fullPath).toBe('/admin/upstream-governance?site=1')
+  })
+  it('loads the factual timeline only in history while keeping existing raw records accessible', async () => {
+    setupNavigationSites()
+    await router.push('/admin/upstream-governance?site=1')
+    const wrapper = mount(View)
+    await flushPromises()
+    expect(operationsAPI.timeline).not.toHaveBeenCalled()
+    await wrapper.get('#governance-history-tab').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-test=operations-timeline]').isVisible()).toBe(true)
+    expect(operationsAPI.timeline).toHaveBeenCalledWith(1, expect.any(Object))
+    expect(wrapper.get('[data-test=raw-governance-history]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('governance.workbench.readDoesNotResolve')
+    expect(api.check).not.toHaveBeenCalled()
+    await wrapper.get('#governance-models-tab').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-test=operations-timeline]').exists()).toBe(false)
+  })
   it('shows functional tabs before choosing an upstream without fetching site details', async () => {
     setupNavigationSites()
     const wrapper = mount(View)

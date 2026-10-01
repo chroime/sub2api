@@ -3,6 +3,8 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { SMART_OPERATIONS_SECTIONS, resolveSmartOperationsSection, type SmartOperationsSection } from '@/config/smartOperations'
 import SmartOperationsTabs from './SmartOperationsTabs.vue'
+import GovernanceWorkbench from './GovernanceWorkbench.vue'
+import GovernanceTimeline from './GovernanceTimeline.vue'
 import { errorKey, siteStateKeys } from './feedback'
 import { intervalValidationKey } from './interval'
 import { useI18n } from 'vue-i18n'
@@ -101,6 +103,20 @@ function chooseSite(site: Site) {
   }
   // Commit the route first so a rejected navigation cannot change the active account.
   void router.push({ path: route.path, query: { ...route.query, site: String(site.id) } })
+}
+function showAllSiteTasks() {
+  if (navigationLocked.value) return
+  const query = { ...route.query }
+  delete query.site
+  void router.push({ path: '/admin/upstream-governance', query })
+}
+function navigateFromWorkbench(target: { siteId: number; section: SmartOperationsSection }) {
+  if (navigationLocked.value || !Number.isSafeInteger(target?.siteId) || !sites.value.some(site => site.id === target.siteId)) return
+  const section = SMART_OPERATIONS_SECTIONS.find(item => item.id === target.section)
+  if (!section) return
+  // A task opens its existing destination only; it never authorizes, repairs,
+  // probes or applies a policy simply because the administrator navigated.
+  void router.push({ path: section.path, query: { ...route.query, site: String(target.siteId) } })
 }
 function restoreLocation() {
   if (!sitesLoaded) return
@@ -494,7 +510,8 @@ onUnmounted(() => {
         </div>
       </header>
       <div class="grid min-w-0 items-start gap-5 xl:grid-cols-[17.5rem_minmax(0,1fr)]" data-test="smart-operations-workspace">
-      <aside class="min-w-0 xl:sticky xl:top-24" data-test="smart-operations-site-rail" :aria-label="t('governance.upstreamSites')">
+      <aside class="min-w-0 space-y-3 xl:sticky xl:top-24" data-test="smart-operations-site-rail" :aria-label="t('governance.upstreamSites')">
+        <button id="governance-all-sites" class="flex min-h-11 w-full items-center gap-2 rounded-xl border px-4 py-3 text-left text-sm font-medium transition-colors disabled:opacity-50" :class="showOverview && tab === 'overview' ? 'border-primary-200 bg-primary-50 text-primary-800 dark:border-primary-800 dark:bg-primary-900/20 dark:text-primary-200' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-200'" type="button" :disabled="navigationLocked" :aria-current="showOverview && tab === 'overview' ? 'page' : undefined" @click="showAllSiteTasks"><Icon name="globe" size="sm" />{{ t('governance.workbench.allSitesEntry') }}</button>
         <GovernanceSitesOverview compact :sites="sites" :selected-site-id="showOverview ? null : active?.id" :disabled="navigationLocked" @select="chooseSite" />
       </aside>
       <div class="min-w-0 space-y-4" data-test="smart-operations-content">
@@ -502,7 +519,8 @@ onUnmounted(() => {
       <div :id="`governance-${tab}-panel`" role="tabpanel" :aria-labelledby="`governance-${tab}-tab`" tabindex="0" class="min-w-0 space-y-5 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500">
       <p v-if="error" role="alert" class="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-600 dark:border-red-900 dark:bg-red-900/10">{{ error }}</p>
       <p v-if="siteNotFound" role="status" class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-300">{{ t('governance.smartOperations.siteNotFound') }}</p>
-      <div v-if="showOverview && sites.length" data-test="site-selection-empty" class="flex min-h-64 flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-gray-200 bg-white p-8 text-center dark:border-dark-600 dark:bg-dark-800">
+      <GovernanceWorkbench v-if="tab === 'overview' && !siteNotFound && (showOverview || active)" :site-id="showOverview ? undefined : active?.id" :disabled="navigationLocked" @navigate="navigateFromWorkbench" />
+      <div v-if="showOverview && sites.length && tab !== 'overview'" data-test="site-selection-empty" class="flex min-h-64 flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-gray-200 bg-white p-8 text-center dark:border-dark-600 dark:bg-dark-800">
         <span class="rounded-2xl bg-gray-100 p-4 dark:bg-dark-700"><Icon name="server" size="lg" class="text-gray-500" /></span>
         <div><h3 class="text-base font-semibold">{{ t('governance.smartOperations.chooseSite') }}</h3><p class="mt-2 max-w-sm text-sm leading-relaxed text-gray-500 dark:text-dark-300">{{ t('governance.smartOperations.chooseSiteHint') }}</p></div>
       </div>
@@ -529,7 +547,10 @@ onUnmounted(() => {
           <div v-show="tab === 'import'" class="min-w-0 p-4 sm:p-5"><ImportPanel v-if="snapshot && importStateReady" :key="active.id" :site-id="active.id" :site-base-url="active.base_url" :site-platform="active.platform" :bindings="bindings" :managed-keys="managedKeys" :preview-epoch="importPreviewEpoch" :snapshot="snapshot" :groups="groups" :disabled="busy || balanceBusy || automationBusy || reconciliationBusy || keyBusy || rechargeBusy || modelBusy" @busy="importBusy = $event" @applied="reloadBindings" @manage-keys="openKeys" /><p v-else class="py-8 text-center text-sm text-gray-500">{{ busy ? t('common.loading') : t(snapshot ? 'governance.importStateUnavailable' : 'governance.noSnapshot') }}</p></div>
           <div v-show="tab === 'monitor'" class="min-w-0 space-y-5 p-4 sm:p-5"><ObservationPricingPanel :key="active.id" :site-id="active.id" :disabled="working" @busy="observationBusy = $event" @observation-saved="reloadHealth" @pricing-saved="reloadHealth" /><AutomationPolicyPanel :key="active.id" :site-id="active.id" :configuration="automation" :disabled="working" @busy="automationBusy = $event" @saved="automationSaved" @reload="reloadAutomation" /><BalanceMonitorPanel :key="active.id" :site="active" :unit="snapshot?.catalog.account?.unit" :disabled="working" @saved="balanceSaved" @busy="balanceBusy = $event" /><RechargePlanPanel :key="active.id" :site-id="active.id" :disabled="working" @busy="rechargeBusy = $event" /><GovernanceHistory mode="bindings" :bindings="bindings" :groups="groups" :remote-groups="overviewSnapshot?.catalog.groups ?? snapshot?.catalog.groups ?? []" :events="null" :checks="null" :disabled="working" @configure="configure" /></div>
           <div v-if="tab === 'models' && !showOverview" class="min-w-0 p-4 sm:p-5"><ModelMonitorPanel :key="active.id" :site-id="active.id" :remote-groups="overviewSnapshot?.catalog.groups ?? snapshot?.catalog.groups ?? []" :managed-keys="managedKeys" :collected-at="overviewSnapshot?.created_at ?? snapshot?.created_at" :disabled="busy || importBusy || balanceBusy || editBusy || automationBusy || reconciliationBusy || keyBusy || rechargeBusy" @busy="modelBusy = $event" @manage-keys="openKeys()" /></div>
-          <div v-show="tab === 'history'" class="min-w-0 p-4 sm:p-5"><GovernanceHistory mode="history" :bindings="[]" :events="events" :checks="checks" :disabled="working" @acknowledge="acknowledge" @page="page" /></div>
+          <div v-show="tab === 'history'" class="min-w-0 space-y-5 p-4 sm:p-5">
+            <GovernanceTimeline v-if="tab === 'history' && !showOverview" :site-id="active.id" :disabled="navigationLocked" />
+            <details data-test="raw-governance-history" class="rounded-xl border border-gray-200 p-4 dark:border-dark-600"><summary class="cursor-pointer text-sm font-medium">{{ t('governance.workbench.rawHistory') }}</summary><p class="my-3 text-xs leading-relaxed text-gray-500">{{ t('governance.workbench.readDoesNotResolve') }}</p><GovernanceHistory mode="history" :bindings="[]" :events="events" :checks="checks" :disabled="working" @acknowledge="acknowledge" @page="page" /></details>
+          </div>
         </div>
       </section>
       </div>
