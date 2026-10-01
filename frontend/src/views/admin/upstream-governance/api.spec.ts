@@ -93,4 +93,18 @@ describe('governance confirmation boundary', () => {
     await api.update(2, input)
     expect(apiClient.put).toHaveBeenCalledWith('/admin/upstream-governance/sites/2', input)
   })
+  it('keeps second-based observation and pricing policy writes scoped to the selected site', async () => {
+    const observation = { version: 3, policy: { enabled: true, fast_interval_seconds: 10, full_interval_seconds: 900 } }
+    const policies = { version: 5, policies: [], notifications: { enabled: false, recipients: [], group_changes: true, rate_changes: true, pricing_changes: true, protection_changes: true } }
+    vi.mocked(apiClient.get).mockResolvedValueOnce({ data: observation }).mockResolvedValueOnce({ data: policies })
+    expect(await api.observationPolicy(2)).toEqual(observation)
+    expect(await api.pricingPolicies(2)).toEqual(policies)
+    expect(apiClient.get).toHaveBeenNthCalledWith(1, '/admin/upstream-governance/sites/2/observation-policy')
+    expect(apiClient.get).toHaveBeenNthCalledWith(2, '/admin/upstream-governance/sites/2/pricing-policies')
+    vi.mocked(apiClient.put).mockResolvedValueOnce({ data: { ...observation, version: 4 } }).mockResolvedValueOnce({ data: { ...policies, version: 6 } })
+    await api.saveObservationPolicy(2, { version: 3, policy: observation.policy })
+    await api.savePricingPolicies(2, policies)
+    expect(apiClient.put).toHaveBeenNthCalledWith(1, '/admin/upstream-governance/sites/2/observation-policy', { version: 3, policy: observation.policy })
+    expect(apiClient.put).toHaveBeenNthCalledWith(2, '/admin/upstream-governance/sites/2/pricing-policies', policies)
+  })
 })

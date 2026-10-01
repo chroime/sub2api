@@ -45,6 +45,76 @@ export interface AutomationConfiguration {
   version: number
   policy: AutomationPolicy
 }
+
+/**
+ * Site-level cadence for the cheap group/rate observation and the complete
+ * catalog collection.  The minute field on Site remains the legacy alias;
+ * new callers should use seconds so a value such as 1 or 5 is preserved.
+ */
+export interface ObservationPolicy {
+  version: number
+  policy: {
+    enabled: boolean
+    fast_interval_seconds: number
+    full_interval_seconds: number
+    decrease_stability_seconds?: number
+    max_rate_increase_percent?: number
+  }
+  status?: {
+    last_fast_observed_at?: string | null
+    last_full_collected_at?: string | null
+    next_fast_observation_at?: string | null
+    fast_observe_status?: string
+    fast_observe_error?: string
+    fast_observe_revision?: number
+  }
+}
+
+export type PricingMode = 'keep_margin' | 'target_margin'
+export interface PricingSource {
+  source_id: string
+  source_name?: string
+  cost: number | null
+  eligible: boolean
+  comparable: boolean
+  unknown?: boolean
+  unit?: string
+  currency?: string
+  observed_at?: string | null
+}
+export interface PricingPolicy {
+  local_group_id: number
+  local_group_name: string
+  enabled: boolean
+  mode: PricingMode
+  baseline_cost: number | null
+  baseline_sale: number | null
+  current_cost: number | null
+  current_sale: number | null
+  target_sale: number | null
+  min_margin: number
+  safety_buffer: number
+  max_increase_percent: number
+  decrease_stability_seconds: number
+  protected: boolean
+  manual_owner: boolean
+  status: string
+  protection_reason?: string
+  sources: PricingSource[]
+}
+export interface PricingNotificationPolicy {
+  enabled: boolean
+  recipients: string[]
+  group_changes: boolean
+  rate_changes: boolean
+  pricing_changes: boolean
+  protection_changes: boolean
+}
+export interface PricingPoliciesConfiguration {
+  version: number
+  policies: PricingPolicy[]
+  notifications: PricingNotificationPolicy
+}
 export interface ReconciliationRow {
   binding_id: number
   account_id: number
@@ -419,6 +489,18 @@ const api = {
   },
   async saveAutomation(id: number, input: AutomationConfiguration) {
     return (await apiClient.put<AutomationConfiguration>(`${site(id)}/automation`, input)).data
+  },
+  async observationPolicy(id: number) {
+    return (await apiClient.get<ObservationPolicy>(`${site(id)}/observation-policy`)).data
+  },
+  async saveObservationPolicy(id: number, input: { version: number; policy: ObservationPolicy['policy'] }) {
+    return (await apiClient.put<ObservationPolicy>(`${site(id)}/observation-policy`, input)).data
+  },
+  async pricingPolicies(id: number) {
+    return (await apiClient.get<PricingPoliciesConfiguration>(`${site(id)}/pricing-policies`)).data
+  },
+  async savePricingPolicies(id: number, input: PricingPoliciesConfiguration) {
+    return (await apiClient.put<PricingPoliciesConfiguration>(`${site(id)}/pricing-policies`, input)).data
   },
   async reconciliation(id: number) {
     return (await apiClient.get<Reconciliation>(`${site(id)}/reconciliation`)).data
