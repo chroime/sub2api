@@ -22,7 +22,7 @@ var _ Store = (*sqlStore)(nil)
 // Keep the result column count compatible with pre-261 callers/tests. The
 // schedule fields are projected through the existing balance-state slot using
 // to_jsonb(table), which returns NULL for columns absent before migration 261.
-	const siteColumns = `id, name, platform, base_url, proxy_id, enabled, interval_minutes, version, session_cipher, status, last_error, last_sync_at, next_sync_at, created_at, updated_at, balance_monitor, jsonb_build_object('__governance_balance_state', balance_monitor_state, '__fast_interval_seconds', to_jsonb(upstream_governance_sites)->'fast_interval_seconds', '__full_interval_seconds', to_jsonb(upstream_governance_sites)->'full_interval_seconds', '__fast_observe_enabled', to_jsonb(upstream_governance_sites)->'fast_observe_enabled', '__next_fast_observe_at', to_jsonb(upstream_governance_sites)->'next_fast_observe_at', '__last_fast_observe_at', to_jsonb(upstream_governance_sites)->'last_fast_observe_at', '__fast_observe_status', to_jsonb(upstream_governance_sites)->'fast_observe_status', '__fast_observe_error', to_jsonb(upstream_governance_sites)->'fast_observe_error', '__fast_observe_revision', to_jsonb(upstream_governance_sites)->'fast_observe_revision'), login_cipher`
+const siteColumns = `id, name, platform, base_url, proxy_id, enabled, interval_minutes, version, session_cipher, status, last_error, last_sync_at, next_sync_at, created_at, updated_at, balance_monitor, jsonb_build_object('__governance_balance_state', balance_monitor_state, '__fast_interval_seconds', to_jsonb(upstream_governance_sites)->'fast_interval_seconds', '__full_interval_seconds', to_jsonb(upstream_governance_sites)->'full_interval_seconds', '__fast_observe_enabled', to_jsonb(upstream_governance_sites)->'fast_observe_enabled', '__next_fast_observe_at', to_jsonb(upstream_governance_sites)->'next_fast_observe_at', '__last_fast_observe_at', to_jsonb(upstream_governance_sites)->'last_fast_observe_at', '__fast_observe_status', to_jsonb(upstream_governance_sites)->'fast_observe_status', '__fast_observe_error', to_jsonb(upstream_governance_sites)->'fast_observe_error', '__fast_observe_revision', to_jsonb(upstream_governance_sites)->'fast_observe_revision'), login_cipher`
 
 type rowScanner interface{ Scan(...any) error }
 
@@ -450,27 +450,37 @@ func (s *sqlStore) LatestSnapshot(ctx context.Context, id int64) (*Snapshot, err
 }
 
 func (s *sqlStore) EventGroupName(ctx context.Context, siteID int64, resource string, at time.Time) (string, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT catalog FROM upstream_governance_snapshots WHERE site_id=$1 AND created_at <= $2 ORDER BY id DESC LIMIT 20`, siteID, at)
-	if err != nil {
-		return "", err
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var raw []byte
-		if err := rows.Scan(&raw); err != nil {
+	lookup := func(query string, args ...any) (string, error) {
+		rows, err := s.db.QueryContext(ctx, query, args...)
+		if err != nil {
 			return "", err
 		}
-		var catalog Catalog
-		if err := json.Unmarshal(raw, &catalog); err != nil {
-			continue
-		}
-		for _, group := range catalog.Groups {
-			if group.ID == resource && group.Name != "" {
-				return group.Name, nil
+		defer rows.Close()
+		for rows.Next() {
+			var raw []byte
+			if err := rows.Scan(&raw); err != nil {
+				return "", err
+			}
+			var catalog Catalog
+			if err := json.Unmarshal(raw, &catalog); err != nil {
+				continue
+			}
+			for _, group := range catalog.Groups {
+				if group.ID == resource && group.Name != "" {
+					return group.Name, nil
+				}
 			}
 		}
+		return "", rows.Err()
 	}
-	return "", rows.Err()
+
+	name, err := lookup(`SELECT catalog FROM upstream_governance_snapshots WHERE site_id=$1 AND created_at <= $2 ORDER BY id DESC LIMIT 20`, siteID, at)
+	if err != nil || name != "" {
+		return name, err
+	}
+	// Snapshots are retained as a rolling window. If the event predates that
+	// window, use the current catalog rather than exposing a bare group ID.
+	return lookup(`SELECT catalog FROM upstream_governance_snapshots WHERE site_id=$1 ORDER BY id DESC LIMIT 1`, siteID)
 }
 func (s *sqlStore) SaveSnapshot(ctx context.Context, v *Snapshot, events []Event) error {
 	data, e := json.Marshal(v.Catalog)

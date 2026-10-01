@@ -137,6 +137,26 @@ func TestSQLStoreSnapshotReturnsCompleteCatalog(t *testing.T) {
 		t.Fatalf("lost data: %#v", v)
 	}
 }
+
+func TestSQLStoreEventGroupNameFallsBackToLatestSnapshot(t *testing.T) {
+	s, m := storeFixture(t)
+	at := time.Date(2026, 10, 1, 16, 7, 37, 0, time.FixedZone("CST", 8*60*60))
+	m.ExpectQuery(`SELECT catalog FROM upstream_governance_snapshots WHERE site_id=\$1 AND created_at <= \$2 ORDER BY id DESC LIMIT 20`).
+		WithArgs(int64(5), at).
+		WillReturnRows(sqlmock.NewRows([]string{"catalog"}))
+	m.ExpectQuery(`SELECT catalog FROM upstream_governance_snapshots WHERE site_id=\$1 ORDER BY id DESC LIMIT 1`).
+		WithArgs(int64(5)).
+		WillReturnRows(sqlmock.NewRows([]string{"catalog"}).AddRow(`{"groups":[{"id":"5","name":"Claude Max"}]}`))
+
+	name, err := s.(EventGroupNameReader).EventGroupName(context.Background(), 5, "5", at)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if name != "Claude Max" {
+		t.Fatalf("want latest group name, got %q", name)
+	}
+}
+
 func TestSQLStoreBindingMarkerConflict(t *testing.T) {
 	s, m := storeFixture(t)
 	m.ExpectQuery(`INSERT INTO upstream_governance_bindings`).WillReturnError(sql.ErrNoRows)
