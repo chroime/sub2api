@@ -352,6 +352,7 @@ export default {
   decreaseStability: '降价稳定时间', seconds: '秒',
   lastFastObservation: '最近快速观察', nextFastObservation: '下次快速观察', observationStatus: '观察状态',
   observationPolicySaved: '采集策略已保存，新的秒级周期将在下一轮调度生效。',
+  observationIssue: '快速观察提示',
   pricingProtectionTitle: '分组自动调价与亏损保护',
   pricingProtectionHint: '默认保持启用时的利润空间，并叠加最低毛利与安全缓冲；多个上游来源按最高可比成本计算。预览确认后才会调整本地售价。',
   noPricingPolicies: '当前没有可管理的本地分组定价策略。完成分组导入或绑定后，这里会显示成本来源和售价保护。',

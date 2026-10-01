@@ -352,6 +352,7 @@ export default {
   decreaseStability: 'Decrease stability window', seconds: 'seconds',
   lastFastObservation: 'Last fast observation', nextFastObservation: 'Next fast observation', observationStatus: 'Observation status',
   observationPolicySaved: 'Collection policy saved. The new second-based cadence takes effect on the next scheduler cycle.',
+  observationIssue: 'Fast observation note',
   pricingProtectionTitle: 'Automatic group pricing and loss protection',
   pricingProtectionHint: 'The default keeps the margin captured when enabled and adds the existing minimum margin and safety buffer. Multiple upstream sources use the highest comparable cost. A preview must be confirmed before local sale prices change.',
   noPricingPolicies: 'No local group pricing policies are available yet. Import or bind an upstream group to see cost sources and price protection here.',
