@@ -357,7 +357,7 @@ export default {
   pricingProtectionHint: 'The default keeps the margin captured when enabled and adds the existing minimum margin and safety buffer. Multiple upstream sources use the highest comparable cost. A preview must be confirmed before local sale prices change.',
   noPricingPolicies: 'No local group pricing policies are available yet. Import or bind an upstream group to see cost sources and price protection here.',
   pricingSources: 'Cost sources', currentCost: 'Effective cost', currentSale: 'Current local sale', targetSale: 'Target local sale', effectiveMargin: 'Current margin',
-  pricingMode: 'Pricing mode', pricingModeKeepMargin: 'Keep current margin', pricingModeTargetMargin: 'Target margin', minimumMargin: 'Minimum margin', safetyBuffer: 'Safety buffer',
+  pricingMode: 'Pricing mode', pricingModeKeepMargin: 'Keep current margin', pricingModeTargetMargin: 'Target margin', minimumMargin: 'Minimum margin (%)', safetyBuffer: 'Safety buffer (%)',
   pricingManaged: 'Automatically managed', pricingManual: 'Manual ownership', pricingProtected: 'Protected',
   pricingPreview: 'Preview price change', pricingApply: 'Confirm price change', pricingPreviewHint: 'Current sale {before} → calculated sale {after}. Confirm to update the local group and record a revision.',
   pricingPolicySaved: 'The group pricing policy was applied. Caches will refresh shortly.', pricingMarginInvalid: 'Minimum margin plus safety buffer must be at least 0 and below 100%.',

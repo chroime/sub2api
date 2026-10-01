@@ -357,7 +357,7 @@ export default {
   pricingProtectionHint: '默认保持启用时的利润空间，并叠加最低毛利与安全缓冲；多个上游来源按最高可比成本计算。预览确认后才会调整本地售价。',
   noPricingPolicies: '当前没有可管理的本地分组定价策略。完成分组导入或绑定后，这里会显示成本来源和售价保护。',
   pricingSources: '成本来源', currentCost: '当前有效成本', currentSale: '当前本地售价', targetSale: '目标本地售价', effectiveMargin: '当前毛利',
-  pricingMode: '调价模式', pricingModeKeepMargin: '保持现有利润空间', pricingModeTargetMargin: '按目标毛利率', minimumMargin: '最低毛利率', safetyBuffer: '安全缓冲',
+  pricingMode: '调价模式', pricingModeKeepMargin: '保持现有利润空间', pricingModeTargetMargin: '按目标毛利率', minimumMargin: '最低毛利率（%）', safetyBuffer: '安全缓冲（%）',
   pricingManaged: '自动托管', pricingManual: '人工维护', pricingProtected: '保护中',
   pricingPreview: '预览调价', pricingApply: '确认应用调价', pricingPreviewHint: '当前售价 {before} → 计算售价 {after}。确认后将更新本地分组售价并记录版本。',
   pricingPolicySaved: '分组调价策略已应用，缓存将在随后刷新。', pricingMarginInvalid: '最低毛利率与安全缓冲之和必须大于等于 0 且小于 100%。',

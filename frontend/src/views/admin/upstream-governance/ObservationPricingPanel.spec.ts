@@ -113,6 +113,26 @@ describe('observation and pricing policy', () => {
     expect(wrapper.emitted('pricing-saved')?.[0]?.[0]).toMatchObject({ version: 6 })
   })
 
+  it('displays margin settings as percentages and stores decimal ratios', async () => {
+    vi.mocked(api.savePricingPolicies).mockResolvedValue({ ...pricing, version: 6 })
+    const wrapper = mount(ObservationPricingPanel, { props: { siteId: 4 } })
+    await flushPromises()
+
+    const margin = wrapper.get('[data-test=pricing-min-margin]')
+    const buffer = wrapper.get('[data-test=pricing-safety-buffer]')
+    expect((margin.element as HTMLInputElement).value).toBe('20')
+    expect((buffer.element as HTMLInputElement).value).toBe('5')
+    await margin.setValue('25')
+    await buffer.setValue('10')
+    await wrapper.get('[data-test=pricing-preview-12]').trigger('click')
+    await wrapper.get('[data-test=pricing-apply-12]').trigger('click')
+    await flushPromises()
+
+    expect(api.savePricingPolicies).toHaveBeenCalledWith(4, expect.objectContaining({
+      policies: expect.arrayContaining([expect.objectContaining({ local_group_id: 12, min_margin: 0.25, safety_buffer: 0.1 })]),
+    }))
+  })
+
   it('persists notification recipients and subscriptions separately from pricing changes', async () => {
     vi.mocked(api.savePricingPolicies).mockResolvedValue({ ...pricing, version: 6 })
     const wrapper = mount(ObservationPricingPanel, { props: { siteId: 4 } })
