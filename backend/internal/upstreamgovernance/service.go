@@ -42,11 +42,53 @@ type Service struct {
 	modelWake            chan struct{}
 	modelActive          map[string]modelActiveRun
 	modelNotifier        ModelNotifier
+	changeNotifier       ChangeNotifier
+	changeQueue          *ChangeNotificationQueue
+	pricingCoordinator   *PricingCoordinator
 	browserAuthorizer    *BrowserAuthorizer
 }
 
 func NewService(store Store, connector Connector, local LocalAccounts, cipher Encryptor, durableKey bool) *Service {
 	return &Service{store: store, connector: connector, local: local, cipher: cipher, durableKey: durableKey, slots: make(chan struct{}, 2), now: func() time.Time { return time.Now().UTC() }}
+}
+
+// SetChangeNotifier wires the administrator change-mail adapter. The durable
+// queue is enabled only when the backing store supports its optional SQL
+// methods, keeping existing in-memory governance fixtures compatible.
+func (s *Service) SetChangeNotifier(notifier ChangeNotifier) {
+	s.changeNotifier = notifier
+	s.changeQueue = nil
+	if notifier == nil {
+		return
+	}
+	if store, ok := s.store.(ChangeNotificationStore); ok {
+		s.changeQueue = NewChangeNotificationQueue(store, changeNotificationSender{notifier: notifier}, s.now)
+	}
+}
+
+// EnqueueChangeNotice persists a rendered notice for each resolved recipient.
+// It is intentionally best-effort for scheduler callers: delivery failures
+// must never turn a successful upstream collection or pricing commit into a
+// failed operation. Direct callers still receive validation/store errors.
+func (s *Service) EnqueueChangeNotice(ctx context.Context, notice ChangeNotice) error {
+	if notice.InitialBaseline || s == nil || s.changeQueue == nil || s.changeNotifier == nil {
+		return nil
+	}
+	recipients, err := s.changeNotifier.Recipients(ctx, nil)
+	if err != nil {
+		return err
+	}
+	return s.changeQueue.EnqueueNotice(ctx, notice, recipients)
+}
+
+// DispatchChangeNotifications delivers persisted notices outside any site or
+// remote-operation lock. A delivery failure stays in the durable queue for
+// exponential retry and does not affect catalog/pricing state.
+func (s *Service) DispatchChangeNotifications(ctx context.Context, limit int) error {
+	if s == nil || s.changeQueue == nil {
+		return nil
+	}
+	return s.changeQueue.Dispatch(ctx, limit)
 }
 
 func (s *Service) ListSites(ctx context.Context) ([]Site, error) {
@@ -604,6 +646,10 @@ func (s *Service) syncLockedWithAutoReauthorization(ctx context.Context, site Si
 	if e = s.store.SaveSnapshot(ctx, snapshot, events); e != nil {
 		return nil, e
 	}
+	// Catalog events are persisted as notification intents while the site lock
+	// is still held; SMTP dispatch is deferred until runDue has released every
+	// site/remote lock. A notification failure never invalidates this snapshot.
+	s.enqueueCatalogChangeNotices(ctx, site, events, previous == nil)
 	if e = s.store.ObserveSite(ctx, site.ID, "healthy", "", now, next); e != nil {
 		return nil, e
 	}
@@ -613,6 +659,36 @@ func (s *Service) syncLockedWithAutoReauthorization(ctx context.Context, site Si
 	s.evaluateRechargeAfterSnapshot(ctx, site, snapshot)
 	s.checkBalanceMonitor(ctx, site, snapshot)
 	return snapshot, nil
+}
+
+func (s *Service) enqueueCatalogChangeNotices(ctx context.Context, site Site, events []Event, initialBaseline bool) {
+	if len(events) == 0 || s.changeQueue == nil || s.changeNotifier == nil {
+		return
+	}
+	recipients, err := s.changeNotifier.Recipients(ctx, nil)
+	if err != nil || len(recipients) == 0 {
+		return
+	}
+	for _, event := range events {
+		kind, severity, subject := "catalog_change", "info", "上游目录发生变化 / Upstream catalog changed"
+		switch event.Kind {
+		case "group_added", "group_removed", "group_changed":
+			kind, subject = "group_change", "上游可见分组发生变化 / Upstream group changed"
+		case "rate_changed", "price_changed":
+			kind, severity, subject = "rate_change", "warning", "上游倍率或价格发生变化 / Upstream rate or price changed"
+		}
+		payload := fmt.Sprintf("事件：%s\n资源：%s\n变更前：%s\n变更后：%s", event.Kind, event.Resource, event.Before, event.After)
+		digest := sha256.Sum256([]byte(event.Kind + "\x00" + event.Resource + "\x00" + event.Before + "\x00" + event.After))
+		notice := ChangeNotice{
+			SiteID: site.ID, SiteName: site.Name, BaseURL: site.BaseURL,
+			Kind: kind, Severity: severity,
+			DedupKey: fmt.Sprintf("site:%d:event:%s", site.ID, hex.EncodeToString(digest[:])),
+			Subject:  subject, Body: payload, InitialBaseline: initialBaseline, ObservedAt: event.CreatedAt,
+		}
+		if err := s.changeQueue.EnqueueNotice(ctx, notice, recipients); err != nil {
+			log.Printf("[UpstreamGovernance] enqueue change notification: %s", ErrorCode(err))
+		}
+	}
 }
 
 func marker(siteID int64, group, platform string) string {

@@ -240,6 +240,9 @@ func governanceClientFactory(upstream HTTPUpstream, proxies ProxyRepository) gov
 }
 func ProvideUpstreamGovernanceService(db *sql.DB, admin AdminService, upstream HTTPUpstream, proxies ProxyRepository, cipher SecretEncryptor, cfg *config.Config, email *EmailService, settings SettingRepository, users UserRepository) *gov.Service {
 	svc := gov.NewService(gov.NewSQLStore(db), gov.NewConnector(governanceClientFactory(upstream, proxies)), &governanceLocalAccounts{db: db, admin: admin}, cipher, cfg != nil && cfg.Totp.EncryptionKeyConfigured)
+	if pricingStore, ok := gov.NewSQLStore(db).(gov.PricingPersistence); ok {
+		svc.SetPricingCoordinator(gov.NewPricingCoordinator(pricingStore))
+	}
 	notifier := &governanceBalanceNotifier{settings: settings, admins: users}
 	if email != nil {
 		notifier.mail = email
@@ -247,6 +250,7 @@ func ProvideUpstreamGovernanceService(db *sql.DB, admin AdminService, upstream H
 	svc.SetBalanceNotifier(notifier)
 	svc.SetKeyNotifier(notifier)
 	svc.SetModelNotifier(notifier)
+	svc.SetChangeNotifier(notifier)
 	configureGovernanceBrowser(svc, proxies)
 	svc.Start()
 	return svc
