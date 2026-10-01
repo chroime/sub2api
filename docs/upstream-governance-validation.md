@@ -267,6 +267,8 @@ Playwright 浏览器控制台无错误。页面截图通过人工视觉检查，
 
 随后修复了快速观察预留的 PostgreSQL 时间类型转换和“不支持快速接口”处理：站点锁/预留冲突不再造成100毫秒紧循环；不支持快速分组接口的站点保留 `unsupported_contract` 状态并继续完整采集，不再冒泡为泛化操作失败。最终部署程序 SHA-256 为 `936F5FC0903926F97C524116D958B3165C006351FFB2445B3B187569DF45AE66`，最后一次替换备份目录为 `E:/workspace/agent/.cache/sub2api-governance/backups/before-nonfatal-fast-observation-20261001-131213/`；时间戳转换修复前的额外数据库保护备份位于 `E:/workspace/agent/.cache/sub2api-governance/backups/before-fast-reservation-cast-20261001-130239/`。站点4现场验证最近5秒 `operation_failed=0`，状态明确显示 `unsupported_contract`，完整同步接口返回200。
 
+之后发现 Sub2API 的 `/groups/rates` 只返回用户覆盖倍率，未覆盖分组需要回退到分组自身的基础倍率；快速观察已修正该解析。最终三个站点的快速观察状态均为 `healthy`，最近观察时间已更新，最近窗口 `operation_failed=0`。最终程序 SHA-256 为 `0BFCC6861809F65F72F06F1DDEC2E913161DD8904A137222212FADB4816E93F2`，本次替换前备份为 `E:/workspace/agent/.cache/sub2api-governance/backups/before-base-rate-fallback-20261001-131800/`。
+
 ## 2026-09-28 下拉控件、文本模型候选与逐项结果验收
 
 逐一盘点治理工作区及弹框中的站点平台、代理、授权方式、模型模板、导入协议、本地分组、充值币种、模型监测和详情来源等下拉。新增上游弹框和授权/模板中的4处原生`select`已换成项目共用控件；共用`Select`在屏幕右侧保留可读宽度，矮视口限制菜单高度，禁用时关闭且不接受过渡中的旧选项。`TargetGroupSelect`去掉会在极矮视口裁切的固定最小高度。弹框中菜单展开时首次Escape只关闭菜单，第二次Escape才关闭弹框。
