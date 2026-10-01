@@ -24,6 +24,53 @@ var errConnectorDenied = errors.New("upstream capability denied")
 var errConnectorCaptcha = errors.New("upstream captcha required")
 var errConnectorUncertain = errors.New("upstream key creation outcome uncertain; reconcile on next explicit apply")
 
+// RateLimitError preserves a bounded Retry-After hint for the scheduler. The
+// response body is intentionally omitted so upstream secrets cannot leak into
+// governance history or notification messages.
+type RateLimitError struct {
+	StatusCode int
+	RetryAfter time.Duration
+}
+
+func (e *RateLimitError) Error() string {
+	if e == nil {
+		return "upstream rate limited"
+	}
+	return "upstream rate limited"
+}
+
+func retryAfter(header string, now time.Time) time.Duration {
+	const (
+		defaultRetry = 30 * time.Second
+		maxRetry     = 5 * time.Minute
+	)
+	header = strings.TrimSpace(header)
+	if header == "" {
+		return defaultRetry
+	}
+	if seconds, err := strconv.ParseInt(header, 10, 64); err == nil {
+		if seconds < 1 {
+			return time.Second
+		}
+		d := time.Duration(seconds) * time.Second
+		if d > maxRetry {
+			return maxRetry
+		}
+		return d
+	}
+	if at, err := http.ParseTime(header); err == nil {
+		d := at.Sub(now)
+		if d < time.Second {
+			return time.Second
+		}
+		if d > maxRetry {
+			return maxRetry
+		}
+		return d
+	}
+	return defaultRetry
+}
+
 type platformConnector struct{ factory ClientFactory }
 
 func NewConnector(factory ClientFactory) Connector { return &platformConnector{factory: factory} }
@@ -141,6 +188,9 @@ func (c *platformConnector) request(ctx context.Context, site Site, session Sess
 	}
 	if resp.StatusCode == 403 {
 		return out, nil, errConnectorDenied
+	}
+	if resp.StatusCode == http.StatusTooManyRequests {
+		return out, nil, &RateLimitError{StatusCode: resp.StatusCode, RetryAfter: retryAfter(resp.Header.Get("Retry-After"), time.Now())}
 	}
 	if resp.StatusCode == 404 || resp.StatusCode == 405 {
 		return out, nil, errConnectorUnavailable

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 )
@@ -177,19 +178,40 @@ func (s *Service) Start() {
 	s.workerCancel, s.workerDone = cancel, done
 	go func() {
 		defer close(done)
-		ticker := time.NewTicker(time.Minute)
-		defer ticker.Stop()
 		for {
 			if err := s.runDue(ctx); err != nil && ctx.Err() == nil {
 				log.Printf("[UpstreamGovernance] scheduled operation: %s", ErrorCode(err))
 			}
+			wait := s.workerWait(ctx)
+			timer := time.NewTimer(wait)
 			select {
 			case <-ctx.Done():
+				if !timer.Stop() {
+					<-timer.C
+				}
 				return
-			case <-ticker.C:
+			case <-timer.C:
 			}
 		}
 	}()
+}
+
+// workerWait returns the next persisted fast deadline, clamped to a short
+// wake-up. A legacy store without migration 261 retains its one-minute cadence.
+func (s *Service) workerWait(ctx context.Context) time.Duration {
+	wait := time.Minute
+	if fastStore, ok := s.store.(FastObservationStore); ok {
+		if next, err := fastStore.NextFastObservationAt(ctx); err == nil && next != nil {
+			delta := next.Sub(s.now())
+			if delta < 100*time.Millisecond {
+				delta = 100 * time.Millisecond
+			}
+			if delta < wait {
+				wait = delta
+			}
+		}
+	}
+	return wait
 }
 
 func (s *Service) Stop() {
@@ -222,6 +244,9 @@ func (s *Service) runDue(ctx context.Context) error {
 	refreshCtx, cancelRefresh := context.WithTimeout(ctx, sessionRefreshBatchTimeout)
 	firstErr := s.refreshDueSessions(refreshCtx)
 	cancelRefresh()
+	if fastErr := s.runFastDue(ctx); fastErr != nil && firstErr == nil {
+		firstErr = fastErr
+	}
 	sites, err := s.store.DueSites(ctx, s.now(), 20)
 	if err != nil {
 		return err
@@ -235,6 +260,113 @@ func (s *Service) runDue(ctx context.Context) error {
 		}
 	}
 	return firstErr
+}
+
+// runFastDue services the optional second-based group observer. Each candidate
+// is reserved before decrypting credentials or making a remote request, so a
+// cancelled worker cannot issue the same observation again immediately.
+func (s *Service) runFastDue(ctx context.Context) error {
+	fastStore, ok := s.store.(FastObservationStore)
+	if !ok {
+		return nil
+	}
+	now := s.now()
+	candidates, err := fastStore.DueFastObservations(ctx, now, 20)
+	if err != nil {
+		return err
+	}
+	var firstErr error
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	for _, candidate := range candidates {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		dueAt := candidate.NextFastObserveAt
+		if dueAt.IsZero() {
+			dueAt = now
+		}
+		reserved, reserveErr := fastStore.ReserveFastObservation(ctx, candidate.ID, dueAt, now)
+		if reserveErr != nil {
+			if firstErr == nil {
+				firstErr = reserveErr
+			}
+			continue
+		}
+		if !reserved {
+			continue
+		}
+		candidateID := candidate.ID
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if runErr := s.runFastSite(ctx, candidateID); runErr != nil {
+				mu.Lock()
+				if firstErr == nil {
+					firstErr = runErr
+				}
+				mu.Unlock()
+			}
+		}()
+	}
+	wg.Wait()
+	return firstErr
+}
+
+func (s *Service) runFastSite(ctx context.Context, siteID int64) error {
+	fastStore := s.store.(FastObservationStore)
+	free, err := s.remoteSlot(ctx)
+	if err != nil {
+		return err
+	}
+	defer free()
+	site, release, err := s.siteLock(ctx, siteID)
+	if err != nil {
+		return err
+	}
+	defer release()
+	now := s.now()
+	interval := site.FastIntervalSeconds
+	if !validIntervalSeconds(interval) {
+		interval = int64(site.IntervalMinutes) * 60
+	}
+	if !validIntervalSeconds(interval) {
+		interval = 900
+	}
+	next := addSeconds(now, interval)
+	observe := GroupObservation{ObservedAt: now, GroupsComplete: false}
+	status, message := "error", ""
+	session, sessionErr := s.session(*site)
+	if sessionErr == nil {
+		connector, supported := s.connector.(FastObservationConnector)
+		if !supported {
+			message = ErrorCode(ErrUnsupported)
+		} else {
+			observe, sessionErr = connector.ObserveGroups(ctx, *site, session)
+			if sessionErr == nil {
+				status, message = "healthy", ""
+			} else if limited, ok := sessionErr.(*RateLimitError); ok {
+				status, message = "rate_limited", "rate_limited"
+				next = addSeconds(now, int64(limited.RetryAfter/time.Second))
+				if !next.After(now) {
+					next = now.Add(time.Second)
+				}
+			} else {
+				message = ErrorCode(sessionErr)
+			}
+		}
+	} else {
+		message = ErrorCode(sessionErr)
+	}
+	result, saveErr := fastStore.ObserveFastResult(ctx, siteID, now, next, status, message, observe)
+	if saveErr != nil {
+		return saveErr
+	}
+	if sessionErr != nil {
+		return sessionErr
+	}
+	_ = result
+	return nil
 }
 
 func (s *Service) runSiteDue(ctx context.Context, siteID int64) error {

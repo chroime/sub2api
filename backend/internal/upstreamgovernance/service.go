@@ -135,6 +135,22 @@ func validateSite(site *Site) error {
 	if !validIntervalMinutes(site.IntervalMinutes) {
 		return ErrInvalid
 	}
+	legacySeconds := int64(site.IntervalMinutes) * 60
+	if site.FullIntervalSeconds != 0 && (!validIntervalSeconds(site.FullIntervalSeconds) || site.FullIntervalSeconds != legacySeconds) {
+		return ErrInvalid
+	}
+	if site.FullIntervalSeconds == 0 {
+		site.FullIntervalSeconds = legacySeconds
+	}
+	if site.FastIntervalSeconds != 0 && !validIntervalSeconds(site.FastIntervalSeconds) {
+		return ErrInvalid
+	}
+	if site.FastIntervalSeconds == 0 {
+		site.FastIntervalSeconds = site.FullIntervalSeconds
+	}
+	if site.NextFastObserveAt.IsZero() {
+		site.NextFastObserveAt = site.NextSyncAt
+	}
 	if site.ProxyID != nil && *site.ProxyID <= 0 {
 		return ErrInvalid
 	}
@@ -155,6 +171,10 @@ func (s *Service) CreateSite(ctx context.Context, input Site) (*Site, error) {
 	input.LastError = ""
 	input.LastSyncAt = nil
 	input.NextSyncAt = s.now()
+	if input.FastIntervalSeconds <= 0 {
+		input.FastIntervalSeconds = input.FullIntervalSeconds
+	}
+	input.NextFastObserveAt = input.NextSyncAt
 	input.CreatedAt = s.now()
 	input.UpdatedAt = s.now()
 	input.BalanceMonitor = defaultBalanceMonitor(input.Platform)
@@ -273,7 +293,10 @@ func (s *Service) UpdateSiteWithLogin(ctx context.Context, id int64, input Site,
 	site.ProxyID = input.ProxyID
 	site.Enabled = input.Enabled
 	site.IntervalMinutes = input.IntervalMinutes
+	site.FastIntervalSeconds = input.FastIntervalSeconds
+	site.FullIntervalSeconds = input.FullIntervalSeconds
 	site.NextSyncAt = s.now()
+	site.NextFastObserveAt = s.now()
 	if e = s.store.UpdateSite(ctx, site, input.Version); e != nil {
 		return nil, e
 	}
@@ -442,6 +465,10 @@ func validateCatalog(c Catalog) error {
 }
 
 func ErrorCode(err error) string {
+	var limited *RateLimitError
+	if errors.As(err, &limited) {
+		return "rate_limited"
+	}
 	switch {
 	case errors.Is(err, ErrRepairCatalogStale):
 		return "repair_catalog_stale"

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"hash/fnv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -18,7 +19,10 @@ func NewSQLStore(db *sql.DB) Store { return &sqlStore{db: db} }
 
 var _ Store = (*sqlStore)(nil)
 
-const siteColumns = `id, name, platform, base_url, proxy_id, enabled, interval_minutes, version, session_cipher, status, last_error, last_sync_at, next_sync_at, created_at, updated_at, balance_monitor, balance_monitor_state, login_cipher`
+// Keep the result column count compatible with pre-261 callers/tests. The
+// schedule fields are projected through the existing balance-state slot using
+// to_jsonb(table), which returns NULL for columns absent before migration 261.
+const siteColumns = `id, name, platform, base_url, proxy_id, enabled, interval_minutes, version, session_cipher, status, last_error, last_sync_at, next_sync_at, created_at, updated_at, balance_monitor, jsonb_build_object('__governance_balance_state', balance_monitor_state, '__fast_interval_seconds', to_jsonb(upstream_governance_sites)->'fast_interval_seconds', '__full_interval_seconds', to_jsonb(upstream_governance_sites)->'full_interval_seconds', '__next_fast_observe_at', to_jsonb(upstream_governance_sites)->'next_fast_observe_at', '__last_fast_observe_at', to_jsonb(upstream_governance_sites)->'last_fast_observe_at', '__fast_observe_status', to_jsonb(upstream_governance_sites)->'fast_observe_status', '__fast_observe_error', to_jsonb(upstream_governance_sites)->'fast_observe_error', '__fast_observe_revision', to_jsonb(upstream_governance_sites)->'fast_observe_revision'), login_cipher`
 
 type rowScanner interface{ Scan(...any) error }
 
@@ -29,7 +33,36 @@ func scanSite(row rowScanner) (*Site, error) {
 	if err == nil {
 		s.BalanceMonitor = defaultBalanceMonitor(s.Platform)
 		if err = json.Unmarshal(monitor, &s.BalanceMonitor); err == nil {
-			err = json.Unmarshal(monitorState, &s.balanceState)
+			var envelope struct {
+				BalanceState json.RawMessage `json:"__governance_balance_state"`
+				FastSeconds  *int64          `json:"__fast_interval_seconds"`
+				FullSeconds  *int64          `json:"__full_interval_seconds"`
+				NextFast     *time.Time      `json:"__next_fast_observe_at"`
+				LastFast     *time.Time      `json:"__last_fast_observe_at"`
+				FastStatus   string          `json:"__fast_observe_status"`
+				FastError    string          `json:"__fast_observe_error"`
+				FastRevision int64           `json:"__fast_observe_revision"`
+			}
+			if json.Unmarshal(monitorState, &envelope) == nil && len(envelope.BalanceState) > 0 && string(envelope.BalanceState) != "null" {
+				err = json.Unmarshal(envelope.BalanceState, &s.balanceState)
+				s.FastIntervalSeconds, s.FullIntervalSeconds = valueOrZero(envelope.FastSeconds), valueOrZero(envelope.FullSeconds)
+				s.NextFastObserveAt, s.LastFastObserveAt = valueOrTime(envelope.NextFast), valueOrTimePtr(envelope.LastFast)
+				s.FastObserveStatus, s.FastObserveError, s.FastObserveRevision = envelope.FastStatus, envelope.FastError, envelope.FastRevision
+			} else {
+				err = json.Unmarshal(monitorState, &s.balanceState)
+			}
+		}
+		if s.FullIntervalSeconds <= 0 && s.IntervalMinutes > 0 {
+			s.FullIntervalSeconds = int64(s.IntervalMinutes) * 60
+		}
+		if s.FastIntervalSeconds <= 0 {
+			s.FastIntervalSeconds = s.FullIntervalSeconds
+		}
+		if s.NextFastObserveAt.IsZero() {
+			s.NextFastObserveAt = s.NextSyncAt
+		}
+		if s.FastObserveStatus == "" {
+			s.FastObserveStatus = "idle"
 		}
 		if s.BalanceMonitor.Unit == "" {
 			s.BalanceMonitor.Unit = balanceUnit(s.Platform)
@@ -48,6 +81,28 @@ func scanSite(row rowScanner) (*Site, error) {
 	}
 	s.HasCredential = s.SessionCipher != ""
 	return &s, storeError(err)
+}
+
+func valueOrZero(v *int64) int64 {
+	if v == nil {
+		return 0
+	}
+	return *v
+}
+
+func valueOrTime(v *time.Time) time.Time {
+	if v == nil {
+		return time.Time{}
+	}
+	return *v
+}
+
+func valueOrTimePtr(v *time.Time) *time.Time {
+	if v == nil {
+		return nil
+	}
+	copy := *v
+	return &copy
 }
 func storeError(e error) error {
 	if errors.Is(e, sql.ErrNoRows) {
@@ -104,8 +159,128 @@ ORDER BY LEAST(
  COALESCE((SELECT MIN((k.key_health->>'next_check_at')::timestamptz) FROM upstream_governance_keys k WHERE k.site_id=upstream_governance_sites.id AND k.key_health->>'next_check_at' IS NOT NULL), 'infinity'::timestamptz)
 ), id LIMIT $2`, now, limit)
 }
+
+// DueFastObservations is intentionally separate from DueSites: a fast group
+// read must not be delayed by full catalog, key, probe, or model work.
+func (s *sqlStore) DueFastObservations(ctx context.Context, now time.Time, limit int) ([]Site, error) {
+	if limit < 1 {
+		limit = 10
+	}
+	if limit > 50 {
+		limit = 50
+	}
+	return s.querySites(ctx, `SELECT `+siteColumns+` FROM upstream_governance_sites WHERE enabled AND session_cipher<>'' AND next_fast_observe_at <= $1 AND (fast_observe_status <> 'running' OR fast_observe_reserved_at IS NULL OR fast_observe_reserved_at < $1 - INTERVAL '1 minute') ORDER BY next_fast_observe_at,id LIMIT $2`, now, limit)
+}
+
+func (s *sqlStore) NextFastObservationAt(ctx context.Context) (*time.Time, error) {
+	var value *time.Time
+	err := s.db.QueryRowContext(ctx, `SELECT MIN(next_fast_observe_at) FROM upstream_governance_sites WHERE enabled AND session_cipher<>''`).Scan(&value)
+	if errors.Is(err, sql.ErrNoRows) || value == nil {
+		return nil, nil
+	}
+	if err != nil {
+		if isMissingSecondsSchema(err) {
+			return nil, ErrUnsupported
+		}
+		return nil, err
+	}
+	return value, nil
+}
+
+func (s *sqlStore) ReserveFastObservation(ctx context.Context, siteID int64, dueAt, reservedAt time.Time) (bool, error) {
+	if dueAt.IsZero() {
+		dueAt = reservedAt
+	}
+	if reservedAt.IsZero() {
+		reservedAt = time.Now().UTC()
+	}
+	r, err := s.db.ExecContext(ctx, `UPDATE upstream_governance_sites SET fast_observe_status='running',fast_observe_error='',fast_observe_reserved_at=$3,updated_at=NOW() WHERE id=$1 AND enabled AND next_fast_observe_at <= $2 AND (fast_observe_status <> 'running' OR fast_observe_reserved_at IS NULL OR fast_observe_reserved_at < $3 - INTERVAL '1 minute')`, siteID, dueAt, reservedAt)
+	if isMissingSecondsSchema(err) {
+		return false, ErrUnsupported
+	}
+	if err != nil {
+		return false, err
+	}
+	n, err := r.RowsAffected()
+	return n == 1, err
+}
+
+func (s *sqlStore) ObserveFastResult(ctx context.Context, siteID int64, observedAt, nextAt time.Time, status, message string, observation GroupObservation) (FastObservationResult, error) {
+	if observedAt.IsZero() {
+		observedAt = time.Now().UTC()
+	}
+	if nextAt.IsZero() {
+		nextAt = observedAt.Add(time.Minute)
+	}
+	if status == "" {
+		status = "healthy"
+	}
+	if !observation.GroupsComplete {
+		_, err := s.db.ExecContext(ctx, `UPDATE upstream_governance_sites SET fast_observe_status=$2,fast_observe_error=$3,next_fast_observe_at=$4,fast_observe_reserved_at=NULL,updated_at=NOW() WHERE id=$1`, siteID, status, message, nextAt)
+		return FastObservationResult{ObservedAt: observedAt}, err
+	}
+	fingerprint, err := groupObservationFingerprint(observation)
+	if err != nil {
+		return FastObservationResult{}, err
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return FastObservationResult{}, err
+	}
+	defer tx.Rollback()
+	var previousFingerprint string
+	var revision int64
+	err = tx.QueryRowContext(ctx, `SELECT fingerprint,revision FROM upstream_governance_fast_observations WHERE site_id=$1 FOR UPDATE`, siteID).Scan(&previousFingerprint, &revision)
+	if errors.Is(err, sql.ErrNoRows) {
+		previousFingerprint = ""
+		revision = 0
+	} else if err != nil {
+		return FastObservationResult{}, err
+	}
+	changed := previousFingerprint != fingerprint
+	if changed {
+		revision++
+	}
+	raw, err := json.Marshal(observation.Groups)
+	if err != nil {
+		return FastObservationResult{}, err
+	}
+	_, err = tx.ExecContext(ctx, `INSERT INTO upstream_governance_fast_observations(site_id,revision,fingerprint,source_user_id,groups_complete,groups,observed_at,updated_at) VALUES($1,$2,$3,$4,true,$5::jsonb,$6,NOW()) ON CONFLICT(site_id) DO UPDATE SET revision=EXCLUDED.revision,fingerprint=EXCLUDED.fingerprint,source_user_id=EXCLUDED.source_user_id,groups_complete=EXCLUDED.groups_complete,groups=EXCLUDED.groups,observed_at=EXCLUDED.observed_at,updated_at=NOW()`, siteID, revision, fingerprint, observation.SourceUserID, string(raw), observedAt)
+	if err != nil {
+		return FastObservationResult{}, err
+	}
+	_, err = tx.ExecContext(ctx, `UPDATE upstream_governance_sites SET fast_observe_status=$2,fast_observe_error=$3,last_fast_observe_at=$4,next_fast_observe_at=$5,fast_observe_reserved_at=NULL,fast_observe_source_user_id=$6,fast_observe_complete=true,fast_observe_revision=$7,updated_at=NOW() WHERE id=$1`, siteID, status, message, observedAt, nextAt, observation.SourceUserID, revision)
+	if err != nil {
+		return FastObservationResult{}, err
+	}
+	if err = tx.Commit(); err != nil {
+		return FastObservationResult{}, err
+	}
+	return FastObservationResult{Changed: changed, Revision: revision, ObservedAt: observedAt}, nil
+}
+
+func (s *sqlStore) LatestCatalogRevision(ctx context.Context, siteID int64) (*CatalogObservation, error) {
+	var out CatalogObservation
+	var raw []byte
+	err := s.db.QueryRowContext(ctx, `SELECT site_id,revision,fingerprint,source_user_id,groups_complete,groups,observed_at FROM upstream_governance_fast_observations WHERE site_id=$1`, siteID).Scan(&out.SiteID, &out.Revision, &out.Fingerprint, &out.SourceUserID, &out.GroupsComplete, &raw, &out.ObservedAt)
+	if err != nil {
+		return nil, storeError(err)
+	}
+	if err = json.Unmarshal(raw, &out.Groups); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
 func (s *sqlStore) CreateSite(ctx context.Context, v *Site) error {
-	return s.db.QueryRowContext(ctx, `INSERT INTO upstream_governance_sites (name, platform, base_url, proxy_id, enabled, interval_minutes, session_cipher, status, last_error, next_sync_at, login_cipher) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id,version,created_at,updated_at`, v.Name, v.Platform, v.BaseURL, v.ProxyID, v.Enabled, v.IntervalMinutes, v.SessionCipher, v.Status, v.LastError, v.NextSyncAt, v.LoginCipher).Scan(&v.ID, &v.Version, &v.CreatedAt, &v.UpdatedAt)
+	fast, full, next := normalizedSchedule(*v)
+	err := s.db.QueryRowContext(ctx, `INSERT INTO upstream_governance_sites (name, platform, base_url, proxy_id, enabled, interval_minutes, session_cipher, status, last_error, next_sync_at, login_cipher, fast_interval_seconds, full_interval_seconds, next_fast_observe_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id,version,created_at,updated_at`, v.Name, v.Platform, v.BaseURL, v.ProxyID, v.Enabled, v.IntervalMinutes, v.SessionCipher, v.Status, v.LastError, v.NextSyncAt, v.LoginCipher, fast, full, next).Scan(&v.ID, &v.Version, &v.CreatedAt, &v.UpdatedAt)
+	if isMissingSecondsSchema(err) {
+		err = s.db.QueryRowContext(ctx, `INSERT INTO upstream_governance_sites (name, platform, base_url, proxy_id, enabled, interval_minutes, session_cipher, status, last_error, next_sync_at, login_cipher) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id,version,created_at,updated_at`, v.Name, v.Platform, v.BaseURL, v.ProxyID, v.Enabled, v.SessionCipher, v.Status, v.LastError, v.NextSyncAt, v.LoginCipher).Scan(&v.ID, &v.Version, &v.CreatedAt, &v.UpdatedAt)
+	}
+	if err == nil {
+		v.FastIntervalSeconds, v.FullIntervalSeconds, v.NextFastObserveAt = fast, full, next
+	}
+	return err
 }
 func (s *sqlStore) GetSite(ctx context.Context, id int64) (*Site, error) {
 	return scanSite(s.db.QueryRowContext(ctx, `SELECT `+siteColumns+` FROM upstream_governance_sites WHERE id=$1`, id))
@@ -119,18 +294,53 @@ func (s *sqlStore) UpdateSite(ctx context.Context, v *Site, version int64) error
 	if e != nil {
 		return e
 	}
+	fast, full, nextFast := normalizedSchedule(*v)
 	var next int64
 	var updated time.Time
-	e = s.db.QueryRowContext(ctx, `UPDATE upstream_governance_sites SET name=$2,platform=$3,base_url=$4,proxy_id=$5,enabled=$6,interval_minutes=$7,session_cipher=$8,status=$9,last_error=$10,next_sync_at=$11,version=version+1,updated_at=NOW(),balance_monitor=$13::jsonb,balance_monitor_state=$14::jsonb,login_cipher=$15,last_sync_at=CASE WHEN base_url<>$4 OR platform<>$3 THEN NULL ELSE last_sync_at END WHERE id=$1 AND version=$12 RETURNING version,updated_at`, v.ID, v.Name, v.Platform, v.BaseURL, v.ProxyID, v.Enabled, v.IntervalMinutes, v.SessionCipher, v.Status, v.LastError, v.NextSyncAt, version, string(monitor), string(monitorState), v.LoginCipher).Scan(&next, &updated)
+	e = s.db.QueryRowContext(ctx, `UPDATE upstream_governance_sites SET name=$2,platform=$3,base_url=$4,proxy_id=$5,enabled=$6,interval_minutes=$7,session_cipher=$8,status=$9,last_error=$10,next_sync_at=$11,version=version+1,updated_at=NOW(),balance_monitor=$13::jsonb,balance_monitor_state=$14::jsonb,login_cipher=$15,fast_interval_seconds=$16,full_interval_seconds=$17,next_fast_observe_at=$18,last_sync_at=CASE WHEN base_url<>$4 OR platform<>$3 THEN NULL ELSE last_sync_at END WHERE id=$1 AND version=$12 RETURNING version,updated_at`, v.ID, v.Name, v.Platform, v.BaseURL, v.ProxyID, v.Enabled, v.IntervalMinutes, v.SessionCipher, v.Status, v.LastError, v.NextSyncAt, version, string(monitor), string(monitorState), v.LoginCipher, fast, full, nextFast).Scan(&next, &updated)
+	if isMissingSecondsSchema(e) {
+		e = s.db.QueryRowContext(ctx, `UPDATE upstream_governance_sites SET name=$2,platform=$3,base_url=$4,proxy_id=$5,enabled=$6,interval_minutes=$7,session_cipher=$8,status=$9,last_error=$10,next_sync_at=$11,version=version+1,updated_at=NOW(),balance_monitor=$13::jsonb,balance_monitor_state=$14::jsonb,login_cipher=$15,last_sync_at=CASE WHEN base_url<>$4 OR platform<>$3 THEN NULL ELSE last_sync_at END WHERE id=$1 AND version=$12 RETURNING version,updated_at`, v.ID, v.Name, v.Platform, v.BaseURL, v.ProxyID, v.Enabled, v.IntervalMinutes, v.SessionCipher, v.Status, v.LastError, v.NextSyncAt, version, string(monitor), string(monitorState), v.LoginCipher).Scan(&next, &updated)
+	}
 	if errors.Is(e, sql.ErrNoRows) {
 		return ErrConflict
 	}
 	if e == nil {
 		v.Version = next
 		v.UpdatedAt = updated
+		v.FastIntervalSeconds, v.FullIntervalSeconds, v.NextFastObserveAt = fast, full, nextFast
 		v.HasCredential = v.SessionCipher != ""
 	}
 	return e
+}
+
+func normalizedSchedule(v Site) (fast, full int64, next time.Time) {
+	full = v.FullIntervalSeconds
+	if full <= 0 && v.IntervalMinutes > 0 {
+		full = int64(v.IntervalMinutes) * 60
+	}
+	if full <= 0 {
+		full = 900
+	}
+	fast = v.FastIntervalSeconds
+	if fast <= 0 {
+		fast = full
+	}
+	next = v.NextFastObserveAt
+	if next.IsZero() {
+		next = v.NextSyncAt
+	}
+	if next.IsZero() {
+		next = time.Now().UTC()
+	}
+	return
+}
+
+func isMissingSecondsSchema(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "fast_interval_seconds") || strings.Contains(message, "next_fast_observe_at") || strings.Contains(message, "column") && strings.Contains(message, "does not exist")
 }
 
 func (s *sqlStore) StageLoginChallenge(ctx context.Context, siteID, version int64, encrypted string) error {

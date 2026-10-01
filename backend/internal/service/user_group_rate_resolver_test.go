@@ -81,3 +81,13 @@ func TestGatewayServiceGetUserGroupRateMultiplier_FallbacksAndUsesExistingResolv
 	require.Equal(t, rate, got)
 	require.Equal(t, 1, repo.calls)
 }
+
+func TestUserGroupRateResolverDoesNotCacheGroupDefaultWhenNoOverride(t *testing.T) {
+	repo := &userGroupRateResolverRepoStub{rate: nil}
+	resolver := newUserGroupRateResolver(repo, nil, time.Minute, nil, "service.test")
+	require.Equal(t, 1.2, resolver.Resolve(context.Background(), 101, 202, 1.2))
+	// A pricing-policy commit changes the group default. An absent explicit
+	// user override must not make the old default live for the cache TTL.
+	require.Equal(t, 1.8, resolver.Resolve(context.Background(), 101, 202, 1.8))
+	require.Equal(t, 1, repo.calls, "nil override should remain a cached presence lookup")
+}

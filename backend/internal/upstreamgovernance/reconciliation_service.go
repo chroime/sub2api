@@ -290,6 +290,13 @@ func (s *Service) reconcileSnapshotLocked(ctx context.Context, site Site, snapsh
 	if err != nil {
 		return err
 	}
+	// Cost facts are persisted independently from account patches. This means a
+	// credible increase is visible to the pricing coordinator even when the
+	// legacy account-rate reconciliation correctly leaves the row in review.
+	var pricingFacts PricingFactRecorder
+	if recorder, ok := s.store.(PricingFactRecorder); ok {
+		pricingFacts = recorder
+	}
 	states, err := store.ReconciliationStates(ctx, site.ID)
 	if err != nil {
 		return err
@@ -303,6 +310,36 @@ func (s *Service) reconcileSnapshotLocked(ctx context.Context, site Site, snapsh
 		a, e := s.inspectReconciliationAccount(ctx, local, site, binding)
 		if e != nil || a == nil {
 			continue
+		}
+		if pricingFacts != nil {
+			localGroupIDs := binding.LocalGroupIDs
+			if len(localGroupIDs) == 0 && binding.LocalGroupID > 0 {
+				localGroupIDs = []int64{binding.LocalGroupID}
+			}
+			for _, groupID := range localGroupIDs {
+				if groupID <= 0 {
+					continue
+				}
+				for _, remote := range snapshot.Catalog.Groups {
+					if remote.ID != binding.RemoteGroupID || remote.ResolvedRateMultiplier == nil || !validCost(*remote.ResolvedRateMultiplier) {
+						continue
+					}
+					fact := CostObservation{
+						LocalGroupID: groupID,
+						SiteID:       site.ID,
+						BindingID:    binding.ID,
+						SourceID:     fmt.Sprintf("site:%d/binding:%d/group:%s", site.ID, binding.ID, remote.ID),
+						Cost:         *remote.ResolvedRateMultiplier,
+						Comparable:   true,
+						Eligible:     true,
+						ObservedAt:   snapshot.CreatedAt,
+					}
+					if _, factErr := pricingFacts.RecordPricingCostFact(ctx, groupID, fact); factErr != nil && !errors.Is(factErr, ErrUnsupported) {
+						log.Printf("[UpstreamGovernance] persist pricing cost fact: %s", ErrorCode(factErr))
+					}
+					break
+				}
+			}
 		}
 		state, ok := states[binding.ID]
 		if !ok {

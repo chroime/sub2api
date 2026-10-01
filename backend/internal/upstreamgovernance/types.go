@@ -20,13 +20,23 @@ var (
 )
 
 type Site struct {
-	ID                   int64                `json:"id"`
-	Name                 string               `json:"name"`
-	Platform             string               `json:"platform"`
-	BaseURL              string               `json:"base_url"`
-	ProxyID              *int64               `json:"proxy_id"`
-	Enabled              bool                 `json:"enabled"`
-	IntervalMinutes      int                  `json:"interval_minutes"`
+	ID              int64  `json:"id"`
+	Name            string `json:"name"`
+	Platform        string `json:"platform"`
+	BaseURL         string `json:"base_url"`
+	ProxyID         *int64 `json:"proxy_id"`
+	Enabled         bool   `json:"enabled"`
+	IntervalMinutes int    `json:"interval_minutes"`
+	// FastIntervalSeconds and FullIntervalSeconds are the persisted cadence
+	// values. IntervalMinutes remains the wire-compatible alias for legacy
+	// callers and is derived from FullIntervalSeconds when possible.
+	FastIntervalSeconds  int64                `json:"fast_interval_seconds,omitempty"`
+	FullIntervalSeconds  int64                `json:"full_interval_seconds,omitempty"`
+	NextFastObserveAt    time.Time            `json:"next_fast_observe_at,omitempty"`
+	LastFastObserveAt    *time.Time           `json:"last_fast_observe_at,omitempty"`
+	FastObserveStatus    string               `json:"fast_observe_status,omitempty"`
+	FastObserveError     string               `json:"fast_observe_error,omitempty"`
+	FastObserveRevision  int64                `json:"fast_observe_revision,omitempty"`
 	Version              int64                `json:"version"`
 	HasCredential        bool                 `json:"has_credential"`
 	SessionCipher        string               `json:"-"`
@@ -138,6 +148,35 @@ type Catalog struct {
 	Channels       []RemoteChannel `json:"channels"`
 	Warnings       []string        `json:"warnings"`
 	Account        *RemoteAccount  `json:"account,omitempty"`
+}
+
+// GroupObservation is deliberately smaller than Catalog. It is the trusted
+// result of the cheap group/rate endpoints used by the second-based worker.
+// Models, channel expansion, and prices are never inferred from this value.
+type GroupObservation struct {
+	ObservedAt     time.Time     `json:"observed_at"`
+	SourceUserID   int64         `json:"source_user_id"`
+	GroupsComplete bool          `json:"groups_complete"`
+	Groups         []RemoteGroup `json:"groups"`
+}
+
+// CatalogObservation is a persisted latest fast observation. Revision only
+// changes when the complete group/rate fingerprint changes; an unchanged
+// observation therefore cannot invalidate import previews.
+type CatalogObservation struct {
+	SiteID         int64         `json:"site_id"`
+	Revision       int64         `json:"revision"`
+	Fingerprint    string        `json:"fingerprint"`
+	ObservedAt     time.Time     `json:"observed_at"`
+	SourceUserID   int64         `json:"source_user_id"`
+	GroupsComplete bool          `json:"groups_complete"`
+	Groups         []RemoteGroup `json:"groups"`
+}
+
+type FastObservationResult struct {
+	Changed    bool
+	Revision   int64
+	ObservedAt time.Time
 }
 
 // RemoteAccount contains only user-visible accounting fields. A nil amount is
@@ -352,4 +391,22 @@ type Store interface {
 	AddCheck(context.Context, *Check) error
 	LatestCheck(context.Context, int64, int64) (*Check, error)
 	ListChecks(context.Context, int64, int, int) ([]Check, int64, error)
+}
+
+// FastObservationStore is optional so existing Store implementations can keep
+// the minute-based API while deployments roll out migration 261. The worker
+// uses it when available and otherwise leaves the legacy full collector in
+// charge.
+type FastObservationStore interface {
+	DueFastObservations(context.Context, time.Time, int) ([]Site, error)
+	NextFastObservationAt(context.Context) (*time.Time, error)
+	ReserveFastObservation(context.Context, int64, time.Time, time.Time) (bool, error)
+	ObserveFastResult(context.Context, int64, time.Time, time.Time, string, string, GroupObservation) (FastObservationResult, error)
+	LatestCatalogRevision(context.Context, int64) (*CatalogObservation, error)
+}
+
+// FastObservationConnector exposes only the cheap group/rate observation
+// path. Connectors that do not implement it continue using Discover.
+type FastObservationConnector interface {
+	ObserveGroups(context.Context, Site, Session) (GroupObservation, error)
 }

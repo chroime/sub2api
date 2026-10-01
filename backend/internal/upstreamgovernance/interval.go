@@ -5,9 +5,14 @@ import "time"
 // Intervals use PostgreSQL INTEGER fields. This is the storage representation
 // limit, rather than a policy restriction on a site's chosen cadence.
 const maxIntervalMinutes = 1<<31 - 1
+const maxIntervalSeconds = int64(1<<63 - 1)
 
 func validIntervalMinutes(minutes int) bool {
 	return minutes >= 1 && minutes <= maxIntervalMinutes
+}
+
+func validIntervalSeconds(seconds int64) bool {
+	return seconds >= 1 && seconds <= maxIntervalSeconds
 }
 
 // addMinutes keeps large configured intervals (and their freshness multiples)
@@ -19,4 +24,12 @@ func addMinutes(at time.Time, minutes int64) time.Time {
 	const minutesPerDay = 24 * 60
 	return at.UTC().AddDate(0, 0, int(minutes/minutesPerDay)).
 		Add(time.Duration(minutes%minutesPerDay) * time.Minute).In(at.Location())
+}
+
+// addSeconds avoids time.Duration overflow for a BIGINT schedule while
+// preserving wall-clock elapsed seconds and the caller's location.
+func addSeconds(at time.Time, seconds int64) time.Time {
+	const secondsPerDay = int64(24 * 60 * 60)
+	days, remainder := seconds/secondsPerDay, seconds%secondsPerDay
+	return at.UTC().AddDate(0, 0, int(days)).Add(time.Duration(remainder) * time.Second).In(at.Location())
 }
