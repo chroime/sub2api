@@ -36,4 +36,14 @@ func TestSQLStoreUnchangedFastObservationKeepsRevision(t *testing.T) {
 	require.Equal(t, int64(4), result.Revision)
 }
 
+func TestSQLStoreNextFastObservationSkipsActiveReservations(t *testing.T) {
+	store, mock := storeFixture(t)
+	next := time.Date(2026, 10, 1, 1, 2, 3, 0, time.UTC)
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT MIN(next_fast_observe_at) FROM upstream_governance_sites")).
+		WillReturnRows(sqlmock.NewRows([]string{"min"}).AddRow(next))
+	got, err := store.(FastObservationScheduleStore).NextFastObservationAt(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, next, *got)
+}
+
 func floatPtr(value float64) *float64 { return &value }

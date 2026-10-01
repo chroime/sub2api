@@ -179,7 +179,7 @@ func (s *sqlStore) DueFastObservations(ctx context.Context, now time.Time, limit
 
 func (s *sqlStore) NextFastObservationAt(ctx context.Context) (*time.Time, error) {
 	var value *time.Time
-	err := s.db.QueryRowContext(ctx, `SELECT MIN(next_fast_observe_at) FROM upstream_governance_sites WHERE enabled AND session_cipher<>''`).Scan(&value)
+	err := s.db.QueryRowContext(ctx, `SELECT MIN(next_fast_observe_at) FROM upstream_governance_sites WHERE enabled AND fast_observe_enabled AND session_cipher<>'' AND (fast_observe_status <> 'running' OR fast_observe_reserved_at IS NULL OR fast_observe_reserved_at < NOW() - INTERVAL '5 minutes')`).Scan(&value)
 	if errors.Is(err, sql.ErrNoRows) || value == nil {
 		return nil, nil
 	}
