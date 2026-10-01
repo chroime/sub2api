@@ -3,7 +3,9 @@ import { describe, expect, it, vi } from 'vitest'
 import GovernanceHistory from './GovernanceHistory.vue'
 import type { Binding } from '@/api/admin/upstream-governance'
 
-vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
+vi.mock('vue-i18n', () => ({ useI18n: () => ({
+  t: (key: string, params?: Record<string, unknown>) => params?.group ? `${key}:${String(params.group)}` : key,
+}) }))
 
 const binding: Binding = { id: 5, site_id: 1, remote_group_id: 'upstream-7', platform: 'openai', local_group_id: 3, local_group_ids: [3, 4], account_id: 8, account_name: 'upstream.example--0.2', probe_enabled: false, probe_model: '', probe_interval_minutes: 30 }
 
@@ -44,6 +46,14 @@ describe('imported binding names', () => {
     ], total: 1, page: 1, page_size: 20, pages: 1 }, checks: null } })
     expect(wrapper.get('[data-test=event-summary]').text()).toContain('governance.rateChangedUpSummary')
     expect(wrapper.get('summary').text()).toBe('governance.rawChangeData')
+    wrapper.unmount()
+  })
+
+  it('wraps the resolved group name in brackets in run history', () => {
+    const wrapper = mount(GovernanceHistory, { props: { mode: 'history', bindings: [], remoteGroups: [{ id: '7', name: 'Claude Max' }], events: { items: [
+      { id: 11, site_id: 1, kind: 'rate_changed', resource: '7', before: '{"Resolved":0.9}', after: '{"Resolved":0.93}', acknowledged: false, created_at: '2026-09-30T08:00:00Z' },
+    ], total: 1, page: 1, page_size: 20, pages: 1 }, checks: null } })
+    expect(wrapper.get('[data-test=event-summary]').text()).toContain('【Claude Max】')
     wrapper.unmount()
   })
 

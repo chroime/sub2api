@@ -25,7 +25,14 @@ func formatNoticeRate(value *float64) string {
 	if value == nil || math.IsNaN(*value) || math.IsInf(*value, 0) {
 		return "未知"
 	}
-	return strconv.FormatFloat(*value, 'f', -1, 64)
+	// Rates are decimal values, but subtraction can expose binary floating
+	// point noise (for example 0.030000000000000027). Keep six meaningful
+	// decimal places while preserving ordinary values such as 0.93.
+	rounded := math.Round(*value*1_000_000) / 1_000_000
+	if rounded == 0 {
+		rounded = 0
+	}
+	return strconv.FormatFloat(rounded, 'f', -1, 64)
 }
 
 func renderCatalogChangeNotice(site Site, event Event, catalog Catalog) ChangeNotice {
@@ -33,8 +40,8 @@ func renderCatalogChangeNotice(site Site, event Event, catalog Catalog) ChangeNo
 	notice := ChangeNotice{
 		SiteID: site.ID, SiteName: site.Name, BaseURL: site.BaseURL,
 		Kind: "catalog_change", Severity: "info",
-		DedupKey: fmt.Sprintf("site:%d:event:%s:%s", site.ID, event.Kind, event.Resource),
-		Subject: fmt.Sprintf("上游变更：%s - %s", site.Name, groupName),
+		DedupKey:   fmt.Sprintf("site:%d:event:%s:%s", site.ID, event.Kind, event.Resource),
+		Subject:    fmt.Sprintf("上游变更：%s - %s", site.Name, groupName),
 		ObservedAt: event.CreatedAt,
 	}
 	switch event.Kind {

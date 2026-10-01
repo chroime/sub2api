@@ -9,7 +9,7 @@ import type {
   Page,
   Transport,
 } from '@/api/admin/upstream-governance'
-import { formatGovernanceTime } from './format'
+import { formatGovernanceGroupName, formatGovernanceRate, formatGovernanceTime } from './format'
 import { eventKeys } from './feedback'
 const props = defineProps<{
   bindings: Binding[]
@@ -38,10 +38,10 @@ function rateSnapshot(value: string): RateSnapshot | null {
   }
 }
 function rateText(value: number | null | undefined): string {
-  return typeof value === 'number' && Number.isFinite(value) ? String(value) : '—'
+  return formatGovernanceRate(value)
 }
 function eventSummary(event: GovernanceEvent): string {
-  const group = event.resource_name || remoteNames.value.get(event.resource) || `#${event.resource}`
+  const group = formatGovernanceGroupName(event.resource_name || remoteNames.value.get(event.resource) || `#${event.resource}`)
   if (event.kind === 'rate_changed') {
     const before = rateSnapshot(event.before)?.Resolved
     const after = rateSnapshot(event.after)?.Resolved

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatGovernanceTime } from './format'
+import { formatGovernanceGroupName, formatGovernanceRate, formatGovernanceTime } from './format'
 describe('governance timestamp presentation', () => {
   it('formats exact second precision in the requested timezone without changing the instant', () => {
     const timestamp = '2026-09-26T15:08:02.675Z'
@@ -17,5 +17,21 @@ describe('governance timestamp presentation', () => {
   })
   it('shows a neutral placeholder for unknown and invalid timestamps', () => {
     for (const value of [null, undefined, '', 'not-a-time']) expect(formatGovernanceTime(value)).toBe('—')
+  })
+})
+
+describe('governance rate presentation', () => {
+  it('rounds binary floating point noise without losing useful precision', () => {
+    expect(formatGovernanceRate(0.030000000000000027)).toBe('0.03')
+    expect(formatGovernanceRate(0.93)).toBe('0.93')
+    expect(formatGovernanceRate(0.123456789)).toBe('0.123457')
+    expect(formatGovernanceRate(null)).toBe('—')
+  })
+})
+
+describe('governance group presentation', () => {
+  it('wraps the group label once for run history summaries', () => {
+    expect(formatGovernanceGroupName('Claude Max')).toBe('【Claude Max】')
+    expect(formatGovernanceGroupName('【Claude Max】')).toBe('【Claude Max】')
   })
 })
