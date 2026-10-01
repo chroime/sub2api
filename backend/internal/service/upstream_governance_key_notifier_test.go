@@ -23,7 +23,7 @@ func TestGovernanceKeyMailUsesSystemSMTPAndEscapesDetails(t *testing.T) {
 	require.Contains(t, body, "&lt;script&gt;site&lt;/script&gt;")
 	require.Contains(t, body, "&lt;group&gt;")
 	require.NotContains(t, body, "<script>")
-	require.Contains(t, body, "2026-09-30 08:00:00")
+	require.Contains(t, body, "2026-09-30 16:00:00")
 	require.NotContains(t, body, "fixture-inference-key")
 	require.NoError(t, repo.Set(t.Context(), SettingKeySMTPFrom, "updated-sender@example.test"))
 	notice.Kind = "recovered"

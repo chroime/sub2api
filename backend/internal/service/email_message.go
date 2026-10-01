@@ -54,7 +54,7 @@ func buildSMTPMessage(config *SMTPConfig, to, subject, body string) (smtpMessage
 	var message bytes.Buffer
 	fmt.Fprintf(&message, "From: %s\r\n", fromHeader)
 	fmt.Fprintf(&message, "To: %s\r\n", toHeader)
-	fmt.Fprintf(&message, "Date: %s\r\n", time.Now().UTC().Format(time.RFC1123Z))
+	fmt.Fprintf(&message, "Date: %s\r\n", time.Now().In(emailTimeZone).Format(time.RFC1123Z))
 	fmt.Fprintf(&message, "Message-ID: %s\r\n", messageID)
 	fmt.Fprintf(&message, "Subject: %s\r\n", subjectHeader)
 	fmt.Fprint(&message, "MIME-Version: 1.0\r\n"+

@@ -23,7 +23,7 @@ func TestGovernanceModelMailUsesSystemSMTPAndEscapesEvidence(t *testing.T) {
 	require.Contains(t, body, "&lt;script&gt;site&lt;/script&gt;")
 	require.Contains(t, body, "&lt;img src=x onerror=alert(1)&gt;")
 	require.NotContains(t, body, "<script>")
-	require.Contains(t, body, "2026-09-27 14:00:00")
+	require.Contains(t, body, "2026-09-27 22:00:00")
 	require.Contains(t, body, "token_suspicious")
 	require.NoError(t, repo.Set(t.Context(), SettingKeySMTPFrom, "updated-sender@example.test"))
 	notice.Kind = "recovery"

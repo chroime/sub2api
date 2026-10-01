@@ -36,9 +36,9 @@ func (n *governanceBalanceNotifier) SendModel(ctx context.Context, recipient str
 <table style="border-collapse:collapse;width:100%%;line-height:1.8">
 <tr><td>上游 / Upstream</td><td>%s</td></tr><tr><td>地址 / URL</td><td>%s</td></tr>
 <tr><td>监测策略 / Policy</td><td>%s</td></tr><tr><td>模型 / Model</td><td>%s</td></tr>
-<tr><td>事件 / Event</td><td>%s</td></tr><tr><td>检测时间 / Observed (UTC)</td><td>%s</td></tr></table>
+<tr><td>事件 / Event</td><td>%s</td></tr><tr><td>检测时间（北京时间，+08:00）</td><td>%s</td></tr></table>
 <p style="white-space:pre-wrap">%s</p>
 <p>请在管理员后台的上游治理中心查看原始记录与核验依据。Token 差异需结合计数口径判断。<br>Review the original evidence in the administrator upstream governance center. Token differences depend on accounting scope.</p>
-<p style="font-size:12px;color:#64748b">%s</p></main></body></html>`, html.EscapeString(title), html.EscapeString(notice.SiteName), html.EscapeString(notice.BaseURL), html.EscapeString(notice.PolicyName), html.EscapeString(notice.Model), html.EscapeString(notice.Kind), html.EscapeString(notice.ObservedAt.UTC().Format("2006-01-02 15:04:05")), html.EscapeString(notice.Detail), html.EscapeString(name))
+<p style="font-size:12px;color:#64748b">%s</p></main></body></html>`, html.EscapeString(title), html.EscapeString(notice.SiteName), html.EscapeString(notice.BaseURL), html.EscapeString(notice.PolicyName), html.EscapeString(notice.Model), html.EscapeString(notice.Kind), html.EscapeString(formatEmailTime(notice.ObservedAt)), html.EscapeString(notice.Detail), html.EscapeString(name))
 	return n.mail.SendEmail(ctx, recipient, subject, body)
 }

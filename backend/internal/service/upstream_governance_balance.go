@@ -72,11 +72,11 @@ func (n *governanceBalanceNotifier) Send(ctx context.Context, recipient string, 
 <table style="border-collapse:collapse;width:100%%;line-height:1.8">
 <tr><td>站点 / Site</td><td>%s</td></tr><tr><td>平台 / Platform</td><td>%s</td></tr>
 <tr><td>可用余额 / Available</td><td><strong>%s</strong></td></tr>
-<tr><td>告警阈值 / Threshold</td><td>%s</td></tr><tr><td>采集时间 / Observed (UTC)</td><td>%s</td></tr></table>
+<tr><td>告警阈值 / Threshold</td><td>%s</td></tr><tr><td>采集时间（北京时间，+08:00）</td><td>%s</td></tr></table>
 <p>请在上游站点检查余额并及时充值。<br>Review the upstream balance and recharge when needed.</p>
 <p style="font-size:12px;color:#64748b">金额保留上游原生单位 / Values retain the upstream native unit.<br>%s</p>
 </main></body></html>`, html.EscapeString(notice.SiteName), html.EscapeString(notice.BaseURL), html.EscapeString(notice.Platform),
 		html.EscapeString(fmt.Sprintf("%g %s", notice.Balance, notice.Unit)), html.EscapeString(fmt.Sprintf("%g %s", notice.Threshold, notice.Unit)),
-		html.EscapeString(notice.ObservedAt.UTC().Format("2006-01-02 15:04:05")), html.EscapeString(name))
+		html.EscapeString(formatEmailTime(notice.ObservedAt)), html.EscapeString(name))
 	return n.mail.SendEmail(ctx, recipient, subject, body)
 }
