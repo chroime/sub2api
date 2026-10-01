@@ -52,10 +52,10 @@ func retryAfter(header string, now time.Time) time.Duration {
 		if seconds < 1 {
 			return time.Second
 		}
-		d := time.Duration(seconds) * time.Second
-		if d > maxRetry {
+		if seconds > int64(maxRetry/time.Second) {
 			return maxRetry
 		}
+		d := time.Duration(seconds) * time.Second
 		return d
 	}
 	if at, err := http.ParseTime(header); err == nil {
