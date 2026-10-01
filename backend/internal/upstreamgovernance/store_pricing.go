@@ -39,8 +39,12 @@ const pricingPolicyColumns = `local_group_id,enabled,mode,baseline_cost,baseline
 func scanPricingPolicy(row interface{ Scan(...any) error }) (PricingPolicy, error) {
 	var p PricingPolicy
 	var mode string
-	err := row.Scan(&p.LocalGroupID, &p.Enabled, &mode, &p.BaselineCost, &p.BaselineSale, &p.Ratio, &p.MinMargin, &p.SafetyBuffer, &p.DecreaseStabilitySeconds, &p.MaxIncreasePercent, &p.Version, &p.ManualOwner, &p.ManualVersion, &p.LastAutomaticSale, &p.LastAutomaticCost, &p.ActiveCost, &p.ActiveCostSource, &p.Protected, &p.ProtectionReason, &p.CostFactRevision, &p.DecreaseObservedAt)
+	var decreaseObservedAt sql.NullTime
+	err := row.Scan(&p.LocalGroupID, &p.Enabled, &mode, &p.BaselineCost, &p.BaselineSale, &p.Ratio, &p.MinMargin, &p.SafetyBuffer, &p.DecreaseStabilitySeconds, &p.MaxIncreasePercent, &p.Version, &p.ManualOwner, &p.ManualVersion, &p.LastAutomaticSale, &p.LastAutomaticCost, &p.ActiveCost, &p.ActiveCostSource, &p.Protected, &p.ProtectionReason, &p.CostFactRevision, &decreaseObservedAt)
 	p.Mode = PricingMode(mode)
+	if decreaseObservedAt.Valid {
+		p.DecreaseObservedAt = decreaseObservedAt.Time
+	}
 	return p, storeError(err)
 }
 
