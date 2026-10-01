@@ -69,11 +69,18 @@ func (c *platformConnector) fastSubGroups(ctx context.Context, s Site, session S
 			return nil, ErrUnsupported
 		}
 		seen[id] = true
-		rate, ok := rates[id]
-		if !ok || rate == nil || !connectorValidRate(rate) {
+		resolved := group.Rate
+		var override *float64
+		if rate, ok := rates[id]; ok {
+			if rate == nil || !connectorValidRate(rate) {
+				return nil, ErrUnsupported
+			}
+			override, resolved = rate, rate
+		}
+		if resolved == nil || !connectorValidRate(resolved) {
 			return nil, ErrUnsupported
 		}
-		out = append(out, RemoteGroup{ID: id, Name: group.Name, Platform: group.Platform, RateMultiplier: group.Rate, UserRateMultiplier: rate, ResolvedRateMultiplier: rate, PeakRateEnabled: group.PeakEnabled, PeakStart: group.PeakStart, PeakEnd: group.PeakEnd, PeakRateMultiplier: group.PeakRate, Models: []string{}, Prices: []RemotePrice{}, Source: "sub2api:user-visible-groups"})
+		out = append(out, RemoteGroup{ID: id, Name: group.Name, Platform: group.Platform, RateMultiplier: group.Rate, UserRateMultiplier: override, ResolvedRateMultiplier: resolved, PeakRateEnabled: group.PeakEnabled, PeakStart: group.PeakStart, PeakEnd: group.PeakEnd, PeakRateMultiplier: group.PeakRate, Models: []string{}, Prices: []RemotePrice{}, Source: "sub2api:user-visible-groups"})
 	}
 	return out, nil
 }

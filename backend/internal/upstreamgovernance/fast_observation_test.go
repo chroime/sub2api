@@ -69,3 +69,25 @@ func TestFastObservationRejectsIncompleteOrUnknownRates(t *testing.T) {
 		})
 	}
 }
+
+func TestFastObservationFallsBackToGroupRateWhenNoUserOverrideExists(t *testing.T) {
+	connector := fixtureConnector(t, func(r *http.Request) (int, string) {
+		switch r.URL.Path {
+		case "/api/v1/user/profile":
+			return 200, `{"code":0,"data":{"id":42}}`
+		case "/api/v1/groups/available":
+			return 200, `{"code":0,"data":[{"id":7,"name":"VIP","platform":"openai","rate_multiplier":2}]}`
+		case "/api/v1/groups/rates":
+			return 200, `{"code":0,"data":{}}`
+		default:
+			t.Fatalf("unexpected endpoint %s", r.URL.Path)
+			return 500, "{}"
+		}
+	})
+	got, err := connector.(FastObservationConnector).ObserveGroups(context.Background(), Site{Platform: "sub2api", BaseURL: "https://upstream.example"}, Session{AccessToken: "fixture", UserID: 42})
+	require.NoError(t, err)
+	require.Len(t, got.Groups, 1)
+	require.Nil(t, got.Groups[0].UserRateMultiplier)
+	require.NotNil(t, got.Groups[0].ResolvedRateMultiplier)
+	require.InDelta(t, 2, *got.Groups[0].ResolvedRateMultiplier, .0001)
+}
