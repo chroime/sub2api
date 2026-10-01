@@ -32,6 +32,7 @@ type Site struct {
 	// callers and is derived from FullIntervalSeconds when possible.
 	FastIntervalSeconds  int64                `json:"fast_interval_seconds,omitempty"`
 	FullIntervalSeconds  int64                `json:"full_interval_seconds,omitempty"`
+	FastObserveEnabled   bool                 `json:"fast_observe_enabled,omitempty"`
 	NextFastObserveAt    time.Time            `json:"next_fast_observe_at,omitempty"`
 	LastFastObserveAt    *time.Time           `json:"last_fast_observe_at,omitempty"`
 	FastObserveStatus    string               `json:"fast_observe_status,omitempty"`

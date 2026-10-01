@@ -51,6 +51,10 @@ func (s *pricingMemoryStore) CommitPricing(_ context.Context, commit PricingComm
 	if commit.ApplySale {
 		state.CurrentSale = commit.Decision.TargetSale
 		state.Policy.LastAutomaticSale = commit.Decision.TargetSale
+		state.Policy.LastAutomaticCost = commit.Decision.Cost
+		state.Policy.DecreaseObservedAt = time.Time{}
+	} else if commit.Reason == "decrease_stability" && state.Policy.DecreaseObservedAt.IsZero() {
+		state.Policy.DecreaseObservedAt = commit.Now
 	}
 	state.Policy.ActiveCost = commit.Decision.Cost
 	state.Policy.ActiveCostSource = commit.Decision.SourceID

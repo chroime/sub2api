@@ -22,7 +22,7 @@ var _ Store = (*sqlStore)(nil)
 // Keep the result column count compatible with pre-261 callers/tests. The
 // schedule fields are projected through the existing balance-state slot using
 // to_jsonb(table), which returns NULL for columns absent before migration 261.
-const siteColumns = `id, name, platform, base_url, proxy_id, enabled, interval_minutes, version, session_cipher, status, last_error, last_sync_at, next_sync_at, created_at, updated_at, balance_monitor, jsonb_build_object('__governance_balance_state', balance_monitor_state, '__fast_interval_seconds', to_jsonb(upstream_governance_sites)->'fast_interval_seconds', '__full_interval_seconds', to_jsonb(upstream_governance_sites)->'full_interval_seconds', '__next_fast_observe_at', to_jsonb(upstream_governance_sites)->'next_fast_observe_at', '__last_fast_observe_at', to_jsonb(upstream_governance_sites)->'last_fast_observe_at', '__fast_observe_status', to_jsonb(upstream_governance_sites)->'fast_observe_status', '__fast_observe_error', to_jsonb(upstream_governance_sites)->'fast_observe_error', '__fast_observe_revision', to_jsonb(upstream_governance_sites)->'fast_observe_revision'), login_cipher`
+	const siteColumns = `id, name, platform, base_url, proxy_id, enabled, interval_minutes, version, session_cipher, status, last_error, last_sync_at, next_sync_at, created_at, updated_at, balance_monitor, jsonb_build_object('__governance_balance_state', balance_monitor_state, '__fast_interval_seconds', to_jsonb(upstream_governance_sites)->'fast_interval_seconds', '__full_interval_seconds', to_jsonb(upstream_governance_sites)->'full_interval_seconds', '__fast_observe_enabled', to_jsonb(upstream_governance_sites)->'fast_observe_enabled', '__next_fast_observe_at', to_jsonb(upstream_governance_sites)->'next_fast_observe_at', '__last_fast_observe_at', to_jsonb(upstream_governance_sites)->'last_fast_observe_at', '__fast_observe_status', to_jsonb(upstream_governance_sites)->'fast_observe_status', '__fast_observe_error', to_jsonb(upstream_governance_sites)->'fast_observe_error', '__fast_observe_revision', to_jsonb(upstream_governance_sites)->'fast_observe_revision'), login_cipher`
 
 type rowScanner interface{ Scan(...any) error }
 
@@ -37,6 +37,7 @@ func scanSite(row rowScanner) (*Site, error) {
 				BalanceState json.RawMessage `json:"__governance_balance_state"`
 				FastSeconds  *int64          `json:"__fast_interval_seconds"`
 				FullSeconds  *int64          `json:"__full_interval_seconds"`
+				FastEnabled  *bool           `json:"__fast_observe_enabled"`
 				NextFast     *time.Time      `json:"__next_fast_observe_at"`
 				LastFast     *time.Time      `json:"__last_fast_observe_at"`
 				FastStatus   string          `json:"__fast_observe_status"`
@@ -46,10 +47,14 @@ func scanSite(row rowScanner) (*Site, error) {
 			if json.Unmarshal(monitorState, &envelope) == nil && len(envelope.BalanceState) > 0 && string(envelope.BalanceState) != "null" {
 				err = json.Unmarshal(envelope.BalanceState, &s.balanceState)
 				s.FastIntervalSeconds, s.FullIntervalSeconds = valueOrZero(envelope.FastSeconds), valueOrZero(envelope.FullSeconds)
+				if envelope.FastEnabled == nil || *envelope.FastEnabled {
+					s.FastObserveEnabled = true
+				}
 				s.NextFastObserveAt, s.LastFastObserveAt = valueOrTime(envelope.NextFast), valueOrTimePtr(envelope.LastFast)
 				s.FastObserveStatus, s.FastObserveError, s.FastObserveRevision = envelope.FastStatus, envelope.FastError, envelope.FastRevision
 			} else {
 				err = json.Unmarshal(monitorState, &s.balanceState)
+				s.FastObserveEnabled = true
 			}
 		}
 		if s.FullIntervalSeconds <= 0 && s.IntervalMinutes > 0 {
@@ -169,7 +174,7 @@ func (s *sqlStore) DueFastObservations(ctx context.Context, now time.Time, limit
 	if limit > 50 {
 		limit = 50
 	}
-	return s.querySites(ctx, `SELECT `+siteColumns+` FROM upstream_governance_sites WHERE enabled AND session_cipher<>'' AND next_fast_observe_at <= $1 AND (fast_observe_status <> 'running' OR fast_observe_reserved_at IS NULL OR fast_observe_reserved_at < $1 - INTERVAL '5 minutes') ORDER BY next_fast_observe_at,id LIMIT $2`, now, limit)
+	return s.querySites(ctx, `SELECT `+siteColumns+` FROM upstream_governance_sites WHERE enabled AND fast_observe_enabled AND session_cipher<>'' AND next_fast_observe_at <= $1 AND (fast_observe_status <> 'running' OR fast_observe_reserved_at IS NULL OR fast_observe_reserved_at < $1 - INTERVAL '5 minutes') ORDER BY next_fast_observe_at,id LIMIT $2`, now, limit)
 }
 
 func (s *sqlStore) NextFastObservationAt(ctx context.Context) (*time.Time, error) {
@@ -194,7 +199,7 @@ func (s *sqlStore) ReserveFastObservation(ctx context.Context, siteID int64, due
 	if reservedAt.IsZero() {
 		reservedAt = time.Now().UTC()
 	}
-	r, err := s.db.ExecContext(ctx, `UPDATE upstream_governance_sites SET fast_observe_status='running',fast_observe_error='',fast_observe_reserved_at=$3,updated_at=NOW() WHERE id=$1 AND enabled AND next_fast_observe_at <= $2 AND (fast_observe_status <> 'running' OR fast_observe_reserved_at IS NULL OR fast_observe_reserved_at < $3 - INTERVAL '5 minutes')`, siteID, dueAt, reservedAt)
+	r, err := s.db.ExecContext(ctx, `UPDATE upstream_governance_sites SET fast_observe_status='running',fast_observe_error='',fast_observe_reserved_at=$3,updated_at=NOW() WHERE id=$1 AND enabled AND fast_observe_enabled AND next_fast_observe_at <= $2 AND (fast_observe_status <> 'running' OR fast_observe_reserved_at IS NULL OR fast_observe_reserved_at < $3 - INTERVAL '5 minutes')`, siteID, dueAt, reservedAt)
 	if isMissingSecondsSchema(err) {
 		return false, ErrUnsupported
 	}
@@ -275,7 +280,12 @@ func (s *sqlStore) CreateSite(ctx context.Context, v *Site) error {
 	fast, full, next := normalizedSchedule(*v)
 	err := s.db.QueryRowContext(ctx, `INSERT INTO upstream_governance_sites (name, platform, base_url, proxy_id, enabled, interval_minutes, session_cipher, status, last_error, next_sync_at, login_cipher, fast_interval_seconds, full_interval_seconds, next_fast_observe_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id,version,created_at,updated_at`, v.Name, v.Platform, v.BaseURL, v.ProxyID, v.Enabled, v.IntervalMinutes, v.SessionCipher, v.Status, v.LastError, v.NextSyncAt, v.LoginCipher, fast, full, next).Scan(&v.ID, &v.Version, &v.CreatedAt, &v.UpdatedAt)
 	if isMissingSecondsSchema(err) {
-		err = s.db.QueryRowContext(ctx, `INSERT INTO upstream_governance_sites (name, platform, base_url, proxy_id, enabled, interval_minutes, session_cipher, status, last_error, next_sync_at, login_cipher) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id,version,created_at,updated_at`, v.Name, v.Platform, v.BaseURL, v.ProxyID, v.Enabled, v.SessionCipher, v.Status, v.LastError, v.NextSyncAt, v.LoginCipher).Scan(&v.ID, &v.Version, &v.CreatedAt, &v.UpdatedAt)
+		err = s.db.QueryRowContext(ctx, `INSERT INTO upstream_governance_sites (name, platform, base_url, proxy_id, enabled, interval_minutes, session_cipher, status, last_error, next_sync_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id,version,created_at,updated_at`, v.Name, v.Platform, v.BaseURL, v.ProxyID, v.Enabled, v.IntervalMinutes, v.SessionCipher, v.Status, v.LastError, v.NextSyncAt).Scan(&v.ID, &v.Version, &v.CreatedAt, &v.UpdatedAt)
+		if err == nil && v.LoginCipher != "" {
+			if _, updateErr := s.db.ExecContext(ctx, `UPDATE upstream_governance_sites SET login_cipher=$1 WHERE id=$2`, v.LoginCipher, v.ID); updateErr != nil && !isMissingSecondsSchema(updateErr) {
+				err = updateErr
+			}
+		}
 	}
 	if err == nil {
 		v.FastIntervalSeconds, v.FullIntervalSeconds, v.NextFastObserveAt = fast, full, next
@@ -308,6 +318,9 @@ func (s *sqlStore) UpdateSite(ctx context.Context, v *Site, version int64) error
 		v.Version = next
 		v.UpdatedAt = updated
 		v.FastIntervalSeconds, v.FullIntervalSeconds, v.NextFastObserveAt = fast, full, nextFast
+		if _, toggleErr := s.db.ExecContext(ctx, `UPDATE upstream_governance_sites SET fast_observe_enabled=$1 WHERE id=$2`, v.FastObserveEnabled, v.ID); toggleErr != nil && !isMissingSecondsSchema(toggleErr) {
+			return toggleErr
+		}
 		v.HasCredential = v.SessionCipher != ""
 	}
 	return e

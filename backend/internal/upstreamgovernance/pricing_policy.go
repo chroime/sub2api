@@ -114,7 +114,7 @@ func CalculatePricingTarget(policy PricingPolicy, cost float64) (PricingDecision
 	if !finitePositive(cost) {
 		return PricingDecision{}, ErrPricingUnknownCost
 	}
-	ratio := policy.BaselineSale / policy.BaselineCost
+	ratio := math.Round(policy.BaselineSale/policy.BaselineCost*1e8) / 1e8
 	if !finitePositive(ratio) {
 		return PricingDecision{}, ErrPricingInvalidPolicy
 	}
@@ -125,8 +125,12 @@ func CalculatePricingTarget(policy PricingPolicy, cost float64) (PricingDecision
 	}
 	target = ceil4(target)
 	decision := PricingDecision{Cost: cost, TargetSale: target, Ratio: ratio, MarginFloor: floor, Reason: "price_ready"}
-	if policy.LastAutomaticCost > 0 && cost > policy.LastAutomaticCost {
-		decision.IncreasePct = (cost/policy.LastAutomaticCost - 1) * 100
+	previousCost := policy.LastAutomaticCost
+	if previousCost <= 0 {
+		previousCost = policy.BaselineCost
+	}
+	if previousCost > 0 && cost > previousCost {
+		decision.IncreasePct = (cost/previousCost - 1) * 100
 		if policy.MaxIncreasePercent > 0 && decision.IncreasePct > policy.MaxIncreasePercent+1e-9 {
 			decision.Protected = true
 			decision.Reason = "increase_review"

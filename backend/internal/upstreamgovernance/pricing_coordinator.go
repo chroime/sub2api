@@ -174,8 +174,19 @@ func (c *PricingCoordinator) recalculateGroup(ctx context.Context, groupID int64
 		return c.commitProtection(ctx, state, op, revision, now)
 	}
 	decision.SourceID = source
-	apply, reason := ShouldApplyPricing(state.Policy, state.Policy.ActiveCost, cost, state.Policy.DecreaseObservedAt, now)
-	if state.Policy.ActiveCost <= 0 {
+	previousCost := state.Policy.LastAutomaticCost
+	if previousCost <= 0 {
+		previousCost = state.Policy.ActiveCost
+	}
+	// The first trusted observation establishes the live cost baseline; it is
+	// not an increase against the policy's frozen baseline and must not enter
+	// the large-increase review path.
+	if previousCost <= 0 {
+		decision.Protected = false
+		decision.IncreasePct = 0
+	}
+	apply, reason := ShouldApplyPricing(state.Policy, previousCost, cost, state.Policy.DecreaseObservedAt, now)
+	if previousCost <= 0 {
 		apply, reason = true, "baseline"
 	}
 	if state.Policy.ManualOwner {
@@ -199,7 +210,7 @@ func (c *PricingCoordinator) recalculateGroup(ctx context.Context, groupID int64
 	commit := PricingCommit{
 		OperationID: op.OperationID, LocalGroupID: groupID, ExpectedPolicyVersion: state.Policy.Version,
 		ExpectedSale: state.CurrentSale, CostFactRevision: revision, Decision: decision,
-		PreviousCost: state.Policy.ActiveCost,
+		PreviousCost: previousCost,
 		ApplySale:    op.Applied, Protected: op.Protected, Reason: reason, Now: now,
 	}
 	if err := c.store.CommitPricing(ctx, commit); err != nil {

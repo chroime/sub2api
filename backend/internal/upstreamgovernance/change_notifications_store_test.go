@@ -45,6 +45,17 @@ func TestSQLStoreChangeNotificationQueueClaimsAndCompletes(t *testing.T) {
 	require.NoError(t, sqlStore.CompleteChangeNotification(context.Background(), 9, now, errSMTPUnavailable{}, now.Add(15*time.Minute)))
 }
 
+func TestSQLStoreLoadsChangeNotificationPolicy(t *testing.T) {
+	store, mock := storeFixture(t)
+	sqlStore := store.(*sqlStore)
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT policy FROM upstream_governance_pricing_notifications WHERE site_id=$1")).WithArgs(int64(5)).WillReturnRows(sqlmock.NewRows([]string{"policy"}).AddRow(`{"enabled":true,"recipients":["ops@example.test"],"group_changes":false,"rate_changes":true,"pricing_changes":true,"protection_changes":true}`))
+	policy, err := sqlStore.LoadChangeNotificationPolicy(context.Background(), 5)
+	require.NoError(t, err)
+	require.True(t, policy.Enabled)
+	require.False(t, policy.GroupChanges)
+	require.Equal(t, []string{"ops@example.test"}, policy.Recipients)
+}
+
 type errSMTPUnavailable struct{}
 
 func (errSMTPUnavailable) Error() string { return "smtp unavailable" }

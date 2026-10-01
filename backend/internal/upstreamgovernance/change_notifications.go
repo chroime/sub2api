@@ -59,6 +59,13 @@ type ChangeNotifier interface {
 	SendChange(context.Context, string, ChangeNotice) error
 }
 
+// ChangeNotificationPolicyReader is optional so deployments can roll out the
+// policy table independently of the durable delivery queue. A missing policy
+// must not prevent the legacy administrator recipient fallback from working.
+type ChangeNotificationPolicyReader interface {
+	LoadChangeNotificationPolicy(context.Context, int64) (PricingNotificationPolicy, error)
+}
+
 // EnqueuePricingOperationNotice converts a committed automatic-pricing result
 // into a durable administrator notice. The coordinator can call this after
 // its atomic pricing commit; no pricing credentials or customer data are
@@ -87,6 +94,24 @@ func (s *Service) EnqueuePricingOperationNotice(ctx context.Context, siteID int6
 		InitialBaseline: baseline,
 		ObservedAt:      time.Now().UTC(),
 	})
+}
+
+func changeNotificationPolicyAllows(policy PricingNotificationPolicy, kind string) bool {
+	if !policy.Enabled {
+		return false
+	}
+	switch kind {
+	case "group_change", "catalog_change":
+		return policy.GroupChanges
+	case "rate_change":
+		return policy.RateChanges
+	case "pricing_change":
+		return policy.PricingChanges
+	case "protection_change":
+		return policy.ProtectionChanges
+	default:
+		return true
+	}
 }
 
 // ChangeNotificationStore is optional so governance can be used with the

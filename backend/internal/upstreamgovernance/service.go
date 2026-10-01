@@ -74,7 +74,16 @@ func (s *Service) EnqueueChangeNotice(ctx context.Context, notice ChangeNotice) 
 	if notice.InitialBaseline || s == nil || s.changeQueue == nil || s.changeNotifier == nil {
 		return nil
 	}
-	recipients, err := s.changeNotifier.Recipients(ctx, nil)
+	override := []string(nil)
+	if reader, ok := s.store.(ChangeNotificationPolicyReader); ok {
+		if policy, policyErr := reader.LoadChangeNotificationPolicy(ctx, notice.SiteID); policyErr == nil {
+			if !changeNotificationPolicyAllows(policy, notice.Kind) {
+				return nil
+			}
+			override = policy.Recipients
+		}
+	}
+	recipients, err := s.changeNotifier.Recipients(ctx, override)
 	if err != nil {
 		return err
 	}
@@ -171,18 +180,28 @@ func validateSite(site *Site) error {
 	if ip := net.ParseIP(host); ip != nil && (!ip.IsGlobalUnicast() || ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast()) {
 		return ErrInvalid
 	}
-	if site.IntervalMinutes == 0 {
-		site.IntervalMinutes = 15
-	}
-	if !validIntervalMinutes(site.IntervalMinutes) {
-		return ErrInvalid
-	}
-	legacySeconds := int64(site.IntervalMinutes) * 60
-	if site.FullIntervalSeconds != 0 && (!validIntervalSeconds(site.FullIntervalSeconds) || site.FullIntervalSeconds != legacySeconds) {
-		return ErrInvalid
-	}
-	if site.FullIntervalSeconds == 0 {
-		site.FullIntervalSeconds = legacySeconds
+	if site.FullIntervalSeconds != 0 {
+		if !validIntervalSeconds(site.FullIntervalSeconds) {
+			return ErrInvalid
+		}
+		// Keep the legacy INTEGER field usable for older readers. It is a
+		// coarse compatibility alias; the BIGINT seconds field is authoritative.
+		minutes := site.FullIntervalSeconds / 60
+		if site.FullIntervalSeconds%60 != 0 {
+			minutes++
+		}
+		if minutes > int64(maxIntervalMinutes) {
+			return ErrInvalid
+		}
+		site.IntervalMinutes = int(minutes)
+	} else {
+		if site.IntervalMinutes == 0 {
+			site.IntervalMinutes = 15
+		}
+		if !validIntervalMinutes(site.IntervalMinutes) {
+			return ErrInvalid
+		}
+		site.FullIntervalSeconds = int64(site.IntervalMinutes) * 60
 	}
 	if site.FastIntervalSeconds != 0 && !validIntervalSeconds(site.FastIntervalSeconds) {
 		return ErrInvalid
@@ -551,12 +570,22 @@ func (s *Service) Sync(ctx context.Context, id int64) (*Snapshot, error) {
 	if e != nil {
 		return nil, e
 	}
-	defer free()
+	remoteReleased := false
+	defer func() {
+		if !remoteReleased {
+			free()
+		}
+	}()
 	site, release, e := s.siteLock(ctx, id)
 	if e != nil {
 		return nil, e
 	}
-	defer release()
+	siteReleased := false
+	defer func() {
+		if !siteReleased {
+			release()
+		}
+	}()
 	snapshot, err := s.syncLocked(ctx, *site)
 	if err == nil {
 		fresh, readErr := s.store.GetSite(ctx, id)
@@ -569,6 +598,17 @@ func (s *Service) Sync(ctx context.Context, id int64) (*Snapshot, error) {
 			}
 			cancel()
 		}
+	}
+	release()
+	siteReleased = true
+	free()
+	remoteReleased = true
+	if s.changeQueue != nil {
+		dispatchCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 20*time.Second)
+		if dispatchErr := s.DispatchChangeNotifications(dispatchCtx, 20); err == nil && dispatchErr != nil {
+			err = dispatchErr
+		}
+		cancel()
 	}
 	return snapshot, err
 }
@@ -665,10 +705,6 @@ func (s *Service) enqueueCatalogChangeNotices(ctx context.Context, site Site, ev
 	if len(events) == 0 || s.changeQueue == nil || s.changeNotifier == nil {
 		return
 	}
-	recipients, err := s.changeNotifier.Recipients(ctx, nil)
-	if err != nil || len(recipients) == 0 {
-		return
-	}
 	for _, event := range events {
 		kind, severity, subject := "catalog_change", "info", "上游目录发生变化 / Upstream catalog changed"
 		switch event.Kind {
@@ -685,7 +721,7 @@ func (s *Service) enqueueCatalogChangeNotices(ctx context.Context, site Site, ev
 			DedupKey: fmt.Sprintf("site:%d:event:%s", site.ID, hex.EncodeToString(digest[:])),
 			Subject:  subject, Body: payload, InitialBaseline: initialBaseline, ObservedAt: event.CreatedAt,
 		}
-		if err := s.changeQueue.EnqueueNotice(ctx, notice, recipients); err != nil {
+		if err := s.EnqueueChangeNotice(ctx, notice); err != nil {
 			log.Printf("[UpstreamGovernance] enqueue change notification: %s", ErrorCode(err))
 		}
 	}
