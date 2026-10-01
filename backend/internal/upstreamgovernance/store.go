@@ -169,7 +169,7 @@ func (s *sqlStore) DueFastObservations(ctx context.Context, now time.Time, limit
 	if limit > 50 {
 		limit = 50
 	}
-	return s.querySites(ctx, `SELECT `+siteColumns+` FROM upstream_governance_sites WHERE enabled AND session_cipher<>'' AND next_fast_observe_at <= $1 AND (fast_observe_status <> 'running' OR fast_observe_reserved_at IS NULL OR fast_observe_reserved_at < $1 - INTERVAL '1 minute') ORDER BY next_fast_observe_at,id LIMIT $2`, now, limit)
+	return s.querySites(ctx, `SELECT `+siteColumns+` FROM upstream_governance_sites WHERE enabled AND session_cipher<>'' AND next_fast_observe_at <= $1 AND (fast_observe_status <> 'running' OR fast_observe_reserved_at IS NULL OR fast_observe_reserved_at < $1 - INTERVAL '5 minutes') ORDER BY next_fast_observe_at,id LIMIT $2`, now, limit)
 }
 
 func (s *sqlStore) NextFastObservationAt(ctx context.Context) (*time.Time, error) {
@@ -194,7 +194,7 @@ func (s *sqlStore) ReserveFastObservation(ctx context.Context, siteID int64, due
 	if reservedAt.IsZero() {
 		reservedAt = time.Now().UTC()
 	}
-	r, err := s.db.ExecContext(ctx, `UPDATE upstream_governance_sites SET fast_observe_status='running',fast_observe_error='',fast_observe_reserved_at=$3,updated_at=NOW() WHERE id=$1 AND enabled AND next_fast_observe_at <= $2 AND (fast_observe_status <> 'running' OR fast_observe_reserved_at IS NULL OR fast_observe_reserved_at < $3 - INTERVAL '1 minute')`, siteID, dueAt, reservedAt)
+	r, err := s.db.ExecContext(ctx, `UPDATE upstream_governance_sites SET fast_observe_status='running',fast_observe_error='',fast_observe_reserved_at=$3,updated_at=NOW() WHERE id=$1 AND enabled AND next_fast_observe_at <= $2 AND (fast_observe_status <> 'running' OR fast_observe_reserved_at IS NULL OR fast_observe_reserved_at < $3 - INTERVAL '5 minutes')`, siteID, dueAt, reservedAt)
 	if isMissingSecondsSchema(err) {
 		return false, ErrUnsupported
 	}
