@@ -239,13 +239,16 @@ func (s *Service) runDue(ctx context.Context) error {
 	}
 	ctx, cancel := context.WithTimeout(ctx, 50*time.Second)
 	defer cancel()
+	// Fast observation is deliberately first: a slow/expired session renewal
+	// must not make an independent second-based group deadline wait a minute.
+	firstErr := s.runFastDue(ctx)
 	// Renewal failures have their own budget; collection retains the parent
 	// context even when a session's identity endpoint consumes this phase.
 	refreshCtx, cancelRefresh := context.WithTimeout(ctx, sessionRefreshBatchTimeout)
-	firstErr := s.refreshDueSessions(refreshCtx)
+	refreshErr := s.refreshDueSessions(refreshCtx)
 	cancelRefresh()
-	if fastErr := s.runFastDue(ctx); fastErr != nil && firstErr == nil {
-		firstErr = fastErr
+	if firstErr == nil {
+		firstErr = refreshErr
 	}
 	sites, err := s.store.DueSites(ctx, s.now(), 20)
 	if err != nil {
