@@ -103,7 +103,11 @@ func (c *platformConnector) fastNewAPIGroups(ctx context.Context, s Site, sessio
 		if !ok {
 			return nil, ErrUnsupported
 		}
-		out = append(out, RemoteGroup{ID: id, Name: groups[id].Desc, Platform: "unknown", RateMultiplier: value, UserRateMultiplier: value, ResolvedRateMultiplier: value, Models: []string{}, Prices: []RemotePrice{}, Source: "newapi:user-self-groups"})
+		name := groups[id].Desc
+		if name == "" {
+			name = id
+		}
+		out = append(out, RemoteGroup{ID: id, Name: name, Platform: "unknown", RateMultiplier: value, UserRateMultiplier: value, ResolvedRateMultiplier: value, Models: []string{}, Prices: []RemotePrice{}, Source: "newapi:user-self-groups"})
 	}
 	return out, nil
 }
