@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"strings"
 	"sync"
@@ -200,7 +201,7 @@ func (s *Service) Start() {
 // wake-up. A legacy store without migration 261 retains its one-minute cadence.
 func (s *Service) workerWait(ctx context.Context) time.Duration {
 	wait := time.Minute
-	if fastStore, ok := s.store.(FastObservationStore); ok {
+	if fastStore, ok := s.store.(FastObservationScheduleStore); ok {
 		if next, err := fastStore.NextFastObservationAt(ctx); err == nil && next != nil {
 			delta := next.Sub(s.now())
 			if delta < 100*time.Millisecond {
@@ -262,6 +263,11 @@ func (s *Service) runDue(ctx context.Context) error {
 			firstErr = err
 		}
 	}
+	// Deliver only after all site work has returned. The dispatcher performs
+	// SMTP I/O but never holds a site advisory lock or remote-operation slot.
+	if notifyErr := s.DispatchChangeNotifications(ctx, 20); notifyErr != nil && firstErr == nil {
+		firstErr = notifyErr
+	}
 	return firstErr
 }
 
@@ -322,12 +328,22 @@ func (s *Service) runFastSite(ctx context.Context, siteID int64) error {
 	if err != nil {
 		return err
 	}
-	defer free()
+	remoteReleased := false
+	defer func() {
+		if !remoteReleased {
+			free()
+		}
+	}()
 	site, release, err := s.siteLock(ctx, siteID)
 	if err != nil {
 		return err
 	}
-	defer release()
+	siteReleased := false
+	defer func() {
+		if !siteReleased {
+			release()
+		}
+	}()
 	now := s.now()
 	interval := site.FastIntervalSeconds
 	if !validIntervalSeconds(interval) {
@@ -368,7 +384,32 @@ func (s *Service) runFastSite(ctx context.Context, siteID int64) error {
 	if sessionErr != nil {
 		return sessionErr
 	}
-	_ = result
+	var pricingOps []PricingOperation
+	var pricingErr error
+	if observe.GroupsComplete {
+		pricingOps, pricingErr = s.recalculatePricingForObservation(ctx, *site, observe.Groups)
+	}
+	if len(pricingOps) > 0 || result.Changed {
+		release()
+		siteReleased = true
+		free()
+		remoteReleased = true
+		if result.Changed && result.Revision > 1 {
+			notice := ChangeNotice{
+				SiteID: site.ID, SiteName: site.Name, BaseURL: site.BaseURL,
+				Kind: "rate_change", Severity: "warning",
+				DedupKey:   fmt.Sprintf("site:%d:catalog:%d", site.ID, result.Revision),
+				Subject:    "上游可见分组或倍率发生变化 / Upstream groups or rates changed",
+				Body:       fmt.Sprintf("上游 %s 的可见分组或倍率目录已更新到第 %d 个版本。请检查受影响的本地分组、成本事实和自动定价结果。\nThe visible group/rate catalog changed to revision %d. Review affected local groups, trusted cost facts and automatic pricing results.", site.Name, result.Revision, result.Revision),
+				ObservedAt: result.ObservedAt,
+			}
+			_ = s.EnqueueChangeNotice(ctx, notice)
+		}
+		for _, operation := range pricingOps {
+			_ = s.EnqueuePricingOperationNotice(ctx, site.ID, operation)
+		}
+		return pricingErr
+	}
 	return nil
 }
 

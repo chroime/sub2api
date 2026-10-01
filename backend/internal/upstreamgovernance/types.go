@@ -399,10 +399,17 @@ type Store interface {
 // charge.
 type FastObservationStore interface {
 	DueFastObservations(context.Context, time.Time, int) ([]Site, error)
-	NextFastObservationAt(context.Context) (*time.Time, error)
 	ReserveFastObservation(context.Context, int64, time.Time, time.Time) (bool, error)
 	ObserveFastResult(context.Context, int64, time.Time, time.Time, string, string, GroupObservation) (FastObservationResult, error)
 	LatestCatalogRevision(context.Context, int64) (*CatalogObservation, error)
+}
+
+// FastObservationScheduleStore is an optional extension used only to choose
+// the worker's next wake-up. Stores implementing the core observation contract
+// remain valid without a MIN-deadline query.
+type FastObservationScheduleStore interface {
+	FastObservationStore
+	NextFastObservationAt(context.Context) (*time.Time, error)
 }
 
 // FastObservationConnector exposes only the cheap group/rate observation
