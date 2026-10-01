@@ -126,7 +126,7 @@ async function savePricing(id: number) {
     error.value = t('governance.pricingMarginInvalid')
     return
   }
-  if (![row.max_increase_percent, row.decrease_stability_seconds].every(validSeconds) && row.decrease_stability_seconds !== 0) {
+  if (!Number.isFinite(row.max_increase_percent) || row.max_increase_percent < 0 || !Number.isSafeInteger(row.decrease_stability_seconds) || row.decrease_stability_seconds < 0) {
     error.value = t('governance.intervalPositiveInteger')
     return
   }
