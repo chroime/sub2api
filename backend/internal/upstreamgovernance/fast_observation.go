@@ -144,18 +144,20 @@ func groupObservationFingerprint(observation GroupObservation) (string, error) {
 	groups := append([]RemoteGroup(nil), observation.Groups...)
 	sort.Slice(groups, func(i, j int) bool { return groups[i].ID < groups[j].ID })
 	type fact struct {
-		ID          string   `json:"id"`
-		Name        string   `json:"name"`
-		Platform    string   `json:"platform"`
-		Rate        *float64 `json:"rate"`
-		PeakEnabled bool     `json:"peak_enabled"`
-		PeakStart   string   `json:"peak_start,omitempty"`
-		PeakEnd     string   `json:"peak_end,omitempty"`
-		PeakRate    *float64 `json:"peak_rate,omitempty"`
+		ID           string   `json:"id"`
+		Name         string   `json:"name"`
+		Platform     string   `json:"platform"`
+		Rate         *float64 `json:"rate"`
+		DeclaredRate *float64 `json:"declared_rate,omitempty"`
+		UserRate     *float64 `json:"user_rate,omitempty"`
+		PeakEnabled  bool     `json:"peak_enabled"`
+		PeakStart    string   `json:"peak_start,omitempty"`
+		PeakEnd      string   `json:"peak_end,omitempty"`
+		PeakRate     *float64 `json:"peak_rate,omitempty"`
 	}
 	facts := make([]fact, 0, len(groups))
 	for _, group := range groups {
-		facts = append(facts, fact{ID: group.ID, Name: group.Name, Platform: group.Platform, Rate: group.ResolvedRateMultiplier, PeakEnabled: group.PeakRateEnabled, PeakStart: group.PeakStart, PeakEnd: group.PeakEnd, PeakRate: group.PeakRateMultiplier})
+		facts = append(facts, fact{ID: group.ID, Name: group.Name, Platform: group.Platform, Rate: group.ResolvedRateMultiplier, DeclaredRate: group.RateMultiplier, UserRate: group.UserRateMultiplier, PeakEnabled: group.PeakRateEnabled, PeakStart: group.PeakStart, PeakEnd: group.PeakEnd, PeakRate: group.PeakRateMultiplier})
 	}
 	raw, err := json.Marshal(facts)
 	if err != nil {
