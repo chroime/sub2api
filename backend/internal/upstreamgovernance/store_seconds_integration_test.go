@@ -43,19 +43,22 @@ func TestSQLSecondsMigrationBackfillsAndPreservesSchedules(t *testing.T) {
 	apply("247_upstream_governance.sql")
 	apply("249_upstream_governance_balance_monitor.sql")
 	apply("251_upstream_governance_login_credentials.sql")
-	apply("261_upstream_governance_seconds_observation.sql")
+	apply("256_upstream_governance_flexible_intervals.sql")
 	var siteID int64
 	next := time.Date(2026, 10, 1, 1, 2, 3, 0, time.UTC)
 	require.NoError(t, db.QueryRow(`INSERT INTO upstream_governance_sites(name,platform,base_url,interval_minutes,next_sync_at,session_cipher) VALUES('Seconds','sub2api','https://fixture.example',$1,$2,'fixture') RETURNING id`, maxIntervalMinutes, next).Scan(&siteID))
+	apply("261_upstream_governance_seconds_observation.sql")
 	var fast, full int64
+	var minutes int64
 	var due time.Time
-	require.NoError(t, db.QueryRow(`SELECT fast_interval_seconds,full_interval_seconds,next_fast_observe_at FROM upstream_governance_sites WHERE id=$1`, siteID).Scan(&fast, &full, &due))
+	require.NoError(t, db.QueryRow(`SELECT interval_minutes,fast_interval_seconds,full_interval_seconds,next_fast_observe_at FROM upstream_governance_sites WHERE id=$1`, siteID).Scan(&minutes, &fast, &full, &due))
+	require.Equal(t, int64(maxIntervalMinutes), minutes)
 	require.Equal(t, int64(maxIntervalMinutes)*60, fast)
 	require.Equal(t, int64(maxIntervalMinutes)*60, full)
-	require.Equal(t, next, due)
+	require.True(t, next.Equal(due))
 	got, err := NewSQLStore(db).GetSite(t.Context(), siteID)
 	require.NoError(t, err)
 	require.Equal(t, fast, got.FastIntervalSeconds)
 	require.Equal(t, full, got.FullIntervalSeconds)
-	require.Equal(t, next, got.NextFastObserveAt)
+	require.True(t, next.Equal(got.NextFastObserveAt))
 }
