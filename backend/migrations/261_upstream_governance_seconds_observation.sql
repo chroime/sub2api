@@ -27,9 +27,17 @@ ALTER TABLE upstream_governance_sites
  ALTER COLUMN full_interval_seconds SET DEFAULT 900,
  ALTER COLUMN full_interval_seconds SET NOT NULL,
  ALTER COLUMN next_fast_observe_at SET DEFAULT NOW(),
- ALTER COLUMN next_fast_observe_at SET NOT NULL,
- ADD CONSTRAINT upstream_governance_sites_fast_interval_seconds_check CHECK (fast_interval_seconds BETWEEN 1 AND 128849018820),
- ADD CONSTRAINT upstream_governance_sites_full_interval_seconds_check CHECK (full_interval_seconds BETWEEN 1 AND 128849018820);
+ ALTER COLUMN next_fast_observe_at SET NOT NULL;
+
+DO $$
+BEGIN
+ IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='upstream_governance_sites_fast_interval_seconds_check') THEN
+  ALTER TABLE upstream_governance_sites ADD CONSTRAINT upstream_governance_sites_fast_interval_seconds_check CHECK (fast_interval_seconds BETWEEN 1 AND 128849018820);
+ END IF;
+ IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='upstream_governance_sites_full_interval_seconds_check') THEN
+  ALTER TABLE upstream_governance_sites ADD CONSTRAINT upstream_governance_sites_full_interval_seconds_check CHECK (full_interval_seconds BETWEEN 1 AND 128849018820);
+ END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_upstream_governance_sites_fast_due
  ON upstream_governance_sites(next_fast_observe_at,id)
