@@ -54,6 +54,7 @@ vi.mock('@/api/admin/groups', () => ({
 }))
 vi.mock('@/api/admin/upstream-model-monitoring', () => ({ default: { policies: vi.fn().mockResolvedValue([]), runs: vi.fn().mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20, counts: {} }), stats: vi.fn().mockResolvedValue({ days: 7, groups: [] }) } }))
 vi.mock('@/api/admin/upstream-operations', () => ({ default: { workbench: vi.fn(), timeline: vi.fn() } }))
+vi.mock('@/api/admin/upstream-import-templates', () => ({ default: { list: vi.fn().mockResolvedValue({ version: 0, templates: [] }), save: vi.fn() } }))
 vi.mock('@/api/admin/proxies', () => ({
   default: { getAll: vi.fn().mockResolvedValue([]) },
 }))

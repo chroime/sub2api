@@ -11,6 +11,9 @@ import {
   type ModelSelections,
 } from './import-config'
 import ImportSettingsPanel from './ImportSettingsPanel.vue'
+import ImportTemplatePanel from './ImportTemplatePanel.vue'
+import { applyImportTemplateSettings, importTemplateSettings, validImportTemplateSettings } from './import-templates'
+import type { ImportTemplateSettings } from '@/api/admin/upstream-import-templates'
 import TransportSelect from './TransportSelect.vue'
 import TargetGroupSelect from './TargetGroupSelect.vue'
 import { initialTransport, providerLabel, transportUnavailable } from './providers'
@@ -28,6 +31,7 @@ import api, {
   type SiteInput,
   type KeySelection,
   type Binding,
+  type ImportAccountConfig,
 } from '@/api/admin/upstream-governance'
 const props = defineProps<{
   siteId: number
@@ -57,6 +61,7 @@ const preview = ref<Preview | null>(null)
 const result = ref<ApplyResult | null>(null)
 const busy = ref(false),
   error = ref('')
+const applying = ref(false), templateBusy = ref(false), templatesReady = ref(false), accountTouched = ref(false)
 const query = ref(''),
   platformFilter = ref<Transport | ''>(''),
   selectedOnly = ref(false)
@@ -67,8 +72,13 @@ const config = ref(defaultImportConfig()),
   quotaEnabled = ref(true),
   modelsReady = ref(false)
 const modelSelections = ref<ModelSelections>(defaultModelSelections())
+const editedModels = ref<Transport[]>([])
+const draftMessage = ref('')
+const draftScope = computed(() => JSON.stringify([props.siteId, props.siteBaseUrl, props.sitePlatform ?? '', props.snapshot.catalog.account?.user_id ?? null]))
+const templateSettings = computed(() => importTemplateSettings(config.value, quotaEnabled.value))
+const templatePristine = computed(() => !accountTouched.value && !preview.value && !busy.value && !applying.value)
 let generation = 0
-const working = computed(() => busy.value)
+const working = computed(() => busy.value || applying.value || templateBusy.value)
 const resolvedGroups = computed(() =>
   props.snapshot.catalog.groups.map((group) => ({
     ...group,
@@ -77,8 +87,9 @@ const resolvedGroups = computed(() =>
 )
 watch(working, (value) => emit('busy', value), { flush: 'sync' })
 watch(
-  () => [props.siteId, props.snapshot.id],
-  () => {
+  () => [draftScope.value, props.snapshot.id] as const,
+  ([scope], previous) => {
+    const sourceChanged = scope !== previous?.[0]
     generation++
     choices.value = Object.fromEntries(
       (props.snapshot.catalog.groups || []).map((group) => [
@@ -105,10 +116,19 @@ watch(
     platformFilter.value = ''
     selectedOnly.value = false
     busy.value = false
-    config.value = defaultImportConfig()
-    quotaEnabled.value = true
     modelsReady.value = false
-    modelSelections.value = defaultModelSelections()
+    if (sourceChanged) {
+      config.value = defaultImportConfig()
+      quotaEnabled.value = true
+      modelSelections.value = defaultModelSelections()
+      editedModels.value = []
+      draftMessage.value = ''
+      accountTouched.value = false
+      templatesReady.value = false
+      templateBusy.value = false
+    } else {
+      draftMessage.value = 'governance.importTemplates.draftRetained'
+    }
   },
   { immediate: true },
 )
@@ -123,6 +143,45 @@ onUnmounted(() => {
   generation++
   emit('busy', false)
 })
+function preserveModelDraft(platform: Transport) {
+  if (!editedModels.value.includes(platform)) editedModels.value.push(platform)
+}
+function invalidateDraftPreview(notify = false) {
+  generation++
+  preview.value = null
+  result.value = null
+  if (!applying.value) busy.value = false
+  error.value = ''
+  if (notify) draftMessage.value = 'governance.importTemplates.previewInvalidated'
+}
+function updateAccountConfig(value: ImportAccountConfig) {
+  if (working.value || props.disabled) return
+  accountTouched.value = true
+  const hadPreview = !!preview.value
+  config.value = value
+  invalidateDraftPreview(hadPreview)
+}
+function updateQuotaEnabled(value: boolean) {
+  if (working.value || props.disabled) return
+  accountTouched.value = true
+  const hadPreview = !!preview.value
+  quotaEnabled.value = value
+  invalidateDraftPreview(hadPreview)
+}
+function updateModelSelections(value: ModelSelections) {
+  const changed = JSON.stringify(value) !== JSON.stringify(modelSelections.value)
+  modelSelections.value = value
+  if (changed) invalidateDraftPreview(!!preview.value)
+}
+function applyTemplate(value: { settings: ImportTemplateSettings; automatic: boolean }) {
+  if (working.value || (!value.automatic && props.disabled) || (value.automatic && !templatePristine.value)) return
+  if (!validImportTemplateSettings(value.settings)) { error.value = t('governance.invalid'); return }
+  const next = applyImportTemplateSettings(config.value, value.settings)
+  config.value = next.config
+  quotaEnabled.value = next.quotaEnabled
+  if (!value.automatic) accountTouched.value = true
+  invalidateDraftPreview(!value.automatic)
+}
 const selected = computed(() =>
   Object.values(choices.value).filter((choice) => choice.selected),
 )
@@ -206,6 +265,7 @@ function remap() {
 }
 async function prepare() {
   if (working.value || props.disabled || !selected.value.length) return
+  if (!templatesReady.value) { error.value = t('governance.importTemplates.notReady'); return }
   if (
     unresolved.value.length ||
     selected.value.some(
@@ -257,6 +317,7 @@ async function apply() {
     return
   }
   const request = generation
+  applying.value = true
   busy.value = true
   error.value = ''
   try {
@@ -273,7 +334,10 @@ async function apply() {
     )
       preview.value = null
   } finally {
-    if (request === generation) busy.value = false
+    // An invalidated response is ignored, but its in-flight write still owns
+    // the navigation lock until it settles. No newer action can start meanwhile.
+    busy.value = false
+    applying.value = false
   }
 }
 const value = (number: number | null | undefined) =>
@@ -290,6 +354,7 @@ const catalogWarnings: Record<string, string> = {
 </script>
 <template>
   <section class="space-y-5">
+    <p v-if="draftMessage" data-test="import-draft-notice" role="status" class="rounded-lg border border-primary-100 bg-primary-50 p-3 text-sm text-primary-800 dark:border-primary-900 dark:bg-primary-900/20 dark:text-primary-200">{{ t(draftMessage) }}</p>
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
         <h3 class="text-base font-semibold">
@@ -304,6 +369,17 @@ const catalogWarnings: Record<string, string> = {
         {{ formatGovernanceTime(snapshot.created_at) }}</span
       >
     </div>
+    <ImportTemplatePanel
+      :key="draftScope"
+      :scope-key="draftScope"
+      :settings="templateSettings"
+      :pristine="templatePristine"
+      :disabled="working || disabled"
+      @apply="applyTemplate"
+      @changed="invalidateDraftPreview(true)"
+      @ready="templatesReady = $event"
+      @busy="templateBusy = $event"
+    />
     <details
       v-if="snapshot.catalog.warnings?.length"
       class="rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-xs text-amber-800 dark:border-amber-800/50 dark:bg-amber-900/10 dark:text-amber-300"
@@ -603,13 +679,18 @@ const catalogWarnings: Record<string, string> = {
         </div>
       </fieldset>
       <ImportSettingsPanel
-        :key="siteId + ':' + snapshot.id"
-        v-model:config="config"
-        v-model:models="modelSelections"
-        v-model:quota-enabled="quotaEnabled"
+        :key="draftScope + ':' + snapshot.id"
+        :config="config"
+        :models="modelSelections"
+        :quota-enabled="quotaEnabled"
         :groups="resolvedGroups"
+        :preserve-models="editedModels"
         :disabled="working || disabled"
         @ready="modelsReady = $event"
+        @model-edited="preserveModelDraft"
+        @update:config="updateAccountConfig"
+        @update:models="updateModelSelections"
+        @update:quota-enabled="updateQuotaEnabled"
       />
       <div
         class="flex flex-wrap items-center gap-3 rounded-xl border border-primary-100 bg-primary-50/50 p-4 dark:border-primary-900/40 dark:bg-primary-900/10"
@@ -648,6 +729,7 @@ const catalogWarnings: Record<string, string> = {
             !selected.length ||
             !!unresolved.length ||
             !modelsReady ||
+            !templatesReady ||
             emptyWhitelist
           "
         >

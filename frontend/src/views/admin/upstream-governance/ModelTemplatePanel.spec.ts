@@ -21,6 +21,27 @@ describe('server-backed model templates', () => {
     vi.mocked(api.modelTemplates).mockResolvedValue({ version: 3, templates: [] })
     vi.mocked(api.saveModelTemplates).mockImplementation(async value => ({ ...value, version: value.version + 1 }))
   })
+  it('preserves explicitly edited protocol drafts when remounted for a refreshed catalog', async () => {
+    const models = { ...defaultModelSelections(), openai: { enabled: true, models: [] } }
+    const wrapper = mount(ModelTemplatePanel, { props: { modelValue: models, groups, preservePlatforms: ['openai'], 'onUpdate:modelValue': value => { void wrapper.setProps({ modelValue: value }) } } })
+    await flushPromises()
+    expect(wrapper.props('modelValue').openai).toEqual({ enabled: true, models: [] })
+    expect(wrapper.props('modelValue').anthropic.models).toEqual(['upstream-claude'])
+    expect(wrapper.emitted('edited')).toBeUndefined()
+    await wrapper.get('[data-test=custom-model]').setValue('chosen-model')
+    await wrapper.get('[data-test=add-model]').trigger('click')
+    expect(wrapper.emitted('edited')?.at(-1)).toEqual(['openai'])
+    wrapper.unmount()
+  })
+  it('rejects Unicode control characters in manually added model names', async () => {
+    const wrapper = setup()
+    await flushPromises()
+    await wrapper.get('[data-test=custom-model]').setValue(`bad${String.fromCodePoint(133)}model`)
+    await wrapper.get('[data-test=add-model]').trigger('click')
+    expect(wrapper.text()).toContain('governance.invalidModelName')
+    expect(wrapper.props('modelValue').openai.models).toEqual(['upstream-gpt'])
+    wrapper.unmount()
+  })
   it('uses each protocol default and otherwise the collected model list without inventing support', async () => {
     vi.mocked(api.modelTemplates).mockResolvedValue({ version: 3, templates: [{ id: 'default', name: 'Saved GPT', platform: 'openai', models: ['saved-gpt'], is_default: true }] })
     const wrapper = setup()

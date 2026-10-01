@@ -3,6 +3,7 @@ import { useI18n } from 'vue-i18n'
 import type {
   ImportAccountConfig,
   RemoteGroup,
+  Transport,
 } from '@/api/admin/upstream-governance'
 import type { ModelSelections } from './import-config'
 import ModelTemplatePanel from './ModelTemplatePanel.vue'
@@ -11,6 +12,7 @@ defineProps<{
   models: ModelSelections
   quotaEnabled: boolean
   groups: RemoteGroup[]
+  preserveModels?: Transport[]
   disabled?: boolean
 }>()
 const emit = defineEmits<{
@@ -18,6 +20,7 @@ const emit = defineEmits<{
   'update:models': [value: ModelSelections]
   'update:quotaEnabled': [value: boolean]
   ready: [value: boolean]
+  'model-edited': [platform: Transport]
 }>()
 const { t } = useI18n()
 function number(event: Event) {
@@ -167,9 +170,11 @@ function checked(event: Event) {
         <ModelTemplatePanel
           :model-value="models"
           :groups="groups"
+          :preserve-platforms="preserveModels"
           :disabled="disabled"
           @update:model-value="emit('update:models', $event)"
           @ready="emit('ready', $event)"
+          @edited="emit('model-edited', $event)"
         />
       </div>
       <p

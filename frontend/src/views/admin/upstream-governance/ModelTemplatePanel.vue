@@ -16,11 +16,13 @@ import { providerLabel, transportPlatforms } from './providers'
 const props = defineProps<{
   modelValue: ModelSelections
   groups: RemoteGroup[]
+  preservePlatforms?: Transport[]
   disabled?: boolean
 }>()
 const emit = defineEmits<{
   'update:modelValue': [value: ModelSelections]
   ready: [value: boolean]
+  edited: [platform: Transport]
 }>()
 const { t } = useI18n()
 const platforms = transportPlatforms
@@ -36,7 +38,7 @@ const saveAsDefault = ref(true)
 const templateID = ref('')
 let generation = 0
 let templatesLoaded = false
-const edited: Partial<Record<Transport, boolean>> = {}
+const edited: Partial<Record<Transport, boolean>> = Object.fromEntries((props.preservePlatforms || []).map(value => [value, true]))
 const current = computed(() => props.modelValue[platform.value])
 const availableTemplates = computed(() =>
   collection.value.templates.filter(
@@ -79,6 +81,7 @@ const filteredModels = computed(() =>
 )
 function update(models: string[], enabled = current.value.enabled) {
   edited[platform.value] = true
+  emit('edited', platform.value)
   emit('update:modelValue', {
     ...props.modelValue,
     [platform.value]: { enabled, models: [...new Set(models)] },
@@ -103,7 +106,7 @@ function chooseTemplate(value: string | number | boolean | null) {
 }
 function addCustom() {
   const model = custom.value.trim()
-  if (!model || model.length > 200 || /[\s*\u0000-\u001f\u007f]/.test(model)) {
+  if (!model || model.length > 200 || /[\s*\p{Cc}]/u.test(model)) {
     error.value = t('governance.invalidModelName')
     return
   }
