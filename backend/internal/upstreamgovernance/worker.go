@@ -382,6 +382,13 @@ func (s *Service) runFastSite(ctx context.Context, siteID int64) error {
 		return saveErr
 	}
 	if sessionErr != nil {
+		// Some older upstream deployments support the complete catalog contract
+		// but do not expose the cheap group/rate endpoints. Keep the observation
+		// status visible for the administrator without turning every scheduled
+		// capability mismatch into a failing worker cycle.
+		if errors.Is(sessionErr, ErrUnsupported) {
+			return nil
+		}
 		return sessionErr
 	}
 	var pricingOps []PricingOperation
