@@ -61,7 +61,7 @@ func (c *platformConnector) fastSubGroups(ctx context.Context, s Site, session S
 	seen := make(map[string]bool, len(available))
 	out := make([]RemoteGroup, 0, len(available))
 	for _, group := range available {
-		if group.ID <= 0 || group.Name == "" || !connectorValidRate(group.Rate) || !connectorValidRate(group.PeakRate) {
+		if group.ID <= 0 || group.Name == "" || len(group.Name) > 300 || len(group.Platform) > 64 || !connectorValidRate(group.Rate) || !connectorValidRate(group.PeakRate) {
 			return nil, ErrUnsupported
 		}
 		id := strconv.FormatInt(group.ID, 10)
@@ -96,6 +96,9 @@ func (c *platformConnector) fastNewAPIGroups(ctx context.Context, s Site, sessio
 	sort.Strings(ids)
 	out := make([]RemoteGroup, 0, len(ids))
 	for _, id := range ids {
+		if id == "" || len(id) > 128 || len(groups[id].Desc) > 300 {
+			return nil, ErrUnsupported
+		}
 		value, ok := parseNewAPIRatio(groups[id].Ratio)
 		if !ok {
 			return nil, ErrUnsupported
