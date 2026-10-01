@@ -74,6 +74,8 @@ export type PricingMode = 'keep_margin' | 'target_margin'
 export interface PricingSource {
   source_id: string
   source_name?: string
+  site_id?: number
+  binding_id?: number
   cost: number | null
   eligible: boolean
   comparable: boolean
@@ -114,6 +116,23 @@ export interface PricingPoliciesConfiguration {
   version: number
   policies: PricingPolicy[]
   notifications: PricingNotificationPolicy
+}
+/** Editable settings only: costs, baselines and ownership are server-owned. */
+export type PricingPolicyDraft = Pick<PricingPolicy,
+  'enabled' | 'mode' | 'min_margin' | 'safety_buffer' | 'max_increase_percent' | 'decrease_stability_seconds'>
+export interface PricingPolicyPreview {
+  fingerprint: string
+  local_group_id: number
+  current_sale: number
+  current_cost: number | null
+  target_sale: number | null
+  projected_margin: number | null
+  reason: string
+  protected: boolean
+  blocked: boolean
+  sources: PricingSource[]
+  bindings: { site_id: number; site_name: string; binding_id: number; remote_group_id: string; account_id: number }[]
+  policy: PricingPolicyDraft
 }
 export interface ReconciliationRow {
   binding_id: number
@@ -502,6 +521,15 @@ const api = {
   },
   async savePricingPolicies(id: number, input: PricingPoliciesConfiguration) {
     return (await apiClient.put<PricingPoliciesConfiguration>(`${site(id)}/pricing-policies`, input)).data
+  },
+  async previewPricingPolicy(id: number, groupId: number, input: { policy: PricingPolicyDraft }) {
+    return (await apiClient.post<PricingPolicyPreview>(`${site(id)}/pricing-policies/${groupId}/preview`, input)).data
+  },
+  async savePricingPolicy(id: number, groupId: number, input: { policy: PricingPolicyDraft; fingerprint: string }) {
+    return (await apiClient.put<PricingPoliciesConfiguration>(`${site(id)}/pricing-policies/${groupId}`, input)).data
+  },
+  async savePricingNotifications(id: number, input: { version: number; notifications: PricingNotificationPolicy }) {
+    return (await apiClient.put<PricingPoliciesConfiguration>(`${site(id)}/pricing-notifications`, input)).data
   },
   async reconciliation(id: number) {
     return (await apiClient.get<Reconciliation>(`${site(id)}/reconciliation`)).data

@@ -25,6 +25,9 @@ func governanceError(c *gin.Context, e error) bool {
 	status := http.StatusBadGateway
 	message := "Upstream governance operation failed"
 	switch {
+	case errors.Is(e, gov.ErrPricingUnknownCost):
+		response.ErrorWithDetails(c, http.StatusConflict, "Trusted comparable pricing cost is unavailable; refresh the preview", "unknown_cost", nil)
+		return true
 	case errors.Is(e, gov.ErrBrowserUnavailable):
 		response.ErrorWithDetails(c, http.StatusServiceUnavailable, "Browser authorization helper is unavailable", "browser_unavailable", nil)
 		return true

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"time"
 )
 
@@ -59,7 +60,7 @@ func (s *sqlStore) LoadPricingState(ctx context.Context, groupID int64) (Pricing
 		}
 		return PricingState{}, err
 	}
-	policy := PricingPolicy{LocalGroupID: groupID, Mode: PricingModeKeepMargin, Version: 1}
+	policy := PricingPolicy{LocalGroupID: groupID, Mode: PricingModeKeepMargin, Version: 1, DecreaseStabilitySeconds: 60, MaxIncreasePercent: 20}
 	if loaded, err := scanPricingPolicy(s.db.QueryRowContext(ctx, `SELECT `+pricingPolicyColumns+` FROM upstream_governance_pricing_policies WHERE local_group_id=$1`, groupID)); err == nil {
 		policy = loaded
 	} else if !errors.Is(err, ErrNotFound) {
@@ -170,7 +171,7 @@ func (s *sqlStore) CommitPricing(ctx context.Context, commit PricingCommit) erro
 }
 
 func pricingViewFromState(groupID int64, groupName string, state PricingState) PricingPolicyView {
-	view := PricingPolicyView{PricingPolicy: state.Policy, LocalGroupName: groupName, Sources: append([]CostObservation(nil), state.Observations...), Status: "disabled"}
+	view := PricingPolicyView{PricingPolicy: state.Policy, LocalGroupName: groupName, Sources: append([]CostObservation{}, state.Observations...), Status: "disabled"}
 	currentCost := state.Policy.ActiveCost
 	if currentCost > 0 {
 		view.CurrentCost = &currentCost
@@ -231,53 +232,50 @@ func (s *sqlStore) ListPricingPolicies(ctx context.Context, siteID int64) (Prici
 	return result, nil
 }
 
-func (s *sqlStore) SavePricingPolicies(ctx context.Context, siteID int64, input PricingPoliciesConfiguration) (PricingPoliciesConfiguration, error) {
-	if siteID <= 0 || input.Version < 0 {
-		return PricingPoliciesConfiguration{}, ErrInvalid
+// SavePricingPolicies retains the legacy batch endpoint, but uses only the
+// editable draft fields. Even old clients cannot replace baseline/runtime or
+// ownership facts, write an unrelated group, or bypass version checks.
+func (s *sqlStore) SavePricingPolicies(ctx context.Context, siteID int64, input PricingPoliciesConfiguration) (result PricingPoliciesConfiguration, err error) {
+	defer func() { err = pricingAdminError(err) }()
+	if siteID <= 0 || input.Version <= 0 {
+		return result, ErrInvalid
 	}
 	recipients, err := normalizeBalanceRecipients(input.Notifications.Recipients)
 	if err != nil {
 		return PricingPoliciesConfiguration{}, err
 	}
 	input.Notifications.Recipients = recipients
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
 		return PricingPoliciesConfiguration{}, err
 	}
 	defer tx.Rollback()
-	for _, view := range input.Policies {
-		p := view.PricingPolicy
-		if p.LocalGroupID <= 0 || p.Mode != PricingModeKeepMargin && p.Mode != PricingModeTargetMargin || p.MinMargin < 0 || p.SafetyBuffer < 0 || p.MinMargin+p.SafetyBuffer >= 1 || p.DecreaseStabilitySeconds < 0 || p.MaxIncreasePercent < 0 {
-			return PricingPoliciesConfiguration{}, ErrInvalid
+	views := append([]PricingPolicyView(nil), input.Policies...)
+	sort.Slice(views, func(i, j int) bool { return views[i].LocalGroupID < views[j].LocalGroupID })
+	for i, view := range views {
+		if view.LocalGroupID <= 0 || i > 0 && views[i-1].LocalGroupID == view.LocalGroupID {
+			return result, ErrInvalid
 		}
-		if p.Enabled {
-			if p.BaselineCost <= 0 && view.CurrentCost != nil {
-				p.BaselineCost = *view.CurrentCost
-			}
-			if p.BaselineSale <= 0 && view.CurrentSale != nil {
-				p.BaselineSale = *view.CurrentSale
-			}
-			if p.BaselineCost <= 0 || p.BaselineSale <= 0 {
-				return PricingPoliciesConfiguration{}, ErrPricingUnknownCost
-			}
-			p.Ratio = p.BaselineSale / p.BaselineCost
+		state, exists, loadErr := loadPricingAdminState(ctx, tx, view.LocalGroupID, true)
+		if loadErr != nil {
+			return result, loadErr
 		}
-		if p.Version <= 0 {
-			p.Version = 1
+		preview, policy, prepareErr := preparePricingAdmin(siteID, view.LocalGroupID, pricingDraftFromPolicy(view.PricingPolicy), state)
+		if prepareErr != nil {
+			return result, prepareErr
 		}
-		_, err = tx.ExecContext(ctx, `INSERT INTO upstream_governance_pricing_policies(local_group_id,enabled,mode,baseline_cost,baseline_sale,ratio,min_margin,safety_buffer,decrease_stability_seconds,max_increase_percent,version,manual_owner,manual_version,last_automatic_sale,last_automatic_cost,active_cost,active_cost_source,protected,protection_reason,cost_fact_revision,decrease_observed_at)
-VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,NULL)
-ON CONFLICT(local_group_id) DO UPDATE SET enabled=EXCLUDED.enabled,mode=EXCLUDED.mode,baseline_cost=EXCLUDED.baseline_cost,baseline_sale=EXCLUDED.baseline_sale,ratio=EXCLUDED.ratio,min_margin=EXCLUDED.min_margin,safety_buffer=EXCLUDED.safety_buffer,decrease_stability_seconds=EXCLUDED.decrease_stability_seconds,max_increase_percent=EXCLUDED.max_increase_percent,manual_owner=EXCLUDED.manual_owner,manual_version=upstream_governance_pricing_policies.manual_version+1,version=upstream_governance_pricing_policies.version+1,updated_at=NOW()`, p.LocalGroupID, p.Enabled, p.Mode, p.BaselineCost, p.BaselineSale, p.Ratio, p.MinMargin, p.SafetyBuffer, p.DecreaseStabilitySeconds, p.MaxIncreasePercent, p.Version, p.ManualOwner, p.ManualVersion, p.LastAutomaticSale, p.LastAutomaticCost, p.ActiveCost, p.ActiveCostSource, p.Protected, p.ProtectionReason, p.CostFactRevision)
-		if err != nil {
-			return PricingPoliciesConfiguration{}, err
+		if view.Version != state.State.Policy.Version {
+			return result, ErrConflict
+		}
+		if preview.Blocked {
+			return result, ErrPricingUnknownCost
+		}
+		if err = writePricingDraft(ctx, tx, policy, exists); err != nil {
+			return result, err
 		}
 	}
-	policyRaw, err := json.Marshal(input.Notifications)
-	if err != nil {
-		return PricingPoliciesConfiguration{}, err
-	}
-	if _, err = tx.ExecContext(ctx, `INSERT INTO upstream_governance_pricing_notifications(site_id,version,policy) VALUES($1,1,$2::jsonb) ON CONFLICT(site_id) DO UPDATE SET version=upstream_governance_pricing_notifications.version+1,policy=EXCLUDED.policy,updated_at=NOW()`, siteID, string(policyRaw)); err != nil {
-		return PricingPoliciesConfiguration{}, err
+	if err = savePricingNotificationsTx(ctx, tx, siteID, input.Version, input.Notifications); err != nil {
+		return result, err
 	}
 	if err = tx.Commit(); err != nil {
 		return PricingPoliciesConfiguration{}, err
