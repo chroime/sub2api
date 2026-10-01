@@ -5,7 +5,9 @@ import "time"
 // Intervals use PostgreSQL INTEGER fields. This is the storage representation
 // limit, rather than a policy restriction on a site's chosen cadence.
 const maxIntervalMinutes = 1<<31 - 1
-const maxIntervalSeconds = int64(1<<63 - 1)
+// Keep the seconds schedule within the range that the legacy INTEGER minute
+// alias and time.AddDate can represent on supported 64-bit builds.
+const maxIntervalSeconds = int64(maxIntervalMinutes) * 60
 
 func validIntervalMinutes(minutes int) bool {
 	return minutes >= 1 && minutes <= maxIntervalMinutes
