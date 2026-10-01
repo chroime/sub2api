@@ -199,7 +199,7 @@ func (s *sqlStore) ReserveFastObservation(ctx context.Context, siteID int64, due
 	if reservedAt.IsZero() {
 		reservedAt = time.Now().UTC()
 	}
-	r, err := s.db.ExecContext(ctx, `UPDATE upstream_governance_sites SET fast_observe_status='running',fast_observe_error='',fast_observe_reserved_at=$3,updated_at=NOW() WHERE id=$1 AND enabled AND fast_observe_enabled AND next_fast_observe_at <= $2 AND (fast_observe_status <> 'running' OR fast_observe_reserved_at IS NULL OR fast_observe_reserved_at < $3 - INTERVAL '5 minutes')`, siteID, dueAt, reservedAt)
+	r, err := s.db.ExecContext(ctx, `UPDATE upstream_governance_sites SET fast_observe_status='running',fast_observe_error='',fast_observe_reserved_at=$3::timestamptz,updated_at=NOW() WHERE id=$1 AND enabled AND fast_observe_enabled AND next_fast_observe_at <= $2::timestamptz AND (fast_observe_status <> 'running' OR fast_observe_reserved_at IS NULL OR fast_observe_reserved_at < $3::timestamptz - INTERVAL '5 minutes')`, siteID, dueAt, reservedAt)
 	if isMissingSecondsSchema(err) {
 		return false, ErrUnsupported
 	}
