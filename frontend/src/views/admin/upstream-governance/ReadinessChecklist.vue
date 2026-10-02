@@ -31,6 +31,7 @@ function itemLabel(item: ReadinessCheck) {
   return t('governance.readiness.items.' + item.key)
 }
 function itemDetail(item: ReadinessCheck) {
+  if (!item.detail) return ''
   const key = 'governance.readiness.details.' + item.detail
   const translated = t(key)
   return translated === key ? t('governance.readiness.details.unknown') : translated
@@ -66,7 +67,7 @@ function countLabel(item: ReadinessCheck) {
               <h4 class="text-sm font-medium">{{ itemLabel(item) }}</h4>
               <span class="rounded-full px-2 py-0.5 text-xs font-medium" :class="stateClass[item.state]">{{ stateLabel(item) }}</span>
             </div>
-            <p class="mt-1 text-xs leading-relaxed text-gray-500 dark:text-gray-400">{{ itemDetail(item) }}</p>
+            <p v-if="itemDetail(item)" class="mt-1 text-xs leading-relaxed text-gray-500 dark:text-gray-400">{{ itemDetail(item) }}</p>
             <p v-if="countLabel(item)" class="mt-1 text-xs font-medium text-gray-600 dark:text-gray-300">{{ countLabel(item) }}</p>
           </div>
           <button v-if="item.target_tab" data-test="readiness-navigate" :data-target="item.target_tab" type="button" class="btn btn-secondary shrink-0 text-xs" :disabled="disabled" @click="emit('navigate', item.target_tab)">{{ t('governance.readiness.open') }}</button>
