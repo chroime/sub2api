@@ -114,7 +114,7 @@ function showAllSiteTasks() {
 function navigateFromReadiness(target: ReadinessOverview['checks'][number]['target_tab']) {
   if (navigationLocked.value) return
   const section = SMART_OPERATIONS_SECTIONS.find(item => item.id === target)
-  if (section && target !== 'overview') tab.value = target
+  if (section) tab.value = target
 }
 function navigateFromWorkbench(target: { siteId: number; section: SmartOperationsSection }) {
   if (navigationLocked.value || !Number.isSafeInteger(target?.siteId) || !sites.value.some(site => site.id === target.siteId)) return

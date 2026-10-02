@@ -607,6 +607,21 @@ describe('governance page', () => {
     expect(api.readiness).toHaveBeenCalledTimes(2)
     wrapper.unmount()
   })
+  it('navigates to the overview when a readiness item targets overview', async () => {
+    setupNavigationSites()
+    vi.mocked(api.readiness).mockResolvedValue({
+      site_id: 1,
+      evaluated_at: '2026-10-01T10:00:00Z',
+      checks: [{ key: 'authorization', state: 'pending', detail: 'reauthorization_required', target_tab: 'overview', count: 0 }],
+    })
+    await router.push('/admin/upstream-governance/monitor?site=1')
+    const wrapper = mount(View)
+    await flushPromises()
+    wrapper.getComponent(SiteOverview).vm.$emit('navigate', 'overview')
+    await flushPromises()
+    expect(router.currentRoute.value.fullPath).toBe('/admin/upstream-governance?site=1')
+    wrapper.unmount()
+  })
   it('refreshes the readiness checklist after operational settings are saved', async () => {
     const site: Site = { id: 1, name: 'Readiness upstream', platform: 'sub2api', base_url: 'https://fixture.example', enabled: true, interval_minutes: 15, proxy_id: null, version: 1, has_credential: true, status: 'healthy', last_error: '', last_sync_at: null }
     const page = { items: [], total: 0, page: 1, pages: 0, page_size: 20 }
