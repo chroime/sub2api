@@ -32,3 +32,14 @@ func TestCatalogRateNoticeDoesNotRenderInfinitePercentageForZeroBaseline(t *test
 	require.Contains(t, notice.Body, "上调幅度为无法计算")
 	require.NotContains(t, notice.Body, "Inf")
 }
+
+func TestCatalogRemovedNoticeUsesPreviousGroupName(t *testing.T) {
+	notice := renderCatalogChangeNotice(
+		Site{Name: "示例上游", BaseURL: "https://up.example"},
+		Event{Kind: "group_removed", Resource: "claude-max", Before: `{"ID":"claude-max","Name":"Claude Max"}`},
+		Catalog{GroupsComplete: true, Groups: []RemoteGroup{}},
+	)
+
+	require.Contains(t, notice.Body, "分组名称：Claude Max")
+	require.NotContains(t, notice.Body, "claude-max")
+}
