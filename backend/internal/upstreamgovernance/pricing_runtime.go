@@ -47,7 +47,7 @@ func (s *Service) pricingObservations(ctx context.Context, site Site, groups []R
 			}
 			groupIDs[localID] = true
 			observations = append(observations, CostObservation{
-				SourceID: fmt.Sprintf("site:%d:group:%s:%s", site.ID, remote.ID, strings.TrimSpace(binding.Platform)),
+				SourceID:     fmt.Sprintf("site:%d:group:%s:%s", site.ID, remote.ID, strings.TrimSpace(binding.Platform)),
 				LocalGroupID: localID, Cost: cost, Unit: "multiplier", Currency: "relative",
 				Comparable: comparable, Eligible: true, Unknown: unknown, SiteID: site.ID, BindingID: binding.ID,
 			})
@@ -77,21 +77,9 @@ func (s *Service) enqueuePricingNotices(ctx context.Context, site Site, operatio
 		if operation.Status != "applied" && operation.Status != "protected" && operation.Status != "conflict" && operation.Status != "failed" {
 			continue
 		}
-		kind, severity := "pricing_change", "info"
-		if operation.Protected || operation.Status == "conflict" || operation.Status == "failed" {
-			if operation.Protected {
-				kind = "protection_change"
-			}
-			severity = "critical"
-		}
-		notice := ChangeNotice{
-			SiteID: site.ID, SiteName: site.Name, BaseURL: site.BaseURL,
-			Kind: kind, Severity: severity,
-			DedupKey: fmt.Sprintf("site:%d:pricing:%s", site.ID, operation.OperationID),
-			Subject: "本地分组自动调价与亏损保护 / Local pricing and loss protection",
-			Body: fmt.Sprintf("本地分组 #%d：状态 %s，原因 %s，成本 %.4f，目标售价 %.4f。\nLocal group #%d: status %s, reason %s, cost %.4f, target sale %.4f.", operation.LocalGroupID, operation.Status, operation.Reason, operation.Decision.Cost, operation.Decision.TargetSale, operation.LocalGroupID, operation.Status, operation.Reason, operation.Decision.Cost, operation.Decision.TargetSale),
-			ObservedAt: s.now().UTC(),
-		}
+		notice := renderPricingOperationNotice(site, operation)
+		notice.DedupKey = fmt.Sprintf("site:%d:pricing:%s", site.ID, operation.OperationID)
+		notice.ObservedAt = s.now().UTC()
 		_ = s.EnqueueChangeNotice(ctx, notice)
 	}
 }
