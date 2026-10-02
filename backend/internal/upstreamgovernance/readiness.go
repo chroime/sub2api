@@ -60,37 +60,37 @@ func readinessCheck(key, target string, state ReadinessState, detail string, cou
 
 func readinessSessionCheck(site Site) ReadinessCheck {
 	if site.Status == "reauth_required" {
-		return readinessCheck("authorization", "connect", ReadinessPending, "reauthorization_required", 0)
+		return readinessCheck("authorization", "overview", ReadinessPending, "reauthorization_required", 0)
 	}
 	if !site.HasCredential && strings.TrimSpace(site.SessionCipher) == "" {
-		return readinessCheck("authorization", "connect", ReadinessNotConfigured, "session_missing", 0)
+		return readinessCheck("authorization", "overview", ReadinessNotConfigured, "session_missing", 0)
 	}
 	// SessionCipher is encrypted at rest. Do not include or expose it in the
 	// DTO; the presence flag is enough for this read-only checklist. A site
 	// marked disconnected while retaining a session still needs review.
 	if site.Status == "disconnected" || site.Status == "error" {
-		return readinessCheck("authorization", "connect", ReadinessPending, "authorization_state_unconfirmed", 0)
+		return readinessCheck("authorization", "overview", ReadinessPending, "authorization_state_unconfirmed", 0)
 	}
-	return readinessCheck("authorization", "connect", ReadinessConfigured, "", 0)
+	return readinessCheck("authorization", "overview", ReadinessConfigured, "", 0)
 }
 
 func readinessCatalogCheck(snapshot *Snapshot, site Site, err error) ReadinessCheck {
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
-			return readinessCheck("catalog", "monitor", ReadinessNotConfigured, "catalog_missing", 0)
+			return readinessCheck("catalog", "overview", ReadinessNotConfigured, "catalog_missing", 0)
 		}
-		return readinessCheck("catalog", "monitor", ReadinessReadFailed, "catalog_read_failed", 0)
+		return readinessCheck("catalog", "overview", ReadinessReadFailed, "catalog_read_failed", 0)
 	}
 	if snapshot == nil {
-		return readinessCheck("catalog", "monitor", ReadinessNotConfigured, "catalog_missing", 0)
+		return readinessCheck("catalog", "overview", ReadinessNotConfigured, "catalog_missing", 0)
 	}
 	if snapshot.SiteVersion != site.Version {
-		return readinessCheck("catalog", "monitor", ReadinessPending, "snapshot_outdated", len(snapshot.Catalog.Groups))
+		return readinessCheck("catalog", "overview", ReadinessPending, "snapshot_outdated", len(snapshot.Catalog.Groups))
 	}
 	if !snapshot.Catalog.GroupsComplete {
-		return readinessCheck("catalog", "monitor", ReadinessPending, "groups_incomplete", len(snapshot.Catalog.Groups))
+		return readinessCheck("catalog", "overview", ReadinessPending, "groups_incomplete", len(snapshot.Catalog.Groups))
 	}
-	return readinessCheck("catalog", "monitor", ReadinessConfigured, "", len(snapshot.Catalog.Groups))
+	return readinessCheck("catalog", "overview", ReadinessConfigured, "", len(snapshot.Catalog.Groups))
 }
 
 func readinessBindingsCheck(bindings []Binding, err error) ReadinessCheck {
@@ -110,17 +110,17 @@ func readinessBindingsCheck(bindings []Binding, err error) ReadinessCheck {
 
 func readinessManagedKeysCheck(keys []ManagedKey, err error) ReadinessCheck {
 	if err != nil {
-		return readinessCheck("managed_keys", "keys", ReadinessReadFailed, "managed_keys_read_failed", 0)
+		return readinessCheck("managed_keys", "import", ReadinessReadFailed, "managed_keys_read_failed", 0)
 	}
 	if len(keys) == 0 {
-		return readinessCheck("managed_keys", "keys", ReadinessNotConfigured, "managed_keys_missing", 0)
+		return readinessCheck("managed_keys", "import", ReadinessNotConfigured, "managed_keys_missing", 0)
 	}
 	for _, key := range keys {
 		if !key.HasKey || key.Health.Status != KeyHealthPresent {
-			return readinessCheck("managed_keys", "keys", ReadinessPending, "key_health_pending", len(keys))
+			return readinessCheck("managed_keys", "import", ReadinessPending, "key_health_pending", len(keys))
 		}
 	}
-	return readinessCheck("managed_keys", "keys", ReadinessConfigured, "", len(keys))
+	return readinessCheck("managed_keys", "import", ReadinessConfigured, "", len(keys))
 }
 
 func readinessAutomationCheck(config AutomationConfig, err error) ReadinessCheck {

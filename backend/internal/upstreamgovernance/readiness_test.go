@@ -66,6 +66,14 @@ func TestReadinessReportsConfiguredAndNotEnabledCapabilitiesWithoutSideEffects(t
 	require.Equal(t, ReadinessNotEnabled, byKey["notifications"].State)
 	require.Equal(t, 1, byKey["bindings"].Count)
 	require.Equal(t, 1, byKey["managed_keys"].Count)
+	require.Equal(t, "overview", byKey["authorization"].TargetTab)
+	require.Equal(t, "overview", byKey["catalog"].TargetTab)
+	require.Equal(t, "import", byKey["bindings"].TargetTab)
+	require.Equal(t, "import", byKey["managed_keys"].TargetTab)
+	require.Equal(t, "monitor", byKey["automation"].TargetTab)
+	require.Equal(t, "monitor", byKey["balance_monitor"].TargetTab)
+	require.Equal(t, "monitor", byKey["pricing_protection"].TargetTab)
+	require.Equal(t, "monitor", byKey["notifications"].TargetTab)
 }
 
 func TestReadinessKeepsEachReadFailureExplicitAndNeverPromotesItToConfigured(t *testing.T) {
