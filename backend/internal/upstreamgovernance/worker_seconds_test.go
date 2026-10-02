@@ -12,9 +12,12 @@ import (
 
 type fastMemoryStore struct {
 	*memoryStore
-	fastDue  []Site
-	reserved []int64
-	results  []FastObservationResult
+	fastDue   []Site
+	reserved  []int64
+	results   []FastObservationResult
+	previous  *CatalogObservation
+	result    FastObservationResult
+	callOrder []string
 }
 
 func (m *fastMemoryStore) DueFastObservations(context.Context, time.Time, int) ([]Site, error) {
@@ -31,13 +34,22 @@ func (m *fastMemoryStore) ReserveFastObservation(_ context.Context, id int64, _,
 	m.reserved = append(m.reserved, id)
 	return true, nil
 }
+
 func (m *fastMemoryStore) ObserveFastResult(_ context.Context, _ int64, observed, _ time.Time, _, _ string, _ GroupObservation) (FastObservationResult, error) {
-	result := FastObservationResult{Changed: false, Revision: 1, ObservedAt: observed}
+	m.callOrder = append(m.callOrder, "observe")
+	result := m.result
+	if result.ObservedAt.IsZero() {
+		result = FastObservationResult{Changed: false, Revision: 1, ObservedAt: observed}
+	}
 	m.results = append(m.results, result)
 	return result, nil
 }
 func (m *fastMemoryStore) LatestCatalogRevision(context.Context, int64) (*CatalogObservation, error) {
-	return nil, ErrNotFound
+	m.callOrder = append(m.callOrder, "latest")
+	if m.previous == nil {
+		return nil, ErrNotFound
+	}
+	return m.previous, nil
 }
 
 type fastConnector struct {
@@ -75,4 +87,21 @@ func TestWorkerTreatsUnsupportedFastObservationAsAVisibleNonFatalStatus(t *testi
 	require.NoError(t, service.runFastDue(context.Background()))
 	require.Equal(t, []int64{8}, store.reserved)
 	require.Len(t, store.results, 1)
+}
+
+func TestWorkerReadsPreviousFastCatalogBeforePersistingChangedObservation(t *testing.T) {
+	raw, _ := json.Marshal(Session{AccessToken: "fixture", UserID: 5})
+	base := &memoryStore{site: Site{ID: 9, Enabled: true, Platform: "sub2api", SessionCipher: base64.StdEncoding.EncodeToString(raw), NextSyncAt: time.Now().Add(time.Hour)}}
+	before, after := 0.8, 0.9
+	store := &fastMemoryStore{
+		memoryStore: base,
+		fastDue:     []Site{base.site},
+		previous:    &CatalogObservation{SiteID: 9, Revision: 1, GroupsComplete: true, Groups: []RemoteGroup{{ID: "claude", Name: "Claude Max", ResolvedRateMultiplier: &before}}},
+		result:      FastObservationResult{Changed: true, Revision: 2, ObservedAt: time.Now().UTC()},
+	}
+	connector := &fastConnector{fakeConnector: &fakeConnector{}, groups: GroupObservation{GroupsComplete: true, SourceUserID: 5, Groups: []RemoteGroup{{ID: "claude", Name: "Claude Max", ResolvedRateMultiplier: &after}}}}
+	service := NewService(store, connector, nil, fakeCipher{}, true)
+
+	require.NoError(t, service.runFastDue(context.Background()))
+	require.Equal(t, []string{"latest", "observe"}, store.callOrder)
 }
