@@ -66,7 +66,7 @@ describe('ReadinessChecklist', () => {
   })
 
   it('does not show an unknown-detail message when configured checks omit detail', () => {
-    const wrapper = render({ overview: { ...overview, checks: [{ ...overview.checks[0], detail: '' }] } })
+    const wrapper = render({ overview: { ...overview, checks: [{ ...overview.checks[0], detail: undefined }] } })
     expect(wrapper.text()).not.toContain('当前状态需要进一步确认')
   })
 })

@@ -163,7 +163,8 @@ export type ReadinessState = 'configured' | 'not_configured' | 'not_enabled' | '
 export interface ReadinessCheck {
   key: string
   state: ReadinessState
-  detail: string
+  /** Omitted by the API when the state has no additional detail. */
+  detail?: string
   /** Omitted by the API when the safe count is zero. */
   count?: number
   target_tab: 'overview' | 'import' | 'models' | 'monitor' | 'history'
