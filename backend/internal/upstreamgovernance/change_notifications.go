@@ -66,6 +66,64 @@ type ChangeNotificationPolicyReader interface {
 	LoadChangeNotificationPolicy(context.Context, int64) (PricingNotificationPolicy, error)
 }
 
+func pricingOperationStatusText(status string) string {
+	switch status {
+	case "applied":
+		return "已应用"
+	case "protected":
+		return "已启用保护"
+	case "conflict":
+		return "等待人工确认"
+	case "failed":
+		return "执行失败"
+	default:
+		return "状态待确认"
+	}
+}
+
+func pricingOperationReasonText(reason string) string {
+	switch reason {
+	case "baseline":
+		return "建立成本基线"
+	case "price_ready":
+		return "成本变化已核算"
+	case "increase":
+		return "成本上升并完成调价"
+	case "decrease":
+		return "成本下降并完成调价"
+	case "increase_review":
+		return "成本涨幅超过审核阈值"
+	case "unknown_cost":
+		return "成本暂时无法确认"
+	case "invalid_policy":
+		return "调价策略无效"
+	case "manual_owner":
+		return "存在人工管理"
+	case "policy_disabled":
+		return "自动调价未启用"
+	default:
+		return "自动调价结果待确认"
+	}
+}
+
+func renderPricingOperationNotice(site Site, op PricingOperation) ChangeNotice {
+	kind, severity, subject := "pricing_change", "warning", "本地分组售价已自动调整"
+	if op.Protected || op.Status == "protected" {
+		kind, severity, subject = "protection_change", "critical", "上游成本触发亏损保护"
+	} else if op.Status == "conflict" || op.Status == "failed" {
+		kind, severity, subject = "pricing_change", "critical", "本地自动调价未完成"
+	}
+	return ChangeNotice{
+		SiteID: site.ID, SiteName: site.Name, BaseURL: site.BaseURL,
+		Kind: kind, Severity: severity,
+		DedupKey:        fmt.Sprintf("site:%d:pricing:group:%d:revision:%d", site.ID, op.LocalGroupID, op.CostFactRevision),
+		Subject:         subject,
+		Body:            fmt.Sprintf("上游名称：%s\n站点URL：%s\n本地分组编号：%d\n处理结果：%s\n处理原因：%s\n观察成本：%.8g\n目标售价：%.8g。", site.Name, site.BaseURL, op.LocalGroupID, pricingOperationStatusText(op.Status), pricingOperationReasonText(op.Reason), op.Decision.Cost, op.Decision.TargetSale),
+		InitialBaseline: op.Reason == "baseline",
+		ObservedAt:      time.Now().UTC(),
+	}
+}
+
 // EnqueuePricingOperationNotice converts a committed automatic-pricing result
 // into a durable administrator notice. The coordinator can call this after
 // its atomic pricing commit; no pricing credentials or customer data are
@@ -78,22 +136,7 @@ func (s *Service) EnqueuePricingOperationNotice(ctx context.Context, siteID int6
 	if err != nil {
 		return err
 	}
-	kind, severity, subject := "pricing_change", "warning", "本地分组售价已自动调整 / Local group sale updated"
-	if op.Protected || op.Status == "protected" {
-		kind, severity, subject = "protection_change", "critical", "上游成本触发亏损保护 / Upstream cost protection enabled"
-	} else if op.Status == "conflict" || op.Status == "failed" {
-		kind, severity, subject = "pricing_change", "critical", "本地自动调价未完成 / Local automatic pricing failed"
-	}
-	baseline := op.Reason == "baseline"
-	return s.EnqueueChangeNotice(ctx, ChangeNotice{
-		SiteID: site.ID, SiteName: site.Name, BaseURL: site.BaseURL,
-		Kind: kind, Severity: severity,
-		DedupKey:        fmt.Sprintf("site:%d:pricing:group:%d:revision:%d", siteID, op.LocalGroupID, op.CostFactRevision),
-		Subject:         subject,
-		Body:            fmt.Sprintf("本地分组 ID：%d\n状态：%s\n原因：%s\n成本：%.8g\n目标售价：%.8g\n来源：%s\n\nLocal group ID: %d\nStatus: %s\nReason: %s\nCost: %.8g\nTarget sale: %.8g\nSource: %s", op.LocalGroupID, op.Status, op.Reason, op.Decision.Cost, op.Decision.TargetSale, op.Decision.SourceID, op.LocalGroupID, op.Status, op.Reason, op.Decision.Cost, op.Decision.TargetSale, op.Decision.SourceID),
-		InitialBaseline: baseline,
-		ObservedAt:      time.Now().UTC(),
-	})
+	return s.EnqueueChangeNotice(ctx, renderPricingOperationNotice(*site, op))
 }
 
 func changeNotificationPolicyAllows(policy PricingNotificationPolicy, kind string) bool {

@@ -402,14 +402,7 @@ func (s *Service) runFastSite(ctx context.Context, siteID int64) error {
 		free()
 		remoteReleased = true
 		if result.Changed && result.Revision > 1 {
-			notice := ChangeNotice{
-				SiteID: site.ID, SiteName: site.Name, BaseURL: site.BaseURL,
-				Kind: "rate_change", Severity: "warning",
-				DedupKey:   fmt.Sprintf("site:%d:catalog:%d", site.ID, result.Revision),
-				Subject:    "上游可见分组或倍率发生变化 / Upstream groups or rates changed",
-				Body:       fmt.Sprintf("上游 %s 的可见分组或倍率目录已更新到第 %d 个版本。请检查受影响的本地分组、成本事实和自动定价结果。\nThe visible group/rate catalog changed to revision %d. Review affected local groups, trusted cost facts and automatic pricing results.", site.Name, result.Revision, result.Revision),
-				ObservedAt: result.ObservedAt,
-			}
+			notice := renderFastObservationChangeNotice(*site, result.Revision, result.ObservedAt)
 			_ = s.EnqueueChangeNotice(ctx, notice)
 		}
 		for _, operation := range pricingOps {
@@ -418,6 +411,17 @@ func (s *Service) runFastSite(ctx context.Context, siteID int64) error {
 		return pricingErr
 	}
 	return nil
+}
+
+func renderFastObservationChangeNotice(site Site, revision int64, observedAt time.Time) ChangeNotice {
+	return ChangeNotice{
+		SiteID: site.ID, SiteName: site.Name, BaseURL: site.BaseURL,
+		Kind: "rate_change", Severity: "warning",
+		DedupKey:   fmt.Sprintf("site:%d:catalog:%d", site.ID, revision),
+		Subject:    "上游可见分组或倍率发生变化",
+		Body:       fmt.Sprintf("上游名称：%s\n站点URL：%s\n可见分组或倍率目录已更新到第 %d 个版本，请检查受影响的本地分组、成本事实和自动定价结果。", site.Name, site.BaseURL, revision),
+		ObservedAt: observedAt,
+	}
 }
 
 func (s *Service) runSiteDue(ctx context.Context, siteID int64) error {
