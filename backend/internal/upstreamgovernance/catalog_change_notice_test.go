@@ -21,3 +21,14 @@ func TestCatalogRateNoticeIsChineseAndIncludesSiteURLGroupAndPercentage(t *testi
 	require.NotContains(t, notice.Body, "Resolved")
 	require.NotContains(t, notice.Body, "{")
 }
+
+func TestCatalogRateNoticeDoesNotRenderInfinitePercentageForZeroBaseline(t *testing.T) {
+	before := `{"Base":0,"User":null,"Resolved":0,"Peak":null,"Enabled":false,"Start":"","End":""}`
+	after := `{"Base":0.2,"User":null,"Resolved":0.2,"Peak":null,"Enabled":false,"Start":"","End":""}`
+	notice := renderCatalogChangeNotice(Site{Name: "ZeroBase", BaseURL: "https://zero.example"}, Event{Kind: "rate_changed", Resource: "zero", Before: before, After: after}, Catalog{Groups: []RemoteGroup{{ID: "zero", Name: "Zero Group"}}})
+
+	require.Contains(t, notice.Body, "分组名称：Zero Group")
+	require.Contains(t, notice.Body, "倍率：0 -> 0.2")
+	require.Contains(t, notice.Body, "上调幅度为无法计算")
+	require.NotContains(t, notice.Body, "Inf")
+}

@@ -35,6 +35,16 @@ func formatNoticeRate(value *float64) string {
 	return strconv.FormatFloat(rounded, 'f', -1, 64)
 }
 
+func formatNoticePercent(before, delta float64) string {
+	// A zero or invalid baseline has no meaningful percentage denominator.
+	// Keep the absolute change in the notice, but never expose +/-Inf or NaN.
+	if before <= 0 || math.IsNaN(before) || math.IsInf(before, 0) || math.IsNaN(delta) || math.IsInf(delta, 0) {
+		return "无法计算"
+	}
+	percent := math.Round(delta/before*100*100) / 100
+	return strconv.FormatFloat(percent, 'f', -1, 64) + "%"
+}
+
 func renderCatalogChangeNotice(site Site, event Event, catalog Catalog) ChangeNotice {
 	groupName := catalogGroupName(catalog, event.Resource)
 	notice := ChangeNotice{
@@ -57,14 +67,12 @@ func renderCatalogChangeNotice(site Site, event Event, catalog Catalog) ChangeNo
 			verb := "倍率未变化"
 			change := ""
 			if delta > 0 {
-				percent := math.Round(delta / *before.Resolved * 100 * 100) / 100
 				verb = "倍率上调"
-				change = fmt.Sprintf("，上调%s，上调幅度为%s%%", formatNoticeRate(&delta), strconv.FormatFloat(percent, 'f', -1, 64))
+				change = fmt.Sprintf("，上调%s，上调幅度为%s", formatNoticeRate(&delta), formatNoticePercent(*before.Resolved, delta))
 			} else if delta < 0 {
 				down := -delta
-				percent := math.Round(down / *before.Resolved * 100 * 100) / 100
 				verb = "倍率下调"
-				change = fmt.Sprintf("，下调%s，下调幅度为%s%%", formatNoticeRate(&down), strconv.FormatFloat(percent, 'f', -1, 64))
+				change = fmt.Sprintf("，下调%s，下调幅度为%s", formatNoticeRate(&down), formatNoticePercent(*before.Resolved, down))
 			}
 			notice.Kind, notice.Severity = "rate_change", "warning"
 			notice.Subject = fmt.Sprintf("上游倍率变更：%s - %s", site.Name, groupName)
