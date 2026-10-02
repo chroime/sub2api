@@ -275,9 +275,8 @@ func (p *OpenAITokenProvider) GetAccessToken(ctx context.Context, account *Accou
 // 这是一种永久性故障：仅靠后续请求或 TokenRefreshService 不会自愈
 // （NeedsRefresh 也会因 refresh_token 为空直接跳过），
 // 必须主动剔除以避免账号被持续选中导致用户端反复 502。
-// 业务请求使用 background context，避免客户端断开丢失永久故障标记；
-// 后台采票则保留生命周期取消，防止停止 harvester 时卡在错误持久化。
-func (p *OpenAITokenProvider) disableAccountMissingRefreshToken(ctx context.Context, account *Account, reason string) {
+// 业务请求使用 background context，避免客户端断开丢失永久故障标记。
+func (p *OpenAITokenProvider) disableAccountMissingRefreshToken(_ context.Context, account *Account, reason string) {
 	if p == nil || p.accountRepo == nil || account == nil {
 		return
 	}
@@ -285,11 +284,6 @@ func (p *OpenAITokenProvider) disableAccountMissingRefreshToken(ctx context.Cont
 		p.runtimeBlocker.BlockAccountScheduling(account, time.Time{}, "missing_refresh_token")
 	}
 	bgCtx := context.Background()
-	if HTTPUpstreamProfileFromContext(ctx) == HTTPUpstreamProfileOpenAIHarvest {
-		var cancel context.CancelFunc
-		bgCtx, cancel = context.WithTimeout(ctx, openAIAccountStateUpdateTimeout)
-		defer cancel()
-	}
 	if err := p.accountRepo.SetError(bgCtx, account.ID, reason); err != nil {
 		slog.Warn("openai_token_provider.set_error_failed",
 			"account_id", account.ID,

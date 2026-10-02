@@ -248,8 +248,6 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyOpenAICodexClientVersion:                           "",
 		SettingKeyOpenAICodexClientVersionSynced:                     "",
 		SettingKeyOpenAICodexVersionAutoSyncEnabled:                  "true",
-		SettingKeyOpenAICodexTicketHarvestProxyURL:                   "",
-		SettingKeyOpenAICodexTicket332HarvestProxyURL:                "",
 		SettingKeyClaudeCodeClientVersion:                            "",
 		SettingKeyClaudeCodeClientVersionSynced:                      "",
 		SettingKeyClaudeCodeVersionAutoSyncEnabled:                   "true",
@@ -902,38 +900,6 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	} else {
 		result.OpenAICodexVersionAutoSyncEnabled = true
 	}
-	if v, ok := settings[SettingKeyOpenAICodexTicketEnabled]; ok && v != "" {
-		result.OpenAICodexTicketEnabled = v == "true"
-	} else if s != nil && s.cfg != nil {
-		result.OpenAICodexTicketEnabled = s.cfg.Gateway.OpenAICodexTicket.Enabled
-	}
-	result.OpenAICodexTicketHarvestProxyURL = strings.TrimSpace(settings[SettingKeyOpenAICodexTicketHarvestProxyURL])
-	result.OpenAICodexTicketFailClosed = true
-	if s != nil && s.cfg != nil {
-		result.OpenAICodexTicketFailClosed = s.cfg.Gateway.OpenAICodexTicket.FailClosed
-		result.OpenAICodexTicket332Enabled = s.cfg.Gateway.OpenAICodexTicket332.Enabled
-		result.OpenAICodexTicket332FailClosed = s.cfg.Gateway.OpenAICodexTicket332.FailClosed
-	}
-	for key, target := range map[string]*bool{
-		SettingKeyOpenAICodexTicketFailClosed:    &result.OpenAICodexTicketFailClosed,
-		SettingKeyOpenAICodexTicket332Enabled:    &result.OpenAICodexTicket332Enabled,
-		SettingKeyOpenAICodexTicket332FailClosed: &result.OpenAICodexTicket332FailClosed,
-	} {
-		if value, ok := settings[key]; ok && strings.TrimSpace(value) != "" {
-			*target = value == "true"
-		}
-	}
-	result.OpenAICodexTicket332HarvestProxyURL = strings.TrimSpace(settings[SettingKeyOpenAICodexTicket332HarvestProxyURL])
-	keys292, _ := codexTicketHarvestOptionKeys("292")
-	options292 := parseCodexTicketHarvestOptions(settings, keys292, s.codexTicketHarvestConfigOptions("292"))
-	result.OpenAICodexTicketVerifyEnabled = options292.VerifyEnabled
-	result.OpenAICodexTicketHarvestProxyIDs = options292.ProxyIDs
-	result.OpenAICodexTicketHarvestConcurrency = options292.Concurrency
-	keys332, _ := codexTicketHarvestOptionKeys("332")
-	options332 := parseCodexTicketHarvestOptions(settings, keys332, s.codexTicketHarvestConfigOptions("332"))
-	result.OpenAICodexTicket332VerifyEnabled = options332.VerifyEnabled
-	result.OpenAICodexTicket332HarvestProxyIDs = options332.ProxyIDs
-	result.OpenAICodexTicket332HarvestConcurrency = options332.Concurrency
 	result.ClaudeCodeClientVersion = NormalizeClaudeCodeClientVersion(settings[SettingKeyClaudeCodeClientVersion])
 	result.ClaudeCodeClientVersionSynced = NormalizeClaudeCodeClientVersion(settings[SettingKeyClaudeCodeClientVersionSynced])
 	// 自动同步默认开启：缺失/空值一律视为开启，与 openai_codex_version_auto_sync_enabled 同一惯例。

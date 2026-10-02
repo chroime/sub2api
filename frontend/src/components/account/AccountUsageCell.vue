@@ -122,9 +122,8 @@
       </ClaudeResetCreditsCell>
     </template>
 
-    <!-- OpenAI Codex accounts: ticket status; usage querying remains OAuth-only. -->
+    <!-- OpenAI Codex accounts: usage querying remains OAuth-only. -->
     <template v-else-if="account.platform === 'openai' && (account.type === 'oauth' || account.type === 'setup-token')">
-      <CodexTicketStatusList v-if="codexTurnTickets.length" :tickets="codexTurnTickets" compact class="mb-1" />
       <div v-if="hasOpenAIUsageFallback" class="space-y-1">
         <UsageProgressBar
           v-if="usageInfo?.five_hour"
@@ -687,7 +686,6 @@ import UsageProgressBar from './UsageProgressBar.vue'
 import AccountQuotaInfo from './AccountQuotaInfo.vue'
 import ClaudeResetCreditsCell from './ClaudeResetCreditsCell.vue'
 import OpenAIQuotaResetCell from './OpenAIQuotaResetCell.vue'
-import CodexTicketStatusList from './CodexTicketStatusList.vue'
 import GrokQuotaProbeCell from './GrokQuotaProbeCell.vue'
 import CNProviderQuotaCell from './CNProviderQuotaCell.vue'
 import CNProviderBalanceCell from './CNProviderBalanceCell.vue'
@@ -819,7 +817,6 @@ const hasOpenAIUsageFallback = computed(() => {
   return !!usageInfo.value?.five_hour || !!usageInfo.value?.seven_day
 })
 
-const codexTurnTickets = computed(() => props.account.codex_turn_tickets ?? [])
 
 const openAISevenDayEstimatedTotalCost = computed(() => {
   const sevenDay = usageInfo.value?.seven_day

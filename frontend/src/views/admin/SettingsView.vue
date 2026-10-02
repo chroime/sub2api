@@ -217,9 +217,6 @@
             </div>
             <StreamingACKSettings />
             <BalancePrechargeSettings />
-            <CodexTicketSettings mode="292" />
-            <CodexTicketSettings mode="332" />
-            <CodexTicketMonitor />
           </div>
         </section>
 
@@ -9091,8 +9088,6 @@ import {
 import OpenAIFastPolicyUserSelector from "@/views/admin/settings/OpenAIFastPolicyUserSelector.vue";
 import StreamingACKSettings from "@/views/admin/settings/StreamingACKSettings.vue";
 import BalancePrechargeSettings from "@/views/admin/settings/BalancePrechargeSettings.vue";
-import CodexTicketSettings from "@/views/admin/settings/CodexTicketSettings.vue";
-import CodexTicketMonitor from "@/views/admin/settings/CodexTicketMonitor.vue";
 import { useClipboard } from "@/composables/useClipboard";
 import {
   useStepUp,
@@ -9157,9 +9152,6 @@ const extensionSettingsHashes = new Set([
   "#streaming-ack-settings",
   "#balance-precharge-settings",
   "#precharge-reviews-title",
-  "#codex-ticket-292-settings",
-  "#codex-ticket-332-settings",
-  "#codex-ticket-monitor",
   "#extensions",
 ]);
 const settingsHash = ref(window.location.hash);
@@ -9791,20 +9783,6 @@ type SettingsForm = Omit<
   | "wechat_connect_open_enabled"
   | "wechat_connect_mp_enabled"
   | "wechat_connect_mobile_enabled"
-  | "openai_codex_ticket_enabled"
-  | "openai_codex_ticket_fail_closed"
-  | "openai_codex_ticket_harvest_proxy_url"
-  | "openai_codex_ticket_harvest_proxy_configured"
-  | "openai_codex_ticket_verify_enabled"
-  | "openai_codex_ticket_harvest_proxy_ids"
-  | "openai_codex_ticket_harvest_concurrency"
-  | "openai_codex_ticket_332_enabled"
-  | "openai_codex_ticket_332_fail_closed"
-  | "openai_codex_ticket_332_harvest_proxy_url"
-  | "openai_codex_ticket_332_harvest_proxy_configured"
-  | "openai_codex_ticket_332_verify_enabled"
-  | "openai_codex_ticket_332_harvest_proxy_ids"
-  | "openai_codex_ticket_332_harvest_concurrency"
   | "openai_oauth_scheduling_rate_multiplier"
 > & {
   /** Form always binds a concrete boolean (SystemSettings marks this optional). */

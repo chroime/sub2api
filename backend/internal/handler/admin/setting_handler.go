@@ -63,7 +63,6 @@ type SettingHandler struct {
 	totpService                    *service.TotpService
 	userService                    *service.UserService
 	balancePrechargeReconciliation *service.BalancePrechargeReconciliationService
-	codexTicketMonitor             codexTicketMonitorSource
 }
 
 // NewSettingHandler 创建系统设置处理器
@@ -309,20 +308,6 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		OpenAICodexClientVersion:                               settings.OpenAICodexClientVersion,
 		OpenAICodexClientVersionSynced:                         settings.OpenAICodexClientVersionSynced,
 		OpenAICodexVersionAutoSyncEnabled:                      settings.OpenAICodexVersionAutoSyncEnabled,
-		OpenAICodexTicketEnabled:                               settings.OpenAICodexTicketEnabled,
-		OpenAICodexTicketVerifyEnabled:                         settings.OpenAICodexTicketVerifyEnabled,
-		OpenAICodexTicketHarvestConcurrency:                    settings.OpenAICodexTicketHarvestConcurrency,
-		OpenAICodexTicketHarvestProxyIDs:                       settings.OpenAICodexTicketHarvestProxyIDs,
-		OpenAICodexTicket332VerifyEnabled:                      settings.OpenAICodexTicket332VerifyEnabled,
-		OpenAICodexTicket332HarvestConcurrency:                 settings.OpenAICodexTicket332HarvestConcurrency,
-		OpenAICodexTicket332HarvestProxyIDs:                    settings.OpenAICodexTicket332HarvestProxyIDs,
-		OpenAICodexTicketFailClosed:                            settings.OpenAICodexTicketFailClosed,
-		OpenAICodexTicket332Enabled:                            settings.OpenAICodexTicket332Enabled,
-		OpenAICodexTicket332FailClosed:                         settings.OpenAICodexTicket332FailClosed,
-		OpenAICodexTicket332HarvestProxyURL:                    service.MaskProxyURL(settings.OpenAICodexTicket332HarvestProxyURL),
-		OpenAICodexTicket332HarvestProxyConfigured:             strings.TrimSpace(settings.OpenAICodexTicket332HarvestProxyURL) != "",
-		OpenAICodexTicketHarvestProxyURL:                       service.MaskProxyURL(settings.OpenAICodexTicketHarvestProxyURL),
-		OpenAICodexTicketHarvestProxyConfigured:                strings.TrimSpace(settings.OpenAICodexTicketHarvestProxyURL) != "",
 		ClaudeCodeClientVersion:                                settings.ClaudeCodeClientVersion,
 		ClaudeCodeClientVersionSynced:                          settings.ClaudeCodeClientVersionSynced,
 		ClaudeCodeVersionAutoSyncEnabled:                       settings.ClaudeCodeVersionAutoSyncEnabled,
