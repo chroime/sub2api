@@ -145,6 +145,22 @@ func TestWorkerHonorsConfiguredCollectionAndProbeIntervals(t *testing.T) {
 	}
 }
 
+func TestWorkerHonorsSubMinuteFullCollectionInterval(t *testing.T) {
+	svc, store, connector, _ := importedEngine(t)
+	start := time.Date(2026, 9, 27, 12, 0, 0, 0, time.UTC)
+	svc.now = func() time.Time { return start }
+	store.site.IntervalMinutes = 1
+	store.site.FullIntervalSeconds = 7
+	store.site.NextSyncAt = start
+
+	before := connector.discoveryCalls
+	require.NoError(t, svc.runDue(t.Context()))
+
+	require.Equal(t, before+1, connector.discoveryCalls)
+	require.Equal(t, start.Add(7*time.Second), store.site.NextSyncAt,
+		"full catalog collection must use the configured seconds cadence")
+}
+
 func TestBalanceReminderUsesConfiguredIntervalWithoutDurationOverflow(t *testing.T) {
 	for _, minutes := range []int{1, 2, 10081, 43200, maxIntervalMinutes} {
 		t.Run(fmt.Sprint(minutes), func(t *testing.T) {

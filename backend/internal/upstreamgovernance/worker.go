@@ -440,7 +440,7 @@ func (s *Service) runSiteDue(ctx context.Context, siteID int64) error {
 		didSync = true
 		// Move this site out of the next batch before network work. In particular,
 		// an interrupted collection must not stay oldest and starve other sites.
-		next := addMinutes(s.now(), int64(site.IntervalMinutes))
+		next := addSeconds(s.now(), collectionIntervalSeconds(*site))
 		if err = s.store.ObserveSite(ctx, site.ID, site.Status, site.LastError, time.Time{}, next); err != nil {
 			return err
 		}

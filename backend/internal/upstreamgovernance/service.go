@@ -695,7 +695,7 @@ func (s *Service) syncLockedWithAutoReauthorization(ctx context.Context, site Si
 		return nil, e
 	}
 	now := s.now()
-	next := addMinutes(now, int64(site.IntervalMinutes))
+	next := addSeconds(now, collectionIntervalSeconds(site))
 	if e != nil {
 		state := "error"
 		if errors.Is(e, ErrReauth) {

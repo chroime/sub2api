@@ -5,6 +5,7 @@ import "time"
 // Intervals use PostgreSQL INTEGER fields. This is the storage representation
 // limit, rather than a policy restriction on a site's chosen cadence.
 const maxIntervalMinutes = 1<<31 - 1
+
 // Keep the seconds schedule within the range that the legacy INTEGER minute
 // alias and time.AddDate can represent on supported 64-bit builds.
 const maxIntervalSeconds = int64(maxIntervalMinutes) * 60
@@ -15,6 +16,20 @@ func validIntervalMinutes(minutes int) bool {
 
 func validIntervalSeconds(seconds int64) bool {
 	return seconds >= 1 && seconds <= maxIntervalSeconds
+}
+
+// collectionIntervalSeconds returns the authoritative full-catalog cadence.
+// FullIntervalSeconds was added after the legacy minute field, so an older
+// row may still have only IntervalMinutes populated. Keep that fallback here
+// so every scheduler path (reservation and completion) uses the same cadence.
+func collectionIntervalSeconds(site Site) int64 {
+	if validIntervalSeconds(site.FullIntervalSeconds) {
+		return site.FullIntervalSeconds
+	}
+	if validIntervalMinutes(site.IntervalMinutes) {
+		return int64(site.IntervalMinutes) * 60
+	}
+	return 900
 }
 
 // addMinutes keeps large configured intervals (and their freshness multiples)
