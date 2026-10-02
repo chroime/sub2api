@@ -16,6 +16,25 @@ type readinessStore struct {
 	fail       map[string]error
 }
 
+type readinessChangeNotifier struct {
+	readiness BalanceDeliveryReadiness
+	calls     int
+	override  [][]string
+}
+
+func (n *readinessChangeNotifier) Recipients(_ context.Context, override []string) ([]string, error) {
+	n.override = append(n.override, append([]string(nil), override...))
+	return []string{"admin@example.com"}, nil
+}
+
+func (*readinessChangeNotifier) SendChange(context.Context, string, ChangeNotice) error { return nil }
+
+func (n *readinessChangeNotifier) Readiness(_ context.Context, overrides []string) BalanceDeliveryReadiness {
+	n.calls++
+	n.override = append(n.override, append([]string(nil), overrides...))
+	return n.readiness
+}
+
 func (s *readinessStore) GetAutomation(context.Context, int64) (AutomationConfig, error) {
 	if err := s.fail["automation"]; err != nil {
 		return AutomationConfig{}, err
@@ -121,4 +140,109 @@ func TestReadinessMarksReauthorizationAndIncompleteCatalogAsPending(t *testing.T
 	require.Equal(t, ReadinessPending, byKey["catalog"].State)
 	require.Equal(t, "reauthorization_required", byKey["authorization"].Detail)
 	require.Equal(t, "groups_incomplete", byKey["catalog"].Detail)
+}
+
+func TestReadinessDoesNotCheckDisabledNotificationEvents(t *testing.T) {
+	s, base, _, _ := setupEngine(t)
+	base.snap = &Snapshot{ID: 9, SiteID: 1, SiteVersion: 1, CreatedAt: time.Now().UTC(), Catalog: Catalog{GroupsComplete: true}}
+	store := &readinessStore{
+		memoryStore: base,
+		pricing:     PricingPoliciesConfiguration{Version: 1, Notifications: PricingNotificationPolicy{Enabled: true}},
+	}
+	s.store = store
+	notifier := &readinessChangeNotifier{readiness: BalanceDeliveryReadiness{Ready: true, RecipientCount: 1, Reason: "ready"}}
+	s.SetChangeNotifier(notifier)
+	// The fixture store does not implement the optional durable queue. Keep the
+	// runtime wiring present so this test reaches the event-policy branch.
+	s.changeQueue = NewChangeNotificationQueue(nil, changeNotificationSender{notifier: notifier}, nil)
+
+	overview, err := s.Readiness(t.Context(), 1)
+	require.NoError(t, err)
+	check := readinessCheckByKey(overview.Checks, "notifications")
+	require.Equal(t, ReadinessNotConfigured, check.State)
+	require.Equal(t, "notifications_events_missing", check.Detail)
+	require.Zero(t, notifier.calls, "a policy with no event kinds must not inspect mail readiness")
+}
+
+func TestReadinessUsesChangeNotifierDeliveryReadinessAndAllowsFallbackRecipients(t *testing.T) {
+	s, base, _, _ := setupEngine(t)
+	base.snap = &Snapshot{ID: 9, SiteID: 1, SiteVersion: 1, CreatedAt: time.Now().UTC(), Catalog: Catalog{GroupsComplete: true}}
+	store := &readinessStore{
+		memoryStore: base,
+		pricing:     PricingPoliciesConfiguration{Version: 1, Notifications: PricingNotificationPolicy{Enabled: true, RateChanges: true}},
+	}
+	s.store = store
+	notifier := &readinessChangeNotifier{readiness: BalanceDeliveryReadiness{Ready: true, RecipientCount: 1, Reason: "ready"}}
+	s.SetChangeNotifier(notifier)
+	s.changeQueue = NewChangeNotificationQueue(nil, changeNotificationSender{notifier: notifier}, nil)
+
+	overview, err := s.Readiness(t.Context(), 1)
+	require.NoError(t, err)
+	check := readinessCheckByKey(overview.Checks, "notifications")
+	require.Equal(t, ReadinessConfigured, check.State)
+	require.Empty(t, check.Detail)
+	require.Equal(t, 1, notifier.calls)
+	// An empty site override is intentional: the runtime resolver may fall back
+	// to the configured administrator recipient.
+	require.Len(t, notifier.override, 1)
+	require.Empty(t, notifier.override[0])
+}
+
+func TestReadinessReportsNotificationDeliveryConfigurationFailures(t *testing.T) {
+	cases := []struct {
+		name   string
+		reason string
+		state  ReadinessState
+		detail string
+	}{
+		{name: "recipients", reason: "recipients_unavailable", state: ReadinessPending, detail: "notifications_recipients_unavailable"},
+		{name: "smtp missing", reason: "smtp_not_configured", state: ReadinessPending, detail: "notifications_smtp_not_configured"},
+		{name: "smtp invalid", reason: "smtp_invalid", state: ReadinessPending, detail: "notifications_smtp_invalid"},
+		{name: "mail read failure", reason: "email_unavailable", state: ReadinessReadFailed, detail: "notifications_email_unavailable"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s, base, _, _ := setupEngine(t)
+			base.snap = &Snapshot{ID: 9, SiteID: 1, SiteVersion: 1, CreatedAt: time.Now().UTC(), Catalog: Catalog{GroupsComplete: true}}
+			store := &readinessStore{memoryStore: base, pricing: PricingPoliciesConfiguration{Version: 1, Notifications: PricingNotificationPolicy{Enabled: true, GroupChanges: true}}}
+			s.store = store
+			notifier := &readinessChangeNotifier{readiness: BalanceDeliveryReadiness{Ready: false, RecipientCount: 1, Reason: tc.reason}}
+			s.SetChangeNotifier(notifier)
+			s.changeQueue = NewChangeNotificationQueue(nil, changeNotificationSender{notifier: notifier}, nil)
+
+			overview, err := s.Readiness(t.Context(), 1)
+			require.NoError(t, err)
+			check := readinessCheckByKey(overview.Checks, "notifications")
+			require.Equal(t, tc.state, check.State)
+			require.Equal(t, tc.detail, check.Detail)
+			require.Equal(t, 1, notifier.calls)
+		})
+	}
+}
+
+func TestReadinessDoesNotCallUnavailableNotificationRuntime(t *testing.T) {
+	s, base, _, _ := setupEngine(t)
+	base.snap = &Snapshot{ID: 9, SiteID: 1, SiteVersion: 1, CreatedAt: time.Now().UTC(), Catalog: Catalog{GroupsComplete: true}}
+	s.store = &readinessStore{memoryStore: base, pricing: PricingPoliciesConfiguration{Version: 1, Notifications: PricingNotificationPolicy{Enabled: true, GroupChanges: true}}}
+
+	overview, err := s.Readiness(t.Context(), 1)
+	require.NoError(t, err)
+	check := readinessCheckByKey(overview.Checks, "notifications")
+	require.Equal(t, ReadinessReadFailed, check.State)
+	require.Equal(t, "notifications_runtime_unavailable", check.Detail)
+}
+
+func TestReadinessBalanceMonitorRequiresNotificationDelivery(t *testing.T) {
+	check := readinessBalanceCheck(Site{BalanceMonitor: BalanceMonitorConfig{Enabled: true}}, &BalanceHealthResult{State: "healthy", Reason: "healthy", DeliveryReady: false, DeliveryReason: "smtp_invalid"}, nil)
+	require.Equal(t, ReadinessPending, check.State)
+	require.Equal(t, "balance_notification_smtp_invalid", check.Detail)
+}
+
+func readinessCheckByKey(checks []ReadinessCheck, key string) ReadinessCheck {
+	for _, check := range checks {
+		if check.Key == key {
+			return check
+		}
+	}
+	return ReadinessCheck{Key: key}
 }

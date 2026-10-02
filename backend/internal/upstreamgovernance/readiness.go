@@ -54,6 +54,15 @@ type readinessPricingReader interface {
 	ListPricingPolicies(context.Context, int64) (PricingPoliciesConfiguration, error)
 }
 
+// changeReadinessNotifier is implemented by the runtime administrator mail
+// adapter. It reports configuration readiness without opening an SMTP
+// connection or sending a message. Keep this separate from ChangeNotifier so
+// older/custom notifiers can still be wired while the checklist reports that
+// their delivery readiness cannot be confirmed.
+type changeReadinessNotifier interface {
+	Readiness(context.Context, []string) BalanceDeliveryReadiness
+}
+
 func readinessCheck(key, target string, state ReadinessState, detail string, count int) ReadinessCheck {
 	return ReadinessCheck{Key: key, TargetTab: target, State: state, Detail: detail, Count: count}
 }
@@ -150,10 +159,19 @@ func readinessBalanceCheck(site Site, health *BalanceHealthResult, err error) Re
 		}
 		return readinessCheck("balance_monitor", "monitor", ReadinessPending, detail, 0)
 	}
+	if !health.DeliveryReady {
+		reason := strings.TrimSpace(health.DeliveryReason)
+		switch reason {
+		case "recipients_unavailable", "smtp_not_configured", "smtp_invalid", "email_unavailable":
+		default:
+			reason = "email_unavailable"
+		}
+		return readinessCheck("balance_monitor", "monitor", ReadinessPending, "balance_notification_"+reason, 0)
+	}
 	return readinessCheck("balance_monitor", "monitor", ReadinessConfigured, "", 0)
 }
 
-func readinessPricingChecks(config PricingPoliciesConfiguration, err error) (ReadinessCheck, ReadinessCheck) {
+func readinessPricingChecks(ctx context.Context, config PricingPoliciesConfiguration, err error, notifier ChangeNotifier, runtimeReady bool) (ReadinessCheck, ReadinessCheck) {
 	if err != nil {
 		return readinessCheck("pricing_protection", "monitor", ReadinessReadFailed, "pricing_read_failed", 0), readinessCheck("notifications", "monitor", ReadinessReadFailed, "notifications_read_failed", 0)
 	}
@@ -170,11 +188,39 @@ func readinessPricingChecks(config PricingPoliciesConfiguration, err error) (Rea
 		}
 	}
 	notifications := readinessCheck("notifications", "monitor", ReadinessNotEnabled, "notifications_disabled", 0)
-	if config.Notifications.Enabled {
-		notifications.State = ReadinessConfigured
-		notifications.Detail = ""
+	policy := config.Notifications
+	if !policy.Enabled {
+		return pricing, notifications
 	}
-	return pricing, notifications
+	if !policy.GroupChanges && !policy.RateChanges && !policy.PricingChanges && !policy.ProtectionChanges {
+		return pricing, readinessCheck("notifications", "monitor", ReadinessNotConfigured, "notifications_events_missing", 0)
+	}
+	if !runtimeReady || notifier == nil {
+		return pricing, readinessCheck("notifications", "monitor", ReadinessReadFailed, "notifications_runtime_unavailable", 0)
+	}
+	reader, ok := notifier.(changeReadinessNotifier)
+	if !ok {
+		return pricing, readinessCheck("notifications", "monitor", ReadinessReadFailed, "notifications_read_failed", 0)
+	}
+	delivery := reader.Readiness(ctx, policy.Recipients)
+	if delivery.RecipientCount <= 0 {
+		return pricing, readinessCheck("notifications", "monitor", ReadinessPending, "notifications_recipients_unavailable", 0)
+	}
+	if delivery.Ready && delivery.RecipientCount > 0 {
+		return pricing, readinessCheck("notifications", "monitor", ReadinessConfigured, "", delivery.RecipientCount)
+	}
+	switch strings.TrimSpace(delivery.Reason) {
+	case "recipients_unavailable":
+		return pricing, readinessCheck("notifications", "monitor", ReadinessPending, "notifications_recipients_unavailable", delivery.RecipientCount)
+	case "smtp_not_configured":
+		return pricing, readinessCheck("notifications", "monitor", ReadinessPending, "notifications_smtp_not_configured", delivery.RecipientCount)
+	case "smtp_invalid":
+		return pricing, readinessCheck("notifications", "monitor", ReadinessPending, "notifications_smtp_invalid", delivery.RecipientCount)
+	case "email_unavailable":
+		return pricing, readinessCheck("notifications", "monitor", ReadinessReadFailed, "notifications_email_unavailable", delivery.RecipientCount)
+	default:
+		return pricing, readinessCheck("notifications", "monitor", ReadinessReadFailed, "notifications_read_failed", delivery.RecipientCount)
+	}
 }
 
 // Readiness returns a per-capability, non-mutating integration checklist.
@@ -246,7 +292,7 @@ func (s *Service) Readiness(ctx context.Context, siteID int64) (ReadinessOvervie
 	} else {
 		pricingErr = ErrUnsupported
 	}
-	pricingCheck, notificationCheck := readinessPricingChecks(pricing, pricingErr)
+	pricingCheck, notificationCheck := readinessPricingChecks(ctx, pricing, pricingErr, s.changeNotifier, s.changeQueue != nil)
 	checks = append(checks, pricingCheck, notificationCheck)
 
 	complete := true

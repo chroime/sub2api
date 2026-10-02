@@ -733,7 +733,7 @@ export default {
   balanceLow: '上游余额偏低', balanceRecovered: '上游余额恢复', balanceNotificationSent: '余额通知已发送', balanceNotificationFailed: '余额通知发送失败',
   readiness: {
     title: '接入完成清单', description: '只读检查授权、采集、绑定、密钥、自动管理、余额、调价和通知配置，不会自动执行任何操作。',
-    evaluatedAt: '检查时间：{time}', notLoaded: '正在读取接入状态…', open: '前往设置', configuredCount: '已配置 {count} 项',
+    evaluatedAt: '检查时间：{time}', notLoaded: '正在读取接入状态…', loading: '正在读取接入状态…', readFailed: '读取接入完成清单失败，请重试。', retry: '重新读取', open: '前往设置', configuredCount: '已配置 {count} 项',
     states: { configured: '已配置', not_configured: '未配置', not_enabled: '未启用', pending: '数据待确认', read_failed: '读取失败' },
     items: { authorization: '授权状态', catalog: '可信采集目录', bindings: '本地分组绑定', managed_keys: '托管密钥', automation: '自动管理', balance_monitor: '余额监控', pricing_protection: '调价保护', notifications: '变化通知' },
     counts: { bindings: '已绑定 {count} 项', managed_keys: '已配置 {count} 个' },
@@ -754,6 +754,16 @@ export default {
       balance_monitor_read_failed: '余额监控状态读取失败。', balance_observation_pending: '余额监控已开启，但最近数据仍待确认。',
       pricing_policy_missing: '尚未配置调价保护策略。', pricing_protection_disabled: '调价保护策略已保存但未启用。',
       notifications_disabled: '变化通知策略未开启。', notifications_read_failed: '变化通知配置读取失败。',
+      notifications_events_missing: '已开启变化通知，但尚未选择要通知的变化类型。',
+      notifications_runtime_unavailable: '变化通知运行组件尚未就绪，请检查系统邮件配置。',
+      notifications_recipients_unavailable: '没有可用的收件邮箱，请填写通知收件人或配置系统管理员邮箱。',
+      notifications_smtp_not_configured: '系统发件服务尚未配置。',
+      notifications_smtp_invalid: '系统发件服务配置无效，请检查发件设置。',
+      notifications_email_unavailable: '系统邮件服务暂时不可用，请稍后重试。',
+      balance_notification_recipients_unavailable: '余额通知没有可用的收件邮箱。',
+      balance_notification_smtp_not_configured: '余额通知所需的系统发件服务尚未配置。',
+      balance_notification_smtp_invalid: '余额通知所需的系统发件服务配置无效。',
+      balance_notification_email_unavailable: '余额通知邮件服务暂时不可用。',
       read_failed: '暂时无法读取此项配置，请稍后重试。', storage_unavailable: '暂时无法读取存储状态，请稍后重试。', unknown: '当前状态需要进一步确认。'
     }
   },

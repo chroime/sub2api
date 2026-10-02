@@ -19,7 +19,7 @@ import GovernanceSitesOverview from './GovernanceSitesOverview.vue'
 import ModelMonitorPanel from './ModelMonitorPanel.vue'
 import modelAPI from '@/api/admin/upstream-model-monitoring'
 import operationsAPI from '@/api/admin/upstream-operations'
-import api, { type BalanceHealth, type Site, type Snapshot } from '@/api/admin/upstream-governance'
+import api, { type BalanceHealth, type ReadinessOverview, type Site, type Snapshot } from '@/api/admin/upstream-governance'
 vi.mock('@/api/admin/upstream-governance', () => ({
   default: {
     list: vi.fn(),
@@ -650,6 +650,45 @@ describe('governance page', () => {
     await flushPromises()
 
     expect(api.readiness).toHaveBeenCalledTimes(3)
+    wrapper.unmount()
+  })
+  it('shows a readiness read failure and retries only the selected site', async () => {
+    setupNavigationSites()
+    const ready = { site_id: 1, evaluated_at: '2026-10-01T10:01:00Z', checks: [] }
+    vi.mocked(api.readiness).mockReset().mockRejectedValueOnce({ reason: 'timeout' })
+    await router.push('/admin/upstream-governance?site=1')
+    const wrapper = mount(View)
+    await flushPromises()
+    await wrapper.vm.$nextTick()
+    const overview = wrapper.getComponent(SiteOverview)
+    expect(overview.get('[data-test="readiness-read-failed"]').exists()).toBe(true)
+    expect(overview.get('[data-test="readiness-retry"]').exists()).toBe(true)
+
+    vi.mocked(api.readiness).mockResolvedValueOnce(ready)
+    await overview.get('[data-test="readiness-retry"]').trigger('click')
+    await flushPromises()
+    expect(overview.props('readiness')).toEqual(ready)
+    expect(overview.find('[data-test="readiness-read-failed"]').exists()).toBe(false)
+    expect(api.readiness).toHaveBeenCalledTimes(2)
+    wrapper.unmount()
+  })
+  it('ignores a late readiness response from a previously selected site', async () => {
+    setupNavigationSites()
+    let resolveSiteOne!: (value: ReadinessOverview) => void
+    const siteOneReadiness = new Promise<ReadinessOverview>(resolve => { resolveSiteOne = resolve })
+    const staleSiteOneReadiness = { site_id: 1, evaluated_at: '2026-10-01T10:01:00Z', checks: [] }
+    const siteTwoReadiness = { site_id: 2, evaluated_at: '2026-10-01T10:02:00Z', checks: [] }
+    vi.mocked(api.readiness).mockImplementation((id) => id === 1 ? siteOneReadiness : Promise.resolve(siteTwoReadiness))
+    await router.push('/admin/upstream-governance?site=1')
+    const wrapper = mount(View)
+    await flushPromises()
+    await wrapper.get('#governance-site-2').trigger('click')
+    await flushPromises()
+    expect(wrapper.getComponent(SiteOverview).props('readiness')).toEqual(siteTwoReadiness)
+    expect(wrapper.getComponent(SiteOverview).props('readinessReadFailed')).toBe(false)
+    resolveSiteOne(staleSiteOneReadiness)
+    await flushPromises()
+    expect(wrapper.getComponent(SiteOverview).props('readiness')).toEqual(siteTwoReadiness)
     wrapper.unmount()
   })
   it('opens the site editor with saved login and refreshes metadata after saving without reconnecting', async () => {

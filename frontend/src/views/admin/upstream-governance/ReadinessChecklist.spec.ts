@@ -69,4 +69,17 @@ describe('ReadinessChecklist', () => {
     const wrapper = render({ overview: { ...overview, checks: [{ ...overview.checks[0], detail: undefined }] } })
     expect(wrapper.text()).not.toContain('当前状态需要进一步确认')
   })
+
+  it('shows an explicit loading state while the readiness read is pending', () => {
+    const wrapper = render({ overview: null, loading: true })
+    expect(wrapper.get('[data-test="readiness-loading"]').text()).toContain('正在读取接入状态')
+    expect(wrapper.find('[data-test="readiness-retry"]').exists()).toBe(false)
+  })
+
+  it('shows a retry action after a readiness read fails', async () => {
+    const wrapper = render({ overview: null, readFailed: true })
+    expect(wrapper.get('[data-test="readiness-read-failed"]').text()).toContain('读取接入完成清单失败')
+    await wrapper.get('[data-test="readiness-retry"]').trigger('click')
+    expect(wrapper.emitted('retry')).toEqual([[]])
+  })
 })

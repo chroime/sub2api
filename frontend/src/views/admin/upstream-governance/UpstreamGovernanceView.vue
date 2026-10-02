@@ -59,6 +59,7 @@ let sitesLoaded = false
 let siteRefreshTimer: ReturnType<typeof setInterval> | undefined
 let summaryRefreshing = false
 const automation = ref<AutomationConfiguration | null>(null), balanceHealth = ref<BalanceHealth | null>(null), readiness = ref<ReadinessOverview | null>(null)
+const readinessLoading = ref(false), readinessReadFailed = ref(false)
 const automationBusy = ref(false), observationBusy = ref(false), reconciliationBusy = ref(false), keyBusy = ref(false), rechargeBusy = ref(false), modelBusy = ref(false)
 const keysOpen = ref(false), keySelections = ref<KeySelection[]>([]), reconciliationEpoch = ref(0)
 const importPreviewEpoch = ref(0)
@@ -232,6 +233,8 @@ async function select(site: Site, collected?: Snapshot, updateLocation = true) {
   snapshot.value = null
   overviewSnapshot.value = null
   readiness.value = null
+  readinessLoading.value = true
+  readinessReadFailed.value = false
   events.value = null
   checks.value = null
   bindings.value = []
@@ -264,7 +267,14 @@ async function select(site: Site, collected?: Snapshot, updateLocation = true) {
     else reportSelectionReadFailure('keys', results[4].reason, selectedTab)
     if (results[5].status === 'fulfilled') automation.value = results[5].value
     if (results[6].status === 'fulfilled') balanceHealth.value = results[6].value
-    if (results[7].status === 'fulfilled') readiness.value = results[7].value
+    if (results[7].status === 'fulfilled') {
+      readiness.value = results[7].value
+      readinessReadFailed.value = false
+    } else {
+      readiness.value = null
+      readinessReadFailed.value = true
+    }
+    readinessLoading.value = false
     importStateReady.value = results[1].status === 'fulfilled' && results[4].status === 'fulfilled'
     busy.value = false
   }
@@ -493,12 +503,18 @@ async function reloadReadiness() {
   if (!active.value) return
   const id = active.value.id
   const request = generation
+  readinessLoading.value = true
+  readinessReadFailed.value = false
   try {
     const value = await api.readiness(id)
-    if (request === generation && active.value?.id === id) readiness.value = value
+    if (request === generation && active.value?.id === id) {
+      readiness.value = value
+      readinessReadFailed.value = false
+    }
   } catch {
-    // The checklist is ancillary to the workbench. Keep the last known state
-    // and avoid turning a transient read failure into an operation error.
+    if (request === generation && active.value?.id === id) readinessReadFailed.value = true
+  } finally {
+    if (request === generation && active.value?.id === id) readinessLoading.value = false
   }
 }
 async function reloadAfterPolicyChange() {
@@ -582,7 +598,7 @@ onUnmounted(() => {
         <p v-if="active.status === 'reauth_required'" role="alert" class="rounded-lg bg-amber-50 p-3 text-sm text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">{{ t('governance.reauth') }}</p><p v-else-if="active.last_error" role="alert" class="text-sm text-red-600">{{ t(errorKey({ reason: active.last_error })) }}</p>
         <div class="min-w-0 overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-dark-600 dark:bg-dark-800">
           <div v-show="tab === 'overview'" data-test="site-overview-tab" class="min-w-0 space-y-5 p-4 sm:p-5">
-            <SiteOverview :site="active" :snapshot="overviewSnapshot" :binding-count="bindings.filter(binding => binding.account_id > 0).length" :balance-health="balanceHealth" :readiness="readiness" @navigate="navigateFromReadiness" />
+            <SiteOverview :site="active" :snapshot="overviewSnapshot" :binding-count="bindings.filter(binding => binding.account_id > 0).length" :balance-health="balanceHealth" :readiness="readiness" :readiness-loading="readinessLoading" :readiness-read-failed="readinessReadFailed" @navigate="navigateFromReadiness" @retry-readiness="reloadReadiness" />
             <div class="flex flex-wrap items-center gap-3 rounded-lg bg-gray-50 p-3 text-sm dark:bg-dark-900"><span class="font-medium">{{ t(!automation ? 'governance.automationUnknown' : automation.policy.enabled ? 'governance.automationOn' : 'governance.automationOff') }}</span><span class="min-w-0 flex-1 text-xs text-gray-500">{{ t('governance.automationSummaryHint') }}</span><button type="button" class="text-sm font-medium text-primary-700 dark:text-primary-300" @click="tab = 'monitor'">{{ t('governance.configureAutomation') }}</button></div>
             <ReconciliationPanel v-if="snapshot" :key="active.id" :site-id="active.id" :refresh-key="`${snapshot.id}:${reconciliationEpoch}`" :disabled="working" @busy="reconciliationBusy = $event" @applied="reconciled" />
             <p v-else class="rounded-lg bg-gray-50 p-4 text-sm text-gray-500 dark:bg-dark-900">{{ busy ? t('common.loading') : t('governance.noSnapshot') }}</p>

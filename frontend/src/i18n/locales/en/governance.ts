@@ -718,7 +718,7 @@ export default {
   balanceLow: 'Low upstream balance', balanceRecovered: 'Upstream balance recovered', balanceNotificationSent: 'Balance notification sent', balanceNotificationFailed: 'Balance notification failed',
   readiness: {
     title: 'Connection readiness', description: 'Read-only checks for authorization, collection, bindings, keys, automation, balance, pricing and notifications. No action is executed automatically.',
-    evaluatedAt: 'Checked at {time}', notLoaded: 'Reading connection status…', open: 'Open settings', configuredCount: '{count} configured',
+    evaluatedAt: 'Checked at {time}', notLoaded: 'Reading connection status…', loading: 'Reading connection status…', readFailed: 'The connection readiness checklist could not be read. Try again.', retry: 'Read again', open: 'Open settings', configuredCount: '{count} configured',
     states: { configured: 'Configured', not_configured: 'Not configured', not_enabled: 'Not enabled', pending: 'Data pending', read_failed: 'Read failed' },
     items: { authorization: 'Authorization', catalog: 'Trusted catalog', bindings: 'Local group bindings', managed_keys: 'Managed keys', automation: 'Automation', balance_monitor: 'Balance monitoring', pricing_protection: 'Pricing protection', notifications: 'Change notifications' },
     counts: { bindings: '{count} bindings', managed_keys: '{count} configured' },
@@ -739,6 +739,16 @@ export default {
       balance_monitor_read_failed: 'Balance monitoring could not be read.', balance_observation_pending: 'Balance monitoring is enabled, but recent data is unconfirmed.',
       pricing_policy_missing: 'No pricing-protection policy is configured.', pricing_protection_disabled: 'The pricing-protection policy is saved but disabled.',
       notifications_disabled: 'Change notifications are not enabled.', notifications_read_failed: 'Change notification settings could not be read.',
+      notifications_events_missing: 'Change notifications are enabled, but no change types are selected.',
+      notifications_runtime_unavailable: 'The change-notification runtime is not ready. Check the system email settings.',
+      notifications_recipients_unavailable: 'No recipient is available. Add recipients or configure a system administrator email.',
+      notifications_smtp_not_configured: 'The system sender is not configured.',
+      notifications_smtp_invalid: 'The system sender configuration is invalid. Check the sender settings.',
+      notifications_email_unavailable: 'The system email service is temporarily unavailable. Try again later.',
+      balance_notification_recipients_unavailable: 'Balance notifications have no available recipient.',
+      balance_notification_smtp_not_configured: 'The system sender required for balance notifications is not configured.',
+      balance_notification_smtp_invalid: 'The system sender required for balance notifications is invalid.',
+      balance_notification_email_unavailable: 'The email service for balance notifications is temporarily unavailable.',
       read_failed: 'This configuration could not be read. Try again later.', storage_unavailable: 'Storage state could not be read. Try again later.', unknown: 'This state needs further confirmation.'
     }
   },

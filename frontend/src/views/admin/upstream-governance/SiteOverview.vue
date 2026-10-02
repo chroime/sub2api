@@ -9,8 +9,13 @@ const props = defineProps<{
   bindingCount: number
   balanceHealth?: BalanceHealth | null
   readiness?: ReadinessOverview | null
+  readinessLoading?: boolean
+  readinessReadFailed?: boolean
 }>()
-const emit = defineEmits<{ navigate: [target: ReadinessOverview['checks'][number]['target_tab']] }>()
+const emit = defineEmits<{
+  navigate: [target: ReadinessOverview['checks'][number]['target_tab']]
+  retryReadiness: []
+}>()
 const { t } = useI18n()
 const amount = (value: number | null | undefined) =>
   value == null
@@ -63,5 +68,5 @@ const amount = (value: number | null | undefined) =>
       </p>
     </div>
   </dl>
-  <ReadinessChecklist :overview="readiness" @navigate="emit('navigate', $event)" />
+  <ReadinessChecklist :overview="readiness" :loading="readinessLoading" :read-failed="readinessReadFailed" @navigate="emit('navigate', $event)" @retry="emit('retryReadiness')" />
 </template>

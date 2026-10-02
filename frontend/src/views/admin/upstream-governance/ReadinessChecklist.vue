@@ -7,13 +7,18 @@ import { formatGovernanceTime } from './format'
 const props = withDefaults(defineProps<{
   overview?: ReadinessOverview | null
   disabled?: boolean
+  loading?: boolean
+  readFailed?: boolean
 }>(), {
   overview: null,
   disabled: false,
+  loading: false,
+  readFailed: false,
 })
 
 const emit = defineEmits<{
   navigate: [target: ReadinessCheck['target_tab']]
+  retry: []
 }>()
 
 const { t } = useI18n()
@@ -57,7 +62,12 @@ function countLabel(item: ReadinessCheck) {
       </div>
       <time v-if="overview" class="shrink-0 text-xs tabular-nums text-gray-500 dark:text-gray-400" :datetime="overview.evaluated_at">{{ t('governance.readiness.evaluatedAt', { time: formatGovernanceTime(overview.evaluated_at) }) }}</time>
     </header>
-    <p v-if="!overview" role="status" class="mt-4 rounded-lg bg-gray-50 p-3 text-sm text-gray-500 dark:bg-dark-900 dark:text-gray-400">{{ t('governance.readiness.notLoaded') }}</p>
+    <p v-if="loading" data-test="readiness-loading" role="status" class="mt-4 rounded-lg bg-gray-50 p-3 text-sm text-gray-500 dark:bg-dark-900 dark:text-gray-400">{{ t('governance.readiness.loading') }}</p>
+    <div v-else-if="readFailed" data-test="readiness-read-failed" role="alert" class="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-900/10 dark:text-red-300">
+      <span>{{ t('governance.readiness.readFailed') }}</span>
+      <button data-test="readiness-retry" type="button" class="btn btn-secondary shrink-0 text-xs" :disabled="disabled" @click="emit('retry')">{{ t('governance.readiness.retry') }}</button>
+    </div>
+    <p v-else-if="!overview" role="status" class="mt-4 rounded-lg bg-gray-50 p-3 text-sm text-gray-500 dark:bg-dark-900 dark:text-gray-400">{{ t('governance.readiness.notLoaded') }}</p>
     <div v-else class="mt-4 grid gap-3 md:grid-cols-2">
       <article v-for="item in items" :key="item.key" data-test="readiness-item" class="min-w-0 rounded-lg border border-gray-200 p-3 dark:border-dark-600">
         <div class="flex items-start gap-3">
