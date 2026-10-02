@@ -1,13 +1,16 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import type { BalanceHealth, Site, Snapshot } from '@/api/admin/upstream-governance'
+import type { BalanceHealth, ReadinessOverview, Site, Snapshot } from '@/api/admin/upstream-governance'
+import ReadinessChecklist from './ReadinessChecklist.vue'
 import { formatGovernanceTime } from './format'
 const props = defineProps<{
   site: Site
   snapshot: Snapshot | null
   bindingCount: number
   balanceHealth?: BalanceHealth | null
+  readiness?: ReadinessOverview | null
 }>()
+const emit = defineEmits<{ navigate: [target: ReadinessOverview['checks'][number]['target_tab']] }>()
 const { t } = useI18n()
 const amount = (value: number | null | undefined) =>
   value == null
@@ -60,4 +63,5 @@ const amount = (value: number | null | undefined) =>
       </p>
     </div>
   </dl>
+  <ReadinessChecklist :overview="readiness" @navigate="emit('navigate', $event)" />
 </template>

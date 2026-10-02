@@ -43,6 +43,7 @@ vi.mock('@/api/admin/upstream-governance', () => ({
     pricingPolicies: vi.fn().mockResolvedValue({ version: 0, policies: [], notifications: { enabled: false, recipients: [], group_changes: true, rate_changes: true, pricing_changes: true, protection_changes: true } }),
     savePricingPolicies: vi.fn(),
     balanceHealth: vi.fn().mockResolvedValue(null),
+    readiness: vi.fn().mockResolvedValue({ site_id: 1, evaluated_at: '2026-10-01T10:00:00Z', checks: [] }),
     reconciliation: vi.fn().mockResolvedValue({ snapshot_id: 0, observed_at: null, rows: [] }),
     reconcilePreview: vi.fn(),
     rechargePlan: vi.fn().mockResolvedValue({ version: 0, policy: { mode: 'disabled', threshold: 10, unit: 'usd', amount_minor: 1000, currency: 'USD', daily_budget_minor: 10000, cooldown_minutes: 1440 }, capability: { available: false, reason: 'provider_unavailable' }, status: 'disabled', evaluation: null }),
@@ -65,6 +66,7 @@ describe('governance page', () => {
   beforeEach(async () => {
     vi.clearAllMocks()
     vi.mocked(api.keys).mockResolvedValue([])
+    vi.mocked(api.readiness).mockResolvedValue({ site_id: 1, evaluated_at: '2026-10-01T10:00:00Z', checks: [] })
     vi.mocked(operationsAPI.workbench).mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20, evaluated_at: '2026-10-01T14:00:00Z', summary: { critical: 0, warning: 0, info: 0 } })
     vi.mocked(operationsAPI.timeline).mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20, evaluated_at: '2026-10-01T14:00:00Z' })
     router = createRouter({

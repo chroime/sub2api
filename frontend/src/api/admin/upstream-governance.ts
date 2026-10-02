@@ -159,6 +159,24 @@ export interface ReconciliationResult {
   preview_id: string
   items: { binding_id: number; account_id: number; status: string; error?: string }[]
 }
+export type ReadinessState = 'configured' | 'not_configured' | 'not_enabled' | 'pending' | 'read_failed'
+export interface ReadinessCheck {
+  key: string
+  state: ReadinessState
+  detail: string
+  count: number
+  target_tab: 'overview' | 'import' | 'models' | 'monitor' | 'history'
+}
+export interface ReadinessOverview {
+  site_id: number
+  site_name?: string
+  base_url?: string
+  site_status?: string
+  version?: number
+  complete?: boolean
+  evaluated_at: string
+  checks: ReadinessCheck[]
+}
 export interface BalanceHealth {
   collection_enabled: boolean
   interval_minutes: number
@@ -492,6 +510,10 @@ export interface Page<T> {
 const base = '/admin/upstream-governance/sites'
 const site = (id: number) => `${base}/${id}`
 const api = {
+  async readiness(id: number) {
+    return (await apiClient.get<ReadinessOverview>(site(id) + '/readiness')).data
+  },
+
   async balanceHealth(id: number) {
     return (await apiClient.get<BalanceHealth>(`${site(id)}/balance-health`)).data
   },
