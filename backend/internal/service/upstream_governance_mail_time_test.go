@@ -44,3 +44,27 @@ func TestGovernanceMailDatesUseBeijingTimeAcrossDayBoundary(t *testing.T) {
 		})
 	}
 }
+
+func TestGovernanceChangeMailLocalizesTechnicalLabels(t *testing.T) {
+	repo := newNotificationEmailMemorySettingRepo()
+	server := startNotificationEmailTestSMTPServer(t)
+	require.NoError(t, repo.SetMultiple(t.Context(), server.settings()))
+	n := &governanceBalanceNotifier{mail: NewEmailService(repo, nil)}
+
+	require.NoError(t, n.SendChange(t.Context(), "admin@example.test", gov.ChangeNotice{
+		SiteID:     5,
+		SiteName:   "测试上游",
+		BaseURL:    "https://upstream.example.test",
+		Kind:       "rate_change",
+		Severity:   "warning",
+		Subject:    "倍率变更",
+		Body:       "上游倍率发生变化。",
+		ObservedAt: time.Date(2026, 10, 2, 0, 8, 2, 0, time.UTC),
+	}))
+
+	body := server.lastMessageBody(t)
+	require.Contains(t, body, "倍率变化")
+	require.Contains(t, body, "警告")
+	require.NotContains(t, body, "rate_change")
+	require.NotContains(t, body, "warning")
+}
