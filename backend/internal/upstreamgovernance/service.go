@@ -1108,6 +1108,13 @@ func groupRates(g RemoteGroup) any {
 		Start, End                 string
 	}{g.Name, g.RateMultiplier, g.UserRateMultiplier, g.ResolvedRateMultiplier, g.PeakRateMultiplier, g.PeakRateEnabled, g.PeakStart, g.PeakEnd}
 }
+func comparableGroupRates(g RemoteGroup) any {
+	return struct {
+		Base, User, Resolved, Peak *float64
+		Enabled                    bool
+		Start, End                 string
+	}{g.RateMultiplier, g.UserRateMultiplier, g.ResolvedRateMultiplier, g.PeakRateMultiplier, g.PeakRateEnabled, g.PeakStart, g.PeakEnd}
+}
 func prices(g RemoteGroup) []RemotePrice {
 	p := append([]RemotePrice{}, g.Prices...)
 	sort.Slice(p, func(i, j int) bool { return canonical(p[i]) < canonical(p[j]) })
@@ -1139,7 +1146,9 @@ func DiffCatalog(siteID int64, before, after Catalog) []Event {
 		if !ok {
 			add("group_added", g.ID, nil, g)
 		} else {
-			add("rate_changed", g.ID, groupRates(prior), groupRates(g))
+			if canonical(comparableGroupRates(prior)) != canonical(comparableGroupRates(g)) {
+				add("rate_changed", g.ID, groupRates(prior), groupRates(g))
+			}
 			add("models_changed", g.ID, sortedStrings(prior.Models), sortedStrings(g.Models))
 			add("price_changed", g.ID, prices(prior), prices(g))
 			if prior.Name != g.Name || prior.Platform != g.Platform {
