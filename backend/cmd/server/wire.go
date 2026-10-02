@@ -19,6 +19,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/server"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	gov "github.com/Wei-Shaw/sub2api/internal/upstreamgovernance"
 
 	"github.com/google/wire"
 	"github.com/redis/go-redis/v9"
@@ -127,6 +128,7 @@ func provideCleanup(
 	channelMonitorV2Aggregator *service.ChannelMonitorV2Aggregator,
 	quotaFlusher *service.UserPlatformQuotaUsageFlusher,
 	upstreamBillingProbe *service.UpstreamBillingProbeService,
+	upstreamGovernance *gov.Service,
 	ollamaCloudUsage *service.OllamaCloudUsageService,
 	opencodeGoUsage *service.OpenCodeGoUsageService,
 	auditLog *service.AuditLogService,
@@ -145,6 +147,12 @@ func provideCleanup(
 
 		// 应用层清理步骤可并行执行，基础设施资源（Redis/Ent）最后按顺序关闭。
 		parallelSteps := []cleanupStep{
+			{"UpstreamGovernance", func() error {
+				if upstreamGovernance != nil {
+					upstreamGovernance.Stop()
+				}
+				return nil
+			}},
 			{"BillingMaintenance", func() error { billingMaintenance.Stop(); return nil }},
 			{"BillingStorageMonitor", func() error { billingStorageMonitor.Stop(); return nil }},
 			{"UsageLogRecovery", func() error { usageLogRecovery.Stop(); return nil }},
