@@ -1,11 +1,18 @@
 package upstreamgovernance
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math"
 	"strconv"
 )
+
+func catalogChangeNoticeDedupKey(siteID int64, event Event) string {
+	digest := sha256.Sum256([]byte(event.Kind + "\x00" + event.Resource + "\x00" + event.Before + "\x00" + event.After))
+	return fmt.Sprintf("site:%d:event:%s", siteID, hex.EncodeToString(digest[:]))
+}
 
 type catalogRateNoticeValue struct {
 	Name     string   `json:"Name"`
@@ -87,6 +94,12 @@ func renderCatalogChangeNotice(site Site, event Event, catalog Catalog) ChangeNo
 		notice.Body = fmt.Sprintf("上游名称：%s\n站点URL：%s\n分组名称：%s\n上游新增了此可见分组。", site.Name, site.BaseURL, groupName)
 	case "group_removed":
 		notice.Kind = "group_change"
+		var before struct {
+			Name string `json:"Name"`
+		}
+		if json.Unmarshal([]byte(event.Before), &before) == nil && before.Name != "" {
+			groupName = before.Name
+		}
 		notice.Body = fmt.Sprintf("上游名称：%s\n站点URL：%s\n分组名称：%s\n上游不再提供此可见分组。", site.Name, site.BaseURL, groupName)
 	case "group_changed":
 		notice.Kind = "group_change"

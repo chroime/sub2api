@@ -8,9 +8,18 @@ import (
 )
 
 func TestFastObservationNoticeIsChineseOnly(t *testing.T) {
-	notice := renderFastObservationChangeNotice(Site{ID: 7, Name: "示例上游", BaseURL: "https://up.example"}, 3, time.Date(2026, 10, 2, 1, 0, 0, 0, time.UTC))
+	before, after := 0.8, 0.9
+	notices := fastObservationChangeNotices(Site{ID: 7, Name: "示例上游", BaseURL: "https://up.example"}, &CatalogObservation{
+		SiteID: 7, Revision: 1, GroupsComplete: true,
+		Groups: []RemoteGroup{{ID: "claude", Name: "Claude Max", ResolvedRateMultiplier: &before}},
+	}, GroupObservation{
+		GroupsComplete: true,
+		Groups:         []RemoteGroup{{ID: "claude", Name: "Claude Max", ResolvedRateMultiplier: &after}},
+	}, 2, time.Date(2026, 10, 2, 1, 0, 0, 0, time.UTC))
+	require.Len(t, notices, 1)
+	notice := notices[0]
 
-	require.Equal(t, "上游可见分组或倍率发生变化", notice.Subject)
+	require.Contains(t, notice.Subject, "上游倍率变更")
 	require.Contains(t, notice.Body, "上游名称：示例上游")
 	require.Contains(t, notice.Body, "站点URL：https://up.example")
 	assertNoEnglishNoticeLabels(t, notice.Subject+"\n"+notice.Body)

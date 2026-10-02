@@ -747,9 +747,8 @@ func (s *Service) enqueueCatalogChangeNotices(ctx context.Context, site Site, ev
 		return
 	}
 	for _, event := range events {
-		digest := sha256.Sum256([]byte(event.Kind + "\x00" + event.Resource + "\x00" + event.Before + "\x00" + event.After))
 		notice := renderCatalogChangeNotice(site, event, catalog)
-		notice.DedupKey = fmt.Sprintf("site:%d:event:%s", site.ID, hex.EncodeToString(digest[:]))
+		notice.DedupKey = catalogChangeNoticeDedupKey(site.ID, event)
 		notice.InitialBaseline = initialBaseline
 		notice.ObservedAt = event.CreatedAt
 		if err := s.EnqueueChangeNotice(ctx, notice); err != nil {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log"
 	"strings"
 	"sync"
@@ -377,6 +376,14 @@ func (s *Service) runFastSite(ctx context.Context, siteID int64) error {
 	} else {
 		message = ErrorCode(sessionErr)
 	}
+	var previous *CatalogObservation
+	if sessionErr == nil && observe.GroupsComplete {
+		previous, err = fastStore.LatestCatalogRevision(ctx, siteID)
+		if err != nil && !errors.Is(err, ErrNotFound) {
+			log.Printf("[UpstreamGovernance] fast observation previous catalog: %s", ErrorCode(err))
+			previous = nil
+		}
+	}
 	result, saveErr := fastStore.ObserveFastResult(ctx, siteID, now, next, status, message, observe)
 	if saveErr != nil {
 		return saveErr
@@ -402,8 +409,9 @@ func (s *Service) runFastSite(ctx context.Context, siteID int64) error {
 		free()
 		remoteReleased = true
 		if result.Changed && result.Revision > 1 {
-			notice := renderFastObservationChangeNotice(*site, result.Revision, result.ObservedAt)
-			_ = s.EnqueueChangeNotice(ctx, notice)
+			for _, notice := range fastObservationChangeNotices(*site, previous, observe, result.Revision, result.ObservedAt) {
+				_ = s.EnqueueChangeNotice(ctx, notice)
+			}
 		}
 		for _, operation := range pricingOps {
 			_ = s.EnqueuePricingOperationNotice(ctx, site.ID, operation)
@@ -411,17 +419,6 @@ func (s *Service) runFastSite(ctx context.Context, siteID int64) error {
 		return pricingErr
 	}
 	return nil
-}
-
-func renderFastObservationChangeNotice(site Site, revision int64, observedAt time.Time) ChangeNotice {
-	return ChangeNotice{
-		SiteID: site.ID, SiteName: site.Name, BaseURL: site.BaseURL,
-		Kind: "rate_change", Severity: "warning",
-		DedupKey:   fmt.Sprintf("site:%d:catalog:%d", site.ID, revision),
-		Subject:    "上游可见分组或倍率发生变化",
-		Body:       fmt.Sprintf("上游名称：%s\n站点URL：%s\n可见分组或倍率目录已更新到第 %d 个版本，请检查受影响的本地分组、成本事实和自动定价结果。", site.Name, site.BaseURL, revision),
-		ObservedAt: observedAt,
-	}
 }
 
 func (s *Service) runSiteDue(ctx context.Context, siteID int64) error {
