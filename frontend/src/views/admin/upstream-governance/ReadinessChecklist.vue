@@ -39,9 +39,10 @@ function stateLabel(item: ReadinessCheck) {
   return t('governance.readiness.states.' + item.state)
 }
 function countLabel(item: ReadinessCheck) {
-  if (item.count <= 0) return ''
-  if (item.key === 'bindings') return t('governance.readiness.counts.bindings', { count: item.count })
-  if (item.key === 'managed_keys') return t('governance.readiness.counts.managed_keys', { count: item.count })
+  const count = item.count ?? 0
+  if (!Number.isFinite(count) || count <= 0) return ''
+  if (item.key === 'bindings') return t('governance.readiness.counts.bindings', { count })
+  if (item.key === 'managed_keys') return t('governance.readiness.counts.managed_keys', { count })
   return ''
 }
 </script>

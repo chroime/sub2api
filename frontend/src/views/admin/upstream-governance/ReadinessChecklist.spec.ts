@@ -58,4 +58,10 @@ describe('ReadinessChecklist', () => {
     const disabled = render({ disabled: true })
     expect(disabled.findAll('[data-test="readiness-navigate"]').every(button => button.attributes('disabled') !== undefined)).toBe(true)
   })
+
+  it('does not render an undefined count when the API omits zero counts', () => {
+    const wrapper = render({ overview: { ...overview, checks: [{ ...overview.checks[0], key: 'bindings', count: undefined }] } })
+    expect(wrapper.text()).not.toContain('undefined')
+    expect(wrapper.text()).not.toContain('已绑定')
+  })
 })

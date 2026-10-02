@@ -12,6 +12,8 @@ import BalanceHealthPanel from './BalanceHealthPanel.vue'
 import ImportPanel from './ImportPanel.vue'
 import ReconciliationPanel from './ReconciliationPanel.vue'
 import SiteEditDialog from './SiteEditDialog.vue'
+import SiteOverview from './SiteOverview.vue'
+import AutomationPolicyPanel from './AutomationPolicyPanel.vue'
 import ManagedKeysPanel from './ManagedKeysPanel.vue'
 import GovernanceSitesOverview from './GovernanceSitesOverview.vue'
 import ModelMonitorPanel from './ModelMonitorPanel.vue'
@@ -588,6 +590,53 @@ describe('governance page', () => {
     expect(api.reconciliation).toHaveBeenCalledTimes(1)
     expect(api.sync).not.toHaveBeenCalled()
   })
+  it('refreshes the readiness checklist after an automation policy save', async () => {
+    setupNavigationSites()
+    const initial = { site_id: 1, evaluated_at: '2026-10-01T10:00:00Z', checks: [{ key: 'automation', state: 'not_enabled' as const, detail: 'automation_disabled', target_tab: 'monitor' as const, count: 0 }] }
+    const refreshed = { ...initial, evaluated_at: '2026-10-01T10:01:00Z', checks: [{ ...initial.checks[0], state: 'configured' as const, detail: '' }] }
+    vi.mocked(api.readiness).mockResolvedValue(initial)
+    await router.push('/admin/upstream-governance/monitor?site=1')
+    const wrapper = mount(View)
+    await flushPromises()
+    expect(wrapper.getComponent(SiteOverview).props('readiness')).toEqual(initial)
+
+    vi.mocked(api.readiness).mockResolvedValue(refreshed)
+    wrapper.getComponent(AutomationPolicyPanel).vm.$emit('saved', { version: 2, policy: { enabled: true, sync_rate: true, sync_name: true, pause_missing: true, restore_returned: true, missing_confirmations: 2, max_rate_increase_percent: 20 } })
+    await flushPromises()
+    expect(wrapper.getComponent(SiteOverview).props('readiness')).toEqual(refreshed)
+    expect(api.readiness).toHaveBeenCalledTimes(2)
+    wrapper.unmount()
+  })
+  it('refreshes the readiness checklist after operational settings are saved', async () => {
+    const site: Site = { id: 1, name: 'Readiness upstream', platform: 'sub2api', base_url: 'https://fixture.example', enabled: true, interval_minutes: 15, proxy_id: null, version: 1, has_credential: true, status: 'healthy', last_error: '', last_sync_at: null }
+    const page = { items: [], total: 0, page: 1, pages: 0, page_size: 20 }
+    vi.mocked(api.list).mockResolvedValue([site])
+    vi.mocked(api.catalog).mockRejectedValue({ status: 404 })
+    vi.mocked(api.bindings).mockResolvedValue([])
+    vi.mocked(api.events).mockResolvedValue(page)
+    vi.mocked(api.checks).mockResolvedValue(page)
+    vi.mocked(api.readiness).mockResolvedValue({ site_id: 1, evaluated_at: '2026-10-01T10:00:00Z', checks: [] })
+    const wrapper = mount(View, { global: { stubs: { BaseDialog: true } } })
+    await flushPromises()
+    await wrapper.get('#governance-site-1').trigger('click')
+    await flushPromises()
+    expect(api.readiness).toHaveBeenCalledTimes(1)
+    await wrapper.get('#governance-monitor-tab').trigger('click')
+    await flushPromises()
+    vi.mocked(api.readiness).mockClear()
+
+    wrapper.getComponent({ name: 'AutomationPolicyPanel' }).vm.$emit('saved', { version: 2, policy: {} })
+    await flushPromises()
+    expect(api.readiness).toHaveBeenCalledTimes(1)
+    wrapper.getComponent({ name: 'ObservationPricingPanel' }).vm.$emit('observation-saved', { version: 2, policy: {} })
+    await flushPromises()
+    expect(api.readiness).toHaveBeenCalledTimes(2)
+    wrapper.getComponent(BalanceMonitorPanel).vm.$emit('saved', { ...site, version: 2 })
+    await flushPromises()
+
+    expect(api.readiness).toHaveBeenCalledTimes(3)
+    wrapper.unmount()
+  })
   it('opens the site editor with saved login and refreshes metadata after saving without reconnecting', async () => {
     const site: Site = { id: 1, name: 'Editable', platform: 'sub2api', base_url: 'https://fixture.example', enabled: true, interval_minutes: 15, proxy_id: null, version: 1, has_credential: true, status: 'healthy', last_error: '', last_sync_at: null }
     const page = { items: [], total: 0, page: 1, pages: 0, page_size: 20 }
@@ -653,6 +702,23 @@ describe('governance page', () => {
     await flushPromises()
     expect(wrapper.findComponent(ImportPanel).exists()).toBe(false)
     expect(wrapper.text()).toContain('governance.importStateUnavailable')
+    wrapper.unmount()
+  })
+  it('does not surface ancillary history or key read failures as a monitor-page operation error', async () => {
+    const site: Site = { id: 1, name: 'Monitor site', platform: 'sub2api', base_url: 'https://fixture.example', enabled: true, interval_minutes: 15, proxy_id: null, version: 1, has_credential: true, status: 'healthy', last_error: '', last_sync_at: null }
+    vi.mocked(api.list).mockResolvedValue([site])
+    vi.mocked(api.catalog).mockRejectedValue({ status: 404 })
+    vi.mocked(api.bindings).mockResolvedValue([])
+    vi.mocked(api.events).mockRejectedValue({ status: 503 })
+    vi.mocked(api.checks).mockRejectedValue({ status: 503 })
+    vi.mocked(api.keys).mockRejectedValue({ status: 503 })
+
+    await router.push('/admin/upstream-governance/monitor?site=1')
+    const wrapper = mount(View, { global: { stubs: { BalanceMonitorPanel: true } } })
+    await flushPromises()
+
+    expect(wrapper.get('#governance-monitor-panel').isVisible()).toBe(true)
+    expect(wrapper.find('#governance-monitor-panel > p[role="alert"]').exists()).toBe(false)
     wrapper.unmount()
   })
   it('explains an in-use deletion conflict and selects the remaining site after successful deletion', async () => {

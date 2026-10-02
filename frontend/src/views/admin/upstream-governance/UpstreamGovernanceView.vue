@@ -165,6 +165,14 @@ watch(() => route.fullPath, () => {
 function failure(e: unknown) {
   error.value = t(errorKey(e))
 }
+function reportSelectionReadFailure(kind: 'catalog' | 'bindings' | 'events' | 'checks' | 'keys', e: unknown, selectedTab: SmartOperationsSection) {
+  // Selecting a site hydrates several panels in parallel. A panel that is not
+  // visible must not turn the whole workspace into a generic operation error;
+  // the panel itself already renders its unavailable/empty state. Keep the
+  // existing catalog semantics, and retain history diagnostics only when the
+  // administrator actually opened the history section.
+  if (kind === 'catalog' || (kind === 'events' || kind === 'checks') && selectedTab === 'history') failure(e)
+}
 async function run(action: () => Promise<void>, writes = false) {
   const request = generation
   busy.value = true
@@ -231,6 +239,7 @@ async function select(site: Site, collected?: Snapshot, updateLocation = true) {
   importStateReady.value = false
   busy.value = true
   error.value = ''
+  const selectedTab = tab.value
   const results = await Promise.allSettled([
     collected ? Promise.resolve(collected) : api.catalog(site.id),
     api.bindings(site.id),
@@ -244,15 +253,15 @@ async function select(site: Site, collected?: Snapshot, updateLocation = true) {
   if (request === generation && active.value?.id === site.id) {
     if (results[0].status === 'fulfilled') snapshot.value = overviewSnapshot.value = results[0].value
     else if ((results[0].reason as { status?: number }).status !== 404)
-      failure(results[0].reason)
+      reportSelectionReadFailure('catalog', results[0].reason, selectedTab)
     if (results[1].status === 'fulfilled') bindings.value = results[1].value
-    else failure(results[1].reason)
+    else reportSelectionReadFailure('bindings', results[1].reason, selectedTab)
     if (results[2].status === 'fulfilled') events.value = results[2].value
-    else failure(results[2].reason)
+    else reportSelectionReadFailure('events', results[2].reason, selectedTab)
     if (results[3].status === 'fulfilled') checks.value = results[3].value
-    else failure(results[3].reason)
+    else reportSelectionReadFailure('checks', results[3].reason, selectedTab)
     if (results[4].status === 'fulfilled') managedKeys.value = results[4].value
-    else failure(results[4].reason)
+    else reportSelectionReadFailure('keys', results[4].reason, selectedTab)
     if (results[5].status === 'fulfilled') automation.value = results[5].value
     if (results[6].status === 'fulfilled') balanceHealth.value = results[6].value
     if (results[7].status === 'fulfilled') readiness.value = results[7].value
@@ -343,16 +352,25 @@ function balanceSaved(site: Site) {
   siteCreated(site)
   if (active.value?.id === site.id) active.value = site
   void reloadHealth()
+  void reloadReadiness()
 }
 async function reloadBindings() {
   if (!active.value) return
   const id = active.value.id,
     request = generation
   try {
-    const [value, keys] = await Promise.all([api.bindings(id), api.keys(id)])
+    // Readiness is derived from bindings and managed-key health too. Refresh it
+    // alongside the metadata, but do not let an optional checklist read block
+    // the import workbench when the endpoint is temporarily unavailable.
+    const [value, keys, currentReadiness] = await Promise.all([
+      api.bindings(id),
+      api.keys(id),
+      api.readiness(id).catch(() => null),
+    ])
     if (request === generation) {
       bindings.value = value
       managedKeys.value = keys
+      if (currentReadiness) readiness.value = currentReadiness
       importStateReady.value = true
     }
   } catch (e) {
@@ -471,6 +489,21 @@ async function reloadHealth() {
     }
   }
 }
+async function reloadReadiness() {
+  if (!active.value) return
+  const id = active.value.id
+  const request = generation
+  try {
+    const value = await api.readiness(id)
+    if (request === generation && active.value?.id === id) readiness.value = value
+  } catch {
+    // The checklist is ancillary to the workbench. Keep the last known state
+    // and avoid turning a transient read failure into an operation error.
+  }
+}
+async function reloadAfterPolicyChange() {
+  await Promise.all([reloadHealth(), reloadReadiness()])
+}
 async function reloadAutomation() {
   if (!active.value) return
   const id = active.value.id, request = generation
@@ -480,6 +513,7 @@ async function reloadAutomation() {
 function automationSaved(value: AutomationConfiguration) {
   automation.value = value
   reconciliationEpoch.value++
+  void reloadReadiness()
 }
 async function reconciled() {
   if (!active.value) return
@@ -555,7 +589,7 @@ onUnmounted(() => {
             <BalanceHealthPanel :health="balanceHealth" :disabled="working" @reload="reloadHealth" @configure="tab = 'monitor'" />
           </div>
           <div v-show="tab === 'import'" class="min-w-0 p-4 sm:p-5"><ImportPanel v-if="snapshot && importStateReady" :key="active.id" :site-id="active.id" :site-base-url="active.base_url" :site-platform="active.platform" :bindings="bindings" :managed-keys="managedKeys" :preview-epoch="importPreviewEpoch" :snapshot="snapshot" :groups="groups" :disabled="busy || balanceBusy || automationBusy || reconciliationBusy || keyBusy || rechargeBusy || modelBusy" @busy="importBusy = $event" @applied="reloadBindings" @manage-keys="openKeys" /><p v-else class="py-8 text-center text-sm text-gray-500">{{ busy ? t('common.loading') : t(snapshot ? 'governance.importStateUnavailable' : 'governance.noSnapshot') }}</p></div>
-          <div v-show="tab === 'monitor'" class="min-w-0 space-y-5 p-4 sm:p-5"><ObservationPricingPanel :key="active.id" :site-id="active.id" :disabled="working" @busy="observationBusy = $event" @observation-saved="reloadHealth" @pricing-saved="reloadHealth" /><AutomationPolicyPanel :key="active.id" :site-id="active.id" :configuration="automation" :disabled="working" @busy="automationBusy = $event" @saved="automationSaved" @reload="reloadAutomation" /><BalanceMonitorPanel :key="active.id" :site="active" :unit="snapshot?.catalog.account?.unit" :disabled="working" @saved="balanceSaved" @busy="balanceBusy = $event" /><RechargePlanPanel :key="active.id" :site-id="active.id" :disabled="working" @busy="rechargeBusy = $event" /><GovernanceHistory mode="bindings" :bindings="bindings" :groups="groups" :remote-groups="overviewSnapshot?.catalog.groups ?? snapshot?.catalog.groups ?? []" :events="null" :checks="null" :disabled="working" @configure="configure" /></div>
+           <div v-show="tab === 'monitor'" class="min-w-0 space-y-5 p-4 sm:p-5"><ObservationPricingPanel :key="active.id" :site-id="active.id" :disabled="working" @busy="observationBusy = $event" @observation-saved="reloadAfterPolicyChange" @pricing-saved="reloadAfterPolicyChange" /><AutomationPolicyPanel :key="active.id" :site-id="active.id" :configuration="automation" :disabled="working" @busy="automationBusy = $event" @saved="automationSaved" @reload="reloadAutomation" /><BalanceMonitorPanel :key="active.id" :site="active" :unit="snapshot?.catalog.account?.unit" :disabled="working" @saved="balanceSaved" @busy="balanceBusy = $event" /><RechargePlanPanel :key="active.id" :site-id="active.id" :disabled="working" @busy="rechargeBusy = $event" /><GovernanceHistory mode="bindings" :bindings="bindings" :groups="groups" :remote-groups="overviewSnapshot?.catalog.groups ?? snapshot?.catalog.groups ?? []" :events="null" :checks="null" :disabled="working" @configure="configure" /></div>
           <div v-if="tab === 'models' && !showOverview" class="min-w-0 p-4 sm:p-5"><ModelMonitorPanel :key="active.id" :site-id="active.id" :remote-groups="overviewSnapshot?.catalog.groups ?? snapshot?.catalog.groups ?? []" :managed-keys="managedKeys" :collected-at="overviewSnapshot?.created_at ?? snapshot?.created_at" :disabled="busy || importBusy || balanceBusy || editBusy || automationBusy || reconciliationBusy || keyBusy || rechargeBusy" @busy="modelBusy = $event" @manage-keys="openKeys()" /></div>
           <div v-show="tab === 'history'" class="min-w-0 space-y-5 p-4 sm:p-5">
             <GovernanceTimeline v-if="tab === 'history' && !showOverview" :site-id="active.id" :disabled="navigationLocked" />

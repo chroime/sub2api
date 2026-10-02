@@ -164,7 +164,8 @@ export interface ReadinessCheck {
   key: string
   state: ReadinessState
   detail: string
-  count: number
+  /** Omitted by the API when the safe count is zero. */
+  count?: number
   target_tab: 'overview' | 'import' | 'models' | 'monitor' | 'history'
 }
 export interface ReadinessOverview {
