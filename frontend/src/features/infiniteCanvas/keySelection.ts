@@ -18,6 +18,15 @@ export function isCanvasImagePlatform(platform: GroupPlatform): boolean {
   return IMAGE_PLATFORMS.has(platform)
 }
 
+/** Mirrors backend group allowlist semantics: exact matches plus trailing-* prefixes. */
+export function isCanvasModelAllowed(model: string, patterns: string[]): boolean {
+  const candidate = model.trim().toLowerCase()
+  return patterns.some((pattern) => {
+    const normalized = pattern.trim().toLowerCase()
+    return normalized.endsWith('*') ? candidate.startsWith(normalized.slice(0, -1)) : candidate === normalized
+  })
+}
+
 function maskKey(key: string): string {
   if (key.length <= 8) return '*'.repeat(key.length)
   return `${key.slice(0, 4)}${'*'.repeat(Math.max(4, key.length - 8))}${key.slice(-4)}`

@@ -5,11 +5,17 @@ import { createPinia } from 'pinia'
 import type { CanvasProject, CanvasRepository } from '../types'
 import InfiniteCanvasView from '@/views/user/InfiniteCanvasView.vue'
 import { keysAPI, userGroupsAPI } from '@/api'
+import { listImageModels } from '@/api/imageGeneration'
 
 vi.mock('@/api', () => ({
   keysAPI: { list: vi.fn(), create: vi.fn() },
   userGroupsAPI: { getAvailable: vi.fn() },
 }))
+
+vi.mock('@/api/imageGeneration', async () => {
+  const actual = await vi.importActual<typeof import('@/api/imageGeneration')>('@/api/imageGeneration')
+  return { ...actual, listImageModels: vi.fn() }
+})
 
 function project(id: string, title: string): CanvasProject {
   const now = new Date('2026-01-01T00:00:00.000Z')
@@ -29,7 +35,7 @@ function repository(initial: CanvasProject[] = []): CanvasRepository {
   }
 }
 
-const groups = [{ id: 1, name: 'Images', platform: 'openai', status: 'active', allow_image_generation: true }]
+const groups = [{ id: 1, name: 'Images', platform: 'openai', status: 'active', allow_image_generation: true, model_allowlist: { enabled: true, models: ['gpt-image-*'] } }]
 
 describe('InfiniteCanvasView', () => {
   beforeEach(() => {
@@ -38,6 +44,7 @@ describe('InfiniteCanvasView', () => {
       { id: 12, name: 'text-key', key: 'sk-text-key', group_id: 2, status: 'active', expires_at: null },
     ] as never, total: 2, page: 1, page_size: 100, pages: 1 })
     vi.mocked(userGroupsAPI.getAvailable).mockResolvedValue(groups as never)
+    vi.mocked(listImageModels).mockResolvedValue([])
   })
 
   function mountPage(projects = [project('one', 'One'), project('two', 'Two')]) {
@@ -68,6 +75,41 @@ describe('InfiniteCanvasView', () => {
     await vi.waitFor(() => expect(wrapper.findAll('.canvas-node')).toHaveLength(2))
     expect(wrapper.find('.prompt-node').exists()).toBe(true)
     expect(wrapper.find('.config-node').exists()).toBe(true)
+  })
+
+  it('loads allowlisted image models into the config select', async () => {
+    vi.mocked(listImageModels).mockResolvedValue([{ id: 'gpt-image-1' }, { id: 'other-image' }])
+    const configProject = project('models', 'Models')
+    configProject.nodes = [{ id: 'config', type: 'config', position: { x: 0, y: 0 }, metadata: {} }]
+    const wrapper = mountPage([configProject])
+    await vi.waitFor(() => expect(wrapper.find('[data-canvas-key-option]').exists()).toBe(true))
+    await wrapper.find('.canvas-key-picker select').setValue('11')
+    await vi.waitFor(() => expect(wrapper.find('.config-node select').findAll('option').map((option) => option.text())).toContain('gpt-image-1'))
+    expect(wrapper.find('.config-node select').findAll('option').map((option) => option.text())).not.toContain('other-image')
+  })
+
+  it('does not let a stale model response overwrite a switched key', async () => {
+    let releaseFirst!: (models: { id: string }[]) => void
+    vi.mocked(keysAPI.list).mockResolvedValue({ items: [
+      { id: 11, name: 'first-image-key', key: 'sk-first', group_id: 1, status: 'active', expires_at: null },
+      { id: 14, name: 'second-image-key', key: 'sk-second', group_id: 2, status: 'active', expires_at: null },
+    ] as never, total: 2, page: 1, page_size: 100, pages: 1 })
+    vi.mocked(userGroupsAPI.getAvailable).mockResolvedValue([
+      ...groups,
+      { id: 2, name: 'Second images', platform: 'openai', status: 'active', allow_image_generation: true, model_allowlist: { enabled: true, models: ['second-*'] } },
+    ] as never)
+    vi.mocked(listImageModels).mockImplementation((key) => key === 'sk-first' ? new Promise((resolve) => { releaseFirst = resolve }) : Promise.resolve([{ id: 'second-image-1' }]))
+    const configProject = project('switch-models', 'Switch models')
+    configProject.nodes = [{ id: 'config', type: 'config', position: { x: 0, y: 0 }, metadata: {} }]
+    const wrapper = mountPage([configProject])
+    await vi.waitFor(() => expect(wrapper.findAll('[data-canvas-key-option]')).toHaveLength(2))
+    await wrapper.find('.canvas-key-picker select').setValue('11')
+    await vi.waitFor(() => expect(listImageModels).toHaveBeenCalledWith('sk-first'))
+    await wrapper.find('.canvas-key-picker select').setValue('14')
+    await vi.waitFor(() => expect(wrapper.find('.config-node select').findAll('option').map((option) => option.text())).toContain('second-image-1'))
+    releaseFirst([{ id: 'first-image-1' }])
+    await nextTick()
+    expect(wrapper.find('.config-node select').findAll('option').map((option) => option.text())).not.toContain('first-image-1')
   })
 
   it('shows a clear empty state when no image key is available', async () => {

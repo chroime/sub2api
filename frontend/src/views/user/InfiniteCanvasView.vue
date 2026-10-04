@@ -11,7 +11,7 @@ import CanvasProjectSidebar from '@/features/infiniteCanvas/components/CanvasPro
 import CanvasToolbar from '@/features/infiniteCanvas/components/CanvasToolbar.vue'
 import CanvasInspector from '@/features/infiniteCanvas/components/CanvasInspector.vue'
 import CanvasKeyPicker from '@/features/infiniteCanvas/components/CanvasKeyPicker.vue'
-import { isCanvasImagePlatform, selectEligibleCanvasKeys } from '@/features/infiniteCanvas/keySelection'
+import { isCanvasImagePlatform, isCanvasModelAllowed, selectEligibleCanvasKeys } from '@/features/infiniteCanvas/keySelection'
 import type { CanvasKeyOption } from '@/features/infiniteCanvas/keySelection'
 import type { CanvasBackgroundMode, CanvasNode, CanvasProject, CanvasRepository } from '@/features/infiniteCanvas/types'
 import { useInfiniteCanvasStore } from '@/features/infiniteCanvas/stores/useInfiniteCanvasStore'
@@ -24,14 +24,21 @@ const props = defineProps<{ repository?: CanvasRepository }>()
 function emptyRepository(): CanvasRepository {
   return { async listProjects() { return [] }, async loadProject() { return null }, async saveProject() {}, async deleteProject() {}, async saveAsset(asset) { return asset.storageKey ?? `asset-${Date.now()}` }, async loadAsset() { return undefined }, async deleteAsset() {} }
 }
-type SwitchableRepository = CanvasRepository & { switchTo(repository: CanvasRepository): void }
+type SwitchableRepository = CanvasRepository & { switchTo(repository: CanvasRepository): void; closeRetired(): void }
 function createSwitchableRepository(initial: CanvasRepository): SwitchableRepository {
   let delegate = initial
+  const retired: CanvasRepository[] = []
   return {
     switchTo(next) {
       const previous = delegate
       delegate = next
-      if (previous !== next && 'close' in previous && typeof previous.close === 'function') previous.close()
+      if (previous !== next) retired.push(previous)
+    },
+    closeRetired() {
+      while (retired.length) {
+        const previous = retired.shift()
+        if (previous && 'close' in previous && typeof previous.close === 'function') previous.close()
+      }
     },
     listProjects: () => delegate.listProjects(), loadProject: (id) => delegate.loadProject(id), saveProject: (project) => delegate.saveProject(project), deleteProject: (id) => delegate.deleteProject(id), saveAsset: (asset) => delegate.saveAsset(asset), loadAsset: (key) => delegate.loadAsset(key), deleteAsset: (key) => delegate.deleteAsset(key),
   }
@@ -71,7 +78,7 @@ const selectedKeyOption = computed(() => eligibleKeys.value.find((option) => opt
 const availableImageModels = computed(() => {
   const allowlist = selectedKeyOption.value?.allowedModels
   if (allowlist === undefined) return imageModels.value
-  return imageModels.value.filter((model) => allowlist.includes(model.id))
+  return imageModels.value.filter((model) => isCanvasModelAllowed(model.id, allowlist))
 })
 const lastSaved = computed(() => activeProject.value ? `Last saved ${activeProject.value.updatedAt.toLocaleString()}` : '')
 let assetHydrationGeneration = 0
@@ -289,7 +296,11 @@ watch(() => authStore.user?.id, (userId) => {
   lifecycleGeneration += 1
   clearSecrets()
   if (!props.repository) repository.switchTo(userId === undefined || userId === null ? emptyRepository() : createIndexedDbCanvasRepositoryForUser(userId))
-  void store.switchRepository(repository).then(() => loadKeys(false, lifecycleGeneration).catch(() => undefined)).catch(() => undefined)
+  void store.switchRepository(repository).then((applied) => {
+    if (!applied) return
+    repository.closeRetired()
+    return loadKeys(false, lifecycleGeneration).catch(() => undefined)
+  }).catch(() => undefined)
 })
 watch(selectedKeyOption, () => { void loadImageModels() })
 watch(() => activeProject.value?.id, (id, previous) => { if (id !== previous) void hydrateImageUrls(activeProject.value) })
@@ -299,7 +310,10 @@ onMounted(async () => {
   lifecycleGeneration += 1
   if (!props.repository && authStore.user?.id !== undefined && authStore.user?.id !== null) repository.switchTo(createIndexedDbCanvasRepositoryForUser(authStore.user.id))
   await store.ready
-  if (!props.repository && authStore.user?.id !== undefined && authStore.user?.id !== null) await store.switchRepository(repository)
+  if (!props.repository && authStore.user?.id !== undefined && authStore.user?.id !== null) {
+    const applied = await store.switchRepository(repository)
+    if (applied) repository.closeRetired()
+  }
   await hydrateImageUrls(activeProject.value)
   await loadKeys(false, lifecycleGeneration).catch(() => undefined)
 })

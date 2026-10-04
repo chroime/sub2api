@@ -582,6 +582,7 @@ export interface Group {
   long_context_pricing_enabled: boolean
   // 图片生成计费配置
   allow_image_generation: boolean
+  model_allowlist?: ModelAllowlist
   allow_batch_image_generation: boolean
   image_rate_independent: boolean
   image_rate_multiplier: number

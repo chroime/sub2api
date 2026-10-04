@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { selectEligibleCanvasKeys } from '../keySelection'
+import { isCanvasModelAllowed, selectEligibleCanvasKeys } from '../keySelection'
 
 const keys: any[] = [
   { id: 11, name: 'OpenAI', key: 'sk-openai-12345678', group_id: 1, status: 'active', expires_at: null },
@@ -36,5 +36,11 @@ describe('selectEligibleCanvasKeys', () => {
     const [option] = selectEligibleCanvasKeys(keys, [{ ...groups[0], model_allowlist: { enabled: true, models: ['gpt-image-1'] } }])
     expect(option.allowedModels).toEqual(['gpt-image-1'])
     expect(option).not.toHaveProperty('model_allowlist')
+  })
+
+  it('matches exact and trailing-prefix wildcard model allowlist entries', () => {
+    expect(isCanvasModelAllowed('GPT-Image-1', ['gpt-image-*'])).toBe(true)
+    expect(isCanvasModelAllowed('gpt-text-1', ['gpt-image-*', 'imagen-3'])).toBe(false)
+    expect(isCanvasModelAllowed('IMAGEN-3', ['gpt-image-*', 'imagen-3'])).toBe(true)
   })
 })

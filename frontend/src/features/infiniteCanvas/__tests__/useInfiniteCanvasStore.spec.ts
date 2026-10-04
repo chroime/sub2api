@@ -140,4 +140,20 @@ describe('useInfiniteCanvasStore', () => {
     expect(store.importProject({ schemaVersion: CANVAS_SCHEMA_VERSION, id: 'bad-edge', title: 'bad', createdAt: '2026-01-02T00:00:00.000Z', updatedAt: '2026-01-02T00:00:00.000Z', viewport: { x: 0, y: 0, zoom: 1 }, backgroundMode: 'grid', nodes: [{ id: 'node', type: 'prompt', position: { x: 0, y: 0 }, metadata: {} }], edges: [{ id: 'edge', sourceNodeId: 'node', targetNodeId: 'node', kind: 'reference', metadata: 'invalid' }] })).toBeUndefined()
     expect(store.activeProject.value?.id).toBe(before)
   })
+
+  it('ignores a stale repository hydrate after a newer user switch', async () => {
+    let releaseFirst!: (projects: CanvasProject[]) => void
+    const first = repository([fixture({ id: 'user-one-project', title: 'User one' })])
+    first.listProjects = () => new Promise((resolve) => { releaseFirst = resolve })
+    const second = repository([fixture({ id: 'user-two-project', title: 'User two' })])
+    const store = useInfiniteCanvasStore(first)
+    const initialHydrate = store.ready
+    await Promise.resolve()
+    expect(await store.switchRepository(second)).toBe(true)
+    expect(store.activeProject.value?.id).toBe('user-two-project')
+    releaseFirst([fixture({ id: 'user-one-project', title: 'User one' })])
+    await initialHydrate
+    expect(store.activeProject.value?.id).toBe('user-two-project')
+    expect(store.projects.value.map((project) => project.id)).toEqual(['user-two-project'])
+  })
 })
