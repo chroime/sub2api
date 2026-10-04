@@ -21,13 +21,24 @@ const PROJECTS_STORE = 'projects'
 const ASSETS_STORE = 'assets'
 
 function clone<T>(value: T): T {
-  return typeof structuredClone === 'function' ? structuredClone(value) : JSON.parse(JSON.stringify(value)) as T
+  if (typeof structuredClone === 'function') return structuredClone(value)
+  return cloneFallback(value) as T
 }
+
+function cloneFallback(value: unknown): unknown {
+  if (value instanceof Date) return new Date(value.getTime())
+  if (value instanceof Blob) return value
+  if (Array.isArray(value)) return value.map(cloneFallback)
+  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, cloneFallback(child)]))
+  return value
+}
+
+const SECRET_FIELDS = new Set(['key', 'apiKey', 'secret', 'token', 'access_token', 'activeKeySecret'])
 
 function stripSecrets(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(stripSecrets)
   if (!value || typeof value !== 'object' || value instanceof Blob || value instanceof Date) return value
-  return Object.fromEntries(Object.entries(value).filter(([key]) => !['key', 'apiKey', 'secret', 'token'].includes(key)).map(([key, child]) => [key, stripSecrets(child)]))
+  return Object.fromEntries(Object.entries(value).filter(([key]) => !SECRET_FIELDS.has(key)).map(([key, child]) => [key, stripSecrets(child)]))
 }
 
 function request<T>(request: IDBRequest<T>): Promise<T> {
@@ -79,7 +90,7 @@ export function createIndexedDbCanvasRepository(databaseName = 'sub2api-infinite
     async loadProject(id) {
       const database = await openDatabase()
       const record = await request(database.transaction(PROJECTS_STORE).objectStore(PROJECTS_STORE).get(id)) as ProjectRecord | undefined
-      return record ? clone(validate(record).payload) : undefined
+      return record ? clone(validate(record).payload) : null
     },
     async saveProject(project) {
       const database = await openDatabase()
@@ -90,9 +101,22 @@ export function createIndexedDbCanvasRepository(databaseName = 'sub2api-infinite
     async deleteProject(id) {
       const database = await openDatabase()
       const transaction = database.transaction([PROJECTS_STORE, ASSETS_STORE], 'readwrite')
-      const project = await request(transaction.objectStore(PROJECTS_STORE).get(id)) as ProjectRecord | undefined
+      const projectStore = transaction.objectStore(PROJECTS_STORE)
+      const assetStore = transaction.objectStore(ASSETS_STORE)
+      const project = await request(projectStore.get(id)) as ProjectRecord | undefined
+      const allProjects = await request(projectStore.getAll()) as ProjectRecord[]
+      const allAssets = await request(assetStore.getAll()) as AssetRecord[]
+      const projectAssetKeys = new Set<string>([
+        ...(project?.payload.assetKeys ?? []),
+        ...((project?.payload.nodes ?? []).flatMap((node) => node.type === 'image' && typeof node.metadata.assetKey === 'string' ? [node.metadata.assetKey] : [])),
+        ...allAssets.filter((asset) => asset.projectId === id).map((asset) => asset.storageKey),
+      ])
+      const remainingReferences = new Set<string>(allProjects.filter((record) => record.id !== id).flatMap((record) => [
+        ...(record.payload.assetKeys ?? []),
+        ...record.payload.nodes.flatMap((node) => node.type === 'image' && typeof node.metadata.assetKey === 'string' ? [node.metadata.assetKey] : []),
+      ]))
       transaction.objectStore(PROJECTS_STORE).delete(id)
-      if (project?.payload.assetKeys) project.payload.assetKeys.forEach((key) => transaction.objectStore(ASSETS_STORE).delete(key))
+      projectAssetKeys.forEach((key) => { if (!remainingReferences.has(key)) assetStore.delete(key) })
       await transactionDone(transaction)
     },
     async saveAsset(asset) {
@@ -102,7 +126,7 @@ export function createIndexedDbCanvasRepository(databaseName = 'sub2api-infinite
       const transaction = database.transaction(ASSETS_STORE, 'readwrite')
       transaction.objectStore(ASSETS_STORE).put(saved)
       await transactionDone(transaction)
-      return { ...saved, blob: new Blob([blobData], { type: saved.mimeType }) }
+      return saved.storageKey
     },
     async loadAsset(storageKey) {
       const database = await openDatabase()

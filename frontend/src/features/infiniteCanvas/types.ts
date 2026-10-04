@@ -1,6 +1,6 @@
 export const CANVAS_SCHEMA_VERSION = 1 as const
 
-export type CanvasBackgroundMode = 'grid' | 'plain'
+export type CanvasBackgroundMode = 'grid' | 'dots' | 'plain'
 export type CanvasNodeType = 'prompt' | 'config' | 'image'
 
 export interface CanvasViewport {
@@ -49,9 +49,9 @@ export interface CanvasNode {
 
 export interface CanvasEdge {
   id: string
-  source: string
-  target: string
-  kind: string
+  sourceNodeId: string
+  targetNodeId: string
+  kind: 'prompt' | 'config' | 'reference'
   metadata?: Record<string, unknown>
 }
 
@@ -80,10 +80,10 @@ export interface CanvasAsset {
 
 export interface CanvasRepository {
   listProjects(): Promise<CanvasProject[]>
-  loadProject(id: string): Promise<CanvasProject | undefined>
+  loadProject(id: string): Promise<CanvasProject | null>
   saveProject(project: CanvasProject): Promise<void>
   deleteProject(id: string): Promise<void>
-  saveAsset(asset: CanvasAsset): Promise<CanvasAsset>
+  saveAsset(asset: CanvasAsset): Promise<string>
   loadAsset(storageKey: string): Promise<CanvasAsset | undefined>
   deleteAsset(storageKey: string): Promise<void>
 }
