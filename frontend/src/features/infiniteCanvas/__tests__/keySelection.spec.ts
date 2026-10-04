@@ -26,4 +26,9 @@ describe('selectEligibleCanvasKeys', () => {
     expect(option).toMatchObject({ id: 11, groupName: 'OpenAI Images', platform: 'openai', key: keys[0].key })
     expect(option.maskedKey).not.toContain(keys[0].key)
   })
+
+  it('rejects malformed non-empty expiration values', () => {
+    const malformed = { ...keys[0], id: 17, name: 'Malformed expiry', expires_at: 'not-a-date' }
+    expect(selectEligibleCanvasKeys([malformed], groups)).toEqual([])
+  })
 })
