@@ -22,6 +22,9 @@ let panPointer: number | undefined
 let lastPointer = { x: 0, y: 0 }
 let frame: number | undefined
 let pending = { x: 0, y: 0 }
+const panMode = ref(false)
+const connectingNodeId = ref<string | undefined>()
+const surfaceSize = ref({ width: 800, height: 600 })
 watch(() => currentProject.value?.viewport, (value) => { if (value) viewport.value = { ...value } }, { deep: true })
 watch(viewport, (value) => emit('viewport-update', { ...value }), { deep: true })
 function pointerDown(event: PointerEvent) {
@@ -33,9 +36,9 @@ function pointerDown(event: PointerEvent) {
 }
 function pointerMove(event: PointerEvent) {
   if (panPointer !== event.pointerId) return
-  pending = { x: event.clientX - lastPointer.x, y: event.clientY - lastPointer.y }
+  pending = { x: pending.x + event.clientX - lastPointer.x, y: pending.y + event.clientY - lastPointer.y }
   lastPointer = { x: event.clientX, y: event.clientY }
-  if (frame === undefined) frame = requestAnimationFrame(() => { panBy(pending.x, pending.y); frame = undefined })
+  if (frame === undefined) frame = requestAnimationFrame(() => { panBy(pending.x, pending.y); emit('viewport-update', { ...viewport.value }); pending = { x: 0, y: 0 }; frame = undefined })
 }
 function pointerUp(event: PointerEvent) {
   if (panPointer !== event.pointerId) return
@@ -55,20 +58,45 @@ function emptyDoubleClick(event: MouseEvent) {
   const rect = surface.value?.getBoundingClientRect()
   if (rect) emit('empty-canvas-double-click', screenToWorld({ x: event.clientX - rect.left, y: event.clientY - rect.top }))
 }
-function keyboard(event: KeyboardEvent) { if (event.key === ' ') surface.value?.classList.toggle('canvas-surface--pan-mode', true) }
-function keyup(event: KeyboardEvent) { if (event.key === ' ') surface.value?.classList.toggle('canvas-surface--pan-mode', false) }
-onMounted(() => { window.addEventListener('keydown', keyboard); window.addEventListener('keyup', keyup) })
-onBeforeUnmount(() => { window.removeEventListener('keydown', keyboard); window.removeEventListener('keyup', keyup); if (frame !== undefined) cancelAnimationFrame(frame) })
-function updateNode(nodeId: string, position: CanvasPoint) { emit('node-move', nodeId, { x: position.x / viewport.value.zoom, y: position.y / viewport.value.zoom }) }
+function keyboard(event: KeyboardEvent) {
+  if (event.key === ' ' || event.key === 'Spacebar' || event.key === 'Control' || event.ctrlKey) {
+    panMode.value = true
+    if (event.key === ' ') event.preventDefault()
+  }
+}
+function keyup(event: KeyboardEvent) {
+  if (event.key === ' ' || event.key === 'Spacebar' || event.key === 'Control' || !event.ctrlKey) panMode.value = event.ctrlKey
+}
+function resizeSurface() {
+  const element = surface.value
+  if (element) surfaceSize.value = { width: element.clientWidth || 800, height: element.clientHeight || 600 }
+}
+onMounted(() => { window.addEventListener('keydown', keyboard); window.addEventListener('keyup', keyup); resizeSurface(); window.addEventListener('resize', resizeSurface) })
+onBeforeUnmount(() => { window.removeEventListener('keydown', keyboard); window.removeEventListener('keyup', keyup); window.removeEventListener('resize', resizeSurface); if (frame !== undefined) cancelAnimationFrame(frame) })
+function updateNode(nodeId: string, screenDelta: CanvasPoint) {
+  const node = currentProject.value?.nodes.find((item) => item.id === nodeId)
+  if (node) emit('node-move', nodeId, { x: node.position.x + screenDelta.x / viewport.value.zoom, y: node.position.y + screenDelta.y / viewport.value.zoom })
+}
+function handleNodeSelect(nodeId: string, additive: boolean) {
+  if (connectingNodeId.value && connectingNodeId.value !== nodeId) {
+    emit('edge-create', { sourceNodeId: connectingNodeId.value, targetNodeId: nodeId, kind: 'reference' })
+    connectingNodeId.value = undefined
+    return
+  }
+  emit('node-select', nodeId, additive)
+}
+function centerViewport(point: CanvasPoint) {
+  viewport.value = { x: surfaceSize.value.width / 2 - point.x * viewport.value.zoom, y: surfaceSize.value.height / 2 - point.y * viewport.value.zoom, zoom: viewport.value.zoom }
+}
 </script>
 
 <template>
   <section ref="surface" class="canvas-surface" :class="`canvas-surface--${currentProject?.backgroundMode ?? 'grid'}`" @pointerdown="pointerDown" @pointermove="pointerMove" @pointerup="pointerUp" @pointercancel="pointerUp" @wheel="wheel" @dblclick="emptyDoubleClick">
     <div v-if="currentProject" class="canvas-surface__world" :style="{ transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})` }">
       <CanvasEdgeLayer :nodes="currentProject.nodes" :edges="currentProject.edges" />
-      <CanvasNode v-for="node in currentProject.nodes" :key="node.id" :node="node" :selected="selectedNodeIds?.includes(node.id)" @select="(id, additive) => emit('node-select', id, additive)" @move="updateNode" @delete="(id) => emit('node-delete', id)" />
+      <CanvasNode v-for="node in currentProject.nodes" :key="node.id" :node="node" :selected="selectedNodeIds?.includes(node.id)" :pan-mode="panMode" @select="handleNodeSelect" @connect-start="(id) => { connectingNodeId = id }" @move="updateNode" @delete="(id) => emit('node-delete', id)" />
     </div>
-    <CanvasMinimap v-if="currentProject" class="canvas-surface__minimap" :nodes="currentProject.nodes" :viewport="viewport" @navigate="(point) => panBy(-point.x * viewport.zoom, -point.y * viewport.zoom)" />
+    <CanvasMinimap v-if="currentProject" class="canvas-surface__minimap" :nodes="currentProject.nodes" :viewport="viewport" :host-width="surfaceSize.width" :host-height="surfaceSize.height" @navigate="centerViewport" />
   </section>
 </template>
 

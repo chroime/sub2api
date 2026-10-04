@@ -20,14 +20,18 @@ export function useInfiniteCanvasStore(repository: CanvasRepository) {
   const selectedNodeIds = ref<string[]>([])
   const activeKeyId = ref<number | undefined>(undefined)
   const history = useCanvasHistory<CanvasProject>(50)
-  let saveTimer: ReturnType<typeof setTimeout> | undefined
+  const saveTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
-  const persist = () => {
-    if (saveTimer) clearTimeout(saveTimer)
-    saveTimer = setTimeout(() => {
-      const project = activeProject.value
-      if (project) void repository.saveProject(clone(project))
+  const persist = (project = activeProject.value) => {
+    if (!project) return
+    const snapshot = clone(project)
+    const previousTimer = saveTimers.get(project.id)
+    if (previousTimer) clearTimeout(previousTimer)
+    saveTimers.set(project.id, setTimeout(() => {
+      saveTimers.delete(project.id)
+      void repository.saveProject(snapshot)
     }, 25)
+    )
   }
 
   const hydrate = async () => {
@@ -99,6 +103,8 @@ export function useInfiniteCanvasStore(repository: CanvasRepository) {
     const index = projects.value.findIndex((item) => item.id === projectId)
     if (index < 0) return
     projects.value.splice(index, 1)
+    const timer = saveTimers.get(projectId)
+    if (timer) { clearTimeout(timer); saveTimers.delete(projectId) }
     await repository.deleteProject(projectId)
     if (activeProject.value?.id === projectId) replaceActive(projects.value[index] ?? projects.value[index - 1] ?? null)
     selectedNodeIds.value = []
@@ -141,17 +147,23 @@ export function useInfiniteCanvasStore(repository: CanvasRepository) {
 
   const setActiveKey = (keyId: number | undefined) => mutate((project) => { project.activeKeyId = keyId })
 
+  const restoreWithFreshTimestamp = (snapshot: CanvasProject, previous: CanvasProject): CanvasProject => {
+    const restored = clone(snapshot)
+    restored.updatedAt = new Date(Math.max(Date.now(), previous.updatedAt.getTime() + 1))
+    return restored
+  }
+
   const undo = () => {
     const project = activeProject.value
     if (!project) return
     const snapshot = history.undo(clone(project))
-    if (snapshot) { replaceActive(snapshot); persist() }
+    if (snapshot) { const restored = restoreWithFreshTimestamp(snapshot, project); replaceActive(restored); persist(restored) }
   }
   const redo = () => {
     const project = activeProject.value
     if (!project) return
     const snapshot = history.redo(clone(project))
-    if (snapshot) { replaceActive(snapshot); persist() }
+    if (snapshot) { const restored = restoreWithFreshTimestamp(snapshot, project); replaceActive(restored); persist(restored) }
   }
 
   return { projects, activeProject, selectedNodeIds, activeKeyId, ready, createProject, renameProject, duplicateProject, deleteProject, setActiveProject, addNode, updateNode, removeNode, connectNodes, setActiveKey, undo, redo, canUndo: history.canUndo, canRedo: history.canRedo }
