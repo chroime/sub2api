@@ -96,6 +96,17 @@ describe('InfiniteCanvasView', () => {
     expect(wrapper.find('.canvas-inspector').classes()).toContain('fixed')
   })
 
+  it('keeps canvas and inspector panels visible through their mobile tabs', async () => {
+    const wrapper = mountPage()
+    await vi.waitFor(() => expect(wrapper.find('[data-canvas-tab="canvas"]').exists()).toBe(true))
+    await wrapper.find('[data-canvas-tab="inspector"]').trigger('click')
+    expect(wrapper.find('.canvas-inspector').classes()).toContain('fixed')
+    expect(wrapper.find('.canvas-surface').element.parentElement?.classList.contains('hidden')).toBe(true)
+    await wrapper.find('[data-canvas-tab="canvas"]').trigger('click')
+    expect(wrapper.find('.canvas-surface').element.parentElement?.classList.contains('hidden')).toBe(false)
+    expect(wrapper.find('.canvas-inspector').classes()).toContain('hidden')
+  })
+
   it('selects a newly created key before the background refresh completes', async () => {
     vi.mocked(keysAPI.create).mockResolvedValue({ id: 99, name: 'new-image-key', key: 'sk-new', group_id: 1, status: 'active', expires_at: null } as never)
     vi.mocked(keysAPI.list).mockResolvedValueOnce({ items: [], total: 0, page: 1, page_size: 100, pages: 1 } as never).mockImplementation(() => new Promise(() => undefined))
@@ -106,5 +117,17 @@ describe('InfiniteCanvasView', () => {
     expect(createButton).toBeDefined()
     await createButton!.trigger('click')
     await vi.waitFor(() => expect((wrapper.find('.canvas-key-picker select').element as HTMLSelectElement).value).toBe('99'))
+  })
+
+  it('does not select a key from a missing or non-image group', async () => {
+    vi.mocked(keysAPI.list).mockResolvedValue({ items: [], total: 0, page: 1, page_size: 100, pages: 1 } as never)
+    vi.mocked(keysAPI.create).mockResolvedValue({ id: 98, name: 'text-key', key: 'sk-text', group_id: 2, status: 'active', expires_at: null } as never)
+    const wrapper = mountPage([project('one', 'One')])
+    await vi.waitFor(() => expect(wrapper.find('[data-canvas-empty="keys"]').exists()).toBe(true))
+    await wrapper.get('.canvas-key-picker button').trigger('click')
+    const createButton = wrapper.findAll('button').find((button) => button.text() === 'Create')
+    await createButton!.trigger('click')
+    await vi.waitFor(() => expect(wrapper.find('[role="status"]').text()).toMatch(/not eligible/i))
+    expect((wrapper.find('.canvas-key-picker select').element as HTMLSelectElement).value).toBe('')
   })
 })
