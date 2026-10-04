@@ -106,6 +106,7 @@ export function createIndexedDbCanvasRepository(databaseName = 'sub2api-infinite
       const project = await request(projectStore.get(id)) as ProjectRecord | undefined
       const allProjects = await request(projectStore.getAll()) as ProjectRecord[]
       const allAssets = await request(assetStore.getAll()) as AssetRecord[]
+      const survivingProjectIds = new Set(allProjects.filter((record) => record.id !== id).map((record) => record.id))
       const projectAssetKeys = new Set<string>([
         ...(project?.payload.assetKeys ?? []),
         ...((project?.payload.nodes ?? []).flatMap((node) => node.type === 'image' && typeof node.metadata.assetKey === 'string' ? [node.metadata.assetKey] : [])),
@@ -115,7 +116,7 @@ export function createIndexedDbCanvasRepository(databaseName = 'sub2api-infinite
         ...(record.payload.assetKeys ?? []),
         ...record.payload.nodes.flatMap((node) => node.type === 'image' && typeof node.metadata.assetKey === 'string' ? [node.metadata.assetKey] : []),
       ]))
-      allAssets.filter((asset) => asset.projectId && asset.projectId !== id).forEach((asset) => remainingReferences.add(asset.storageKey))
+      allAssets.filter((asset) => asset.projectId && survivingProjectIds.has(asset.projectId)).forEach((asset) => remainingReferences.add(asset.storageKey))
       transaction.objectStore(PROJECTS_STORE).delete(id)
       projectAssetKeys.forEach((key) => { if (!remainingReferences.has(key)) assetStore.delete(key) })
       await transactionDone(transaction)
