@@ -73,12 +73,29 @@ async function normalizeResult(item: any): Promise<GeneratedImage> {
     return { blob: decodeBase64(item.b64_json, mimeType), mimeType, width: item.width, height: item.height }
   }
   if (item?.url) {
-    const response = await fetch(item.url)
+    const gatewayUrl = buildGatewayUrl('/')
+    let resolved: URL
+    try {
+      resolved = new URL(String(item.url), gatewayUrl)
+    } catch {
+      throw new ImageGenerationError(400, 'invalid_image_url', 'Image response contained an invalid URL')
+    }
+    if (resolved.origin !== new URL(gatewayUrl).origin) {
+      throw new ImageGenerationError(400, 'external_image_url', 'Image response URL must use the gateway origin')
+    }
+    const response = await fetch(resolved, { credentials: 'same-origin' })
     if (!response.ok) await throwImageError(response)
     const blob = await response.blob()
     return { blob, mimeType: blob.type || item.mime_type || 'image/png', width: item.width, height: item.height }
   }
   throw new ImageGenerationError(200, 'invalid_response', 'Image response did not contain image data')
+}
+
+function normalizeGeminiPart(part: any): GeneratedImage | undefined {
+  const inline = part?.inlineData ?? part?.inline_data
+  if (!inline?.data || typeof inline.data !== 'string') return undefined
+  const mimeType = inline.mimeType || inline.mime_type || 'image/png'
+  return { blob: decodeBase64(inline.data, mimeType), mimeType, width: inline.width, height: inline.height }
 }
 
 export async function generateImage(apiKey: string, request: ImageGenerationRequest): Promise<GeneratedImage[]> {
@@ -107,6 +124,21 @@ export async function editImage(apiKey: string, request: ImageEditRequest): Prom
   if (!response.ok) await throwImageError(response)
   const payload = await response.json()
   return Promise.all((payload?.data ?? []).map(normalizeResult))
+}
+
+export async function generateGeminiImage(apiKey: string, request: ImageGenerationRequest): Promise<GeneratedImage[]> {
+  const url = buildGatewayUrl(`/v1beta/models/${encodeURIComponent(request.model)}:generateContent`)
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+    body: JSON.stringify(buildGeminiRequest(request)),
+  })
+  if (!response.ok) await throwImageError(response)
+  const payload = await response.json()
+  const parts = (payload?.candidates ?? []).flatMap((candidate: any) => candidate?.content?.parts ?? [])
+  const images = parts.map(normalizeGeminiPart).filter((image: GeneratedImage | undefined): image is GeneratedImage => Boolean(image))
+  if (!images.length) throw new ImageGenerationError(200, 'invalid_response', 'Gemini response did not contain image data')
+  return images
 }
 
 export function buildGeminiRequest(request: ImageGenerationRequest): Record<string, unknown> {
