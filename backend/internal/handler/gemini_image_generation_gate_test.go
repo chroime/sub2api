@@ -27,6 +27,12 @@ func TestGeminiImageGenerationPermission(t *testing.T) {
 			wantAllowed: true,
 		},
 		{
+			name:        "text and audio remain allowed for a group without image permission",
+			body:        `{"generationConfig":{"responseModalities":["TEXT","AUDIO"]}}`,
+			allowImage:  false,
+			wantAllowed: true,
+		},
+		{
 			name:             "mixed text and image is rejected when group disallows images",
 			body:             `{"generationConfig":{"responseModalities":["TEXT","IMAGE"]}}`,
 			allowImage:       false,

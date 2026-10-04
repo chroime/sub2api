@@ -70,6 +70,96 @@ describe('InfiniteCanvasView', () => {
     expect(wrapper.find('[data-create-key-link]').exists()).toBe(true)
   })
 
+  it('does not expose a key whose group is missing from the image-capable groups', async () => {
+    vi.mocked(keysAPI.list).mockResolvedValue({ items: [
+      { id: 13, name: 'orphan-key', key: 'sk-orphan', group_id: 999, status: 'active', expires_at: null },
+    ] as never, total: 1, page: 1, page_size: 100, pages: 1 })
+    const wrapper = mountPage([project('one', 'One')])
+    await vi.waitFor(() => expect(wrapper.find('[data-canvas-empty="keys"]').exists()).toBe(true))
+    expect(wrapper.find('[data-canvas-key-option]').exists()).toBe(false)
+    expect(wrapper.text()).toMatch(/create.*key/i)
+  })
+
+  it('restores persisted projects on reload while fetching a fresh key list', async () => {
+    const persisted = repository([project('persisted', 'Persisted')])
+    const keyListCallsBefore = vi.mocked(keysAPI.list).mock.calls.length
+    const groupCallsBefore = vi.mocked(userGroupsAPI.getAvailable).mock.calls.length
+    const first = mount(InfiniteCanvasView, {
+      props: { repository: persisted },
+      global: {
+        plugins: [createPinia()],
+        stubs: {
+          AppLayout: { template: '<div class="app-layout"><slot /></div>' },
+          BaseDialog: { template: '<div v-if="show"><slot /><slot name="footer" /></div>', props: ['show'] },
+          ConfirmDialog: { template: '<div v-if="show"></div>', props: ['show'] },
+          Icon: true,
+        },
+      },
+    })
+    await vi.waitFor(() => expect(first.find('[data-canvas-project="persisted"]').exists()).toBe(true))
+    first.unmount()
+
+    const second = mount(InfiniteCanvasView, {
+      props: { repository: persisted },
+      global: {
+        plugins: [createPinia()],
+        stubs: {
+          AppLayout: { template: '<div class="app-layout"><slot /></div>' },
+          BaseDialog: { template: '<div v-if="show"><slot /><slot name="footer" /></div>', props: ['show'] },
+          ConfirmDialog: { template: '<div v-if="show"></div>', props: ['show'] },
+          Icon: true,
+        },
+      },
+    })
+    await vi.waitFor(() => expect(second.find('[data-canvas-project="persisted"]').exists()).toBe(true))
+    expect(keysAPI.list).toHaveBeenCalledTimes(keyListCallsBefore + 2)
+    expect(userGroupsAPI.getAvailable).toHaveBeenCalledTimes(groupCallsBefore + 2)
+    second.unmount()
+  })
+
+  it('keeps a hydrated image downloadable after restoring its Blob URL', async () => {
+    vi.mocked(keysAPI.list).mockResolvedValue({ items: [], total: 0, page: 1, page_size: 100, pages: 1 } as never)
+    vi.mocked(userGroupsAPI.getAvailable).mockResolvedValue([] as never)
+    const imageProject: CanvasProject = {
+      ...project('downloadable', 'Downloadable'),
+      nodes: [{ id: 'image-1', type: 'image', position: { x: 10, y: 10 }, metadata: { status: 'completed', storageKey: 'asset-1', prompt: 'Restored image' } }],
+    }
+    const imageRepository = {
+      ...repository([imageProject]),
+      async loadAsset(key: string) { return key === 'asset-1' ? { blob: new Blob(['image'], { type: 'image/png' }), mimeType: 'image/png', kind: 'image', storageKey: key } : undefined },
+    } satisfies CanvasRepository
+    const createUrl = vi.fn(() => 'blob:restored-image')
+    const revokeUrl = vi.fn()
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createUrl })
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: revokeUrl })
+    let clickedHref = ''
+    let clickedName = ''
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function () {
+      clickedHref = this.href
+      clickedName = this.download
+    })
+    const wrapper = mount(InfiniteCanvasView, {
+      props: { repository: imageRepository },
+      global: {
+        plugins: [createPinia()],
+        stubs: {
+          AppLayout: { template: '<div class="app-layout"><slot /></div>' },
+          BaseDialog: { template: '<div v-if="show"><slot /><slot name="footer" /></div>', props: ['show'] },
+          ConfirmDialog: { template: '<div v-if="show"></div>', props: ['show'] },
+          Icon: true,
+        },
+      },
+    })
+    await vi.waitFor(() => expect(wrapper.find('img').attributes('src')).toBe('blob:restored-image'))
+    const download = wrapper.findAll('button').find((button) => button.text() === '下载')
+    expect(download).toBeDefined()
+    await download!.trigger('click')
+    expect(clickedHref).toBe('blob:restored-image')
+    expect(clickedName).toBe('image-1.png')
+    click.mockRestore()
+    wrapper.unmount()
+  })
+
   it('keeps the selected tab when switching projects', async () => {
     const wrapper = mountPage()
     await vi.waitFor(() => expect(wrapper.find('[data-canvas-project="one"]').exists()).toBe(true))

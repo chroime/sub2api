@@ -56,6 +56,22 @@ describe('useCanvasGeneration', () => {
     expect(String(image?.metadata.error)).toContain('无权')
   })
 
+  it('fails cleanly when a key is disabled after page load', async () => {
+    const repo = repository([fixture()]); const store = useInfiniteCanvasStore(repo.value); await store.ready
+    store.setActiveKey(11)
+    const prompt = store.addNode({ type: 'prompt', position: { x: 0, y: 0 }, metadata: { prompt: 'Disabled key' } })
+    const config = store.addNode({ type: 'config', position: { x: 200, y: 0 }, metadata: { model: 'image-model' } })
+    const adapter = vi.fn(async () => { throw new ImageGenerationError(401, 'invalid_api_key', 'key disabled') })
+    const generation = useCanvasGeneration({ store, repository: repo.value, getKeySecret: () => 'stale-secret', getKeyPlatform: () => 'openai', generate: adapter })
+    const result = await generation.generateFromNodes(prompt.id, config.id)
+    expect(result).toEqual([])
+    expect(adapter).toHaveBeenCalledWith('stale-secret', expect.objectContaining({ model: 'image-model', prompt: 'Disabled key' }))
+    const image = store.activeProject.value?.nodes.find((node) => node.type === 'image')
+    expect(image?.metadata.status).toBe('failed')
+    expect(image?.metadata.error).toBe('API Key 已失效，请重新选择密钥。')
+    expect(JSON.stringify(store.activeProject.value)).not.toContain('stale-secret')
+  })
+
   it('retries a failed image with its stored prompt and configuration', async () => {
     const repo = repository([fixture()]); const store = useInfiniteCanvasStore(repo.value); await store.ready
     const prompt = store.addNode({ type: 'prompt', position: { x: 0, y: 0 }, metadata: { prompt: 'Retry me' } })
