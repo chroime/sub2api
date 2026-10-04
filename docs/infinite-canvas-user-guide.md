@@ -9,7 +9,7 @@ the user navigation, or visit `/infinite-canvas` directly.
 1. Create or select an API Key that belongs to an active image-capable group.
    The key picker only lists eligible keys. Text-only, inactive, unsupported,
    or otherwise unavailable groups are excluded.
-2. If no eligible key is available, use **Create image key** in the empty state.
+2. If no eligible key is available, use **创建 Key** in the empty state.
    Select an active image-capable group before creating the key.
 3. Add a prompt node and a configuration node. Set the model and any supported
    options, then connect the nodes or use the node's generate action.
@@ -32,9 +32,10 @@ temporary Blob URLs rebuilt when a project is opened and are not persisted.
 
 ## Export and Import
 
-Use the project menu to **Export** the active project. The download is a
-`.canvas.zip` archive containing a validated `project.json` manifest and the
-referenced image assets. Use **Import** to load an archive as a new project;
+Use the project sidebar's **Export** control to download the active project. The
+download is a `.canvas.zip` archive containing a validated `project.json`
+manifest and the referenced image assets. Use the sidebar's **Import** control
+to load an archive as a new project;
 asset identifiers are remapped so the imported project does not overwrite an
 existing project or asset.
 
