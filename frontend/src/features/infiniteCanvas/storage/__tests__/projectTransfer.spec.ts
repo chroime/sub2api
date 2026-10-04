@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { unzipSync, strFromU8 } from 'fflate'
+import { unzipSync, strFromU8, strToU8, zipSync } from 'fflate'
 import type { CanvasAsset, CanvasProject, CanvasRepository } from '../../types'
 import { exportProject, importProject, sanitizeExportProject } from '../projectTransfer'
 
@@ -54,5 +54,30 @@ describe('project transfer', () => {
     const sanitized = sanitizeExportProject(project()) as Record<string, unknown>
     expect(sanitized.activeKeyId).toBe(7)
     expect(JSON.stringify(sanitized)).not.toMatch(/apiKey|do-not-export|activeKeySecret/)
+  })
+
+  it('rejects an export when a referenced asset is missing', async () => {
+    await expect(exportProject(project(), repository())).rejects.toThrow('Missing asset')
+  })
+
+  it('rolls back assets if saving the imported project fails', async () => {
+    const source = repository([], { 'asset-original': { storageKey: 'asset-original', blob: new Blob(['asset-bytes'], { type: 'image/png' }), mimeType: 'image/png', kind: 'image', projectId: 'project-original' } })
+    const archive = await exportProject(project(), source)
+    const target = repository()
+    target.saveProject = async () => { throw new Error('project write failed') }
+    await expect(importProject(archive, target)).rejects.toThrow('project write failed')
+    expect(Object.keys(target.assets)).toHaveLength(0)
+    expect(target.projects).toHaveLength(0)
+  })
+
+  it('rejects unsafe extra archive entries before repository writes', async () => {
+    const source = repository([], { 'asset-original': { storageKey: 'asset-original', blob: new Blob(['asset-bytes'], { type: 'image/png' }), mimeType: 'image/png', kind: 'image', projectId: 'project-original' } })
+    const archive = await exportProject(project(), source)
+    const bytes = await new Promise<ArrayBuffer>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result as ArrayBuffer); reader.onerror = () => reject(reader.error); reader.readAsArrayBuffer(archive) })
+    const original = unzipSync(new Uint8Array(bytes)); original['../extra'] = strToU8('bad')
+    const malformed = new Blob([zipSync(original)], { type: 'application/zip' })
+    const target = repository()
+    await expect(importProject(malformed, target)).rejects.toThrow()
+    expect(Object.keys(target.assets)).toHaveLength(0)
   })
 })
