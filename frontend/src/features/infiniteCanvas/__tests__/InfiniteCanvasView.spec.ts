@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { nextTick } from 'vue'
 import { createPinia } from 'pinia'
 import type { CanvasProject, CanvasRepository } from '../types'
 import InfiniteCanvasView from '@/views/user/InfiniteCanvasView.vue'
@@ -107,6 +108,29 @@ describe('InfiniteCanvasView', () => {
     expect(wrapper.find('.canvas-inspector').classes()).toContain('hidden')
   })
 
+  it('restores the canvas when the inspector drawer closes via backdrop', async () => {
+    const wrapper = mountPage()
+    await vi.waitFor(() => expect(wrapper.find('[data-canvas-tab="inspector"]').exists()).toBe(true))
+    await wrapper.find('[data-canvas-tab="inspector"]').trigger('click')
+    await wrapper.find('[aria-label="Close canvas drawer"]').trigger('click')
+    expect(wrapper.find('[data-canvas-tab="canvas"]').classes()).toContain('is-active')
+    expect(wrapper.find('.canvas-surface').element.parentElement?.classList.contains('hidden')).toBe(false)
+  })
+
+  it('ignores a stale key-request rejection after a newer generation succeeds', async () => {
+    let rejectOld: ((error: Error) => void) | undefined
+    vi.mocked(keysAPI.list)
+      .mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectOld = reject }))
+      .mockResolvedValue({ items: [{ id: 11, name: 'fresh-image-key', key: 'sk-fresh', group_id: 1, status: 'active', expires_at: null }] as never, total: 1, page: 1, page_size: 100, pages: 1 })
+    const wrapper = mountPage([project('one', 'One')])
+    const auth = (wrapper.vm as unknown as { authStore: { user: unknown } }).authStore
+    auth.user = { id: 2 }
+    await vi.waitFor(() => expect(wrapper.find('[data-canvas-key-option]').exists()).toBe(true))
+    rejectOld?.(new Error('stale request failed'))
+    await nextTick()
+    expect(wrapper.find('[data-canvas-key-option]').exists()).toBe(true)
+  })
+
   it('selects a newly created key before the background refresh completes', async () => {
     vi.mocked(keysAPI.create).mockResolvedValue({ id: 99, name: 'new-image-key', key: 'sk-new', group_id: 1, status: 'active', expires_at: null } as never)
     vi.mocked(keysAPI.list).mockResolvedValueOnce({ items: [], total: 0, page: 1, page_size: 100, pages: 1 } as never).mockImplementation(() => new Promise(() => undefined))
@@ -128,6 +152,35 @@ describe('InfiniteCanvasView', () => {
     const createButton = wrapper.findAll('button').find((button) => button.text() === 'Create')
     await createButton!.trigger('click')
     await vi.waitFor(() => expect(wrapper.find('[role="status"]').text()).toMatch(/not eligible/i))
+    expect((wrapper.find('.canvas-key-picker select').element as HTMLSelectElement).value).toBe('')
+  })
+
+  it.each([
+    ['inactive', { ...groups[0], status: 'inactive' }],
+    ['unsupported', { ...groups[0], platform: 'anthropic' }],
+  ])('rejects a newly created key from an %s group', async (_label, group) => {
+    vi.mocked(keysAPI.list).mockResolvedValue({ items: [], total: 0, page: 1, page_size: 100, pages: 1 } as never)
+    vi.mocked(userGroupsAPI.getAvailable).mockResolvedValue([group] as never)
+    vi.mocked(keysAPI.create).mockResolvedValue({ id: 97, name: 'ineligible-key', key: 'sk-ineligible', group_id: 1, status: 'active', expires_at: null } as never)
+    const wrapper = mountPage([project('one', 'One')])
+    await vi.waitFor(() => expect(wrapper.find('[data-canvas-empty="keys"]').exists()).toBe(true))
+    await wrapper.get('.canvas-key-picker button').trigger('click')
+    const createButton = wrapper.findAll('button').find((button) => button.text() === 'Create')
+    await createButton!.trigger('click')
+    await vi.waitFor(() => expect(wrapper.find('[role="status"]').text()).toMatch(/not eligible/i))
+    expect((wrapper.find('.canvas-key-picker select').element as HTMLSelectElement).value).toBe('')
+  })
+
+  it('clears a quick-created key if the group becomes ineligible during refresh', async () => {
+    vi.mocked(keysAPI.list).mockResolvedValue({ items: [], total: 0, page: 1, page_size: 100, pages: 1 } as never)
+    vi.mocked(userGroupsAPI.getAvailable).mockResolvedValueOnce(groups as never).mockResolvedValueOnce([{ ...groups[0], status: 'inactive' }] as never)
+    vi.mocked(keysAPI.create).mockResolvedValue({ id: 96, name: 'stale-key', key: 'sk-stale', group_id: 1, status: 'active', expires_at: null } as never)
+    const wrapper = mountPage([project('one', 'One')])
+    await vi.waitFor(() => expect(wrapper.find('[data-canvas-empty="keys"]').exists()).toBe(true))
+    await wrapper.get('.canvas-key-picker button').trigger('click')
+    const createButton = wrapper.findAll('button').find((button) => button.text() === 'Create')
+    await createButton!.trigger('click')
+    await vi.waitFor(() => expect(wrapper.find('[role="status"]').text()).toMatch(/no longer eligible/i))
     expect((wrapper.find('.canvas-key-picker select').element as HTMLSelectElement).value).toBe('')
   })
 })

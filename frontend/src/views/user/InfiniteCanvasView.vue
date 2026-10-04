@@ -36,6 +36,7 @@ const importInput = ref<HTMLInputElement>()
 const warningMessage = ref('')
 let mounted = false
 let lifecycleGeneration = 0
+let groupsGeneration = -1
 
 const activeProject = computed(() => store.activeProject.value)
 const selectedNode = computed<CanvasNode | null>(() => activeProject.value?.nodes.find((node) => store.selectedNodeIds.value.includes(node.id)) ?? null)
@@ -48,6 +49,7 @@ function refreshEligibleKeys(items: Parameters<typeof selectEligibleCanvasKeys>[
 }
 
 async function loadKeys(preserveOnFailure = false, generation = lifecycleGeneration) {
+  if (!mounted || generation !== lifecycleGeneration) return
   keysLoading.value = true
   try {
     const [firstResponse, availableGroups] = await Promise.all([keysAPI.list(1, 100), userGroupsAPI.getAvailable()])
@@ -59,12 +61,14 @@ async function loadKeys(preserveOnFailure = false, generation = lifecycleGenerat
     }
     if (!mounted || generation !== lifecycleGeneration) return
     groups.value = availableGroups
+    groupsGeneration = generation
     refreshEligibleKeys(allKeys)
   } catch {
+    if (!mounted || generation !== lifecycleGeneration) return
     if (!preserveOnFailure) eligibleKeys.value = []
     throw new Error('Failed to refresh keys')
   } finally {
-    keysLoading.value = false
+    if (mounted && generation === lifecycleGeneration) keysLoading.value = false
   }
 }
 
@@ -73,24 +77,36 @@ async function createKey() {
   try {
     const created = await keysAPI.create(newKeyName.value.trim() || 'Canvas image key', newKeyGroupId.value)
     if (!mounted || generation !== lifecycleGeneration) return
-    keySecrets.set(created.id, created.key)
+    if (groupsGeneration !== generation) {
+      warningMessage.value = 'Image groups are still refreshing. Try creating the key again.'
+      showCreateKey.value = false
+      return
+    }
     const group = created.group ?? groups.value.find((item) => item.id === created.group_id)
-    const fallbackOption = group?.allow_image_generation
-      ? { id: created.id, name: created.name, maskedKey: '****', groupName: group.name, platform: group.platform, key: created.key }
-      : undefined
+    const fallbackOption = group ? selectEligibleCanvasKeys([created], [group])[0] : undefined
     if (!fallbackOption) {
       warningMessage.value = 'The new key is not eligible for image generation in its group.'
       showCreateKey.value = false
     } else {
+      keySecrets.set(created.id, created.key)
       eligibleKeys.value = [...eligibleKeys.value.filter((item) => item.id !== created.id), fallbackOption]
       store.setActiveKey(created.id)
       showCreateKey.value = false
     }
     void loadKeys(true, generation).then(() => {
       if (!mounted || generation !== lifecycleGeneration) return
-      if (fallbackOption && !eligibleKeys.value.some((item) => item.id === created.id)) eligibleKeys.value = [...eligibleKeys.value, fallbackOption]
-      if (fallbackOption && store.activeKeyId.value !== created.id) store.setActiveKey(created.id)
-    }).catch(() => { warningMessage.value = 'Key list refresh failed; the new key remains selected.' })
+      const refreshedOption = fallbackOption && groupsGeneration === generation ? selectEligibleCanvasKeys([created], groups.value)[0] : undefined
+      if (fallbackOption && !refreshedOption) {
+        warningMessage.value = 'The key group is no longer eligible for image generation.'
+        eligibleKeys.value = eligibleKeys.value.filter((item) => item.id !== created.id)
+        if (store.activeKeyId.value === created.id) store.setActiveKey(undefined)
+        return
+      }
+      if (refreshedOption && !eligibleKeys.value.some((item) => item.id === created.id)) eligibleKeys.value = [...eligibleKeys.value, refreshedOption]
+      if (refreshedOption && store.activeKeyId.value !== created.id) store.setActiveKey(created.id)
+    }).catch(() => {
+      if (mounted && generation === lifecycleGeneration) warningMessage.value = 'Key list refresh failed; the new key remains selected.'
+    })
   } catch {
     warningMessage.value = 'Could not create the image key.'
   }
@@ -133,10 +149,15 @@ async function handleImport(event: Event) {
   } catch { warningMessage.value = 'The canvas file is invalid or too large.' }
   if (importInput.value) importInput.value.value = ''
 }
-function clearSecrets() { keySecrets.clear(); eligibleKeys.value = [] }
+function clearSecrets() { keySecrets.clear(); eligibleKeys.value = []; groups.value = []; groupsGeneration = -1 }
+function closeDrawer() { activeTab.value = 'canvas'; mobileDrawer.value = null }
 function openDrawer(drawer: 'sidebar' | 'inspector') {
+  if (mobileDrawer.value === drawer) {
+    closeDrawer()
+    return
+  }
   activeTab.value = drawer === 'inspector' ? 'inspector' : 'canvas'
-  mobileDrawer.value = mobileDrawer.value === drawer ? null : drawer
+  mobileDrawer.value = drawer
 }
 function selectTab(tab: 'canvas' | 'inspector') {
   activeTab.value = tab
@@ -152,7 +173,7 @@ onBeforeUnmount(() => { mounted = false; lifecycleGeneration += 1; clearSecrets(
   <AppLayout>
     <div class="infinite-canvas-view min-h-[calc(100vh-8rem)] overflow-hidden rounded-lg bg-gray-100 shadow-sm dark:bg-dark-950 dark:bg-dark-950" data-page="infinite-canvas">
       <div class="flex min-h-[calc(100vh-8rem)] flex-col lg:flex-row">
-        <CanvasProjectSidebar :projects="store.projects.value" :active-project-id="activeProject?.id" :mobile-open="mobileDrawer === 'sidebar'" @select="selectProject" @new="createProject" @rename="renameProject" @duplicate="duplicateProject" @delete="requestDelete" @import="importProject" @export="exportProject" @close="mobileDrawer = null" />
+        <CanvasProjectSidebar :projects="store.projects.value" :active-project-id="activeProject?.id" :mobile-open="mobileDrawer === 'sidebar'" @select="selectProject" @new="createProject" @rename="renameProject" @duplicate="duplicateProject" @delete="requestDelete" @import="importProject" @export="exportProject" @close="closeDrawer" />
         <section class="flex min-w-0 flex-1 flex-col">
           <CanvasToolbar :project="activeProject" :can-undo="store.canUndo.value" :can-redo="store.canRedo.value" :save-status="saveStatus || lastSaved" @background-change="changeBackground" @zoom="zoom" @undo="store.undo" @redo="store.redo" @save="saveNow" />
           <div class="flex gap-1 border-b border-gray-200 bg-white px-3 pt-2 dark:border-dark-700 dark:bg-dark-900 lg:hidden">
@@ -162,13 +183,13 @@ onBeforeUnmount(() => { mounted = false; lifecycleGeneration += 1; clearSecrets(
             <button type="button" aria-label="Open inspector" data-canvas-drawer="inspector" class="rounded-t-md px-3 py-1 text-xs" @click="openDrawer('inspector')">Inspect</button>
           </div>
           <div class="flex min-h-0 flex-1 flex-col lg:flex-row">
-            <button v-if="mobileDrawer" type="button" aria-label="Close canvas drawer" class="fixed inset-0 z-30 bg-black/30 lg:hidden" @click="mobileDrawer = null" />
+            <button v-if="mobileDrawer" type="button" aria-label="Close canvas drawer" class="fixed inset-0 z-30 bg-black/30 lg:hidden" @click="closeDrawer" />
             <div v-if="!activeProject" data-canvas-empty="projects" class="flex min-h-[420px] flex-1 items-center justify-center p-8 text-center text-sm text-gray-500 dark:text-dark-400">No projects yet. <button type="button" class="ml-1 text-primary-600 hover:underline" @click="createProject">Create a project</button></div>
             <div v-else class="relative min-h-[420px] min-w-0 flex-1 overflow-auto" :class="{ hidden: activeTab !== 'canvas' }">
               <InfiniteCanvasSurface :project="activeProject" :selected-node-ids="store.selectedNodeIds.value" @node-select="selectNode" @node-move="moveNode" @node-delete="store.removeNode" @edge-create="connectNodes" @viewport-update="updateViewport" />
               <div v-if="!eligibleKeys.length" class="pointer-events-none absolute left-1/2 top-6 w-72 -translate-x-1/2 rounded-md border border-amber-200 bg-amber-50 p-3 text-center text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-200" data-canvas-empty="image-models">No image models available for this canvas.</div>
             </div>
-            <CanvasInspector v-if="activeProject" :mobile-open="mobileDrawer === 'inspector'" :node="selectedNode" @update="updateNode" @delete="removeSelectedNode" @close="mobileDrawer = null" />
+            <CanvasInspector v-if="activeProject" :mobile-open="mobileDrawer === 'inspector'" :node="selectedNode" @update="updateNode" @delete="removeSelectedNode" @close="closeDrawer" />
           </div>
           <div class="border-t border-gray-200 bg-white p-3 dark:border-dark-700 dark:bg-dark-900"><CanvasKeyPicker :options="eligibleKeys" :model-value="selectedKeyId" :loading="keysLoading" @update:model-value="chooseKey" @create-key="showCreateKey = true" /></div>
         </section>
