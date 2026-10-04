@@ -135,6 +135,9 @@ describe('useInfiniteCanvasStore', () => {
     expect(store.activeProject.value?.createdAt).toBeInstanceOf(Date)
     const before = store.activeProject.value?.id
     expect(store.importProject({ schemaVersion: CANVAS_SCHEMA_VERSION, id: 'bad', title: 'bad', key: 'secret' })).toBeUndefined()
+    expect(store.importProject({ schemaVersion: CANVAS_SCHEMA_VERSION, id: 'bad-type', title: 'bad', createdAt: '2026-01-02T00:00:00.000Z', updatedAt: '2026-01-02T00:00:00.000Z', viewport: { x: 0, y: 0, zoom: 1 }, backgroundMode: 'grid', nodes: [], edges: [], activeKeyId: '11' })).toBeUndefined()
+    expect(store.importProject({ schemaVersion: CANVAS_SCHEMA_VERSION, id: 'bad-size', title: 'bad', createdAt: '2026-01-02T00:00:00.000Z', updatedAt: '2026-01-02T00:00:00.000Z', viewport: { x: 0, y: 0, zoom: 1 }, backgroundMode: 'grid', nodes: [{ id: 'node', type: 'prompt', position: { x: 0, y: 0 }, size: { width: 'wide', height: 100 }, metadata: {} }], edges: [] })).toBeUndefined()
+    expect(store.importProject({ schemaVersion: CANVAS_SCHEMA_VERSION, id: 'bad-edge', title: 'bad', createdAt: '2026-01-02T00:00:00.000Z', updatedAt: '2026-01-02T00:00:00.000Z', viewport: { x: 0, y: 0, zoom: 1 }, backgroundMode: 'grid', nodes: [{ id: 'node', type: 'prompt', position: { x: 0, y: 0 }, metadata: {} }], edges: [{ id: 'edge', sourceNodeId: 'node', targetNodeId: 'node', kind: 'reference', metadata: 'invalid' }] })).toBeUndefined()
     expect(store.activeProject.value?.id).toBe(before)
   })
 })

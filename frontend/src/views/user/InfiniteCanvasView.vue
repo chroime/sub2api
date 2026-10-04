@@ -34,6 +34,8 @@ const projectToDelete = ref<string | null>(null)
 const saveStatus = ref('')
 const importInput = ref<HTMLInputElement>()
 const warningMessage = ref('')
+let mounted = false
+let lifecycleGeneration = 0
 
 const activeProject = computed(() => store.activeProject.value)
 const selectedNode = computed<CanvasNode | null>(() => activeProject.value?.nodes.find((node) => store.selectedNodeIds.value.includes(node.id)) ?? null)
@@ -45,7 +47,7 @@ function refreshEligibleKeys(items: Parameters<typeof selectEligibleCanvasKeys>[
   eligibleKeys.value.forEach((option) => keySecrets.set(option.id, option.key))
 }
 
-async function loadKeys(preserveOnFailure = false) {
+async function loadKeys(preserveOnFailure = false, generation = lifecycleGeneration) {
   keysLoading.value = true
   try {
     const [firstResponse, availableGroups] = await Promise.all([keysAPI.list(1, 100), userGroupsAPI.getAvailable()])
@@ -55,6 +57,7 @@ async function loadKeys(preserveOnFailure = false) {
       const response = await keysAPI.list(page, 100)
       allKeys.push(...response.items)
     }
+    if (!mounted || generation !== lifecycleGeneration) return
     groups.value = availableGroups
     refreshEligibleKeys(allKeys)
   } catch {
@@ -66,16 +69,25 @@ async function loadKeys(preserveOnFailure = false) {
 }
 
 async function createKey() {
+  const generation = lifecycleGeneration
   try {
     const created = await keysAPI.create(newKeyName.value.trim() || 'Canvas image key', newKeyGroupId.value)
+    if (!mounted || generation !== lifecycleGeneration) return
     keySecrets.set(created.id, created.key)
-    const group = created.group ?? groups.value.find((item) => item.id === created.group_id) ?? groups.value.find((item) => item.allow_image_generation)
-    const fallbackGroup = group && group.allow_image_generation ? group : { name: 'Image key', platform: 'openai' as const }
-    const fallbackOption = { id: created.id, name: created.name, maskedKey: '****', groupName: fallbackGroup.name, platform: fallbackGroup.platform, key: created.key }
-    eligibleKeys.value = [...eligibleKeys.value.filter((item) => item.id !== created.id), fallbackOption]
-    store.setActiveKey(created.id)
-    showCreateKey.value = false
-    void loadKeys(true).then(() => {
+    const group = created.group ?? groups.value.find((item) => item.id === created.group_id)
+    const fallbackOption = group?.allow_image_generation
+      ? { id: created.id, name: created.name, maskedKey: '****', groupName: group.name, platform: group.platform, key: created.key }
+      : undefined
+    if (!fallbackOption) {
+      warningMessage.value = 'The new key is not eligible for image generation in its group.'
+      showCreateKey.value = false
+    } else {
+      eligibleKeys.value = [...eligibleKeys.value.filter((item) => item.id !== created.id), fallbackOption]
+      store.setActiveKey(created.id)
+      showCreateKey.value = false
+    }
+    void loadKeys(true, generation).then(() => {
+      if (!mounted || generation !== lifecycleGeneration) return
       if (fallbackOption && !eligibleKeys.value.some((item) => item.id === created.id)) eligibleKeys.value = [...eligibleKeys.value, fallbackOption]
       if (fallbackOption && store.activeKeyId.value !== created.id) store.setActiveKey(created.id)
     }).catch(() => { warningMessage.value = 'Key list refresh failed; the new key remains selected.' })
@@ -121,12 +133,19 @@ async function handleImport(event: Event) {
   } catch { warningMessage.value = 'The canvas file is invalid or too large.' }
   if (importInput.value) importInput.value.value = ''
 }
-function clearSecrets() { keySecrets.clear() }
-function openDrawer(drawer: 'sidebar' | 'inspector') { mobileDrawer.value = mobileDrawer.value === drawer ? null : drawer }
+function clearSecrets() { keySecrets.clear(); eligibleKeys.value = [] }
+function openDrawer(drawer: 'sidebar' | 'inspector') {
+  activeTab.value = drawer === 'inspector' ? 'inspector' : 'canvas'
+  mobileDrawer.value = mobileDrawer.value === drawer ? null : drawer
+}
+function selectTab(tab: 'canvas' | 'inspector') {
+  activeTab.value = tab
+  mobileDrawer.value = tab === 'inspector' ? 'inspector' : null
+}
 
-watch(() => authStore.user?.id, () => { clearSecrets(); void loadKeys().catch(() => undefined) })
-onMounted(async () => { await store.ready; await loadKeys().catch(() => undefined) })
-onBeforeUnmount(clearSecrets)
+watch(() => authStore.user?.id, () => { lifecycleGeneration += 1; clearSecrets(); void loadKeys(false, lifecycleGeneration).catch(() => undefined) })
+onMounted(async () => { mounted = true; lifecycleGeneration += 1; await store.ready; await loadKeys(false, lifecycleGeneration).catch(() => undefined) })
+onBeforeUnmount(() => { mounted = false; lifecycleGeneration += 1; clearSecrets() })
 </script>
 
 <template>
@@ -138,8 +157,8 @@ onBeforeUnmount(clearSecrets)
           <CanvasToolbar :project="activeProject" :can-undo="store.canUndo.value" :can-redo="store.canRedo.value" :save-status="saveStatus || lastSaved" @background-change="changeBackground" @zoom="zoom" @undo="store.undo" @redo="store.redo" @save="saveNow" />
           <div class="flex gap-1 border-b border-gray-200 bg-white px-3 pt-2 dark:border-dark-700 dark:bg-dark-900 lg:hidden">
             <button type="button" aria-label="Open projects" data-canvas-drawer="sidebar" class="rounded-t-md px-3 py-1 text-xs" @click="openDrawer('sidebar')">Projects</button>
-            <button type="button" data-canvas-tab="canvas" :class="['rounded-t-md px-3 py-1 text-xs', activeTab === 'canvas' ? 'is-active bg-gray-100 font-semibold dark:bg-dark-800' : '']" @click="activeTab = 'canvas'">Canvas</button>
-            <button type="button" data-canvas-tab="inspector" :class="['rounded-t-md px-3 py-1 text-xs', activeTab === 'inspector' ? 'is-active bg-gray-100 font-semibold dark:bg-dark-800' : '']" @click="activeTab = 'inspector'">Inspector</button>
+            <button type="button" data-canvas-tab="canvas" :class="['rounded-t-md px-3 py-1 text-xs', activeTab === 'canvas' ? 'is-active bg-gray-100 font-semibold dark:bg-dark-800' : '']" @click="selectTab('canvas')">Canvas</button>
+            <button type="button" data-canvas-tab="inspector" :class="['rounded-t-md px-3 py-1 text-xs', activeTab === 'inspector' ? 'is-active bg-gray-100 font-semibold dark:bg-dark-800' : '']" @click="selectTab('inspector')">Inspector</button>
             <button type="button" aria-label="Open inspector" data-canvas-drawer="inspector" class="rounded-t-md px-3 py-1 text-xs" @click="openDrawer('inspector')">Inspect</button>
           </div>
           <div class="flex min-h-0 flex-1 flex-col lg:flex-row">

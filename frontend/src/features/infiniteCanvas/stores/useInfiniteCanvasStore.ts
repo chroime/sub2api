@@ -49,22 +49,24 @@ export function validateCanvasProjectImport(input: unknown): CanvasProject | und
   const nodes = input.nodes
   const edges = input.edges
   const backgroundMode = input.backgroundMode
-  if (typeof idValue !== 'string' || !idValue.trim() || idValue.length > 200 || typeof title !== 'string' || !title.trim() || title.length > IMPORT_MAX_TITLE_LENGTH || !createdAt || !updatedAt || !isRecord(viewport) || !isFiniteNumber(viewport.x) || !isFiniteNumber(viewport.y) || !isFiniteNumber(viewport.zoom) || viewport.zoom <= 0 || viewport.zoom > 10 || !Array.isArray(nodes) || nodes.length > IMPORT_MAX_NODES || !Array.isArray(edges) || edges.length > IMPORT_MAX_EDGES || !['grid', 'dots', 'plain'].includes(String(backgroundMode))) return undefined
+  const activeKeyId = input.activeKeyId
+  const assetKeys = input.assetKeys
+  if (typeof idValue !== 'string' || !idValue.trim() || idValue.length > 200 || typeof title !== 'string' || !title.trim() || title.length > IMPORT_MAX_TITLE_LENGTH || !createdAt || !updatedAt || !isRecord(viewport) || !isFiniteNumber(viewport.x) || !isFiniteNumber(viewport.y) || !isFiniteNumber(viewport.zoom) || viewport.zoom <= 0 || viewport.zoom > 10 || !Array.isArray(nodes) || nodes.length > IMPORT_MAX_NODES || !Array.isArray(edges) || edges.length > IMPORT_MAX_EDGES || !['grid', 'dots', 'plain'].includes(String(backgroundMode)) || (activeKeyId !== undefined && (!isFiniteNumber(activeKeyId) || !Number.isInteger(activeKeyId) || activeKeyId < 0)) || (assetKeys !== undefined && (!Array.isArray(assetKeys) || assetKeys.some((key) => typeof key !== 'string' || key.length > 500)))) return undefined
   const nodeIds = new Set<string>()
   const normalizedNodes: CanvasNode[] = []
   for (const candidate of nodes) {
-    if (!isRecord(candidate) || typeof candidate.id !== 'string' || !candidate.id || nodeIds.has(candidate.id) || !['prompt', 'config', 'image'].includes(String(candidate.type)) || !isRecord(candidate.position) || !isFiniteNumber(candidate.position.x) || !isFiniteNumber(candidate.position.y) || !isRecord(candidate.metadata)) return undefined
+    if (!isRecord(candidate) || typeof candidate.id !== 'string' || !candidate.id || nodeIds.has(candidate.id) || !['prompt', 'config', 'image'].includes(String(candidate.type)) || !isRecord(candidate.position) || !isFiniteNumber(candidate.position.x) || !isFiniteNumber(candidate.position.y) || !isRecord(candidate.metadata) || (candidate.size !== undefined && (!isRecord(candidate.size) || !isFiniteNumber(candidate.size.width) || !isFiniteNumber(candidate.size.height) || candidate.size.width <= 0 || candidate.size.height <= 0))) return undefined
     nodeIds.add(candidate.id)
-    normalizedNodes.push({ id: candidate.id, type: candidate.type as CanvasNode['type'], position: { x: candidate.position.x, y: candidate.position.y }, ...(isRecord(candidate.size) && isFiniteNumber(candidate.size.width) && isFiniteNumber(candidate.size.height) ? { size: { width: candidate.size.width, height: candidate.size.height } } : {}), metadata: clone(candidate.metadata) })
+    normalizedNodes.push({ id: candidate.id, type: candidate.type as CanvasNode['type'], position: { x: candidate.position.x, y: candidate.position.y }, ...(isRecord(candidate.size) ? { size: { width: candidate.size.width as number, height: candidate.size.height as number } } : {}), metadata: clone(candidate.metadata) })
   }
   const edgeIds = new Set<string>()
   const normalizedEdges: CanvasEdge[] = []
   for (const candidate of edges) {
-    if (!isRecord(candidate) || typeof candidate.id !== 'string' || !candidate.id || edgeIds.has(candidate.id) || typeof candidate.sourceNodeId !== 'string' || typeof candidate.targetNodeId !== 'string' || !nodeIds.has(candidate.sourceNodeId) || !nodeIds.has(candidate.targetNodeId) || !['prompt', 'config', 'reference'].includes(String(candidate.kind))) return undefined
+    if (!isRecord(candidate) || typeof candidate.id !== 'string' || !candidate.id || edgeIds.has(candidate.id) || typeof candidate.sourceNodeId !== 'string' || typeof candidate.targetNodeId !== 'string' || !nodeIds.has(candidate.sourceNodeId) || !nodeIds.has(candidate.targetNodeId) || !['prompt', 'config', 'reference'].includes(String(candidate.kind)) || (candidate.metadata !== undefined && !isRecord(candidate.metadata))) return undefined
     edgeIds.add(candidate.id)
     normalizedEdges.push({ id: candidate.id, sourceNodeId: candidate.sourceNodeId, targetNodeId: candidate.targetNodeId, kind: candidate.kind as CanvasEdge['kind'], ...(isRecord(candidate.metadata) ? { metadata: clone(candidate.metadata) } : {}) })
   }
-  return { id: idValue, title, createdAt, updatedAt, viewport: { x: viewport.x, y: viewport.y, zoom: viewport.zoom }, backgroundMode: backgroundMode as CanvasProject['backgroundMode'], nodes: normalizedNodes, edges: normalizedEdges, ...(typeof input.activeKeyId === 'number' ? { activeKeyId: input.activeKeyId } : {}) }
+  return { id: idValue, title, createdAt, updatedAt, viewport: { x: viewport.x, y: viewport.y, zoom: viewport.zoom }, backgroundMode: backgroundMode as CanvasProject['backgroundMode'], nodes: normalizedNodes, edges: normalizedEdges, ...(typeof activeKeyId === 'number' ? { activeKeyId } : {}), ...(Array.isArray(assetKeys) ? { assetKeys: [...assetKeys] } : {}) }
 }
 
 export function useInfiniteCanvasStore(repository: CanvasRepository) {
