@@ -65,6 +65,15 @@ describe('indexed db canvas repository', () => {
     expect(await repo.loadAsset(sharedKey)).toBeTruthy()
   })
 
+  it('retains an asset owned by another project even when its key is only listed by the deleted project', async () => {
+    const repo = createIndexedDbCanvasRepository(`test-${crypto.randomUUID()}`)
+    const key = await repo.saveAsset({ blob: new Blob(['owned-by-two']), mimeType: 'text/plain', kind: 'text', projectId: 'project-2' })
+    await repo.saveProject(makeFixtureProject({ assetKeys: [key] }))
+    await repo.saveProject(makeFixtureProject({ id: 'project-2' }))
+    await repo.deleteProject('project-1')
+    expect(await repo.loadAsset(key)).toBeTruthy()
+  })
+
   it('rejects an unknown schema version with a typed error', async () => {
     const repo = createIndexedDbCanvasRepository(`test-${crypto.randomUUID()}`)
     await repo.__unsafePutProjectRecord({ id: 'bad', schemaVersion: 999, payload: {} as CanvasProject })
