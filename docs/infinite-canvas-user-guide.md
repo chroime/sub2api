@@ -9,7 +9,9 @@ the user navigation, or visit `/infinite-canvas` directly.
 1. Create or select an API Key that belongs to an active image-capable group.
    The key picker only lists eligible keys. Text-only, inactive, unsupported,
    or otherwise unavailable groups are excluded.
-2. If no eligible key is available, use **创建 Key** in the empty state.
+2. If no eligible key is available, use the localized empty-state action:
+   **创建 Key** in Chinese or **Create a key** / **Create key** in English.
+   The dialog title is **Create image key**.
    Select an active image-capable group before creating the key.
 3. Add a prompt node and a configuration node. Set the model and any supported
    options, then connect the nodes or use the node's generate action.
