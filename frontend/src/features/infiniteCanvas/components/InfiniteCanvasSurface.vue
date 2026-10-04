@@ -5,8 +5,9 @@ import CanvasMinimap from './CanvasMinimap.vue'
 import CanvasNode from './CanvasNode.vue'
 import { useCanvasViewport } from '../composables/useCanvasViewport'
 import type { CanvasEdge, CanvasNode as CanvasNodeModel, CanvasPoint, CanvasProject, CanvasViewport } from '../types'
+import type { ImageModel } from '@/api/imageGeneration'
 
-const props = defineProps<{ project?: CanvasProject | null; activeProject?: CanvasProject | null; selectedNodeIds?: string[]; imageUrls?: Record<string, string> }>()
+const props = defineProps<{ project?: CanvasProject | null; activeProject?: CanvasProject | null; selectedNodeIds?: string[]; imageUrls?: Record<string, string>; imageModels?: ImageModel[]; imageModelsLoading?: boolean; imageModelsError?: string }>()
 const emit = defineEmits<{
   (event: 'node-select', nodeId: string, additive: boolean): void
   (event: 'node-move', nodeId: string, position: CanvasPoint): void
@@ -17,6 +18,7 @@ const emit = defineEmits<{
   (event: 'edge-create', edge: Pick<CanvasEdge, 'sourceNodeId' | 'targetNodeId' | 'kind'>): void
   (event: 'viewport-update', viewport: CanvasViewport): void
   (event: 'empty-canvas-double-click', point: CanvasPoint): void
+  (event: 'retry-image-models'): void
 }>()
 const surface = ref<HTMLElement>()
 const currentProject = computed(() => props.project ?? props.activeProject ?? null)
@@ -106,7 +108,7 @@ function centerViewport(point: CanvasPoint) {
   <section ref="surface" class="canvas-surface" :class="`canvas-surface--${currentProject?.backgroundMode ?? 'grid'}`" @pointerdown="pointerDown" @pointermove="pointerMove" @pointerup="pointerUp" @pointercancel="pointerUp" @wheel="wheel" @dblclick="emptyDoubleClick">
     <div v-if="currentProject" class="canvas-surface__world" :style="{ transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})` }">
       <CanvasEdgeLayer :nodes="currentProject.nodes" :edges="currentProject.edges" />
-      <CanvasNode v-for="node in currentProject.nodes" :key="node.id" :node="node" :image-url="imageUrls?.[node.id]" :selected="selectedNodeIds?.includes(node.id)" :pan-mode="panMode" @select="handleNodeSelect" @connect-start="(id) => { connectingNodeId = id }" @move="updateNode" @delete="(id) => emit('node-delete', id)" @update="(id, patch) => emit('node-update', id, patch)" @retry="(id) => emit('node-retry', id)" @generate="(id) => emit('node-generate', id)" />
+      <CanvasNode v-for="node in currentProject.nodes" :key="node.id" :node="node" :image-url="imageUrls?.[node.id]" :selected="selectedNodeIds?.includes(node.id)" :pan-mode="panMode" :image-models="imageModels" :image-models-loading="imageModelsLoading" :image-models-error="imageModelsError" @select="handleNodeSelect" @connect-start="(id) => { connectingNodeId = id }" @move="updateNode" @delete="(id) => emit('node-delete', id)" @update="(id, patch) => emit('node-update', id, patch)" @retry="(id) => emit('node-retry', id)" @generate="(id) => emit('node-generate', id)" @retry-models="emit('retry-image-models')" />
     </div>
     <CanvasMinimap v-if="currentProject" class="canvas-surface__minimap" :nodes="currentProject.nodes" :viewport="viewport" :host-width="surfaceSize.width" :host-height="surfaceSize.height" @navigate="centerViewport" />
   </section>

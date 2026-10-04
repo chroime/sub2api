@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { CanvasNode } from '../../types'
+import type { ImageModel } from '@/api/imageGeneration'
 
-const props = defineProps<{ node: CanvasNode }>()
-const emit = defineEmits<{ (event: 'update', patch: Partial<CanvasNode>): void; (event: 'generate'): void }>()
+const props = defineProps<{ node: CanvasNode; models?: ImageModel[]; modelsLoading?: boolean; modelsError?: string }>()
+const emit = defineEmits<{ (event: 'update', patch: Partial<CanvasNode>): void; (event: 'generate'): void; (event: 'retry-models'): void }>()
 const metadata = computed(() => props.node.metadata as Record<string, unknown>)
 const value = (field: string, fallback = '') => typeof metadata.value[field] === 'string' || typeof metadata.value[field] === 'number' ? String(metadata.value[field]) : fallback
 function update(field: string, raw: string) {
@@ -14,7 +15,8 @@ function update(field: string, raw: string) {
 
 <template>
   <div class="config-node" data-canvas-no-zoom>
-    <label>Model<input :value="value('model')" data-canvas-no-zoom @pointerdown.stop @input="update('model', ($event.target as HTMLInputElement).value)" /></label>
+    <label>Model<select :value="value('model')" data-canvas-no-zoom :disabled="modelsLoading || !models?.length" @pointerdown.stop @change="update('model', ($event.target as HTMLSelectElement).value)"><option value="">Select model</option><option v-for="model in models" :key="model.id" :value="model.id">{{ model.id }}</option></select></label>
+    <p v-if="modelsLoading" class="text-gray-500">Loading image models...</p><p v-else-if="modelsError" class="text-red-600">{{ modelsError }} <button type="button" class="underline" @pointerdown.stop @click.stop="emit('retry-models')">Retry</button></p><p v-else-if="!models?.length" class="text-gray-500">No allowed image models.</p>
     <label>Size<select :value="value('size', '1024x1024')" data-canvas-no-zoom @pointerdown.stop @change="update('size', ($event.target as HTMLSelectElement).value)"><option value="1024x1024">1024x1024</option><option value="1536x1024">1536x1024</option><option value="1024x1536">1024x1536</option><option value="1K">1K</option><option value="2K">2K</option><option value="4K">4K</option></select></label>
     <div class="config-node__row"><label>Quality<input :value="value('quality')" data-canvas-no-zoom @pointerdown.stop @input="update('quality', ($event.target as HTMLInputElement).value)" /></label><label>Count<input type="number" min="1" max="10" :value="value('count', '1')" data-canvas-no-zoom @pointerdown.stop @input="update('count', ($event.target as HTMLInputElement).value)" /></label></div>
     <label>Background<input :value="value('background')" data-canvas-no-zoom @pointerdown.stop @input="update('background', ($event.target as HTMLInputElement).value)" /></label>

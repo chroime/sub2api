@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import 'fake-indexeddb/auto'
-import { createIndexedDbCanvasRepository } from '../indexedDbCanvasRepository'
+import { canvasDatabaseNameForUser, createIndexedDbCanvasRepository, createIndexedDbCanvasRepositoryForUser } from '../indexedDbCanvasRepository'
 import type { CanvasProject } from '../../types'
 
 function makeFixtureProject(overrides: Partial<CanvasProject> = {}): CanvasProject {
@@ -19,6 +19,13 @@ function makeFixtureProject(overrides: Partial<CanvasProject> = {}): CanvasProje
 }
 
 describe('indexed db canvas repository', () => {
+  it('namespaces databases by user without persisting an email', () => {
+    const first = canvasDatabaseNameForUser(101)
+    const second = canvasDatabaseNameForUser(202)
+    expect(first).not.toBe(second)
+    expect(first).not.toContain('@')
+    expect(createIndexedDbCanvasRepositoryForUser(101)).toBeTruthy()
+  })
   it('round trips project metadata without an API key secret', async () => {
     const repo = createIndexedDbCanvasRepository(`test-${crypto.randomUUID()}`)
     const project = makeFixtureProject({ activeKeyId: 7 })

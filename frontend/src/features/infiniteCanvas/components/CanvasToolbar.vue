@@ -8,6 +8,7 @@ const emit = defineEmits<{
   (event: 'undo'): void
   (event: 'redo'): void
   (event: 'save'): void
+  (event: 'add-nodes'): void
 }>()
 </script>
 
@@ -23,6 +24,7 @@ const emit = defineEmits<{
       </select>
     </label>
     <button type="button" title="Save" aria-label="Save" class="ml-auto rounded-md border px-2 py-1 text-xs" @click="emit('save')">Save</button>
+    <button type="button" title="Add prompt and config nodes" class="rounded-md border px-2 py-1 text-xs" @click="emit('add-nodes')">Add nodes</button>
     <span class="text-xs text-gray-500 dark:text-dark-400">{{ saveStatus }}</span>
   </header>
 </template>

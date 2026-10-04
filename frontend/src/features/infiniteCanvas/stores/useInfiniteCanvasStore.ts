@@ -66,10 +66,11 @@ export function validateCanvasProjectImport(input: unknown): CanvasProject | und
     edgeIds.add(candidate.id)
     normalizedEdges.push({ id: candidate.id, sourceNodeId: candidate.sourceNodeId, targetNodeId: candidate.targetNodeId, kind: candidate.kind as CanvasEdge['kind'], ...(isRecord(candidate.metadata) ? { metadata: clone(candidate.metadata) } : {}) })
   }
-  return { id: idValue, title, createdAt, updatedAt, viewport: { x: viewport.x, y: viewport.y, zoom: viewport.zoom }, backgroundMode: backgroundMode as CanvasProject['backgroundMode'], nodes: normalizedNodes, edges: normalizedEdges, ...(typeof activeKeyId === 'number' ? { activeKeyId } : {}), ...(Array.isArray(assetKeys) ? { assetKeys: [...assetKeys] } : {}) }
+  return { schemaVersion: CANVAS_SCHEMA_VERSION, id: idValue, title, createdAt, updatedAt, viewport: { x: viewport.x, y: viewport.y, zoom: viewport.zoom }, backgroundMode: backgroundMode as CanvasProject['backgroundMode'], nodes: normalizedNodes, edges: normalizedEdges, ...(typeof activeKeyId === 'number' ? { activeKeyId } : {}), ...(Array.isArray(assetKeys) ? { assetKeys: [...assetKeys] } : {}) }
 }
 
 export function useInfiniteCanvasStore(repository: CanvasRepository) {
+  let currentRepository = repository
   const projects = ref<CanvasProject[]>([])
   const activeProject = ref<CanvasProject | null>(null)
   const selectedNodeIds = ref<string[]>([])
@@ -88,7 +89,7 @@ export function useInfiniteCanvasStore(repository: CanvasRepository) {
     cancelPersist(project.id)
     saveTimers.set(project.id, setTimeout(() => {
       saveTimers.delete(project.id)
-      void repository.saveProject(snapshot)
+      void currentRepository.saveProject(snapshot)
     }, 25)
     )
   }
@@ -96,11 +97,11 @@ export function useInfiniteCanvasStore(repository: CanvasRepository) {
   const saveProject = async (project = activeProject.value): Promise<void> => {
     if (!project) return
     cancelPersist(project.id)
-    await repository.saveProject(clone(project))
+    await currentRepository.saveProject(clone(project))
   }
 
   const hydrate = async () => {
-    const loaded = await repository.listProjects()
+    const loaded = await currentRepository.listProjects()
     projects.value = loaded.map(clone)
     activeProject.value = projects.value[0] ?? null
     activeKeyId.value = activeProject.value?.activeKeyId
@@ -128,7 +129,7 @@ export function useInfiniteCanvasStore(repository: CanvasRepository) {
 
   const createProject = (title = 'Untitled canvas'): CanvasProject => {
     const now = new Date()
-    const project: CanvasProject = { id: id('project'), title, createdAt: now, updatedAt: now, viewport: { x: 0, y: 0, zoom: 1 }, backgroundMode: 'grid', nodes: [], edges: [] }
+    const project: CanvasProject = { schemaVersion: CANVAS_SCHEMA_VERSION, id: id('project'), title, createdAt: now, updatedAt: now, viewport: { x: 0, y: 0, zoom: 1 }, backgroundMode: 'grid', nodes: [], edges: [] }
     projects.value.push(project)
     replaceActive(project)
     history.clear()
@@ -145,7 +146,7 @@ export function useInfiniteCanvasStore(repository: CanvasRepository) {
       project.title = title
       project.updatedAt = new Date()
       cancelPersist(project.id)
-      void repository.saveProject(clone(project))
+      void currentRepository.saveProject(clone(project))
     }
   }
 
@@ -170,7 +171,7 @@ export function useInfiniteCanvasStore(repository: CanvasRepository) {
     if (index < 0) return
     projects.value.splice(index, 1)
     cancelPersist(projectId)
-    await repository.deleteProject(projectId)
+    await currentRepository.deleteProject(projectId)
     if (activeProject.value?.id === projectId) replaceActive(projects.value[index] ?? projects.value[index - 1] ?? null)
     selectedNodeIds.value = []
     history.clear()
@@ -227,6 +228,17 @@ export function useInfiniteCanvasStore(repository: CanvasRepository) {
     return imported
   }
 
+  const switchRepository = async (nextRepository: CanvasRepository): Promise<void> => {
+    for (const projectId of saveTimers.keys()) cancelPersist(projectId)
+    currentRepository = nextRepository
+    projects.value = []
+    activeProject.value = null
+    activeKeyId.value = undefined
+    selectedNodeIds.value = []
+    history.clear()
+    await hydrate()
+  }
+
   const restoreWithFreshTimestamp = (snapshot: CanvasProject, previous: CanvasProject): CanvasProject => {
     const restored = clone(snapshot)
     restored.updatedAt = new Date(Math.max(Date.now(), previous.updatedAt.getTime() + 1))
@@ -246,5 +258,5 @@ export function useInfiniteCanvasStore(repository: CanvasRepository) {
     if (snapshot) { const restored = restoreWithFreshTimestamp(snapshot, project); replaceActive(restored); persist(restored) }
   }
 
-  return { projects, activeProject, selectedNodeIds, activeKeyId, ready, createProject, renameProject, duplicateProject, deleteProject, setActiveProject, addNode, updateNode, removeNode, connectNodes, setActiveKey, updateViewport, setBackgroundMode, importProject, saveProject, undo, redo, canUndo: history.canUndo, canRedo: history.canRedo }
+  return { projects, activeProject, selectedNodeIds, activeKeyId, ready, switchRepository, createProject, renameProject, duplicateProject, deleteProject, setActiveProject, addNode, updateNode, removeNode, connectNodes, setActiveKey, updateViewport, setBackgroundMode, importProject, saveProject, undo, redo, canUndo: history.canUndo, canRedo: history.canRedo }
 }

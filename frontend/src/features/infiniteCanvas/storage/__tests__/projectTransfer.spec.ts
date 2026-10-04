@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { unzipSync, strFromU8, strToU8, zipSync } from 'fflate'
 import type { CanvasAsset, CanvasProject, CanvasRepository } from '../../types'
 import { exportProject, importProject, sanitizeExportProject } from '../projectTransfer'
+import { useInfiniteCanvasStore } from '../../stores/useInfiniteCanvasStore'
 
 function project(): CanvasProject {
   const now = new Date('2026-10-04T00:00:00.000Z')
@@ -43,11 +44,16 @@ describe('project transfer', () => {
 
     const target = repository()
     const imported = await importProject(archive, target)
+    expect(imported.schemaVersion).toBe(1)
     expect(imported.id).not.toBe(project().id)
     expect(imported.nodes[0].metadata.assetKey).not.toBe('asset-original')
     expect(imported.nodes[0].metadata.assetKey).toBe(imported.assetKeys?.[0])
     expect(Object.keys(target.assets)).toContain(imported.assetKeys?.[0] as string)
     expect(await target.loadAsset(imported.assetKeys?.[0] as string)).toBeTruthy()
+    const store = useInfiniteCanvasStore(target)
+    await store.ready
+    expect(store.activeProject.value?.id).toBe(imported.id)
+    expect((await target.loadProject(imported.id))?.schemaVersion).toBe(1)
   })
 
   it('sanitizes secret fields recursively while preserving active key id', () => {
