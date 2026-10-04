@@ -43,6 +43,21 @@ describe('InfiniteCanvasSurface interactions', () => {
     await node.trigger('pointerup', { pointerId: 1, clientX: 110, clientY: 50 })
   })
 
+  it('emits incremental node drag movement across multiple RAF frames', async () => {
+    const wrapper = mount(InfiniteCanvasSurface, { props: { project: project() } })
+    const node = wrapper.find('.canvas-node')
+    await node.trigger('pointerdown', { button: 0, pointerId: 6, clientX: 100, clientY: 50 })
+    await node.trigger('pointermove', { pointerId: 6, clientX: 110, clientY: 50 })
+    rafCallbacks.shift()!(0)
+    await node.trigger('pointermove', { pointerId: 6, clientX: 120, clientY: 50 })
+    rafCallbacks.shift()!(0)
+    expect(wrapper.emitted('node-move')).toEqual([
+      ['source', { x: 105, y: 20 }],
+      ['source', { x: 110, y: 20 }],
+    ])
+    await node.trigger('pointerup', { pointerId: 6, clientX: 120, clientY: 50 })
+  })
+
   it('accumulates multiple blank-pan moves before a single RAF flush', async () => {
     const wrapper = mount(InfiniteCanvasSurface, { props: { project: project({ viewport: { x: 0, y: 0, zoom: 1 } }) } })
     const surface = wrapper.find('.canvas-surface')
@@ -66,5 +81,13 @@ describe('InfiniteCanvasSurface interactions', () => {
     await nodes[0].find('.canvas-node__handle--output').trigger('pointerdown', { button: 0, pointerId: 4 })
     await nodes[1].trigger('pointerdown', { button: 0, pointerId: 5, clientX: 400, clientY: 50 })
     expect(wrapper.emitted('edge-create')?.at(-1)).toEqual([{ sourceNodeId: 'source', targetNodeId: 'target', kind: 'reference' }])
+  })
+
+  it('clears a pending edge source when the active project changes', async () => {
+    const wrapper = mount(InfiniteCanvasSurface, { props: { project: project() } })
+    await wrapper.findAll('.canvas-node')[0].find('.canvas-node__handle--output').trigger('pointerdown', { button: 0, pointerId: 7 })
+    await wrapper.setProps({ project: project({ id: 'next-project' }) })
+    await wrapper.findAll('.canvas-node')[1].trigger('pointerdown', { button: 0, pointerId: 8, clientX: 400, clientY: 50 })
+    expect(wrapper.emitted('edge-create')).toBeUndefined()
   })
 })

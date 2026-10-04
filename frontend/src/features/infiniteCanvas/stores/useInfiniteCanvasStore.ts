@@ -22,11 +22,15 @@ export function useInfiniteCanvasStore(repository: CanvasRepository) {
   const history = useCanvasHistory<CanvasProject>(50)
   const saveTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
+  const cancelPersist = (projectId: string) => {
+    const timer = saveTimers.get(projectId)
+    if (timer) { clearTimeout(timer); saveTimers.delete(projectId) }
+  }
+
   const persist = (project = activeProject.value) => {
     if (!project) return
     const snapshot = clone(project)
-    const previousTimer = saveTimers.get(project.id)
-    if (previousTimer) clearTimeout(previousTimer)
+    cancelPersist(project.id)
     saveTimers.set(project.id, setTimeout(() => {
       saveTimers.delete(project.id)
       void repository.saveProject(snapshot)
@@ -79,6 +83,7 @@ export function useInfiniteCanvasStore(repository: CanvasRepository) {
     else {
       project.title = title
       project.updatedAt = new Date()
+      cancelPersist(project.id)
       void repository.saveProject(clone(project))
     }
   }
@@ -103,8 +108,7 @@ export function useInfiniteCanvasStore(repository: CanvasRepository) {
     const index = projects.value.findIndex((item) => item.id === projectId)
     if (index < 0) return
     projects.value.splice(index, 1)
-    const timer = saveTimers.get(projectId)
-    if (timer) { clearTimeout(timer); saveTimers.delete(projectId) }
+    cancelPersist(projectId)
     await repository.deleteProject(projectId)
     if (activeProject.value?.id === projectId) replaceActive(projects.value[index] ?? projects.value[index - 1] ?? null)
     selectedNodeIds.value = []

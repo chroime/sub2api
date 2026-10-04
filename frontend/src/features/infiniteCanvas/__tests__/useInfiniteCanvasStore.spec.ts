@@ -88,4 +88,18 @@ describe('useInfiniteCanvasStore', () => {
     expect(repo.saves.some((project) => project.id === 'project-1' && project.title === 'First updated')).toBe(true)
     vi.useRealTimers()
   })
+
+  it('replaces an inactive project debounce before saving its latest direct rename', async () => {
+    vi.useFakeTimers()
+    const repo = repository([fixture(), fixture({ id: 'project-2', title: 'Second' })])
+    const store = useInfiniteCanvasStore(repo)
+    await store.ready
+    store.renameProject('First pending')
+    store.setActiveProject('project-2')
+    store.renameProject('project-1', 'First direct')
+    vi.advanceTimersByTime(100)
+    await Promise.resolve()
+    expect(repo.saves.filter((project) => project.id === 'project-1')).toEqual([expect.objectContaining({ title: 'First direct' })])
+    vi.useRealTimers()
+  })
 })
