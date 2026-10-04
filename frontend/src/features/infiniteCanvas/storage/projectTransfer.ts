@@ -58,22 +58,27 @@ function normalizeProject(value: unknown): CanvasProject {
   })
   const assetKeys = input.assetKeys
   if (assetKeys !== undefined && (!Array.isArray(assetKeys) || new Set(assetKeys).size !== assetKeys.length || assetKeys.some((key) => !safeKey(key)))) throw new Error('Invalid asset keys')
-  if (input.activeKeyId !== undefined && input.activeKeyId !== null && (!finite(input.activeKeyId) || !Number.isInteger(input.activeKeyId) || input.activeKeyId < 0)) throw new Error('Invalid active key id')
-  return { id: input.id, title: input.title, createdAt, updatedAt, viewport: { x: (viewport as Record<string, number>).x, y: (viewport as Record<string, number>).y, zoom: (viewport as Record<string, number>).zoom }, backgroundMode: input.backgroundMode as CanvasProject['backgroundMode'], ...(input.activeKeyId !== undefined && input.activeKeyId !== null ? { activeKeyId: input.activeKeyId as number } : {}), nodes, edges, ...(assetKeys ? { assetKeys: [...assetKeys] } : {}) }
+  if (input.activeKeyId !== undefined && (!finite(input.activeKeyId) || !Number.isInteger(input.activeKeyId) || input.activeKeyId < 0)) throw new Error('Invalid active key id')
+  return { id: input.id, title: input.title, createdAt, updatedAt, viewport: { x: (viewport as Record<string, number>).x, y: (viewport as Record<string, number>).y, zoom: (viewport as Record<string, number>).zoom }, backgroundMode: input.backgroundMode as CanvasProject['backgroundMode'], ...(input.activeKeyId !== undefined ? { activeKeyId: input.activeKeyId as number } : {}), nodes, edges, ...(assetKeys ? { assetKeys: [...assetKeys] } : {}) }
 }
 function zipEntries(bytes: Uint8Array): string[] {
   const names: string[] = []; const seen = new Set<string>(); let count = 0; let total = 0; let compressedTotal = 0
-  for (let offset = 0; offset + 46 <= bytes.length; offset += 1) {
-    if (bytes[offset] !== 0x50 || bytes[offset + 1] !== 0x4b || bytes[offset + 2] !== 0x01 || bytes[offset + 3] !== 0x02) continue
+  let eocd = -1
+  for (let i = Math.max(0, bytes.length - 65557); i + 22 <= bytes.length; i += 1) if (bytes[i] === 0x50 && bytes[i + 1] === 0x4b && bytes[i + 2] === 0x05 && bytes[i + 3] === 0x06) eocd = i
+  if (eocd < 0) throw new Error('Missing ZIP directory')
+  const end = new DataView(bytes.buffer, bytes.byteOffset + eocd, bytes.byteLength - eocd); const countExpected = end.getUint16(10, true); const directorySize = end.getUint32(12, true); const directoryOffset = end.getUint32(16, true); if (directorySize === 0xffffffff || directoryOffset === 0xffffffff || directoryOffset + directorySize > eocd) throw new Error('Invalid ZIP directory')
+  let offset = directoryOffset; const directoryEnd = directoryOffset + directorySize
+  while (offset < directoryEnd) {
+    if (offset + 46 > directoryEnd || bytes[offset] !== 0x50 || bytes[offset + 1] !== 0x4b || bytes[offset + 2] !== 0x01 || bytes[offset + 3] !== 0x02) throw new Error('Invalid ZIP directory entry')
     count += 1; if (count > MAX_ENTRIES) throw new Error('Too many archive entries')
     const view = new DataView(bytes.buffer, bytes.byteOffset + offset, bytes.byteLength - offset); const compressed = view.getUint32(20, true); const uncompressed = view.getUint32(24, true); const nameLength = view.getUint16(28, true); const extraLength = view.getUint16(30, true); const commentLength = view.getUint16(32, true)
     if (uncompressed === 0xffffffff || compressed === 0xffffffff) throw new Error('Unsupported ZIP entry')
     total += uncompressed; compressedTotal += compressed; if (total > MAX_ARCHIVE_BYTES || compressedTotal > MAX_ARCHIVE_BYTES) throw new Error('Canvas archive exceeds 100 MiB')
     const name = new TextDecoder().decode(bytes.subarray(offset + 46, offset + 46 + nameLength)); if (seen.has(name) || !name || name.includes('..') || name.startsWith('/') || name.includes('\\') || name.includes('\0')) throw new Error('Invalid archive path')
     if (name !== 'project.json' && !/^assets\/[^/]+$/.test(name)) throw new Error('Unexpected archive entry')
-    seen.add(name); names.push(name); offset += 46 + nameLength + extraLength + commentLength - 1
+    seen.add(name); names.push(name); offset += 46 + nameLength + extraLength + commentLength
   }
-  if (!seen.has('project.json')) throw new Error('Missing project.json')
+  if (count !== countExpected || offset !== directoryEnd || !seen.has('project.json')) throw new Error('Invalid ZIP directory')
   return names
 }
 export async function exportProject(project: CanvasProject, repository: CanvasRepository): Promise<Blob> {
@@ -85,13 +90,13 @@ export async function importProject(file: Blob, repository: CanvasRepository): P
   if (file.size > MAX_ARCHIVE_BYTES) throw new Error('Canvas archive exceeds 100 MiB'); const bytes = await blobBytes(file); if (bytes.byteLength > MAX_ARCHIVE_BYTES) throw new Error('Canvas archive exceeds 100 MiB')
   const entryNames = zipEntries(bytes); const files = unzipSync(bytes); const json = files['project.json']; if (!json) throw new Error('Missing project.json'); const raw = JSON.parse(strFromU8(json)) as Record<string, unknown>; const project = normalizeProject(raw); const rawManifest = raw.assetManifest
   if (!rawManifest || typeof rawManifest !== 'object' || rawManifest === null || Array.isArray(rawManifest)) throw new Error('Invalid asset manifest')
-  const manifest = rawManifest as Record<string, unknown>; const references = referencedKeys(project); const manifestKeys = Object.keys(manifest); if (manifestKeys.length !== references.length || manifestKeys.some((key) => !safeKey(key) || !references.includes(key))) throw new Error('Asset manifest does not match project references')
+  const manifest = rawManifest as Record<string, unknown>; const references = referencedKeys(project); const manifestKeys = Object.keys(manifest); if (manifestKeys.length !== references.length || manifestKeys.some((key) => !safeKey(key) || ['__proto__', 'constructor', 'prototype'].includes(key) || !references.includes(key))) throw new Error('Asset manifest does not match project references')
   const expectedEntries = new Set(['project.json', ...references.map((key) => `assets/${key}`)]); if (entryNames.length !== expectedEntries.size || entryNames.some((name) => !expectedEntries.has(name))) throw new Error('Archive entries do not match manifest')
   const prepared: { key: string; nextKey: string; blob: Blob; mimeType: string; kind: string; width?: number; height?: number }[] = []
   for (const key of references) { const metadata = manifest[key]; if (!validAssetMeta(metadata) || metadata.storageKey !== key) throw new Error('Invalid asset manifest entry'); const data = files[`assets/${key}`]; if (!data) throw new Error(`Missing asset ${key}`); const blob = new Blob([data], { type: metadata.mimeType }); if (blob.type !== metadata.mimeType) throw new Error('Asset MIME mismatch'); prepared.push({ key, nextKey: id('asset'), blob, ...metadata }) }
   const existingProjects = await repository.listProjects(); let newProjectId = id('project'); while (existingProjects.some((item) => item.id === newProjectId)) newProjectId = id('project')
-  for (const item of prepared) { while (await repository.loadAsset(item.nextKey)) item.nextKey = id('asset') }
+  const generatedKeys = new Set<string>(); for (const item of prepared) { while (generatedKeys.has(item.nextKey) || await repository.loadAsset(item.nextKey)) item.nextKey = id('asset'); generatedKeys.add(item.nextKey) }
   const keyMap = new Map(prepared.map((item) => [item.key, item.nextKey])); const remapped = { ...project, id: newProjectId, updatedAt: new Date(), assetKeys: project.assetKeys?.map((key) => keyMap.get(key) as string), nodes: project.nodes.map((node) => node.type === 'image' ? { ...node, metadata: { ...node.metadata, ...(typeof node.metadata.assetKey === 'string' ? { assetKey: keyMap.get(node.metadata.assetKey) } : {}), ...(typeof node.metadata.storageKey === 'string' ? { storageKey: keyMap.get(node.metadata.storageKey) } : {}) } } : node) }
   const attempted = prepared.map((item) => item.nextKey)
-  try { for (const item of prepared) await repository.saveAsset({ storageKey: item.nextKey, blob: item.blob, mimeType: item.mimeType, kind: item.kind, width: item.width, height: item.height, projectId: newProjectId }); await repository.saveProject(remapped); return remapped } catch (error) { const failures: unknown[] = []; for (const key of attempted) { try { await repository.deleteAsset(key) } catch (cleanupError) { failures.push(cleanupError) } } if (failures.length) throw new Error(`Canvas import rollback failed: ${String(failures[0])}`); throw error }
+  try { for (const item of prepared) await repository.saveAsset({ storageKey: item.nextKey, blob: item.blob, mimeType: item.mimeType, kind: item.kind, width: item.width, height: item.height, projectId: newProjectId }); await repository.saveProject(remapped); return remapped } catch (error) { const failures: unknown[] = []; try { await repository.deleteProject(newProjectId) } catch (cleanupError) { failures.push(cleanupError) }; for (const key of attempted) { try { await repository.deleteAsset(key) } catch (cleanupError) { failures.push(cleanupError) } } if (failures.length) throw new Error(`Canvas import rollback failed: ${String(failures[0])}`); throw error }
 }
