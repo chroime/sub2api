@@ -13,7 +13,7 @@ function makeFixtureProject(overrides: Partial<CanvasProject> = {}): CanvasProje
       { id: 'config-1', type: 'config', position: { x: 3, y: 4 }, metadata: { model: 'gpt-4o' } },
       { id: 'image-1', type: 'image', position: { x: 5, y: 6 }, metadata: { status: 'ready', url: 'blob:one' } },
     ],
-    edges: [{ id: 'edge-1', source: 'prompt-1', target: 'config-1', kind: 'data' }],
+    edges: [{ id: 'edge-1', sourceNodeId: 'prompt-1', targetNodeId: 'config-1', kind: 'prompt' }],
     ...overrides,
   }
 }
@@ -22,21 +22,26 @@ describe('indexed db canvas repository', () => {
   it('round trips project metadata without an API key secret', async () => {
     const repo = createIndexedDbCanvasRepository(`test-${crypto.randomUUID()}`)
     const project = makeFixtureProject({ activeKeyId: 7 })
-    await repo.saveProject(project)
+    const polluted = makeFixtureProject({ activeKeyId: 7 })
+    polluted.nodes[0].metadata = {
+      text: 'Hello', key: 'k', apiKey: 'api', secret: 's', token: 't', access_token: 'at', activeKeySecret: 'aks',
+      nested: { key: 'nested-k', apiKey: 'nested-api', secret: 'nested-s', token: 'nested-t', access_token: 'nested-at', activeKeySecret: 'nested-aks' },
+    }
+    await repo.saveProject(polluted)
     const loaded = await repo.loadProject(project.id)
-    expect(loaded).toMatchObject(project)
-    expect(JSON.stringify(loaded)).not.toContain('sk-secret')
+    expect(loaded).toMatchObject({ ...project, nodes: [{ ...project.nodes[0], metadata: { text: 'Hello' } }, ...project.nodes.slice(1)] })
+    expect(JSON.stringify(loaded)).not.toMatch(/key|apiKey|secret|token|access_token|activeKeySecret/)
     expect(loaded?.createdAt).toBeInstanceOf(Date)
     expect(loaded?.viewport).toEqual(project.viewport)
-    expect(loaded?.edges[0].kind).toBe('data')
+    expect(loaded?.edges[0].kind).toBe('prompt')
   })
 
   it('saves, reloads, and deletes asset bytes', async () => {
     const repo = createIndexedDbCanvasRepository(`test-${crypto.randomUUID()}`)
     const bytes = new Uint8Array([137, 80, 78, 71])
-    const saved = await repo.saveAsset({ blob: new Blob([bytes], { type: 'image/png' }), mimeType: 'image/png', kind: 'image' })
-    expect(saved.storageKey).toBeTruthy()
-    const loaded = await repo.loadAsset(saved.storageKey!)
+    const storageKey = await repo.saveAsset({ blob: new Blob([bytes], { type: 'image/png' }), mimeType: 'image/png', kind: 'image' })
+    expect(storageKey).toBeTruthy()
+    const loaded = await repo.loadAsset(storageKey)
     expect(loaded?.mimeType).toBe('image/png')
     const result = await new Promise<ArrayBuffer>((resolve, reject) => {
       const reader = new FileReader()
@@ -45,13 +50,24 @@ describe('indexed db canvas repository', () => {
       reader.readAsArrayBuffer(loaded!.blob)
     })
     expect(new Uint8Array(result)).toEqual(bytes)
-    await repo.deleteAsset(saved.storageKey!)
-    expect(await repo.loadAsset(saved.storageKey!)).toBeUndefined()
+    await repo.deleteAsset(storageKey)
+    expect(await repo.loadAsset(storageKey)).toBeUndefined()
+  })
+
+  it('deletes owned assets while retaining assets referenced by another project', async () => {
+    const repo = createIndexedDbCanvasRepository(`test-${crypto.randomUUID()}`)
+    const ownedKey = await repo.saveAsset({ blob: new Blob(['owned']), mimeType: 'text/plain', kind: 'text', projectId: 'project-1' })
+    const sharedKey = await repo.saveAsset({ blob: new Blob(['shared']), mimeType: 'text/plain', kind: 'text', projectId: 'project-1' })
+    await repo.saveProject(makeFixtureProject({ assetKeys: [ownedKey, sharedKey] }))
+    await repo.saveProject(makeFixtureProject({ id: 'project-2', assetKeys: [sharedKey] }))
+    await repo.deleteProject('project-1')
+    expect(await repo.loadAsset(ownedKey)).toBeUndefined()
+    expect(await repo.loadAsset(sharedKey)).toBeTruthy()
   })
 
   it('rejects an unknown schema version with a typed error', async () => {
     const repo = createIndexedDbCanvasRepository(`test-${crypto.randomUUID()}`)
     await repo.__unsafePutProjectRecord({ id: 'bad', schemaVersion: 999, payload: {} as CanvasProject })
-    await expect(repo.loadProject('bad')).rejects.toBeInstanceOf(Error)
+    await expect(repo.loadProject('bad')).rejects.toMatchObject({ name: 'CanvasSchemaError', schemaVersion: 999 })
   })
 })
