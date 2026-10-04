@@ -10,7 +10,7 @@ import CanvasProjectSidebar from '@/features/infiniteCanvas/components/CanvasPro
 import CanvasToolbar from '@/features/infiniteCanvas/components/CanvasToolbar.vue'
 import CanvasInspector from '@/features/infiniteCanvas/components/CanvasInspector.vue'
 import CanvasKeyPicker from '@/features/infiniteCanvas/components/CanvasKeyPicker.vue'
-import { selectEligibleCanvasKeys } from '@/features/infiniteCanvas/keySelection'
+import { isCanvasImagePlatform, selectEligibleCanvasKeys } from '@/features/infiniteCanvas/keySelection'
 import type { CanvasKeyOption } from '@/features/infiniteCanvas/keySelection'
 import type { CanvasBackgroundMode, CanvasNode, CanvasProject, CanvasRepository } from '@/features/infiniteCanvas/types'
 import { useInfiniteCanvasStore } from '@/features/infiniteCanvas/stores/useInfiniteCanvasStore'
@@ -37,18 +37,27 @@ const warningMessage = ref('')
 let mounted = false
 let lifecycleGeneration = 0
 let groupsGeneration = -1
+const canvasGroups = computed(() => groups.value.filter((group) => group.status === 'active' && group.allow_image_generation && isCanvasImagePlatform(group.platform)))
 
 const activeProject = computed(() => store.activeProject.value)
 const selectedNode = computed<CanvasNode | null>(() => activeProject.value?.nodes.find((node) => store.selectedNodeIds.value.includes(node.id)) ?? null)
 const selectedKeyId = computed(() => store.activeKeyId.value ?? null)
 const lastSaved = computed(() => activeProject.value ? `Last saved ${activeProject.value.updatedAt.toLocaleString()}` : '')
 
-function refreshEligibleKeys(items: Parameters<typeof selectEligibleCanvasKeys>[0] = []) {
+function refreshEligibleKeys(items: Parameters<typeof selectEligibleCanvasKeys>[0] = []): CanvasKeyOption[] {
   eligibleKeys.value = selectEligibleCanvasKeys(items, groups.value)
+  const eligibleIds = new Set(eligibleKeys.value.map((option) => option.id))
+  for (const id of keySecrets.keys()) if (!eligibleIds.has(id)) keySecrets.delete(id)
   eligibleKeys.value.forEach((option) => keySecrets.set(option.id, option.key))
+  const activeId = store.activeKeyId.value
+  if (activeId !== undefined && !eligibleIds.has(activeId)) {
+    keySecrets.delete(activeId)
+    store.setActiveKey(undefined)
+  }
+  return eligibleKeys.value
 }
 
-async function loadKeys(preserveOnFailure = false, generation = lifecycleGeneration) {
+async function loadKeys(preserveOnFailure = false, generation = lifecycleGeneration): Promise<CanvasKeyOption[] | undefined> {
   if (!mounted || generation !== lifecycleGeneration) return
   keysLoading.value = true
   try {
@@ -59,12 +68,15 @@ async function loadKeys(preserveOnFailure = false, generation = lifecycleGenerat
       const response = await keysAPI.list(page, 100)
       allKeys.push(...response.items)
     }
-    if (!mounted || generation !== lifecycleGeneration) return
+    if (!mounted || generation !== lifecycleGeneration) return undefined
     groups.value = availableGroups
     groupsGeneration = generation
-    refreshEligibleKeys(allKeys)
+    if (!availableGroups.some((group) => group.id === newKeyGroupId.value && group.status === 'active' && group.allow_image_generation && isCanvasImagePlatform(group.platform))) {
+      newKeyGroupId.value = availableGroups.find((group) => group.status === 'active' && group.allow_image_generation && isCanvasImagePlatform(group.platform))?.id ?? null
+    }
+    return refreshEligibleKeys(allKeys)
   } catch {
-    if (!mounted || generation !== lifecycleGeneration) return
+    if (!mounted || generation !== lifecycleGeneration) return undefined
     if (!preserveOnFailure) eligibleKeys.value = []
     throw new Error('Failed to refresh keys')
   } finally {
@@ -77,38 +89,36 @@ async function createKey() {
   try {
     const created = await keysAPI.create(newKeyName.value.trim() || 'Canvas image key', newKeyGroupId.value)
     if (!mounted || generation !== lifecycleGeneration) return
-    if (groupsGeneration !== generation) {
+    const selectedGroupId = newKeyGroupId.value === null ? null : Number(newKeyGroupId.value)
+    if (groupsGeneration !== generation || selectedGroupId === null || !canvasGroups.value.some((group) => group.id === selectedGroupId)) {
       warningMessage.value = 'Image groups are still refreshing. Try creating the key again.'
       showCreateKey.value = false
       return
     }
     const group = created.group ?? groups.value.find((item) => item.id === created.group_id)
-    const fallbackOption = group ? selectEligibleCanvasKeys([created], [group])[0] : undefined
-    if (!fallbackOption) {
+    const createdOption = group ? selectEligibleCanvasKeys([created], [group])[0] : undefined
+    if (!createdOption) {
       warningMessage.value = 'The new key is not eligible for image generation in its group.'
       showCreateKey.value = false
     } else {
       keySecrets.set(created.id, created.key)
-      eligibleKeys.value = [...eligibleKeys.value.filter((item) => item.id !== created.id), fallbackOption]
+      eligibleKeys.value = [...eligibleKeys.value.filter((item) => item.id !== created.id), createdOption]
       store.setActiveKey(created.id)
       showCreateKey.value = false
     }
     void loadKeys(true, generation).then(() => {
       if (!mounted || generation !== lifecycleGeneration) return
-      const refreshedOption = fallbackOption && groupsGeneration === generation ? selectEligibleCanvasKeys([created], groups.value)[0] : undefined
-      if (fallbackOption && !refreshedOption) {
+      const refreshedOption = groupsGeneration === generation ? eligibleKeys.value.find((item) => item.id === created.id) : undefined
+      if (createdOption && !refreshedOption) {
         warningMessage.value = 'The key group is no longer eligible for image generation.'
-        eligibleKeys.value = eligibleKeys.value.filter((item) => item.id !== created.id)
-        if (store.activeKeyId.value === created.id) store.setActiveKey(undefined)
         return
       }
-      if (refreshedOption && !eligibleKeys.value.some((item) => item.id === created.id)) eligibleKeys.value = [...eligibleKeys.value, refreshedOption]
       if (refreshedOption && store.activeKeyId.value !== created.id) store.setActiveKey(created.id)
     }).catch(() => {
       if (mounted && generation === lifecycleGeneration) warningMessage.value = 'Key list refresh failed; the new key remains selected.'
     })
   } catch {
-    warningMessage.value = 'Could not create the image key.'
+    if (mounted && generation === lifecycleGeneration) warningMessage.value = 'Could not create the image key.'
   }
 }
 
@@ -138,18 +148,31 @@ function exportProject() {
   const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `${activeProject.value.title || 'canvas'}.json`; link.click(); URL.revokeObjectURL(url)
 }
 function importProject() { importInput.value?.click() }
+const IMPORT_SECRET_FIELDS = new Set(['key', 'apiKey', 'secret', 'token', 'access_token', 'activeKeySecret'])
+function unwrapImportPayload(data: unknown): unknown {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return data
+  const record = data as Record<string, unknown>
+  if (!Object.prototype.hasOwnProperty.call(record, 'project')) return data
+  if (Object.keys(record).some((key) => key !== 'project' || IMPORT_SECRET_FIELDS.has(key))) return undefined
+  return record.project
+}
 async function handleImport(event: Event) {
   const file = (event.target as HTMLInputElement).files?.[0]; if (!file) return
   try {
     const raw = await file.text()
     if (raw.length > 2_000_000) throw new Error('Import too large')
     const data = JSON.parse(raw) as unknown
-    const payload = data && typeof data === 'object' && 'project' in data ? (data as { project: unknown }).project : data
+    const payload = unwrapImportPayload(data)
+    if (payload === undefined) throw new Error('Invalid canvas envelope')
     if (!store.importProject(payload)) throw new Error('Invalid canvas project')
   } catch { warningMessage.value = 'The canvas file is invalid or too large.' }
   if (importInput.value) importInput.value.value = ''
 }
-function clearSecrets() { keySecrets.clear(); eligibleKeys.value = []; groups.value = []; groupsGeneration = -1 }
+function clearSecrets() { keySecrets.clear(); eligibleKeys.value = []; groups.value = []; groupsGeneration = -1; newKeyGroupId.value = null }
+const canCreateKey = computed(() => {
+  const selectedGroupId = newKeyGroupId.value === null ? null : Number(newKeyGroupId.value)
+  return groupsGeneration === lifecycleGeneration && selectedGroupId !== null && canvasGroups.value.some((group) => group.id === selectedGroupId)
+})
 function closeDrawer() { activeTab.value = 'canvas'; mobileDrawer.value = null }
 function openDrawer(drawer: 'sidebar' | 'inspector') {
   if (mobileDrawer.value === drawer) {
@@ -198,8 +221,8 @@ onBeforeUnmount(() => { mounted = false; lifecycleGeneration += 1; clearSecrets(
     </div>
     <input ref="importInput" type="file" accept="application/json" class="hidden" @change="handleImport" />
     <BaseDialog :show="showCreateKey" title="Create image key" width="narrow" @close="showCreateKey = false">
-      <div class="space-y-3"><label class="block text-sm">Name<input v-model="newKeyName" class="mt-1 w-full rounded-md border px-3 py-2 dark:border-dark-600 dark:bg-dark-800" /></label><label class="block text-sm">Group<select v-model="newKeyGroupId" class="mt-1 w-full rounded-md border px-3 py-2 dark:border-dark-600 dark:bg-dark-800"><option :value="null">Select group</option><option v-for="group in groups.filter((item) => item.allow_image_generation)" :key="group.id" :value="group.id">{{ group.name }}</option></select></label></div>
-      <template #footer><button type="button" class="rounded-md bg-primary-600 px-3 py-2 text-sm text-white" @click="createKey">Create</button></template>
+      <div class="space-y-3"><label class="block text-sm">Name<input v-model="newKeyName" class="mt-1 w-full rounded-md border px-3 py-2 dark:border-dark-600 dark:bg-dark-800" /></label><label class="block text-sm">Group<select v-model="newKeyGroupId" class="mt-1 w-full rounded-md border px-3 py-2 dark:border-dark-600 dark:bg-dark-800"><option :value="null">Select group</option><option v-for="group in canvasGroups" :key="group.id" :value="group.id">{{ group.name }}</option></select></label></div>
+      <template #footer><button type="button" :disabled="!canCreateKey" class="rounded-md bg-primary-600 px-3 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-50" @click="createKey">Create</button></template>
     </BaseDialog>
     <ConfirmDialog :show="showDelete" title="Delete project" message="Delete this project and its nodes?" danger @confirm="deleteProject" @cancel="showDelete = false" />
   </AppLayout>

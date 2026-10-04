@@ -133,12 +133,15 @@ describe('InfiniteCanvasView', () => {
 
   it('selects a newly created key before the background refresh completes', async () => {
     vi.mocked(keysAPI.create).mockResolvedValue({ id: 99, name: 'new-image-key', key: 'sk-new', group_id: 1, status: 'active', expires_at: null } as never)
-    vi.mocked(keysAPI.list).mockResolvedValueOnce({ items: [], total: 0, page: 1, page_size: 100, pages: 1 } as never).mockImplementation(() => new Promise(() => undefined))
+    vi.mocked(keysAPI.list).mockImplementationOnce(() => Promise.resolve({ items: [], total: 0, page: 1, page_size: 100, pages: 1 } as never)).mockImplementation(() => new Promise(() => undefined))
+    vi.mocked(userGroupsAPI.getAvailable).mockImplementation(() => Promise.resolve(groups as never))
     const wrapper = mountPage([project('one', 'One')])
     await vi.waitFor(() => expect(wrapper.find('[data-canvas-key-option]').exists()).toBe(false))
     await wrapper.get('.canvas-key-picker button').trigger('click')
     const createButton = wrapper.findAll('button').find((button) => button.text() === 'Create')
     expect(createButton).toBeDefined()
+    await vi.waitFor(() => expect((wrapper.vm as any).canCreateKey).toBe(true))
+    await vi.waitFor(() => expect(createButton!.attributes('disabled')).toBeUndefined())
     await createButton!.trigger('click')
     await vi.waitFor(() => expect((wrapper.find('.canvas-key-picker select').element as HTMLSelectElement).value).toBe('99'))
   })
@@ -160,8 +163,7 @@ describe('InfiniteCanvasView', () => {
     ['unsupported', { ...groups[0], platform: 'anthropic' }],
   ])('rejects a newly created key from an %s group', async (_label, group) => {
     vi.mocked(keysAPI.list).mockResolvedValue({ items: [], total: 0, page: 1, page_size: 100, pages: 1 } as never)
-    vi.mocked(userGroupsAPI.getAvailable).mockResolvedValue([group] as never)
-    vi.mocked(keysAPI.create).mockResolvedValue({ id: 97, name: 'ineligible-key', key: 'sk-ineligible', group_id: 1, status: 'active', expires_at: null } as never)
+    vi.mocked(keysAPI.create).mockResolvedValue({ id: 97, name: 'ineligible-key', key: 'sk-ineligible', group_id: 1, group, status: 'active', expires_at: null } as never)
     const wrapper = mountPage([project('one', 'One')])
     await vi.waitFor(() => expect(wrapper.find('[data-canvas-empty="keys"]').exists()).toBe(true))
     await wrapper.get('.canvas-key-picker button').trigger('click')

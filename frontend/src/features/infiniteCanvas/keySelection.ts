@@ -12,6 +12,10 @@ export interface CanvasKeyOption {
 
 const IMAGE_PLATFORMS = new Set<GroupPlatform>(['openai', 'grok', 'gemini'])
 
+export function isCanvasImagePlatform(platform: GroupPlatform): boolean {
+  return IMAGE_PLATFORMS.has(platform)
+}
+
 function maskKey(key: string): string {
   if (key.length <= 8) return '*'.repeat(key.length)
   return `${key.slice(0, 4)}${'*'.repeat(Math.max(4, key.length - 8))}${key.slice(-4)}`
