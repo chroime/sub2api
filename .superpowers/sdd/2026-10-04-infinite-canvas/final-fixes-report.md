@@ -33,3 +33,10 @@ Additional verification:
 - `pnpm run typecheck` - passed.
 - `pnpm run build` - passed (existing Vite chunk-size/dynamic-import warnings only).
 - `go test ./internal/handler/dto -run 'TestGroupFromService(IncludesModelAllowlist|OmitsProfitControl|AdminIncludesProfitControl)' -count=1` - blocked by the pre-existing missing `ValidateOpenAICodexTicketHarvestProxyURL` symbol in `internal/service/setting_update.go`.
+
+## Repair Wave 3
+
+- Enabled but malformed group allowlists now produce `allowedModels: []`, preserving backend fail-closed behavior instead of allowing every discovered model.
+- Added an IndexedDB round-trip isolation test proving the same project and asset IDs saved under one user namespace are invisible from another namespace.
+- Focused Infinite Canvas/API suite: 79 tests passed.
+- `pnpm run lint:check` and `pnpm run typecheck` passed.
