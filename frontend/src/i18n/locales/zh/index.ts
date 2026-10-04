@@ -3,6 +3,7 @@ import common from './common'
 import dashboard from './dashboard'
 import channelMonitorV2 from './channelMonitorV2'
 import batchImage from './batchImage'
+import infiniteCanvas from './infiniteCanvas'
 import admin from './admin'
 import misc from './misc'
 import publicDocs from './publicDocs'
@@ -13,6 +14,7 @@ export default {
   ...dashboard,
   ...channelMonitorV2,
   ...batchImage,
+  ...infiniteCanvas,
   admin,
   ...misc,
   ...publicDocs,

@@ -167,6 +167,7 @@ export default {
     announcements: 'Announcements',
     apiKeys: 'API Keys',
     batchImage: 'Batch Images',
+    infiniteCanvas: 'Infinite Canvas',
     usage: 'Usage',
     redeem: 'Redeem',
     affiliate: 'Affiliate Rebates',
