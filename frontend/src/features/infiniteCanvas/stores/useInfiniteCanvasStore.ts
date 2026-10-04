@@ -1,5 +1,5 @@
 import { ref, toRaw } from 'vue'
-import type { CanvasEdge, CanvasNode, CanvasProject, CanvasRepository } from '../types'
+import { CANVAS_SCHEMA_VERSION, type CanvasBackgroundMode, type CanvasEdge, type CanvasNode, type CanvasProject, type CanvasRepository } from '../types'
 import { useCanvasHistory } from '../composables/useCanvasHistory'
 
 function clone<T>(value: T): T {
@@ -12,6 +12,59 @@ function clone<T>(value: T): T {
 
 function id(prefix: string): string {
   return typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function' ? `${prefix}-${crypto.randomUUID()}` : `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
+const IMPORT_MAX_NODES = 500
+const IMPORT_MAX_EDGES = 1000
+const IMPORT_MAX_TITLE_LENGTH = 200
+const SECRET_FIELDS = new Set(['key', 'apiKey', 'secret', 'token', 'access_token', 'activeKeySecret'])
+
+function containsSecret(value: unknown): boolean {
+  if (Array.isArray(value)) return value.some(containsSecret)
+  if (!value || typeof value !== 'object') return false
+  return Object.entries(value).some(([key, child]) => SECRET_FIELDS.has(key) || containsSecret(child))
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value)
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value)
+}
+
+function parseDate(value: unknown): Date | undefined {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return new Date(value.getTime())
+  if (typeof value === 'string' && !Number.isNaN(new Date(value).getTime())) return new Date(value)
+  return undefined
+}
+
+export function validateCanvasProjectImport(input: unknown): CanvasProject | undefined {
+  if (!isRecord(input) || input.schemaVersion !== CANVAS_SCHEMA_VERSION || containsSecret(input)) return undefined
+  const idValue = input.id
+  const title = input.title
+  const createdAt = parseDate(input.createdAt)
+  const updatedAt = parseDate(input.updatedAt)
+  const viewport = input.viewport
+  const nodes = input.nodes
+  const edges = input.edges
+  const backgroundMode = input.backgroundMode
+  if (typeof idValue !== 'string' || !idValue.trim() || idValue.length > 200 || typeof title !== 'string' || !title.trim() || title.length > IMPORT_MAX_TITLE_LENGTH || !createdAt || !updatedAt || !isRecord(viewport) || !isFiniteNumber(viewport.x) || !isFiniteNumber(viewport.y) || !isFiniteNumber(viewport.zoom) || viewport.zoom <= 0 || viewport.zoom > 10 || !Array.isArray(nodes) || nodes.length > IMPORT_MAX_NODES || !Array.isArray(edges) || edges.length > IMPORT_MAX_EDGES || !['grid', 'dots', 'plain'].includes(String(backgroundMode))) return undefined
+  const nodeIds = new Set<string>()
+  const normalizedNodes: CanvasNode[] = []
+  for (const candidate of nodes) {
+    if (!isRecord(candidate) || typeof candidate.id !== 'string' || !candidate.id || nodeIds.has(candidate.id) || !['prompt', 'config', 'image'].includes(String(candidate.type)) || !isRecord(candidate.position) || !isFiniteNumber(candidate.position.x) || !isFiniteNumber(candidate.position.y) || !isRecord(candidate.metadata)) return undefined
+    nodeIds.add(candidate.id)
+    normalizedNodes.push({ id: candidate.id, type: candidate.type as CanvasNode['type'], position: { x: candidate.position.x, y: candidate.position.y }, ...(isRecord(candidate.size) && isFiniteNumber(candidate.size.width) && isFiniteNumber(candidate.size.height) ? { size: { width: candidate.size.width, height: candidate.size.height } } : {}), metadata: clone(candidate.metadata) })
+  }
+  const edgeIds = new Set<string>()
+  const normalizedEdges: CanvasEdge[] = []
+  for (const candidate of edges) {
+    if (!isRecord(candidate) || typeof candidate.id !== 'string' || !candidate.id || edgeIds.has(candidate.id) || typeof candidate.sourceNodeId !== 'string' || typeof candidate.targetNodeId !== 'string' || !nodeIds.has(candidate.sourceNodeId) || !nodeIds.has(candidate.targetNodeId) || !['prompt', 'config', 'reference'].includes(String(candidate.kind))) return undefined
+    edgeIds.add(candidate.id)
+    normalizedEdges.push({ id: candidate.id, sourceNodeId: candidate.sourceNodeId, targetNodeId: candidate.targetNodeId, kind: candidate.kind as CanvasEdge['kind'], ...(isRecord(candidate.metadata) ? { metadata: clone(candidate.metadata) } : {}) })
+  }
+  return { id: idValue, title, createdAt, updatedAt, viewport: { x: viewport.x, y: viewport.y, zoom: viewport.zoom }, backgroundMode: backgroundMode as CanvasProject['backgroundMode'], nodes: normalizedNodes, edges: normalizedEdges, ...(typeof input.activeKeyId === 'number' ? { activeKeyId: input.activeKeyId } : {}) }
 }
 
 export function useInfiniteCanvasStore(repository: CanvasRepository) {
@@ -36,6 +89,12 @@ export function useInfiniteCanvasStore(repository: CanvasRepository) {
       void repository.saveProject(snapshot)
     }, 25)
     )
+  }
+
+  const saveProject = async (project = activeProject.value): Promise<void> => {
+    if (!project) return
+    cancelPersist(project.id)
+    await repository.saveProject(clone(project))
   }
 
   const hydrate = async () => {
@@ -151,6 +210,21 @@ export function useInfiniteCanvasStore(repository: CanvasRepository) {
 
   const setActiveKey = (keyId: number | undefined) => mutate((project) => { project.activeKeyId = keyId })
 
+  const updateViewport = (viewport: CanvasProject['viewport']) => mutate((project) => { project.viewport = { ...viewport } })
+  const setBackgroundMode = (backgroundMode: CanvasBackgroundMode) => mutate((project) => { project.backgroundMode = backgroundMode })
+
+  const importProject = (input: unknown): CanvasProject | undefined => {
+    const imported = validateCanvasProjectImport(input)
+    if (!imported || projects.value.some((project) => project.id === imported.id)) return undefined
+    projects.value.push(imported)
+    replaceActive(imported)
+    selectedNodeIds.value = []
+    activeKeyId.value = imported.activeKeyId
+    history.clear()
+    persist(imported)
+    return imported
+  }
+
   const restoreWithFreshTimestamp = (snapshot: CanvasProject, previous: CanvasProject): CanvasProject => {
     const restored = clone(snapshot)
     restored.updatedAt = new Date(Math.max(Date.now(), previous.updatedAt.getTime() + 1))
@@ -170,5 +244,5 @@ export function useInfiniteCanvasStore(repository: CanvasRepository) {
     if (snapshot) { const restored = restoreWithFreshTimestamp(snapshot, project); replaceActive(restored); persist(restored) }
   }
 
-  return { projects, activeProject, selectedNodeIds, activeKeyId, ready, createProject, renameProject, duplicateProject, deleteProject, setActiveProject, addNode, updateNode, removeNode, connectNodes, setActiveKey, undo, redo, canUndo: history.canUndo, canRedo: history.canRedo }
+  return { projects, activeProject, selectedNodeIds, activeKeyId, ready, createProject, renameProject, duplicateProject, deleteProject, setActiveProject, addNode, updateNode, removeNode, connectNodes, setActiveKey, updateViewport, setBackgroundMode, importProject, saveProject, undo, redo, canUndo: history.canUndo, canRedo: history.canRedo }
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { CanvasProject, CanvasRepository } from '../types'
+import { CANVAS_SCHEMA_VERSION, type CanvasProject, type CanvasRepository } from '../types'
 import { useInfiniteCanvasStore } from '../stores/useInfiniteCanvasStore'
 
 function fixture(overrides: Partial<CanvasProject> = {}): CanvasProject {
@@ -11,10 +11,11 @@ function fixture(overrides: Partial<CanvasProject> = {}): CanvasProject {
   }
 }
 
-function repository(projects: CanvasProject[] = []): CanvasRepository & { saves: CanvasProject[] } {
+function repository(projects: CanvasProject[] = []): CanvasRepository & { saves: CanvasProject[]; state: CanvasProject[] } {
   const state = projects.map((project) => structuredClone(project))
   const saves: CanvasProject[] = []
   return {
+    state,
     saves,
     async listProjects() { return state.map((project) => structuredClone(project)) },
     async loadProject(id) { return state.find((project) => project.id === id) ?? null },
@@ -101,5 +102,39 @@ describe('useInfiniteCanvasStore', () => {
     await Promise.resolve()
     expect(repo.saves.filter((project) => project.id === 'project-1')).toEqual([expect.objectContaining({ title: 'First direct' })])
     vi.useRealTimers()
+  })
+
+  it('persists viewport and background mutations and can flush them immediately', async () => {
+    vi.useFakeTimers()
+    const repo = repository([fixture()])
+    const store = useInfiniteCanvasStore(repo)
+    await store.ready
+    store.updateViewport({ x: 10, y: 20, zoom: 1.5 })
+    store.setBackgroundMode('dots')
+    await store.saveProject()
+    expect(repo.saves.at(-1)).toMatchObject({ viewport: { x: 10, y: 20, zoom: 1.5 }, backgroundMode: 'dots' })
+    const reloaded = useInfiniteCanvasStore(repo)
+    await reloaded.ready
+    expect(reloaded.activeProject.value?.viewport).toEqual({ x: 10, y: 20, zoom: 1.5 })
+    expect(reloaded.activeProject.value?.backgroundMode).toBe('dots')
+    expect(store.canUndo.value).toBe(true)
+    vi.useRealTimers()
+  })
+
+  it('validates and imports a versioned project without changing state on malformed data', async () => {
+    const repo = repository([fixture()])
+    const store = useInfiniteCanvasStore(repo)
+    await store.ready
+    const imported = store.importProject({
+      schemaVersion: CANVAS_SCHEMA_VERSION,
+      id: 'imported', title: 'Imported', createdAt: '2026-01-02T00:00:00.000Z', updatedAt: '2026-01-02T00:00:00.000Z',
+      viewport: { x: 0, y: 0, zoom: 1 }, backgroundMode: 'plain', nodes: [], edges: [],
+    })
+    expect(imported?.id).toBe('imported')
+    expect(store.activeProject.value?.id).toBe('imported')
+    expect(store.activeProject.value?.createdAt).toBeInstanceOf(Date)
+    const before = store.activeProject.value?.id
+    expect(store.importProject({ schemaVersion: CANVAS_SCHEMA_VERSION, id: 'bad', title: 'bad', key: 'secret' })).toBeUndefined()
+    expect(store.activeProject.value?.id).toBe(before)
   })
 })

@@ -2,8 +2,8 @@
 import { computed } from 'vue'
 import type { CanvasNode } from '../types'
 
-const props = defineProps<{ node?: CanvasNode | null }>()
-const emit = defineEmits<{ (event: 'update', patch: Partial<CanvasNode>): void; (event: 'delete'): void }>()
+const props = defineProps<{ node?: CanvasNode | null; mobileOpen?: boolean }>()
+const emit = defineEmits<{ (event: 'update', patch: Partial<CanvasNode>): void; (event: 'delete'): void; (event: 'close'): void }>()
 const text = computed(() => typeof props.node?.metadata.text === 'string' ? props.node.metadata.text : '')
 const model = computed(() => typeof props.node?.metadata.model === 'string' ? props.node.metadata.model : '')
 const status = computed(() => typeof props.node?.metadata.status === 'string' ? props.node.metadata.status : '')
@@ -11,8 +11,8 @@ function update(field: 'text' | 'model' | 'status', value: string) { emit('updat
 </script>
 
 <template>
-  <aside class="canvas-inspector w-full shrink-0 border-t border-gray-200 bg-white p-4 dark:border-dark-700 dark:bg-dark-900 lg:w-72 lg:border-l lg:border-t-0">
-    <h2 class="mb-3 text-sm font-semibold text-gray-900 dark:text-gray-100">Inspector</h2>
+  <aside :class="['canvas-inspector w-full shrink-0 border-t border-gray-200 bg-white p-4 dark:border-dark-700 dark:bg-dark-900 lg:static lg:block lg:w-72 lg:border-l lg:border-t-0', mobileOpen ? 'fixed inset-y-0 right-0 z-40 block w-72 shadow-xl' : 'hidden lg:block']">
+    <div class="mb-3 flex items-center justify-between"><h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Inspector</h2><button type="button" aria-label="Close inspector" class="text-xs text-gray-500 lg:hidden" @click="emit('close')">Close</button></div>
     <div v-if="node" class="space-y-3">
       <p class="text-xs text-gray-500 dark:text-dark-400">{{ node.type }} node</p>
       <label v-if="node.type === 'prompt'" class="block text-xs text-gray-600 dark:text-gray-300">Prompt<textarea class="mt-1 w-full rounded-md border px-2 py-1 text-sm dark:border-dark-600 dark:bg-dark-800" :value="text" rows="4" @input="update('text', ($event.target as HTMLTextAreaElement).value)" /></label>

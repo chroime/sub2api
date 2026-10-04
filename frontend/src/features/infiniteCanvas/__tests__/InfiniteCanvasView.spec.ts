@@ -85,4 +85,26 @@ describe('InfiniteCanvasView', () => {
     expect(error).not.toHaveBeenCalled()
     error.mockRestore()
   })
+
+  it('offers mutually exclusive mobile project and inspector drawers', async () => {
+    const wrapper = mountPage()
+    await vi.waitFor(() => expect(wrapper.find('[data-canvas-drawer="sidebar"]').exists()).toBe(true))
+    await wrapper.find('[data-canvas-drawer="sidebar"]').trigger('click')
+    expect(wrapper.find('.canvas-project-sidebar').classes()).toContain('fixed')
+    await wrapper.find('[data-canvas-drawer="inspector"]').trigger('click')
+    expect(wrapper.find('.canvas-project-sidebar').classes()).toContain('hidden')
+    expect(wrapper.find('.canvas-inspector').classes()).toContain('fixed')
+  })
+
+  it('selects a newly created key before the background refresh completes', async () => {
+    vi.mocked(keysAPI.create).mockResolvedValue({ id: 99, name: 'new-image-key', key: 'sk-new', group_id: 1, status: 'active', expires_at: null } as never)
+    vi.mocked(keysAPI.list).mockResolvedValueOnce({ items: [], total: 0, page: 1, page_size: 100, pages: 1 } as never).mockImplementation(() => new Promise(() => undefined))
+    const wrapper = mountPage([project('one', 'One')])
+    await vi.waitFor(() => expect(wrapper.find('[data-canvas-key-option]').exists()).toBe(false))
+    await wrapper.get('.canvas-key-picker button').trigger('click')
+    const createButton = wrapper.findAll('button').find((button) => button.text() === 'Create')
+    expect(createButton).toBeDefined()
+    await createButton!.trigger('click')
+    await vi.waitFor(() => expect((wrapper.find('.canvas-key-picker select').element as HTMLSelectElement).value).toBe('99'))
+  })
 })
