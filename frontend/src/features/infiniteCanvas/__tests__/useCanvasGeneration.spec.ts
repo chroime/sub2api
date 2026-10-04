@@ -186,4 +186,20 @@ describe('useCanvasGeneration', () => {
     await Promise.all([first, second])
     expect(store.activeProject.value?.nodes.find((node) => node.id === image.id)?.metadata.status).toBe('completed')
   })
+
+  it('cancels an in-flight result before deleting its image node and leaves no orphan asset', async () => {
+    const repo = repository([fixture()]); const store = useInfiniteCanvasStore(repo.value); await store.ready
+    const prompt = store.addNode({ type: 'prompt', position: { x: 0, y: 0 }, metadata: { prompt: 'Delete during generation' } })
+    const config = store.addNode({ type: 'config', position: { x: 200, y: 0 }, metadata: { model: 'image-model' } })
+    let resolveResult: ((result: GeneratedImage[]) => void) | undefined
+    const adapter = vi.fn(() => new Promise<GeneratedImage[]>((resolve) => { resolveResult = resolve }))
+    const generation = useCanvasGeneration({ store, repository: repo.value, getKeySecret: () => 'secret', generate: adapter })
+    const pending = generation.generateFromNodes(prompt.id, config.id)
+    await vi.waitFor(() => expect(adapter).toHaveBeenCalledTimes(1))
+    const image = store.activeProject.value?.nodes.find((node) => node.type === 'image')!
+    await generation.removeImageNode(image.id)
+    resolveResult?.([{ blob: new Blob(['late']), mimeType: 'image/png' }]); await pending
+    expect(store.activeProject.value?.nodes.some((node) => node.id === image.id)).toBe(false)
+    expect(repo.assets).toHaveLength(0)
+  })
 })
