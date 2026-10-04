@@ -29,7 +29,11 @@ export function selectEligibleCanvasKeys(
   const timestamp = now instanceof Date ? now.getTime() : now
   const groupById = new Map(groups.map((group) => [group.id, group]))
   return keys.flatMap((item) => {
-    if (item.status !== 'active' || (item.expires_at && new Date(item.expires_at).getTime() <= timestamp)) return []
+    if (item.status !== 'active') return []
+    if (item.expires_at !== null && item.expires_at !== undefined && item.expires_at !== '') {
+      const expiresAt = new Date(item.expires_at).getTime()
+      if (!Number.isFinite(expiresAt) || expiresAt <= timestamp) return []
+    }
     const group = item.group_id == null ? undefined : groupById.get(item.group_id)
     if (!group || group.status !== 'active' || !group.allow_image_generation || !IMAGE_PLATFORMS.has(group.platform)) return []
     return [{ id: item.id, name: item.name, maskedKey: maskKey(item.key), groupName: group.name, platform: group.platform, key: item.key }]
