@@ -20,6 +20,17 @@ interface AssetRecord extends CanvasAsset {
 const PROJECTS_STORE = 'projects'
 const ASSETS_STORE = 'assets'
 
+/** Stable, non-sensitive namespace for a user's local canvas database. */
+export function canvasDatabaseNameForUser(userId: string | number, baseName = 'sub2api-infinite-canvas'): string {
+  const value = String(userId)
+  let hash = 2166136261
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index)
+    hash = Math.imul(hash, 16777619)
+  }
+  return `${baseName}-user-${(hash >>> 0).toString(36)}`
+}
+
 function clone<T>(value: T): T {
   if (typeof structuredClone === 'function') return structuredClone(value)
   return cloneFallback(value) as T
@@ -68,6 +79,7 @@ function blobToArrayBuffer(blob: Blob): Promise<ArrayBuffer> {
 
 export function createIndexedDbCanvasRepository(databaseName = 'sub2api-infinite-canvas'): CanvasRepository & {
   __unsafePutProjectRecord(record: ProjectRecord): Promise<void>
+  close(): void
 } {
   let databasePromise: Promise<IDBDatabase> | undefined
   const openDatabase = () => databasePromise ??= new Promise((resolve, reject) => {
@@ -82,6 +94,10 @@ export function createIndexedDbCanvasRepository(databaseName = 'sub2api-infinite
   })
 
   return {
+    close() {
+      databasePromise?.then((database) => database.close()).catch(() => undefined)
+      databasePromise = undefined
+    },
     async listProjects() {
       const database = await openDatabase()
       const records = await request(database.transaction(PROJECTS_STORE).objectStore(PROJECTS_STORE).getAll()) as ProjectRecord[]
@@ -148,6 +164,10 @@ export function createIndexedDbCanvasRepository(databaseName = 'sub2api-infinite
       await transactionDone(transaction)
     },
   }
+}
+
+export function createIndexedDbCanvasRepositoryForUser(userId: string | number, baseName = 'sub2api-infinite-canvas') {
+  return createIndexedDbCanvasRepository(canvasDatabaseNameForUser(userId, baseName))
 }
 
 function validate(record: ProjectRecord): ProjectRecord {

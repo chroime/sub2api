@@ -56,6 +56,8 @@ export interface CanvasEdge {
 }
 
 export interface CanvasProject {
+  /** Persisted schema marker. Older in-memory fixtures may omit this field. */
+  schemaVersion?: typeof CANVAS_SCHEMA_VERSION
   id: string
   title: string
   createdAt: Date

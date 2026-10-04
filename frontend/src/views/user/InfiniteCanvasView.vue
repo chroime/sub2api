@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { keysAPI, userGroupsAPI } from '@/api'
+import { listImageModels, type ImageModel } from '@/api/imageGeneration'
 import { useAuthStore } from '@/stores/auth'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import BaseDialog from '@/components/common/BaseDialog.vue'
@@ -14,13 +15,28 @@ import { isCanvasImagePlatform, selectEligibleCanvasKeys } from '@/features/infi
 import type { CanvasKeyOption } from '@/features/infiniteCanvas/keySelection'
 import type { CanvasBackgroundMode, CanvasNode, CanvasProject, CanvasRepository } from '@/features/infiniteCanvas/types'
 import { useInfiniteCanvasStore } from '@/features/infiniteCanvas/stores/useInfiniteCanvasStore'
-import { createIndexedDbCanvasRepository } from '@/features/infiniteCanvas/storage/indexedDbCanvasRepository'
+import { createIndexedDbCanvasRepositoryForUser } from '@/features/infiniteCanvas/storage/indexedDbCanvasRepository'
 import { useCanvasGeneration } from '@/features/infiniteCanvas/composables/useCanvasGeneration'
 import { saveAs } from 'file-saver'
 import { exportProject as exportCanvasProject, importProject as importCanvasProject, sanitizeExportProject } from '@/features/infiniteCanvas/storage/projectTransfer'
 
 const props = defineProps<{ repository?: CanvasRepository }>()
-const repository = props.repository ?? createIndexedDbCanvasRepository()
+function emptyRepository(): CanvasRepository {
+  return { async listProjects() { return [] }, async loadProject() { return null }, async saveProject() {}, async deleteProject() {}, async saveAsset(asset) { return asset.storageKey ?? `asset-${Date.now()}` }, async loadAsset() { return undefined }, async deleteAsset() {} }
+}
+type SwitchableRepository = CanvasRepository & { switchTo(repository: CanvasRepository): void }
+function createSwitchableRepository(initial: CanvasRepository): SwitchableRepository {
+  let delegate = initial
+  return {
+    switchTo(next) {
+      const previous = delegate
+      delegate = next
+      if (previous !== next && 'close' in previous && typeof previous.close === 'function') previous.close()
+    },
+    listProjects: () => delegate.listProjects(), loadProject: (id) => delegate.loadProject(id), saveProject: (project) => delegate.saveProject(project), deleteProject: (id) => delegate.deleteProject(id), saveAsset: (asset) => delegate.saveAsset(asset), loadAsset: (key) => delegate.loadAsset(key), deleteAsset: (key) => delegate.deleteAsset(key),
+  }
+}
+const repository = createSwitchableRepository(props.repository ?? emptyRepository())
 const store = useInfiniteCanvasStore(repository)
 const authStore = useAuthStore()
 const groups = ref<Awaited<ReturnType<typeof userGroupsAPI.getAvailable>>>([])
@@ -39,6 +55,10 @@ const projectToDelete = ref<string | null>(null)
 const saveStatus = ref('')
 const importInput = ref<HTMLInputElement>()
 const warningMessage = ref('')
+const imageModels = ref<ImageModel[]>([])
+const imageModelsLoading = ref(false)
+const imageModelsError = ref('')
+let modelRequestGeneration = 0
 let mounted = false
 let lifecycleGeneration = 0
 let groupsGeneration = -1
@@ -47,6 +67,12 @@ const canvasGroups = computed(() => groups.value.filter((group) => group.status 
 const activeProject = computed(() => store.activeProject.value)
 const selectedNode = computed<CanvasNode | null>(() => activeProject.value?.nodes.find((node) => store.selectedNodeIds.value.includes(node.id)) ?? null)
 const selectedKeyId = computed(() => store.activeKeyId.value ?? null)
+const selectedKeyOption = computed(() => eligibleKeys.value.find((option) => option.id === selectedKeyId.value))
+const availableImageModels = computed(() => {
+  const allowlist = selectedKeyOption.value?.allowedModels
+  if (allowlist === undefined) return imageModels.value
+  return imageModels.value.filter((model) => allowlist.includes(model.id))
+})
 const lastSaved = computed(() => activeProject.value ? `Last saved ${activeProject.value.updatedAt.toLocaleString()}` : '')
 let assetHydrationGeneration = 0
 
@@ -154,7 +180,20 @@ async function createKey() {
 
 function chooseKey(id: number | null) { store.setActiveKey(id ?? undefined) }
 function selectProject(id: string) { store.setActiveProject(id) }
-function createProject() { store.createProject(`Canvas ${store.projects.value.length + 1}`) }
+function createProject() {
+  void store.ready.then(() => {
+    store.createProject(`Canvas ${store.projects.value.length + 1}`)
+    addStarterNodes({ x: 120, y: 100 })
+  })
+}
+function addStarterNodes(point = { x: 120, y: 100 }) {
+  const project = activeProject.value ?? store.createProject(`Canvas ${store.projects.value.length + 1}`)
+  if (project.nodes.some((node) => node.type === 'prompt') || project.nodes.some((node) => node.type === 'config')) return
+  const prompt = store.addNode({ type: 'prompt', position: point, metadata: { prompt: '' } })
+  const config = store.addNode({ type: 'config', position: { x: point.x + 300, y: point.y }, metadata: { model: '', size: '1024x1024', quality: '', count: 1, background: '' } })
+  store.connectNodes({ sourceNodeId: prompt.id, targetNodeId: config.id, kind: 'prompt' })
+  store.connectNodes({ sourceNodeId: config.id, targetNodeId: prompt.id, kind: 'config' })
+}
 function renameProject(id: string, title: string) { store.renameProject(id, title) }
 function duplicateProject(id: string) { store.duplicateProject(id) }
 function requestDelete(id: string) { projectToDelete.value = id; showDelete.value = true }
@@ -183,6 +222,7 @@ function zoom(factor: number) { const current = activeProject.value?.viewport; i
 function selectNode(nodeId: string, additive: boolean) { store.selectedNodeIds.value = additive ? [...new Set([...store.selectedNodeIds.value, nodeId])] : [nodeId] }
 function moveNode(nodeId: string, position: { x: number; y: number }) { store.updateNode(nodeId, { position }) }
 function connectNodes(edge: { sourceNodeId: string; targetNodeId: string; kind: 'prompt' | 'config' | 'reference' }) { store.connectNodes(edge) }
+function handleEmptyCanvasDoubleClick(point: { x: number; y: number }) { addStarterNodes(point) }
 function updateViewport(viewport: CanvasProject['viewport']) {
   const current = activeProject.value?.viewport
   if (!current || (current.x === viewport.x && current.y === viewport.y && current.zoom === viewport.zoom)) return
@@ -209,6 +249,24 @@ async function handleImport(event: Event) {
   if (importInput.value) importInput.value.value = ''
 }
 function clearSecrets() { keySecrets.clear(); eligibleKeys.value = []; groups.value = []; groupsGeneration = -1; newKeyGroupId.value = null }
+async function loadImageModels(generation = lifecycleGeneration) {
+  const option = selectedKeyOption.value
+  const secret = option ? keySecrets.get(option.id) : undefined
+  const requestId = ++modelRequestGeneration
+  imageModelsError.value = ''
+  imageModels.value = []
+  if (!secret) { imageModelsLoading.value = false; return }
+  imageModelsLoading.value = true
+  try {
+    const models = await listImageModels(secret)
+    if (!mounted || generation !== lifecycleGeneration || requestId !== modelRequestGeneration) return
+    imageModels.value = models
+  } catch {
+    if (mounted && generation === lifecycleGeneration && requestId === modelRequestGeneration) imageModelsError.value = 'Could not load image models.'
+  } finally {
+    if (requestId === modelRequestGeneration) imageModelsLoading.value = false
+  }
+}
 const canCreateKey = computed(() => {
   const selectedGroupId = newKeyGroupId.value === null ? null : Number(newKeyGroupId.value)
   return groupsGeneration === lifecycleGeneration && selectedGroupId !== null && canvasGroups.value.some((group) => group.id === selectedGroupId)
@@ -227,10 +285,24 @@ function selectTab(tab: 'canvas' | 'inspector') {
   mobileDrawer.value = tab === 'inspector' ? 'inspector' : null
 }
 
-watch(() => authStore.user?.id, () => { lifecycleGeneration += 1; clearSecrets(); void loadKeys(false, lifecycleGeneration).catch(() => undefined) })
+watch(() => authStore.user?.id, (userId) => {
+  lifecycleGeneration += 1
+  clearSecrets()
+  if (!props.repository) repository.switchTo(userId === undefined || userId === null ? emptyRepository() : createIndexedDbCanvasRepositoryForUser(userId))
+  void store.switchRepository(repository).then(() => loadKeys(false, lifecycleGeneration).catch(() => undefined)).catch(() => undefined)
+})
+watch(selectedKeyOption, () => { void loadImageModels() })
 watch(() => activeProject.value?.id, (id, previous) => { if (id !== previous) void hydrateImageUrls(activeProject.value) })
 watch(() => activeProject.value?.nodes.map((node) => `${node.id}:${typeof node.metadata.storageKey === 'string' ? node.metadata.storageKey : typeof node.metadata.assetKey === 'string' ? node.metadata.assetKey : ''}`).join('|'), () => { void hydrateImageUrls(activeProject.value) })
-onMounted(async () => { mounted = true; lifecycleGeneration += 1; await store.ready; await hydrateImageUrls(activeProject.value); await loadKeys(false, lifecycleGeneration).catch(() => undefined) })
+onMounted(async () => {
+  mounted = true
+  lifecycleGeneration += 1
+  if (!props.repository && authStore.user?.id !== undefined && authStore.user?.id !== null) repository.switchTo(createIndexedDbCanvasRepositoryForUser(authStore.user.id))
+  await store.ready
+  if (!props.repository && authStore.user?.id !== undefined && authStore.user?.id !== null) await store.switchRepository(repository)
+  await hydrateImageUrls(activeProject.value)
+  await loadKeys(false, lifecycleGeneration).catch(() => undefined)
+})
 onBeforeUnmount(() => { mounted = false; lifecycleGeneration += 1; assetHydrationGeneration += 1; revokeImageUrls(); clearSecrets() })
 </script>
 
@@ -240,7 +312,7 @@ onBeforeUnmount(() => { mounted = false; lifecycleGeneration += 1; assetHydratio
       <div class="flex min-h-[calc(100vh-8rem)] flex-col lg:flex-row">
         <CanvasProjectSidebar :projects="store.projects.value" :active-project-id="activeProject?.id" :mobile-open="mobileDrawer === 'sidebar'" @select="selectProject" @new="createProject" @rename="renameProject" @duplicate="duplicateProject" @delete="requestDelete" @import="importProject" @export="exportProject" @close="closeDrawer" />
         <section class="flex min-w-0 flex-1 flex-col">
-          <CanvasToolbar :project="activeProject" :can-undo="store.canUndo.value" :can-redo="store.canRedo.value" :save-status="saveStatus || lastSaved" @background-change="changeBackground" @zoom="zoom" @undo="store.undo" @redo="store.redo" @save="saveNow" />
+          <CanvasToolbar :project="activeProject" :can-undo="store.canUndo.value" :can-redo="store.canRedo.value" :save-status="saveStatus || lastSaved" @background-change="changeBackground" @zoom="zoom" @undo="store.undo" @redo="store.redo" @save="saveNow" @add-nodes="addStarterNodes" />
           <div class="flex gap-1 border-b border-gray-200 bg-white px-3 pt-2 dark:border-dark-700 dark:bg-dark-900 lg:hidden">
             <button type="button" aria-label="Open projects" data-canvas-drawer="sidebar" class="rounded-t-md px-3 py-1 text-xs" @click="openDrawer('sidebar')">Projects</button>
             <button type="button" data-canvas-tab="canvas" :class="['rounded-t-md px-3 py-1 text-xs', activeTab === 'canvas' ? 'is-active bg-gray-100 font-semibold dark:bg-dark-800' : '']" @click="selectTab('canvas')">Canvas</button>
@@ -251,8 +323,8 @@ onBeforeUnmount(() => { mounted = false; lifecycleGeneration += 1; assetHydratio
             <button v-if="mobileDrawer" type="button" aria-label="Close canvas drawer" class="fixed inset-0 z-30 bg-black/30 lg:hidden" @click="closeDrawer" />
             <div v-if="!activeProject" data-canvas-empty="projects" class="flex min-h-[420px] flex-1 items-center justify-center p-8 text-center text-sm text-gray-500 dark:text-dark-400">No projects yet. <button type="button" class="ml-1 text-primary-600 hover:underline" @click="createProject">Create a project</button></div>
             <div v-else class="relative min-h-[420px] min-w-0 flex-1 overflow-auto" :class="{ hidden: activeTab !== 'canvas' }">
-              <InfiniteCanvasSurface :project="activeProject" :image-urls="imageUrls" :selected-node-ids="store.selectedNodeIds.value" @node-select="selectNode" @node-move="moveNode" @node-delete="removeCanvasNode" @node-update="updateCanvasNode" @node-retry="retryCanvasNode" @node-generate="generateCanvasNode" @edge-create="connectNodes" @viewport-update="updateViewport" />
-              <div v-if="!eligibleKeys.length" class="pointer-events-none absolute left-1/2 top-6 w-72 -translate-x-1/2 rounded-md border border-amber-200 bg-amber-50 p-3 text-center text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-200" data-canvas-empty="image-models">No image models available for this canvas.</div>
+              <InfiniteCanvasSurface :project="activeProject" :image-urls="imageUrls" :selected-node-ids="store.selectedNodeIds.value" :image-models="availableImageModels" :image-models-loading="imageModelsLoading" :image-models-error="imageModelsError" @node-select="selectNode" @node-move="moveNode" @node-delete="removeCanvasNode" @node-update="updateCanvasNode" @node-retry="retryCanvasNode" @node-generate="generateCanvasNode" @edge-create="connectNodes" @viewport-update="updateViewport" @empty-canvas-double-click="handleEmptyCanvasDoubleClick" @retry-image-models="loadImageModels" />
+              <div v-if="selectedKeyId && !imageModelsLoading && !imageModelsError && !availableImageModels.length" class="pointer-events-none absolute left-1/2 top-6 w-72 -translate-x-1/2 rounded-md border border-amber-200 bg-amber-50 p-3 text-center text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-200" data-canvas-empty="image-models">No image models available for this key.</div>
             </div>
             <CanvasInspector v-if="activeProject" :mobile-open="mobileDrawer === 'inspector'" :node="selectedNode" @update="updateNode" @delete="removeSelectedNode" @close="closeDrawer" />
           </div>

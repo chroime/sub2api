@@ -31,4 +31,10 @@ describe('selectEligibleCanvasKeys', () => {
     const malformed = { ...keys[0], id: 17, name: 'Malformed expiry', expires_at: 'not-a-date' }
     expect(selectEligibleCanvasKeys([malformed], groups)).toEqual([])
   })
+
+  it('carries the selected group model allowlist without exposing unrelated fields', () => {
+    const [option] = selectEligibleCanvasKeys(keys, [{ ...groups[0], model_allowlist: { enabled: true, models: ['gpt-image-1'] } }])
+    expect(option.allowedModels).toEqual(['gpt-image-1'])
+    expect(option).not.toHaveProperty('model_allowlist')
+  })
 })

@@ -62,6 +62,14 @@ describe('InfiniteCanvasView', () => {
     expect(wrapper.text()).not.toContain('text-key')
   })
 
+  it('creates connected prompt and config nodes from a new empty project', async () => {
+    const wrapper = mountPage([])
+    await wrapper.find('[data-canvas-empty="projects"] button').trigger('click')
+    await vi.waitFor(() => expect(wrapper.findAll('.canvas-node')).toHaveLength(2))
+    expect(wrapper.find('.prompt-node').exists()).toBe(true)
+    expect(wrapper.find('.config-node').exists()).toBe(true)
+  })
+
   it('shows a clear empty state when no image key is available', async () => {
     vi.mocked(keysAPI.list).mockResolvedValue({ items: [], total: 0, page: 1, page_size: 100, pages: 1 } as never)
     const wrapper = mountPage([project('one', 'One')])
