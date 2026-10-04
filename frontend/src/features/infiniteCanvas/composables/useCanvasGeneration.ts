@@ -81,6 +81,7 @@ export function useCanvasGeneration(options: CanvasGenerationOptions) {
     const project = options.store.activeProject.value
     const node = project?.nodes.find((candidate) => candidate.id === nodeId && candidate.type === 'image')
     const storageKey = node ? stringValue(metadata(node).storageKey) ?? stringValue(metadata(node).assetKey) : undefined
+    cancelGeneration(nodeId)
     options.store.removeNode(nodeId)
     if (storageKey) await cleanupAsset(storageKey)
   }
