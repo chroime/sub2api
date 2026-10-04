@@ -130,4 +130,60 @@ describe('useCanvasGeneration', () => {
     await generation.generateFromNodes(prompt.id, config.id)
     expect(gemini).toHaveBeenCalled(); expect(generic).not.toHaveBeenCalled()
   })
+
+  it('aborts stale key selections before dispatching the old secret', async () => {
+    const repo = repository([fixture()]); const store = useInfiniteCanvasStore(repo.value); await store.ready
+    store.setActiveKey(1)
+    const prompt = store.addNode({ type: 'prompt', position: { x: 0, y: 0 }, metadata: { prompt: 'Stale key' } })
+    const config = store.addNode({ type: 'config', position: { x: 200, y: 0 }, metadata: { model: 'image-model' } })
+    let resolveSecret: ((secret: string) => void) | undefined
+    const adapter = vi.fn().mockResolvedValue([{ blob: new Blob(['unexpected']), mimeType: 'image/png' }])
+    const generation = useCanvasGeneration({ store, repository: repo.value, getKeySecret: () => new Promise<string>((resolve) => { resolveSecret = resolve }), getKeyPlatform: (id) => id === 1 ? 'openai' : 'gemini', generate: adapter })
+    const pending = generation.generateFromNodes(prompt.id, config.id)
+    await vi.waitFor(() => expect(store.activeProject.value?.nodes.some((node) => node.type === 'image')).toBe(true))
+    store.setActiveKey(2); resolveSecret?.('old-secret'); await pending
+    expect(adapter).not.toHaveBeenCalled()
+    expect(store.activeProject.value?.nodes.find((node) => node.type === 'image')?.metadata.error).toContain('密钥选择已变更')
+  })
+
+  it('retains an old replacement asset when the new save fails', async () => {
+    const repo = repository([fixture()]); repo.assets.push({ key: 'old-asset', blob: new Blob(['old']) })
+    const store = useInfiniteCanvasStore(repo.value); await store.ready
+    const prompt = store.addNode({ type: 'prompt', position: { x: 0, y: 0 }, metadata: { prompt: 'Replace' } })
+    const config = store.addNode({ type: 'config', position: { x: 200, y: 0 }, metadata: { model: 'image-model' } })
+    const image = store.addNode({ type: 'image', position: { x: 500, y: 0 }, metadata: { status: 'failed', storageKey: 'old-asset', assetKey: 'old-asset', promptNodeId: prompt.id, configNodeId: config.id, requestSnapshot: { model: 'image-model', prompt: 'Replace' } } })
+    const failingRepo: CanvasRepository = { ...repo.value, async saveAsset() { throw new Error('disk full') } }
+    const generation = useCanvasGeneration({ store, repository: failingRepo, getKeySecret: () => 'secret', generate: async () => [{ blob: new Blob(['new']), mimeType: 'image/png' }] })
+    await generation.retryImageNode(image.id)
+    expect(store.activeProject.value?.nodes.find((node) => node.id === image.id)?.metadata.storageKey).toBe('old-asset')
+    expect(repo.assets).toHaveLength(1)
+  })
+
+  it('fails closed for duplicate node IDs, project assetKeys, and repository scan errors', async () => {
+    const second = fixture(); second.id = 'project-2'; second.assetKeys = ['shared']; second.nodes = [{ id: 'same-node', type: 'image', position: { x: 0, y: 0 }, metadata: { storageKey: 'shared' } }]
+    const first = fixture(); first.nodes = [{ id: 'same-node', type: 'image', position: { x: 0, y: 0 }, metadata: { storageKey: 'shared' } }]
+    const repo = repository([first, second]); repo.assets.push({ key: 'shared', blob: new Blob(['shared']) })
+    const store = useInfiniteCanvasStore(repo.value); await store.ready
+    const generation = useCanvasGeneration({ store, repository: repo.value, getKeySecret: () => 'secret' })
+    await generation.removeImageNode('same-node'); expect(repo.assets).toHaveLength(1)
+    repo.value.listProjects = async () => { throw new Error('offline') }
+    await generation.cleanupAsset('shared'); expect(repo.assets).toHaveLength(1)
+  })
+
+  it('does not let an older overlapping run clear the newer retry state', async () => {
+    const repo = repository([fixture()]); const store = useInfiniteCanvasStore(repo.value); await store.ready
+    const prompt = store.addNode({ type: 'prompt', position: { x: 0, y: 0 }, metadata: { prompt: 'Overlap' } })
+    const config = store.addNode({ type: 'config', position: { x: 200, y: 0 }, metadata: { model: 'image-model' } })
+    const deferred: Array<(value: GeneratedImage[]) => void> = []
+    const adapter = vi.fn(() => new Promise<GeneratedImage[]>((resolve) => deferred.push(resolve)))
+    const generation = useCanvasGeneration({ store, repository: repo.value, getKeySecret: () => 'secret', generate: adapter })
+    const first = generation.generateFromNodes(prompt.id, config.id)
+    await vi.waitFor(() => expect(adapter).toHaveBeenCalledTimes(1))
+    const image = store.activeProject.value?.nodes.find((node) => node.type === 'image')!
+    const second = generation.retryImageNode(image.id)
+    await vi.waitFor(() => expect(adapter).toHaveBeenCalledTimes(2))
+    deferred[0]([{ blob: new Blob(['old']), mimeType: 'image/png' }]); deferred[1]([{ blob: new Blob(['new']), mimeType: 'image/png' }])
+    await Promise.all([first, second])
+    expect(store.activeProject.value?.nodes.find((node) => node.id === image.id)?.metadata.status).toBe('completed')
+  })
 })
