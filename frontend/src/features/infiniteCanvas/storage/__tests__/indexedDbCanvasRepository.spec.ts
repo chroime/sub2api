@@ -74,6 +74,14 @@ describe('indexed db canvas repository', () => {
     expect(await repo.loadAsset(key)).toBeTruthy()
   })
 
+  it('deletes an asset whose project owner no longer exists', async () => {
+    const repo = createIndexedDbCanvasRepository(`test-${crypto.randomUUID()}`)
+    const key = await repo.saveAsset({ blob: new Blob(['orphan']), mimeType: 'text/plain', kind: 'text', projectId: 'missing-project' })
+    await repo.saveProject(makeFixtureProject({ assetKeys: [key] }))
+    await repo.deleteProject('project-1')
+    expect(await repo.loadAsset(key)).toBeUndefined()
+  })
+
   it('rejects an unknown schema version with a typed error', async () => {
     const repo = createIndexedDbCanvasRepository(`test-${crypto.randomUUID()}`)
     await repo.__unsafePutProjectRecord({ id: 'bad', schemaVersion: 999, payload: {} as CanvasProject })
