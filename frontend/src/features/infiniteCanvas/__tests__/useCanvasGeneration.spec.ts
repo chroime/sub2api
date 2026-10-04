@@ -79,7 +79,8 @@ describe('useCanvasGeneration', () => {
     const adapter = vi.fn().mockRejectedValueOnce(new ImageGenerationError(403, 'forbidden', 'no')).mockResolvedValueOnce([{ blob: new Blob(['ok'], { type: 'image/png' }), mimeType: 'image/png' }])
     const generation = useCanvasGeneration({ store, repository: repo.value, getKeySecret: () => 'secret', generate: adapter })
     await generation.generateFromNodes(prompt.id, config.id)
-    const failed = store.activeProject.value?.nodes.find((node) => node.type === 'image')!
+    const failed = store.activeProject.value?.nodes.find((node) => node.type === 'image')
+    if (!failed) throw new Error('expected a failed image node')
     await generation.retryImageNode(failed.id)
     expect(adapter.mock.calls[1][1]).toMatchObject({ prompt: 'Retry me', model: 'retry-model', size: '1K' })
     expect(store.activeProject.value?.nodes.find((node) => node.id === failed.id)?.metadata.status).toBe('completed')
@@ -92,7 +93,8 @@ describe('useCanvasGeneration', () => {
     const adapter = vi.fn().mockRejectedValueOnce(new ImageGenerationError(403, 'forbidden', 'no')).mockResolvedValueOnce([{ blob: new Blob(['ok'], { type: 'image/png' }), mimeType: 'image/png' }])
     const generation = useCanvasGeneration({ store, repository: repo.value, getKeySecret: () => 'secret', generate: adapter })
     await generation.generateFromNodes(prompt.id, config.id)
-    const failed = store.activeProject.value?.nodes.find((node) => node.type === 'image')!
+    const failed = store.activeProject.value?.nodes.find((node) => node.type === 'image')
+    if (!failed) throw new Error('expected a failed image node')
     store.updateNode(prompt.id, { metadata: { prompt: 'Edited prompt' } }); store.updateNode(config.id, { metadata: { model: 'edited-model', quality: 'low' } })
     await generation.retryImageNode(failed.id)
     expect(adapter.mock.calls[1][1]).toMatchObject({ prompt: 'Original prompt', model: 'original-model', quality: 'high' })
@@ -107,7 +109,8 @@ describe('useCanvasGeneration', () => {
     const generation = useCanvasGeneration({ store, repository: repo.value, getKeySecret: () => new Promise<string>((resolve) => { resolveSecret = resolve }), generate: adapter })
     const pending = generation.generateFromNodes(prompt.id, config.id)
     await vi.waitFor(() => expect(store.activeProject.value?.nodes.some((node) => node.type === 'image')).toBe(true))
-    const image = store.activeProject.value?.nodes.find((node) => node.type === 'image')!
+    const image = store.activeProject.value?.nodes.find((node) => node.type === 'image')
+    if (!image) throw new Error('expected an image node')
     generation.cancelGeneration(image.id); resolveSecret?.('secret'); await pending
     expect(adapter).not.toHaveBeenCalled()
     expect(image.metadata.status).toBe('failed')
@@ -195,7 +198,8 @@ describe('useCanvasGeneration', () => {
     const generation = useCanvasGeneration({ store, repository: repo.value, getKeySecret: () => 'secret', generate: adapter })
     const first = generation.generateFromNodes(prompt.id, config.id)
     await vi.waitFor(() => expect(adapter).toHaveBeenCalledTimes(1))
-    const image = store.activeProject.value?.nodes.find((node) => node.type === 'image')!
+    const image = store.activeProject.value?.nodes.find((node) => node.type === 'image')
+    if (!image) throw new Error('expected an image node')
     const second = generation.retryImageNode(image.id)
     await vi.waitFor(() => expect(adapter).toHaveBeenCalledTimes(2))
     deferred[0]([{ blob: new Blob(['old']), mimeType: 'image/png' }]); deferred[1]([{ blob: new Blob(['new']), mimeType: 'image/png' }])
@@ -212,7 +216,8 @@ describe('useCanvasGeneration', () => {
     const generation = useCanvasGeneration({ store, repository: repo.value, getKeySecret: () => 'secret', generate: adapter })
     const pending = generation.generateFromNodes(prompt.id, config.id)
     await vi.waitFor(() => expect(adapter).toHaveBeenCalledTimes(1))
-    const image = store.activeProject.value?.nodes.find((node) => node.type === 'image')!
+    const image = store.activeProject.value?.nodes.find((node) => node.type === 'image')
+    if (!image) throw new Error('expected an image node')
     await generation.removeImageNode(image.id)
     resolveResult?.([{ blob: new Blob(['late']), mimeType: 'image/png' }]); await pending
     expect(store.activeProject.value?.nodes.some((node) => node.id === image.id)).toBe(false)
