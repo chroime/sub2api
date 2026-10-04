@@ -202,4 +202,21 @@ describe('useCanvasGeneration', () => {
     expect(store.activeProject.value?.nodes.some((node) => node.id === image.id)).toBe(false)
     expect(repo.assets).toHaveLength(0)
   })
+
+  it('cancels the whole run when a later multi-result node is deleted during save', async () => {
+    const base = repository([fixture()]); const store = useInfiniteCanvasStore(base.value); await store.ready
+    const prompt = store.addNode({ type: 'prompt', position: { x: 0, y: 0 }, metadata: { prompt: 'Delete second' } })
+    const config = store.addNode({ type: 'config', position: { x: 200, y: 0 }, metadata: { model: 'image-model', count: 2 } })
+    let saveCount = 0; let releaseSecond: (() => void) | undefined
+    const repo: CanvasRepository = { ...base.value, async saveAsset(asset) { saveCount += 1; if (saveCount === 2) await new Promise<void>((resolve) => { releaseSecond = resolve }); return base.value.saveAsset(asset) } }
+    const generation = useCanvasGeneration({ store, repository: repo, getKeySecret: () => 'secret', generate: async () => [{ blob: new Blob(['one']), mimeType: 'image/png' }, { blob: new Blob(['two']), mimeType: 'image/png' }] })
+    const pending = generation.generateFromNodes(prompt.id, config.id)
+    await vi.waitFor(() => expect(saveCount).toBe(2))
+    const images = store.activeProject.value?.nodes.filter((node) => node.type === 'image') ?? []
+    expect(images).toHaveLength(2)
+    await generation.removeImageNode(images[1].id); releaseSecond?.(); await pending
+    expect(store.activeProject.value?.nodes.some((node) => node.id === images[1].id)).toBe(false)
+    expect(base.assets).toHaveLength(0)
+    expect(store.activeProject.value?.nodes.find((node) => node.id === images[0].id)?.metadata.status).toBe('failed')
+  })
 })
