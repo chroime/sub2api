@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref } from 'vue'
 import type { CanvasNode as CanvasNodeModel } from '../types'
+import PromptNode from './nodes/PromptNode.vue'
+import ConfigNode from './nodes/ConfigNode.vue'
+import ImageNode from './nodes/ImageNode.vue'
 
 const props = defineProps<{ node: CanvasNodeModel; selected?: boolean; panMode?: boolean }>()
 const emit = defineEmits<{
@@ -8,6 +11,8 @@ const emit = defineEmits<{
   (event: 'move', nodeId: string, screenDelta: { x: number; y: number }): void
   (event: 'delete', nodeId: string): void
   (event: 'connect-start', nodeId: string): void
+  (event: 'update', nodeId: string, patch: Partial<CanvasNodeModel>): void
+  (event: 'retry', nodeId: string): void
 }>()
 const dragging = ref(false)
 const dragStart = ref({ x: 0, y: 0 })
@@ -17,7 +22,7 @@ let dragFrame: number | undefined
 const size = computed(() => props.node.size ?? { width: 240, height: 140 })
 const label = computed(() => props.node.type[0].toUpperCase() + props.node.type.slice(1))
 const metadataSummary = computed(() => {
-  const keys = Object.keys(props.node.metadata).filter((key) => !['text', 'model', 'url', 'status'].includes(key))
+  const keys = Object.keys(props.node.metadata).filter((key) => !['text', 'prompt', 'model', 'url', 'status'].includes(key))
   return keys.length ? `${keys.length} metadata field${keys.length === 1 ? '' : 's'}` : 'Placeholder node'
 })
 
@@ -74,14 +79,14 @@ onBeforeUnmount(() => { if (dragFrame !== undefined) cancelAnimationFrame(dragFr
   >
     <header class="canvas-node__header">
       <span>{{ label }}</span>
-      <button type="button" title="Delete node" @pointerdown.stop @click.stop="emit('delete', node.id)">×</button>
+      <button type="button" title="Delete node" data-canvas-no-zoom @pointerdown.stop @click.stop="emit('delete', node.id)">×</button>
     </header>
     <button class="canvas-node__handle canvas-node__handle--output" type="button" title="Connect node" aria-label="Connect node" @pointerdown="startConnection" />
     <div class="canvas-node__body">
-      <span class="canvas-node__placeholder">{{ metadataSummary }}</span>
-      <span v-if="node.type === 'prompt' && typeof node.metadata.text === 'string'" class="canvas-node__text">{{ node.metadata.text }}</span>
-      <span v-else-if="node.type === 'config' && typeof node.metadata.model === 'string'" class="canvas-node__text">{{ node.metadata.model }}</span>
-      <span v-else-if="node.type === 'image' && typeof node.metadata.status === 'string'" class="canvas-node__text">{{ node.metadata.status }}</span>
+      <PromptNode v-if="node.type === 'prompt'" :node="node" @update="emit('update', node.id, $event)" />
+      <ConfigNode v-else-if="node.type === 'config'" :node="node" @update="emit('update', node.id, $event)" />
+      <ImageNode v-else-if="node.type === 'image'" :node="node" @delete="emit('delete', node.id)" @retry="emit('retry', node.id)" />
+      <span v-if="metadataSummary !== 'Placeholder node'" class="canvas-node__placeholder">{{ metadataSummary }}</span>
     </div>
   </article>
 </template>
