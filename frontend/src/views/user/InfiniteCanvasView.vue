@@ -16,6 +16,8 @@ import type { CanvasBackgroundMode, CanvasNode, CanvasProject, CanvasRepository 
 import { useInfiniteCanvasStore } from '@/features/infiniteCanvas/stores/useInfiniteCanvasStore'
 import { createIndexedDbCanvasRepository } from '@/features/infiniteCanvas/storage/indexedDbCanvasRepository'
 import { useCanvasGeneration } from '@/features/infiniteCanvas/composables/useCanvasGeneration'
+import { saveAs } from 'file-saver'
+import { exportProject as exportCanvasProject, importProject as importCanvasProject, sanitizeExportProject } from '@/features/infiniteCanvas/storage/projectTransfer'
 
 const props = defineProps<{ repository?: CanvasRepository }>()
 const repository = props.repository ?? createIndexedDbCanvasRepository()
@@ -187,29 +189,22 @@ function updateViewport(viewport: CanvasProject['viewport']) {
   store.updateViewport(viewport)
 }
 async function saveNow() { await store.saveProject(); saveStatus.value = 'Saved'; window.setTimeout(() => { saveStatus.value = '' }, 1600) }
-function exportProject() {
+async function exportProject() {
   if (!activeProject.value) return
-  const blob = new Blob([JSON.stringify({ schemaVersion: 1, ...activeProject.value })], { type: 'application/json' })
-  const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `${activeProject.value.title || 'canvas'}.json`; link.click(); URL.revokeObjectURL(url)
+  try {
+    const blob = await exportCanvasProject(activeProject.value, repository)
+    const safeTitle = sanitizeExportProject(activeProject.value).title.replace(/[^a-z0-9._-]+/gi, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'canvas'
+    saveAs(blob, `${safeTitle}-${new Date().toISOString().slice(0, 10)}.canvas.zip`)
+  } catch { warningMessage.value = 'Could not export this canvas.' }
 }
 function importProject() { importInput.value?.click() }
-const IMPORT_SECRET_FIELDS = new Set(['key', 'apiKey', 'secret', 'token', 'access_token', 'activeKeySecret'])
-function unwrapImportPayload(data: unknown): unknown {
-  if (!data || typeof data !== 'object' || Array.isArray(data)) return data
-  const record = data as Record<string, unknown>
-  if (!Object.prototype.hasOwnProperty.call(record, 'project')) return data
-  if (Object.keys(record).some((key) => key !== 'project' || IMPORT_SECRET_FIELDS.has(key))) return undefined
-  return record.project
-}
 async function handleImport(event: Event) {
   const file = (event.target as HTMLInputElement).files?.[0]; if (!file) return
+  warningMessage.value = 'Importing canvas...'
   try {
-    const raw = await file.text()
-    if (raw.length > 2_000_000) throw new Error('Import too large')
-    const data = JSON.parse(raw) as unknown
-    const payload = unwrapImportPayload(data)
-    if (payload === undefined) throw new Error('Invalid canvas envelope')
-    if (!store.importProject(payload)) throw new Error('Invalid canvas project')
+    const imported = await importCanvasProject(file, repository)
+    if (!store.importProject(imported)) throw new Error('Invalid canvas project')
+    warningMessage.value = ''
   } catch { warningMessage.value = 'The canvas file is invalid or too large.' }
   if (importInput.value) importInput.value.value = ''
 }
@@ -266,7 +261,7 @@ onBeforeUnmount(() => { mounted = false; lifecycleGeneration += 1; assetHydratio
       </div>
       <p v-if="warningMessage" role="status" class="border-t border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">{{ warningMessage }}</p>
     </div>
-    <input ref="importInput" type="file" accept="application/json" class="hidden" @change="handleImport" />
+    <input ref="importInput" type="file" accept=".zip,.canvas.zip,application/zip" class="hidden" @change="handleImport" />
     <BaseDialog :show="showCreateKey" title="Create image key" width="narrow" @close="showCreateKey = false">
       <div class="space-y-3"><label class="block text-sm">Name<input v-model="newKeyName" class="mt-1 w-full rounded-md border px-3 py-2 dark:border-dark-600 dark:bg-dark-800" /></label><label class="block text-sm">Group<select v-model="newKeyGroupId" class="mt-1 w-full rounded-md border px-3 py-2 dark:border-dark-600 dark:bg-dark-800"><option :value="null">Select group</option><option v-for="group in canvasGroups" :key="group.id" :value="group.id">{{ group.name }}</option></select></label></div>
       <template #footer><button type="button" :disabled="!canCreateKey" class="rounded-md bg-primary-600 px-3 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-50" @click="createKey">Create</button></template>
