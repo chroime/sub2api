@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { buildGeminiRequest, editImage, generateImage, ImageGenerationError, listImageModels } from '../imageGeneration'
+import { buildGeminiRequest, editImage, generateGeminiImage, generateImage, ImageGenerationError, listImageModels } from '../imageGeneration'
 
 describe('image generation gateway adapter', () => {
   beforeEach(() => vi.restoreAllMocks())
@@ -37,5 +37,29 @@ describe('image generation gateway adapter', () => {
     expect(buildGeminiRequest({ model: 'gemini-image', prompt: 'draw', size: '1K' })).toEqual({
       contents: [{ parts: [{ text: 'draw' }] }], generationConfig: { responseModalities: ['TEXT', 'IMAGE'], imageConfig: { imageSize: '1K' } }
     })
+  })
+
+  it('calls Gemini generateContent with its API key and normalizes inline image data', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ candidates: [{ content: { parts: [{ inlineData: { mimeType: 'image/png', data: 'aGVsbG8=' } }] } }] }), { status: 200 }))
+    const result = await generateGeminiImage('gem-key', { model: 'gemini/image model', prompt: 'draw' })
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toContain('/v1beta/models/gemini%2Fimage%20model:generateContent')
+    expect(init).toMatchObject({ method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': 'gem-key' } })
+    expect(result[0].mimeType).toBe('image/png')
+    expect(result[0].blob).toBeInstanceOf(Blob)
+  })
+
+  it('fetches relative and same-origin URL results without cross-origin credentials', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: [{ url: '/generated.png' }] }), { status: 200 }))
+      .mockResolvedValueOnce(new Response('png', { status: 200, headers: { 'Content-Type': 'image/png' } }))
+    const result = await generateImage('secret', { model: 'image', prompt: 'hello' })
+    expect(result[0].mimeType).toBe('image/png')
+    expect(fetchMock.mock.calls[1][1]).toMatchObject({ credentials: 'same-origin' })
+  })
+
+  it('rejects external URL results as a structured adapter error', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ data: [{ url: 'https://external.example/image.png' }] }), { status: 200 }))
+    await expect(generateImage('secret', { model: 'image', prompt: 'hello' })).rejects.toMatchObject({ status: 400, code: 'external_image_url' })
   })
 })
