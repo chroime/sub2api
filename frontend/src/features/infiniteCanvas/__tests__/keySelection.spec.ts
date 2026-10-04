@@ -43,4 +43,9 @@ describe('selectEligibleCanvasKeys', () => {
     expect(isCanvasModelAllowed('gpt-text-1', ['gpt-image-*', 'imagen-3'])).toBe(false)
     expect(isCanvasModelAllowed('IMAGEN-3', ['gpt-image-*', 'imagen-3'])).toBe(true)
   })
+
+  it('fails closed when an enabled allowlist has no model array', () => {
+    const [option] = selectEligibleCanvasKeys(keys, [{ ...groups[0], model_allowlist: { enabled: true } }])
+    expect(option.allowedModels).toEqual([])
+  })
 })

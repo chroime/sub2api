@@ -48,7 +48,10 @@ export function selectEligibleCanvasKeys(
     const group = item.group_id == null ? undefined : groupById.get(item.group_id)
     if (!group || group.status !== 'active' || !group.allow_image_generation || !IMAGE_PLATFORMS.has(group.platform)) return []
     const allowlist = (group as Pick<Group, 'id'> & { model_allowlist?: { enabled?: boolean; models?: string[] } }).model_allowlist
-    return [{ id: item.id, name: item.name, maskedKey: maskKey(item.key), groupName: group.name, groupId: group.id, platform: group.platform, ...(allowlist?.enabled && Array.isArray(allowlist.models) ? { allowedModels: allowlist.models.filter((model): model is string => typeof model === 'string') } : {}), key: item.key }]
+    const allowedModels = allowlist?.enabled
+      ? Array.isArray(allowlist.models) ? allowlist.models.filter((model): model is string => typeof model === 'string') : []
+      : undefined
+    return [{ id: item.id, name: item.name, maskedKey: maskKey(item.key), groupName: group.name, groupId: group.id, platform: group.platform, ...(allowlist?.enabled ? { allowedModels } : {}), key: item.key }]
   })
 }
 
