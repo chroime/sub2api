@@ -203,7 +203,11 @@ export function useCanvasGeneration(options: CanvasGenerationOptions) {
     return run(nodeId, promptNode, configNode, promptNode.id, configNode.id, snapshot)
   }
 
-  function cancelGeneration(nodeId: string): void { const run = runs.get(nodeId); if (run) run.cancelled = true }
+  function cancelGeneration(nodeId: string): void {
+    const direct = runs.get(nodeId)
+    const run = direct ?? [...runs.values()].find((candidate) => candidate.targetIds.includes(nodeId))
+    if (run) run.cancelled = true
+  }
 
   return { generateFromNodes, retryImageNode, cancelGeneration, isGenerating, removeImageNode, cleanupAsset, activeIds }
 }
