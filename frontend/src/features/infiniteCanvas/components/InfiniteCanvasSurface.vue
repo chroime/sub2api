@@ -25,7 +25,9 @@ let pending = { x: 0, y: 0 }
 const panMode = ref(false)
 const connectingNodeId = ref<string | undefined>()
 const surfaceSize = ref({ width: 800, height: 600 })
+const dragPositions = new Map<string, CanvasPoint>()
 watch(() => currentProject.value?.viewport, (value) => { if (value) viewport.value = { ...value } }, { deep: true })
+watch(() => currentProject.value?.id, () => { connectingNodeId.value = undefined; dragPositions.clear() })
 watch(viewport, (value) => emit('viewport-update', { ...value }), { deep: true })
 function pointerDown(event: PointerEvent) {
   if (event.button !== 0 && event.button !== 1 && !event.ctrlKey && !event.shiftKey) return
@@ -75,9 +77,16 @@ onMounted(() => { window.addEventListener('keydown', keyboard); window.addEventL
 onBeforeUnmount(() => { window.removeEventListener('keydown', keyboard); window.removeEventListener('keyup', keyup); window.removeEventListener('resize', resizeSurface); if (frame !== undefined) cancelAnimationFrame(frame) })
 function updateNode(nodeId: string, screenDelta: CanvasPoint) {
   const node = currentProject.value?.nodes.find((item) => item.id === nodeId)
-  if (node) emit('node-move', nodeId, { x: node.position.x + screenDelta.x / viewport.value.zoom, y: node.position.y + screenDelta.y / viewport.value.zoom })
+  if (node) {
+    const previous = dragPositions.get(nodeId) ?? node.position
+    const next = { x: previous.x + screenDelta.x / viewport.value.zoom, y: previous.y + screenDelta.y / viewport.value.zoom }
+    dragPositions.set(nodeId, next)
+    emit('node-move', nodeId, next)
+  }
 }
 function handleNodeSelect(nodeId: string, additive: boolean) {
+  const node = currentProject.value?.nodes.find((item) => item.id === nodeId)
+  if (node) dragPositions.set(nodeId, { ...node.position })
   if (connectingNodeId.value && connectingNodeId.value !== nodeId) {
     emit('edge-create', { sourceNodeId: connectingNodeId.value, targetNodeId: nodeId, kind: 'reference' })
     connectingNodeId.value = undefined

@@ -12,6 +12,7 @@ const emit = defineEmits<{
 const dragging = ref(false)
 const dragStart = ref({ x: 0, y: 0 })
 const pendingDelta = ref({ x: 0, y: 0 })
+const emittedDelta = ref({ x: 0, y: 0 })
 let dragFrame: number | undefined
 const size = computed(() => props.node.size ?? { width: 240, height: 140 })
 const label = computed(() => props.node.type[0].toUpperCase() + props.node.type.slice(1))
@@ -26,6 +27,7 @@ function startDrag(event: PointerEvent) {
   dragging.value = true
   dragStart.value = { x: event.clientX, y: event.clientY }
   pendingDelta.value = { x: 0, y: 0 }
+  emittedDelta.value = { x: 0, y: 0 }
   emit('select', props.node.id, event.shiftKey || event.metaKey || event.ctrlKey)
   ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
 }
@@ -46,8 +48,9 @@ function stopDrag(event: PointerEvent) {
 function flushDrag() {
   if (dragFrame !== undefined) { cancelAnimationFrame(dragFrame); dragFrame = undefined }
   if (dragging.value && (pendingDelta.value.x !== 0 || pendingDelta.value.y !== 0)) {
-    emit('move', props.node.id, { ...pendingDelta.value })
-    pendingDelta.value = { x: 0, y: 0 }
+    const incremental = { x: pendingDelta.value.x - emittedDelta.value.x, y: pendingDelta.value.y - emittedDelta.value.y }
+    if (incremental.x !== 0 || incremental.y !== 0) emit('move', props.node.id, incremental)
+    emittedDelta.value = { ...pendingDelta.value }
   }
 }
 function startConnection(event: PointerEvent) {
