@@ -20,11 +20,12 @@ import { useCanvasGeneration } from '@/features/infiniteCanvas/composables/useCa
 const props = defineProps<{ repository?: CanvasRepository }>()
 const repository = props.repository ?? createIndexedDbCanvasRepository()
 const store = useInfiniteCanvasStore(repository)
-const generation = useCanvasGeneration({ store, repository, getKeySecret: (keyId) => keyId === undefined ? undefined : keySecrets.get(keyId) })
 const authStore = useAuthStore()
 const groups = ref<Awaited<ReturnType<typeof userGroupsAPI.getAvailable>>>([])
 const eligibleKeys = ref<CanvasKeyOption[]>([])
 const keySecrets = new Map<number, string>()
+const imageUrls = ref<Record<string, string>>({})
+const generation = useCanvasGeneration({ store, repository, getKeySecret: (keyId) => keyId === undefined ? undefined : keySecrets.get(keyId), getKeyPlatform: (keyId) => keyId === undefined ? undefined : eligibleKeys.value.find((option) => option.id === keyId)?.platform })
 const keysLoading = ref(true)
 const activeTab = ref<'canvas' | 'inspector'>('canvas')
 const mobileDrawer = ref<'sidebar' | 'inspector' | null>(null)
@@ -45,6 +46,31 @@ const activeProject = computed(() => store.activeProject.value)
 const selectedNode = computed<CanvasNode | null>(() => activeProject.value?.nodes.find((node) => store.selectedNodeIds.value.includes(node.id)) ?? null)
 const selectedKeyId = computed(() => store.activeKeyId.value ?? null)
 const lastSaved = computed(() => activeProject.value ? `Last saved ${activeProject.value.updatedAt.toLocaleString()}` : '')
+let assetHydrationGeneration = 0
+
+function revokeImageUrls() {
+  if (typeof URL !== 'undefined' && typeof URL.revokeObjectURL === 'function') Object.values(imageUrls.value).forEach((url) => URL.revokeObjectURL(url))
+  imageUrls.value = {}
+}
+
+async function hydrateImageUrls(project: CanvasProject | null) {
+  const generationId = ++assetHydrationGeneration
+  revokeImageUrls()
+  if (!project) return
+  const entries = await Promise.all(project.nodes.filter((node) => node.type === 'image').map(async (node) => {
+    const key = typeof node.metadata.storageKey === 'string' ? node.metadata.storageKey : typeof node.metadata.assetKey === 'string' ? node.metadata.assetKey : undefined
+    if (!key) return undefined
+    const asset = await repository.loadAsset(key)
+    if (!asset || generationId !== assetHydrationGeneration) return undefined
+    if (typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') return undefined
+    return [node.id, URL.createObjectURL(asset.blob)] as const
+  }))
+  if (generationId !== assetHydrationGeneration) {
+    entries.forEach((entry) => { if (entry && typeof URL !== 'undefined' && typeof URL.revokeObjectURL === 'function') URL.revokeObjectURL(entry[1]) })
+    return
+  }
+  imageUrls.value = Object.fromEntries(entries.filter((entry): entry is readonly [string, string] => Boolean(entry)))
+}
 
 function refreshEligibleKeys(items: Parameters<typeof selectEligibleCanvasKeys>[0] = []): CanvasKeyOption[] {
   eligibleKeys.value = selectEligibleCanvasKeys(items, groups.value)
@@ -134,7 +160,22 @@ async function deleteProject() { if (projectToDelete.value) await store.deletePr
 function updateNode(patch: Partial<CanvasNode>) { if (selectedNode.value) store.updateNode(selectedNode.value.id, patch) }
 function updateCanvasNode(nodeId: string, patch: Partial<CanvasNode>) { store.updateNode(nodeId, patch) }
 function retryCanvasNode(nodeId: string) { void generation.retryImageNode(nodeId) }
-function removeSelectedNode() { if (selectedNode.value) store.removeNode(selectedNode.value.id) }
+function generateCanvasNode(nodeId: string) {
+  const project = activeProject.value
+  const node = project?.nodes.find((candidate) => candidate.id === nodeId)
+  if (!project || !node) return
+  const promptId = node.type === 'prompt' ? node.id : project.edges.find((edge) => edge.targetNodeId === node.id && edge.kind === 'prompt')?.sourceNodeId ?? project.nodes.find((candidate) => candidate.type === 'prompt')?.id
+  const configId = node.type === 'config' ? node.id : project.edges.find((edge) => edge.targetNodeId === node.id && edge.kind === 'config')?.sourceNodeId ?? project.nodes.find((candidate) => candidate.type === 'config')?.id
+  if (promptId && configId) void generation.generateFromNodes(promptId, configId)
+}
+async function removeCanvasNode(nodeId: string) {
+  const url = imageUrls.value[nodeId]
+  if (url && typeof URL !== 'undefined' && typeof URL.revokeObjectURL === 'function') { URL.revokeObjectURL(url); const next = { ...imageUrls.value }; delete next[nodeId]; imageUrls.value = next }
+  const node = activeProject.value?.nodes.find((candidate) => candidate.id === nodeId)
+  if (node?.type === 'image') await generation.removeImageNode(nodeId)
+  else store.removeNode(nodeId)
+}
+async function removeSelectedNode() { if (selectedNode.value) await removeCanvasNode(selectedNode.value.id) }
 function changeBackground(mode: CanvasBackgroundMode) { store.setBackgroundMode(mode) }
 function zoom(factor: number) { const current = activeProject.value?.viewport; if (current) store.updateViewport({ ...current, zoom: Math.max(0.2, Math.min(3, current.zoom * factor)) }) }
 function selectNode(nodeId: string, additive: boolean) { store.selectedNodeIds.value = additive ? [...new Set([...store.selectedNodeIds.value, nodeId])] : [nodeId] }
@@ -192,8 +233,10 @@ function selectTab(tab: 'canvas' | 'inspector') {
 }
 
 watch(() => authStore.user?.id, () => { lifecycleGeneration += 1; clearSecrets(); void loadKeys(false, lifecycleGeneration).catch(() => undefined) })
-onMounted(async () => { mounted = true; lifecycleGeneration += 1; await store.ready; await loadKeys(false, lifecycleGeneration).catch(() => undefined) })
-onBeforeUnmount(() => { mounted = false; lifecycleGeneration += 1; clearSecrets() })
+watch(() => activeProject.value?.id, (id, previous) => { if (id !== previous) void hydrateImageUrls(activeProject.value) })
+watch(() => activeProject.value?.nodes.map((node) => `${node.id}:${typeof node.metadata.storageKey === 'string' ? node.metadata.storageKey : typeof node.metadata.assetKey === 'string' ? node.metadata.assetKey : ''}`).join('|'), () => { void hydrateImageUrls(activeProject.value) })
+onMounted(async () => { mounted = true; lifecycleGeneration += 1; await store.ready; await hydrateImageUrls(activeProject.value); await loadKeys(false, lifecycleGeneration).catch(() => undefined) })
+onBeforeUnmount(() => { mounted = false; lifecycleGeneration += 1; assetHydrationGeneration += 1; revokeImageUrls(); clearSecrets() })
 </script>
 
 <template>
@@ -213,7 +256,7 @@ onBeforeUnmount(() => { mounted = false; lifecycleGeneration += 1; clearSecrets(
             <button v-if="mobileDrawer" type="button" aria-label="Close canvas drawer" class="fixed inset-0 z-30 bg-black/30 lg:hidden" @click="closeDrawer" />
             <div v-if="!activeProject" data-canvas-empty="projects" class="flex min-h-[420px] flex-1 items-center justify-center p-8 text-center text-sm text-gray-500 dark:text-dark-400">No projects yet. <button type="button" class="ml-1 text-primary-600 hover:underline" @click="createProject">Create a project</button></div>
             <div v-else class="relative min-h-[420px] min-w-0 flex-1 overflow-auto" :class="{ hidden: activeTab !== 'canvas' }">
-              <InfiniteCanvasSurface :project="activeProject" :selected-node-ids="store.selectedNodeIds.value" @node-select="selectNode" @node-move="moveNode" @node-delete="store.removeNode" @node-update="updateCanvasNode" @node-retry="retryCanvasNode" @edge-create="connectNodes" @viewport-update="updateViewport" />
+              <InfiniteCanvasSurface :project="activeProject" :image-urls="imageUrls" :selected-node-ids="store.selectedNodeIds.value" @node-select="selectNode" @node-move="moveNode" @node-delete="removeCanvasNode" @node-update="updateCanvasNode" @node-retry="retryCanvasNode" @node-generate="generateCanvasNode" @edge-create="connectNodes" @viewport-update="updateViewport" />
               <div v-if="!eligibleKeys.length" class="pointer-events-none absolute left-1/2 top-6 w-72 -translate-x-1/2 rounded-md border border-amber-200 bg-amber-50 p-3 text-center text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-200" data-canvas-empty="image-models">No image models available for this canvas.</div>
             </div>
             <CanvasInspector v-if="activeProject" :mobile-open="mobileDrawer === 'inspector'" :node="selectedNode" @update="updateNode" @delete="removeSelectedNode" @close="closeDrawer" />

@@ -5,7 +5,7 @@ import PromptNode from './nodes/PromptNode.vue'
 import ConfigNode from './nodes/ConfigNode.vue'
 import ImageNode from './nodes/ImageNode.vue'
 
-const props = defineProps<{ node: CanvasNodeModel; selected?: boolean; panMode?: boolean }>()
+const props = defineProps<{ node: CanvasNodeModel; selected?: boolean; panMode?: boolean; imageUrl?: string }>()
 const emit = defineEmits<{
   (event: 'select', nodeId: string, additive: boolean): void
   (event: 'move', nodeId: string, screenDelta: { x: number; y: number }): void
@@ -13,6 +13,7 @@ const emit = defineEmits<{
   (event: 'connect-start', nodeId: string): void
   (event: 'update', nodeId: string, patch: Partial<CanvasNodeModel>): void
   (event: 'retry', nodeId: string): void
+  (event: 'generate', nodeId: string): void
 }>()
 const dragging = ref(false)
 const dragStart = ref({ x: 0, y: 0 })
@@ -84,8 +85,8 @@ onBeforeUnmount(() => { if (dragFrame !== undefined) cancelAnimationFrame(dragFr
     <button class="canvas-node__handle canvas-node__handle--output" type="button" title="Connect node" aria-label="Connect node" @pointerdown="startConnection" />
     <div class="canvas-node__body">
       <PromptNode v-if="node.type === 'prompt'" :node="node" @update="emit('update', node.id, $event)" />
-      <ConfigNode v-else-if="node.type === 'config'" :node="node" @update="emit('update', node.id, $event)" />
-      <ImageNode v-else-if="node.type === 'image'" :node="node" @delete="emit('delete', node.id)" @retry="emit('retry', node.id)" />
+      <ConfigNode v-else-if="node.type === 'config'" :node="node" @update="emit('update', node.id, $event)" @generate="emit('generate', node.id)" />
+      <ImageNode v-else-if="node.type === 'image'" :node="node" :image-url="imageUrl" @delete="emit('delete', node.id)" @retry="emit('retry', node.id)" />
       <span v-if="metadataSummary !== 'Placeholder node'" class="canvas-node__placeholder">{{ metadataSummary }}</span>
     </div>
   </article>

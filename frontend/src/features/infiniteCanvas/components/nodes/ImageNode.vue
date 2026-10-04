@@ -1,26 +1,12 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref, watch } from 'vue'
 import type { CanvasNode } from '../../types'
 import NodeStatusBadge from './NodeStatusBadge.vue'
 
-const props = defineProps<{ node: CanvasNode }>()
+const props = defineProps<{ node: CanvasNode; imageUrl?: string }>()
 const emit = defineEmits<{ (event: 'delete'): void; (event: 'retry'): void }>()
-const imageUrl = ref('')
-let ownedUrl = ''
-function revokeUrl() {
-  if (ownedUrl && typeof URL !== 'undefined' && typeof URL.revokeObjectURL === 'function') URL.revokeObjectURL(ownedUrl)
-  ownedUrl = ''
-}
-function syncUrl(value: unknown) {
-  revokeUrl()
-  if (typeof value === 'string') { imageUrl.value = value; ownedUrl = value }
-  else imageUrl.value = ''
-}
-watch(() => (props.node.metadata as Record<string, unknown>).url, syncUrl, { immediate: true })
-onBeforeUnmount(() => { revokeUrl(); imageUrl.value = '' })
 const download = () => {
-  if (!imageUrl.value) return
-  const link = document.createElement('a'); link.href = imageUrl.value; link.download = `${props.node.id}.png`; link.click()
+  if (!props.imageUrl) return
+  const link = document.createElement('a'); link.href = props.imageUrl; link.download = `${props.node.id}.png`; link.click()
 }
 </script>
 
