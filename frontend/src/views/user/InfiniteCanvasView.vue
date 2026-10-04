@@ -15,10 +15,12 @@ import type { CanvasKeyOption } from '@/features/infiniteCanvas/keySelection'
 import type { CanvasBackgroundMode, CanvasNode, CanvasProject, CanvasRepository } from '@/features/infiniteCanvas/types'
 import { useInfiniteCanvasStore } from '@/features/infiniteCanvas/stores/useInfiniteCanvasStore'
 import { createIndexedDbCanvasRepository } from '@/features/infiniteCanvas/storage/indexedDbCanvasRepository'
+import { useCanvasGeneration } from '@/features/infiniteCanvas/composables/useCanvasGeneration'
 
 const props = defineProps<{ repository?: CanvasRepository }>()
 const repository = props.repository ?? createIndexedDbCanvasRepository()
 const store = useInfiniteCanvasStore(repository)
+const generation = useCanvasGeneration({ store, repository, getKeySecret: (keyId) => keyId === undefined ? undefined : keySecrets.get(keyId) })
 const authStore = useAuthStore()
 const groups = ref<Awaited<ReturnType<typeof userGroupsAPI.getAvailable>>>([])
 const eligibleKeys = ref<CanvasKeyOption[]>([])
@@ -130,6 +132,8 @@ function duplicateProject(id: string) { store.duplicateProject(id) }
 function requestDelete(id: string) { projectToDelete.value = id; showDelete.value = true }
 async function deleteProject() { if (projectToDelete.value) await store.deleteProject(projectToDelete.value); showDelete.value = false; projectToDelete.value = null }
 function updateNode(patch: Partial<CanvasNode>) { if (selectedNode.value) store.updateNode(selectedNode.value.id, patch) }
+function updateCanvasNode(nodeId: string, patch: Partial<CanvasNode>) { store.updateNode(nodeId, patch) }
+function retryCanvasNode(nodeId: string) { void generation.retryImageNode(nodeId) }
 function removeSelectedNode() { if (selectedNode.value) store.removeNode(selectedNode.value.id) }
 function changeBackground(mode: CanvasBackgroundMode) { store.setBackgroundMode(mode) }
 function zoom(factor: number) { const current = activeProject.value?.viewport; if (current) store.updateViewport({ ...current, zoom: Math.max(0.2, Math.min(3, current.zoom * factor)) }) }
@@ -209,7 +213,7 @@ onBeforeUnmount(() => { mounted = false; lifecycleGeneration += 1; clearSecrets(
             <button v-if="mobileDrawer" type="button" aria-label="Close canvas drawer" class="fixed inset-0 z-30 bg-black/30 lg:hidden" @click="closeDrawer" />
             <div v-if="!activeProject" data-canvas-empty="projects" class="flex min-h-[420px] flex-1 items-center justify-center p-8 text-center text-sm text-gray-500 dark:text-dark-400">No projects yet. <button type="button" class="ml-1 text-primary-600 hover:underline" @click="createProject">Create a project</button></div>
             <div v-else class="relative min-h-[420px] min-w-0 flex-1 overflow-auto" :class="{ hidden: activeTab !== 'canvas' }">
-              <InfiniteCanvasSurface :project="activeProject" :selected-node-ids="store.selectedNodeIds.value" @node-select="selectNode" @node-move="moveNode" @node-delete="store.removeNode" @edge-create="connectNodes" @viewport-update="updateViewport" />
+              <InfiniteCanvasSurface :project="activeProject" :selected-node-ids="store.selectedNodeIds.value" @node-select="selectNode" @node-move="moveNode" @node-delete="store.removeNode" @node-update="updateCanvasNode" @node-retry="retryCanvasNode" @edge-create="connectNodes" @viewport-update="updateViewport" />
               <div v-if="!eligibleKeys.length" class="pointer-events-none absolute left-1/2 top-6 w-72 -translate-x-1/2 rounded-md border border-amber-200 bg-amber-50 p-3 text-center text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-200" data-canvas-empty="image-models">No image models available for this canvas.</div>
             </div>
             <CanvasInspector v-if="activeProject" :mobile-open="mobileDrawer === 'inspector'" :node="selectedNode" @update="updateNode" @delete="removeSelectedNode" @close="closeDrawer" />

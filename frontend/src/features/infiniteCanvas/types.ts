@@ -31,7 +31,7 @@ export interface ConfigNodeMetadata {
 }
 
 export interface ImageNodeMetadata {
-  status?: 'pending' | 'ready' | 'error'
+  status?: 'pending' | 'ready' | 'error' | 'completed' | 'failed'
   url?: string
   assetKey?: string
   [key: string]: unknown
