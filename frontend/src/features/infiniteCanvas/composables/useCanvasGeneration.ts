@@ -15,8 +15,10 @@ interface CanvasStoreContract {
 
 interface GenerationRun {
   cancelled: boolean
+  superseded: boolean
   targetIds: string[]
   savedKeys: string[]
+  replacedOldKeys: string[]
 }
 
 export interface CanvasGenerationOptions {
@@ -35,6 +37,7 @@ export interface CanvasGenerationOptions {
 const generationError = (error: unknown): string => {
   const status = error instanceof ImageGenerationError ? error.status : typeof (error as { status?: unknown })?.status === 'number' ? (error as { status: number }).status : undefined
   if (status === 401) return 'API Key 已失效，请重新选择密钥。'
+  if (status === 409 || (error instanceof ImageGenerationError && error.code === 'stale_key_selection')) return '密钥选择已变更，请重新发起生成。'
   if (status === 403) return '当前密钥所属分组或模型无权生成图片。'
   if (status === 402) return '余额不足或已达到配额，请检查账户额度。'
   if (status === 429) return '请求过于频繁，请稍后重试。'
@@ -58,14 +61,20 @@ export function useCanvasGeneration(options: CanvasGenerationOptions) {
 
   function isGenerating(nodeId: string): boolean { return active.has(nodeId) }
 
-  async function hasAssetReference(storageKey: string, excludingNodeId?: string): Promise<boolean> {
-    const projects = await options.repository.listProjects().catch(() => [])
-    const candidates = [options.store.activeProject.value, ...projects.filter((project) => project.id !== options.store.activeProject.value?.id)]
-    return candidates.some((project) => project?.nodes.some((node) => node.id !== excludingNodeId && node.type === 'image' && (metadata(node).storageKey === storageKey || metadata(node).assetKey === storageKey)))
+  async function hasAssetReference(storageKey: string): Promise<boolean> {
+    let projects: CanvasProject[]
+    try { projects = await options.repository.listProjects() } catch { return true }
+    const active = options.store.activeProject.value
+    const candidates = [active, ...projects.filter((project) => project.id !== active?.id)]
+    return candidates.some((project) => Boolean(project && (project.assetKeys?.includes(storageKey) || project.nodes.some((node) => node.type === 'image' && (metadata(node).storageKey === storageKey || metadata(node).assetKey === storageKey)))))
   }
 
-  async function cleanupAsset(storageKey: string, excludingNodeId?: string): Promise<void> {
-    if (!(await hasAssetReference(storageKey, excludingNodeId))) await options.repository.deleteAsset(storageKey)
+  async function cleanupAsset(storageKey: string): Promise<void> {
+    try {
+      if (!(await hasAssetReference(storageKey))) await options.repository.deleteAsset(storageKey)
+    } catch {
+      // Asset cleanup is fail-closed: a repository failure must retain the asset.
+    }
   }
 
   async function removeImageNode(nodeId: string): Promise<void> {
@@ -73,7 +82,7 @@ export function useCanvasGeneration(options: CanvasGenerationOptions) {
     const node = project?.nodes.find((candidate) => candidate.id === nodeId && candidate.type === 'image')
     const storageKey = node ? stringValue(metadata(node).storageKey) ?? stringValue(metadata(node).assetKey) : undefined
     options.store.removeNode(nodeId)
-    if (storageKey) await cleanupAsset(storageKey, nodeId)
+    if (storageKey) await cleanupAsset(storageKey)
   }
 
   function resolveNode(nodeId: string | undefined, type: CanvasNode['type']): CanvasNode | undefined {
@@ -105,15 +114,8 @@ export function useCanvasGeneration(options: CanvasGenerationOptions) {
     return request
   }
 
-  async function getSecret(): Promise<string | undefined> {
-    const keyId = options.store.activeKeyId?.value ?? options.store.activeProject.value?.activeKeyId
-    const getter = options.getKeySecret ?? options.getApiKey
-    return getter ? getter(keyId) : undefined
-  }
-
-  function adapterForKey(): Adapter {
-    const keyId = options.store.activeKeyId?.value ?? options.store.activeProject.value?.activeKeyId
-    if (options.getKeyPlatform?.(keyId)?.toLowerCase() === 'gemini') return options.generateGeminiImage ?? generateGeminiImage
+  function adapterForKey(platform?: string): Adapter {
+    if (platform?.toLowerCase() === 'gemini') return options.generateGeminiImage ?? generateGeminiImage
     return options.generate ?? options.generateImage ?? generateImage
   }
 
@@ -122,9 +124,9 @@ export function useCanvasGeneration(options: CanvasGenerationOptions) {
     const projectId = options.store.activeProject.value?.id
     const storageKey = await options.repository.saveAsset({ blob: result.blob, mimeType: result.mimeType || result.blob.type || 'image/png', width: result.width, height: result.height, kind: 'image', projectId })
     run.savedKeys.push(storageKey)
-    if (run.cancelled) { await cleanupAsset(storageKey); throw new ImageGenerationError(499, 'cancelled', 'Generation cancelled') }
+    if (run.cancelled) { await cleanupAsset(storageKey); if (run.cancelled) throw new ImageGenerationError(499, 'cancelled', 'Generation cancelled') }
     options.store.updateNode(nodeId, { metadata: { status: 'completed', prompt: request.prompt, model: request.model, size: request.size, quality: request.quality, count: request.count, background: request.background, mimeType: result.mimeType, width: result.width, height: result.height, storageKey, assetKey: storageKey, promptNodeId, configNodeId, requestSnapshot: { ...request }, error: undefined } })
-    if (oldStorageKey && oldStorageKey !== storageKey) await cleanupAsset(oldStorageKey, nodeId)
+    if (oldStorageKey && oldStorageKey !== storageKey) run.replacedOldKeys.push(oldStorageKey)
     return storageKey
   }
 
@@ -137,13 +139,20 @@ export function useCanvasGeneration(options: CanvasGenerationOptions) {
     const targetMetadata = metadata(target)
     const oldStorageKey = stringValue(targetMetadata.storageKey) ?? stringValue(targetMetadata.assetKey)
     options.store.updateNode(nodeId, { metadata: { status: 'pending', prompt: request.prompt, model: request.model, size: request.size, quality: request.quality, count: request.count, background: request.background, promptNodeId, configNodeId, requestSnapshot: { ...request }, error: undefined } })
-    const runState: GenerationRun = { cancelled: false, targetIds: [nodeId], savedKeys: [] }
+    const previousRun = runs.get(nodeId)
+    if (previousRun) { previousRun.cancelled = true; previousRun.superseded = true }
+    const runState: GenerationRun = { cancelled: false, superseded: false, targetIds: [nodeId], savedKeys: [], replacedOldKeys: [] }
     runs.set(nodeId, runState); setActive(nodeId, true)
     try {
-      const secret = await getSecret()
+      const keyId = options.store.activeKeyId?.value ?? options.store.activeProject.value?.activeKeyId
+      const platform = options.getKeyPlatform?.(keyId)
+      const getter = options.getKeySecret ?? options.getApiKey
+      const secret = getter ? await getter(keyId) : undefined
       if (runState.cancelled) throw new ImageGenerationError(499, 'cancelled', 'Generation cancelled')
+      const currentKeyId = options.store.activeKeyId?.value ?? options.store.activeProject.value?.activeKeyId
+      if (currentKeyId !== keyId || options.getKeyPlatform?.(currentKeyId) !== platform) throw new ImageGenerationError(409, 'stale_key_selection', 'Key selection changed')
       if (!secret) throw new ImageGenerationError(401, 'missing_key', 'No image API key selected')
-      const adapter = adapterForKey()
+      const adapter = adapterForKey(platform)
       if (runState.cancelled) throw new ImageGenerationError(499, 'cancelled', 'Generation cancelled')
       const results = await adapter(secret, request)
       if (runState.cancelled) throw new ImageGenerationError(499, 'cancelled', 'Generation cancelled')
@@ -158,14 +167,15 @@ export function useCanvasGeneration(options: CanvasGenerationOptions) {
         await saveImage(runState, resultNode.id, result, request, promptNodeId, configNodeId, index === 0 ? oldStorageKey : undefined)
         nodes.push(resultNode)
       }
+      for (const oldKey of runState.replacedOldKeys) await cleanupAsset(oldKey)
       return nodes
     } catch (error) {
       const message = runState.cancelled || (error instanceof ImageGenerationError && error.code === 'cancelled') ? '生成已取消。' : generationError(error)
-      for (const targetId of runState.targetIds) options.store.updateNode(targetId, { metadata: { status: 'failed', prompt: request.prompt, model: request.model, promptNodeId, configNodeId, requestSnapshot: { ...request }, error: message, storageKey: undefined, assetKey: undefined } })
+      if (!runState.superseded) for (const targetId of runState.targetIds) options.store.updateNode(targetId, { metadata: { status: 'failed', prompt: request.prompt, model: request.model, promptNodeId, configNodeId, requestSnapshot: { ...request }, error: message, ...(targetId === nodeId && oldStorageKey ? { storageKey: oldStorageKey, assetKey: oldStorageKey } : { storageKey: undefined, assetKey: undefined }) } })
       for (const key of runState.savedKeys) await cleanupAsset(key)
       return []
     } finally {
-      setActive(nodeId, false); runs.delete(nodeId)
+      if (runs.get(nodeId) === runState) { setActive(nodeId, false); runs.delete(nodeId) }
     }
   }
 
