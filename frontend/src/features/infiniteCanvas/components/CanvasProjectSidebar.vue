@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { CanvasProject } from '../types'
 
-defineProps<{ projects: CanvasProject[]; activeProjectId?: string | null }>()
+defineProps<{ projects: CanvasProject[]; activeProjectId?: string | null; mobileOpen?: boolean }>()
 const emit = defineEmits<{
   (event: 'select', id: string): void
   (event: 'new'): void
@@ -10,6 +10,7 @@ const emit = defineEmits<{
   (event: 'delete', id: string): void
   (event: 'import'): void
   (event: 'export'): void
+  (event: 'close'): void
 }>()
 function promptRename(project: CanvasProject) {
   const title = window.prompt('Project name', project.title)
@@ -18,10 +19,10 @@ function promptRename(project: CanvasProject) {
 </script>
 
 <template>
-  <aside class="canvas-project-sidebar w-full shrink-0 border-b border-gray-200 bg-white p-3 dark:border-dark-700 dark:bg-dark-900 lg:w-64 lg:border-b-0 lg:border-r">
+  <aside :class="['canvas-project-sidebar w-full shrink-0 border-b border-gray-200 bg-white p-3 dark:border-dark-700 dark:bg-dark-900 lg:static lg:block lg:w-64 lg:border-b-0 lg:border-r', mobileOpen ? 'fixed inset-y-0 left-0 z-40 block w-72 shadow-xl' : 'hidden lg:block']">
     <div class="mb-3 flex items-center justify-between">
       <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Projects</h2>
-      <button type="button" class="rounded-md bg-primary-600 px-2 py-1 text-xs font-medium text-white" data-new-project @click="emit('new')">New</button>
+      <div class="flex items-center gap-2"><button type="button" aria-label="Close projects" class="text-xs text-gray-500 lg:hidden" @click="emit('close')">Close</button><button type="button" class="rounded-md bg-primary-600 px-2 py-1 text-xs font-medium text-white" data-new-project @click="emit('new')">New</button></div>
     </div>
     <div v-if="projects.length" class="space-y-1">
       <div v-for="project in projects" :key="project.id" :class="['group flex items-center rounded-md', project.id === activeProjectId ? 'bg-primary-50 dark:bg-primary-900/30' : 'hover:bg-gray-50 dark:hover:bg-dark-800']">
