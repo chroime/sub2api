@@ -115,6 +115,7 @@ export function createIndexedDbCanvasRepository(databaseName = 'sub2api-infinite
         ...(record.payload.assetKeys ?? []),
         ...record.payload.nodes.flatMap((node) => node.type === 'image' && typeof node.metadata.assetKey === 'string' ? [node.metadata.assetKey] : []),
       ]))
+      allAssets.filter((asset) => asset.projectId && asset.projectId !== id).forEach((asset) => remainingReferences.add(asset.storageKey))
       transaction.objectStore(PROJECTS_STORE).delete(id)
       projectAssetKeys.forEach((key) => { if (!remainingReferences.has(key)) assetStore.delete(key) })
       await transactionDone(transaction)
