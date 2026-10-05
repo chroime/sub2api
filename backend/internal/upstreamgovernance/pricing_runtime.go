@@ -69,7 +69,19 @@ func (s *Service) recalculatePricingForObservation(ctx context.Context, site Sit
 	if err != nil || len(ids) == 0 {
 		return nil, err
 	}
-	return s.pricingCoordinator.Recalculate(ctx, ids, observations)
+	operations, recalculateErr := s.pricingCoordinator.Recalculate(ctx, ids, observations)
+	if recalculateErr != nil {
+		return operations, recalculateErr
+	}
+	for _, operation := range operations {
+		if !operation.Protected {
+			continue
+		}
+		if protectErr := s.protectPricingGroupAccounts(ctx, site, operation); protectErr != nil {
+			return operations, protectErr
+		}
+	}
+	return operations, nil
 }
 
 func (s *Service) enqueuePricingNotices(ctx context.Context, site Site, operations []PricingOperation) {

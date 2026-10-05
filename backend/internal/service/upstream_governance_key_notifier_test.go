@@ -31,7 +31,9 @@ func TestGovernanceKeyMailUsesSystemSMTPAndEscapesDetails(t *testing.T) {
 	message, err := mail.ReadMessage(strings.NewReader(server.lastMessage()))
 	require.NoError(t, err)
 	require.Contains(t, message.Header.Get("From"), "updated-sender@example.test")
-	require.Contains(t, server.lastMessageBody(t), "recovered")
+	require.Contains(t, server.lastMessageBody(t), "上游密钥已恢复")
+	require.NotContains(t, server.lastMessageBody(t), "Upstream")
+	require.NotContains(t, server.lastMessageBody(t), "Event")
 }
 
 func TestGovernanceKeyMailMissingSMTPAndCancellation(t *testing.T) {

@@ -84,6 +84,9 @@ func scanModelRun(row rowScanner) (*ModelRun, error) {
 		if err = json.Unmarshal(result, &r.Result); err != nil {
 			return nil, err
 		}
+		// Populate the credential-free security projection for legacy rows that
+		// predate the field and normalize it whenever a run is read.
+		r.Result.Security = summarizeModelSecurity(r.Request.Template, *r.Result)
 	}
 	return &r, nil
 }

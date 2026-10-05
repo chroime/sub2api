@@ -8,6 +8,7 @@ import infiniteCanvas from './infiniteCanvas'
 import admin from './admin'
 import misc from './misc'
 import publicDocs from './publicDocs'
+import iqDetection from './iqDetection'
 
 export default {
   governance,
@@ -20,4 +21,5 @@ export default {
   admin,
   ...misc,
   ...publicDocs,
+  ...iqDetection,
 }

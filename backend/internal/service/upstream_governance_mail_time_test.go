@@ -37,7 +37,7 @@ func TestGovernanceMailDatesUseBeijingTimeAcrossDayBoundary(t *testing.T) {
 					require.NoError(t, err)
 					body := server.lastMessageBody(t)
 					require.Contains(t, body, "2026-10-02 00:08:02")
-					require.Contains(t, body, "北京时间，+08:00")
+				require.Contains(t, body, "北京时间（UTC+08:00）")
 					require.NotContains(t, body, "(UTC)")
 				})
 			}

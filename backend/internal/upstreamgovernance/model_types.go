@@ -107,29 +107,48 @@ type ModelTokenAudit struct {
 	Note                  string              `json:"note"`
 }
 
+// ModelSecuritySummary is a compact, credential-free assessment of a model
+// run. It deliberately contains states and measurements rather than raw
+// prompts, responses, request bodies, usage payloads or HTML artifacts.
+type ModelSecuritySummary struct {
+	TrustState           string   `json:"trust_state"`
+	TrustLabel           string   `json:"trust_label"`
+	Summary              string   `json:"summary"`
+	TokenDifference      bool     `json:"token_difference"`
+	TokenInputState      string   `json:"token_input_state,omitempty"`
+	TokenOutputState     string   `json:"token_output_state,omitempty"`
+	InputDeltaPercent    *float64 `json:"input_delta_percent,omitempty"`
+	OutputDeltaPercent   *float64 `json:"output_delta_percent,omitempty"`
+	CandyVerdict         string   `json:"candy_verdict,omitempty"`
+	CandyVerdictLabel    string   `json:"candy_verdict_label,omitempty"`
+	PelicanHTMLAvailable bool     `json:"pelican_html_available"`
+	PelicanHTMLBytes     int      `json:"pelican_html_bytes,omitempty"`
+}
+
 type ModelRunResult struct {
-	TemplateVersion string          `json:"template_version"`
-	AdapterVersion  string          `json:"adapter_version"`
-	Success         bool            `json:"success"`
-	ErrorCode       string          `json:"error_code"`
-	HTTPStatus      int             `json:"http_status"`
-	ResponseModel   string          `json:"response_model"`
-	EffortSupport   string          `json:"effort_support"`
-	SentParameters  map[string]any  `json:"sent_parameters,omitempty"`
-	RequestBody     json.RawMessage `json:"request_body,omitempty"`
-	InputText       string          `json:"input_text,omitempty"`
-	ResponseText    string          `json:"response_text,omitempty"`
-	HTML            string          `json:"html,omitempty"`
-	FinishReason    string          `json:"finish_reason"`
-	Streamed        bool            `json:"streamed"`
-	Completed       bool            `json:"completed"`
-	CandyAnswer     *int            `json:"candy_answer,omitempty"`
-	TTFTMS          *int64          `json:"ttft_ms"`
-	DurationMS      int64           `json:"duration_ms"`
-	Usage           ModelUsage      `json:"usage"`
-	RawUsage        json.RawMessage `json:"raw_usage,omitempty"`
-	Tokens          ModelTokenAudit `json:"tokens"`
-	CandyVerdict    string          `json:"candy_verdict"`
+	TemplateVersion string               `json:"template_version"`
+	AdapterVersion  string               `json:"adapter_version"`
+	Success         bool                 `json:"success"`
+	ErrorCode       string               `json:"error_code"`
+	HTTPStatus      int                  `json:"http_status"`
+	ResponseModel   string               `json:"response_model"`
+	EffortSupport   string               `json:"effort_support"`
+	SentParameters  map[string]any       `json:"sent_parameters,omitempty"`
+	RequestBody     json.RawMessage      `json:"request_body,omitempty"`
+	InputText       string               `json:"input_text,omitempty"`
+	ResponseText    string               `json:"response_text,omitempty"`
+	HTML            string               `json:"html,omitempty"`
+	FinishReason    string               `json:"finish_reason"`
+	Streamed        bool                 `json:"streamed"`
+	Completed       bool                 `json:"completed"`
+	CandyAnswer     *int                 `json:"candy_answer,omitempty"`
+	TTFTMS          *int64               `json:"ttft_ms"`
+	DurationMS      int64                `json:"duration_ms"`
+	Usage           ModelUsage           `json:"usage"`
+	RawUsage        json.RawMessage      `json:"raw_usage,omitempty"`
+	Tokens          ModelTokenAudit      `json:"tokens"`
+	CandyVerdict    string               `json:"candy_verdict"`
+	Security        ModelSecuritySummary `json:"security"`
 }
 
 type ModelRun struct {

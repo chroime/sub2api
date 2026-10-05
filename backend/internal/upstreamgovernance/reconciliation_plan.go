@@ -83,6 +83,7 @@ func planReconciliationRow(site Site, config AutomationConfig, snapshot Snapshot
 		row.Action = "pause"
 		row.Reason = "upstream_group_missing"
 		row.Patch.Availability = "pause"
+		row.Patch.PauseReason = "upstream_group_missing"
 		row.Changes = append(row.Changes, ReconciliationChange{Field: "schedulable", Before: true, After: false})
 		return row
 	}
@@ -146,7 +147,10 @@ func planReconciliationRow(site Site, config AutomationConfig, snapshot Snapshot
 		row.Action = "update"
 		row.Changes = append(row.Changes, ReconciliationChange{Field: "rate_source", Before: "governance", After: "native"})
 	}
-	if config.Policy.RestoreReturned && a.PauseToken != "" {
+	// Only pauses caused by a confirmed missing upstream group may be
+	// automatically restored. Pricing protection and key-health pauses are
+	// safety decisions owned by their respective recovery workflows.
+	if config.Policy.RestoreReturned && a.PauseToken != "" && a.PauseReason == "upstream_group_missing" {
 		if a.PauseMarker != b.Marker || a.PauseIdentity != a.Identity {
 			return stop("conflict", "pause_owner_changed")
 		}

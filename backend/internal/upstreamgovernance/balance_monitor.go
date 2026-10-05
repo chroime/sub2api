@@ -29,15 +29,17 @@ type BalanceMonitorStatus struct {
 // BalanceMonitorState is persisted separately from public policy. Recipient
 // hashes and reservations are never included in the administrator API response.
 type BalanceMonitorState struct {
-	Status     BalanceMonitorStatus             `json:"status"`
-	Low        bool                             `json:"low"`
-	Recipients map[string]BalanceRecipientState `json:"recipients,omitempty"`
+	Status          BalanceMonitorStatus             `json:"status"`
+	Low             bool                             `json:"low"`
+	RecoveryPending bool                             `json:"recovery_pending,omitempty"`
+	Recipients      map[string]BalanceRecipientState `json:"recipients,omitempty"`
 }
 
 type BalanceRecipientState struct {
-	NextAttemptAt time.Time  `json:"next_attempt_at"`
-	LastSentAt    *time.Time `json:"last_sent_at,omitempty"`
-	Failed        bool       `json:"failed,omitempty"`
+	NextAttemptAt   time.Time  `json:"next_attempt_at"`
+	LastSentAt      *time.Time `json:"last_sent_at,omitempty"`
+	Failed          bool       `json:"failed,omitempty"`
+	RecoveryPending bool       `json:"recovery_pending,omitempty"`
 }
 
 type BalanceNotice struct {
@@ -48,6 +50,7 @@ type BalanceNotice struct {
 	Balance    float64
 	Threshold  float64
 	Unit       string
+	Recovered  bool
 	ObservedAt time.Time
 }
 
@@ -167,6 +170,9 @@ func (s *Service) checkBalanceMonitor(ctx context.Context, site Site, snapshot *
 	}
 	now := s.now()
 	low := *account.Balance <= config.Threshold
+	wasLow := state.Low
+	wasRecoveryPending := state.RecoveryPending
+	recovered := !low && (wasLow || wasRecoveryPending)
 	events := []Event{}
 	if low && !state.Low {
 		events = append(events, Event{SiteID: site.ID, Kind: "balance_low", After: fmt.Sprintf("%g %s", *account.Balance, config.Unit), CreatedAt: now})
@@ -174,13 +180,26 @@ func (s *Service) checkBalanceMonitor(ctx context.Context, site Site, snapshot *
 		events = append(events, Event{SiteID: site.ID, Kind: "balance_recovered", After: fmt.Sprintf("%g %s", *account.Balance, config.Unit), CreatedAt: now})
 	}
 	state.Low = low
+	if low {
+		// A new low-balance incident supersedes a recovery notification that
+		// may still be waiting for SMTP delivery.
+		state.RecoveryPending = false
+		for key, recipient := range state.Recipients {
+			recipient.RecoveryPending = false
+			state.Recipients[key] = recipient
+		}
+	} else if recovered {
+		// Keep the recovery incident durable until every recipient has received
+		// the recovery message. This survives process restarts and SMTP failures.
+		state.RecoveryPending = true
+	}
 	state.Status.State = "healthy"
 	if low {
 		state.Status.State = "low"
 	} else {
 		state.Status.LastError = ""
 	}
-	if !s.saveBalanceState(ctx, site.ID, state, events...) || !low {
+	if !s.saveBalanceState(ctx, site.ID, state, events...) || !low && !recovered {
 		return
 	}
 	if s.balanceNotifier == nil {
@@ -197,7 +216,28 @@ func (s *Service) checkBalanceMonitor(ctx context.Context, site Site, snapshot *
 		s.saveBalanceState(ctx, site.ID, state)
 		return
 	}
-	notice := BalanceNotice{SiteID: site.ID, SiteName: site.Name, BaseURL: site.BaseURL, Platform: site.Platform, Balance: *account.Balance, Threshold: config.Threshold, Unit: account.Unit, ObservedAt: snapshot.CreatedAt}
+	hasPendingRecoveryRecipient := false
+	if recovered {
+		for _, recipient := range recipients {
+			if state.Recipients[balanceRecipientHash(recipient)].RecoveryPending {
+				hasPendingRecoveryRecipient = true
+				break
+			}
+		}
+	}
+	if recovered && (!wasRecoveryPending || !hasPendingRecoveryRecipient) {
+		for _, recipient := range recipients {
+			key := balanceRecipientHash(recipient)
+			delivery := state.Recipients[key]
+			delivery.RecoveryPending = true
+			delivery.NextAttemptAt = now
+			state.Recipients[key] = delivery
+		}
+		if !s.saveBalanceState(ctx, site.ID, state) {
+			return
+		}
+	}
+	notice := BalanceNotice{SiteID: site.ID, SiteName: site.Name, BaseURL: site.BaseURL, Platform: site.Platform, Balance: *account.Balance, Threshold: config.Threshold, Unit: account.Unit, Recovered: recovered, ObservedAt: snapshot.CreatedAt}
 	refreshDeliveryError := func() {
 		state.Status.LastError = ""
 		for _, recipient := range recipients {
@@ -213,6 +253,9 @@ func (s *Service) checkBalanceMonitor(ctx context.Context, site Site, snapshot *
 		}
 		key := balanceRecipientHash(recipient)
 		delivery := state.Recipients[key]
+		if recovered && !delivery.RecoveryPending {
+			continue
+		}
 		if delivery.NextAttemptAt.After(now) {
 			continue
 		}
@@ -233,6 +276,9 @@ func (s *Service) checkBalanceMonitor(ctx context.Context, site Site, snapshot *
 		} else {
 			delivery.LastSentAt = &now
 			state.Status.LastNotifiedAt = &now
+			if recovered {
+				delivery.RecoveryPending = false
+			}
 		}
 		state.Recipients[key] = delivery
 		refreshDeliveryError()
@@ -243,6 +289,15 @@ func (s *Service) checkBalanceMonitor(ctx context.Context, site Site, snapshot *
 		cancel()
 		if !ok {
 			return
+		}
+	}
+	if recovered {
+		state.RecoveryPending = false
+		for _, recipient := range recipients {
+			if state.Recipients[balanceRecipientHash(recipient)].RecoveryPending {
+				state.RecoveryPending = true
+				break
+			}
 		}
 	}
 	s.saveBalanceState(ctx, site.ID, state)

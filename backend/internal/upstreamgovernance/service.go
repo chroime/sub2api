@@ -32,6 +32,9 @@ type Service struct {
 	workerMu             sync.Mutex
 	workerCancel         context.CancelFunc
 	workerDone           chan struct{}
+	scheduleMu           sync.Mutex
+	collectionFailures   map[int64]int
+	fastFailures         map[int64]int
 	sessionRefreshMu     sync.Mutex
 	sessionRefreshCursor int64
 	balanceNotifier      BalanceNotifier
@@ -49,7 +52,47 @@ type Service struct {
 }
 
 func NewService(store Store, connector Connector, local LocalAccounts, cipher Encryptor, durableKey bool) *Service {
-	return &Service{store: store, connector: connector, local: local, cipher: cipher, durableKey: durableKey, slots: make(chan struct{}, 2), now: func() time.Time { return time.Now().UTC() }}
+	return &Service{store: store, connector: connector, local: local, cipher: cipher, durableKey: durableKey, slots: make(chan struct{}, 2), collectionFailures: map[int64]int{}, fastFailures: map[int64]int{}, now: func() time.Time { return time.Now().UTC() }}
+}
+
+func (s *Service) nextCollectionAt(siteID int64, now time.Time, intervalSeconds int64, success bool) time.Time {
+	s.scheduleMu.Lock()
+	defer s.scheduleMu.Unlock()
+	if s.collectionFailures == nil {
+		s.collectionFailures = map[int64]int{}
+	}
+	failures := s.collectionFailures[siteID]
+	if success {
+		delete(s.collectionFailures, siteID)
+		failures = 0
+	} else {
+		failures++
+		if failures > maxCollectionFailures {
+			failures = maxCollectionFailures
+		}
+		s.collectionFailures[siteID] = failures
+	}
+	return scheduledNextAt(now, intervalSeconds, failures, siteID, scheduleCollection)
+}
+
+func (s *Service) nextFastObservationAt(siteID int64, now time.Time, intervalSeconds int64, success bool) time.Time {
+	s.scheduleMu.Lock()
+	defer s.scheduleMu.Unlock()
+	if s.fastFailures == nil {
+		s.fastFailures = map[int64]int{}
+	}
+	failures := s.fastFailures[siteID]
+	if success {
+		delete(s.fastFailures, siteID)
+		failures = 0
+	} else {
+		failures++
+		if failures > maxCollectionFailures {
+			failures = maxCollectionFailures
+		}
+		s.fastFailures[siteID] = failures
+	}
+	return scheduledNextAt(now, intervalSeconds, failures, siteID, scheduleFastObservation)
 }
 
 // SetChangeNotifier wires the administrator change-mail adapter. The durable
@@ -737,6 +780,19 @@ func (s *Service) syncLockedWithAutoReauthorization(ctx context.Context, site Si
 	// Notification failures have their own persisted status and must not turn a
 	// successfully collected catalog into a failed synchronization.
 	s.reconcileSuccessfulSnapshot(ctx, site, snapshot)
+	// Full catalog collection is the authoritative fallback when second-based
+	// observation is disabled or unsupported. Feed it through the same pricing
+	// coordinator so an upstream increase still applies automatic pricing and
+	// protection decisions on every deployment.
+	if s.pricingCoordinator != nil && snapshot.Catalog.GroupsComplete {
+		operations, pricingErr := s.recalculatePricingForObservation(ctx, site, catalog.Groups)
+		if pricingErr != nil && !errors.Is(pricingErr, ErrUnsupported) {
+			log.Printf("[UpstreamGovernance] full catalog pricing: %s", ErrorCode(pricingErr))
+		}
+		for _, operation := range operations {
+			_ = s.EnqueuePricingOperationNotice(ctx, site.ID, operation)
+		}
+	}
 	s.evaluateRechargeAfterSnapshot(ctx, site, snapshot)
 	s.checkBalanceMonitor(ctx, site, snapshot)
 	return snapshot, nil

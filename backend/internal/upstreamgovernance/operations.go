@@ -365,14 +365,16 @@ func projectTimeline(site workbenchSite, record timelineRecord) TimelineItem {
 		}
 		item.Reason = "event_recorded"
 		switch record.Reason {
-		case "rate_changed", "group_added", "group_removed", "group_changed", "models_changed", "price_changed", "channels_changed", "balance_low", "balance_recovered", "reconciliation_applied", "import_applied", "auto_reauthorization_required", "sync_failed", "probe_failed", "probe_recovered", "key_missing_suspected", "key_missing_confirmed", "key_recovered", "key_account_paused", "key_account_restored", "key_repair_abandoned":
+		case "rate_changed", "group_added", "group_removed", "group_changed", "models_changed", "price_changed", "channels_changed", "balance_low", "balance_recovered", "reconciliation_applied", "import_applied", "auto_reauthorization_required", "sync_failed", "probe_failed", "probe_recovered", "key_missing_suspected", "key_missing_confirmed", "key_recovered", "key_account_paused", "key_account_restored", "key_repair_pending", "key_repair_manual_required", "key_repair_abandoned":
 			item.Reason = record.Reason
 		}
 		switch item.Reason {
 		case "rate_changed", "price_changed", "group_removed", "balance_low", "sync_failed", "probe_failed", "key_missing_suspected":
 			item.Severity = "warning"
-		case "auto_reauthorization_required", "key_missing_confirmed", "key_account_paused":
+		case "auto_reauthorization_required", "key_missing_confirmed", "key_account_paused", "key_repair_manual_required":
 			item.Severity = "critical"
+		case "key_repair_pending":
+			item.Severity = "warning"
 		}
 		if item.Reason == "rate_changed" {
 			beforeName, before := eventRate(record.Before)

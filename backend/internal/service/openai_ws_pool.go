@@ -2126,7 +2126,7 @@ func (p *openAIWSConnPool) dialConn(ctx context.Context, req openAIWSAcquireRequ
 			return nil, err
 		}
 	}
-	conn, status, handshakeHeaders, err := p.clientDialer.Dial(ctx, req.WSURL, openAIWSHeadersForUpstream(headers), req.ProxyURL)
+	conn, status, handshakeHeaders, err := p.clientDialer.Dial(ctx, req.WSURL, headers, req.ProxyURL)
 	if err != nil {
 		var handshakeErr *openAIWSHandshakeError
 		var responseBody []byte
@@ -2440,10 +2440,6 @@ func cloneHeader(src http.Header) http.Header {
 		dst[k] = copied
 	}
 	return dst
-}
-
-func openAIWSHeadersForUpstream(headers http.Header) http.Header {
-	return cloneHeader(headers)
 }
 
 func closeOpenAIWSConns(conns []*openAIWSConn) {

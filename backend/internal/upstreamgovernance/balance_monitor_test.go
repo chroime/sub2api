@@ -99,11 +99,12 @@ func TestBalanceMonitorFirstLowBoundaryCooldownAndRecovery(t *testing.T) {
 	_, err = s.Sync(t.Context(), 1)
 	require.NoError(t, err)
 	require.Equal(t, "healthy", m.site.BalanceMonitorStatus.State)
-	require.Len(t, n.sent["admin@example.com"], 1, "recovery only records an event")
+	require.Len(t, n.sent["admin@example.com"], 2, "a recovery transition sends one recovery notice")
+	require.True(t, n.sent["admin@example.com"][1].Recovered)
 	balance = 9
 	_, err = s.Sync(t.Context(), 1)
 	require.NoError(t, err)
-	require.Len(t, n.sent["admin@example.com"], 1, "flapping preserves cooldown")
+	require.Len(t, n.sent["admin@example.com"], 2, "flapping preserves cooldown")
 	*now = now.Add(23 * time.Hour)
 	_, err = s.Sync(t.Context(), 1)
 	require.NoError(t, err)
@@ -140,6 +141,31 @@ func TestBalanceMonitorRetriesOnlyFailedRecipientsAndPersistsAcrossRestart(t *te
 	require.Len(t, n.sent["ok@example.com"], 1)
 	require.Len(t, n.sent["fail@example.com"], 2)
 	require.Empty(t, m.site.BalanceMonitorStatus.LastError)
+}
+
+func TestBalanceMonitorRetriesFailedRecoveryNotification(t *testing.T) {
+	s, m, c, n, now := balanceEngine(t)
+	_, err := s.Sync(t.Context(), 1)
+	require.NoError(t, err)
+	balance := 11.0
+	c.catalog.Account.Balance = &balance
+	n.failing["admin@example.com"] = true
+	_, err = s.Sync(t.Context(), 1)
+	require.NoError(t, err)
+	require.Len(t, n.sent["admin@example.com"], 2)
+	require.True(t, n.sent["admin@example.com"][1].Recovered)
+	require.True(t, m.site.balanceState.RecoveryPending)
+
+	n.failing["admin@example.com"] = false
+	*now = now.Add(16 * time.Minute)
+	restarted := NewService(m, s.connector, s.local, s.cipher, true)
+	restarted.now = s.now
+	restarted.SetBalanceNotifier(n)
+	_, err = restarted.Sync(t.Context(), 1)
+	require.NoError(t, err)
+	require.Len(t, n.sent["admin@example.com"], 3)
+	require.True(t, n.sent["admin@example.com"][2].Recovered)
+	require.False(t, m.site.balanceState.RecoveryPending)
 }
 
 func TestBalanceMonitorUnknownAndFailedSyncDoNotRecover(t *testing.T) {

@@ -26,19 +26,19 @@ func (n *governanceBalanceNotifier) SendKey(ctx context.Context, recipient strin
 			name = configured
 		}
 	}
-	title := "上游密钥已确认缺失 / Upstream key missing"
+	title := "上游密钥已确认缺失"
 	if notice.Kind == "recovered" {
-		title = "上游密钥已恢复 / Upstream key recovered"
+		title = "上游密钥已恢复"
 	}
-	subject := sanitizeEmailHeader(fmt.Sprintf("[%s] %s: %s", name, title, notice.SiteName))
+	subject := sanitizeEmailHeader(fmt.Sprintf("[%s] %s：%s", name, title, notice.SiteName))
 	body := fmt.Sprintf(`<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="margin:0;padding:24px;background:#f8fafc;color:#0f172a;font-family:Arial,sans-serif">
 <main style="max-width:640px;margin:auto;background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:28px">
 <h1 style="font-size:20px;margin:0 0 20px">%s</h1>
 <table style="border-collapse:collapse;width:100%%;line-height:1.8">
-<tr><td>上游 / Upstream</td><td>%s</td></tr><tr><td>地址 / URL</td><td>%s</td></tr>
-<tr><td>分组 ID / Group ID</td><td>%s</td></tr><tr><td>密钥 ID / Key ID</td><td>%s</td></tr>
-<tr><td>事件 / Event</td><td>%s</td></tr><tr><td>核验时间（北京时间，+08:00）</td><td>%s</td></tr></table>
-<p>请在智能运维中核对托管密钥和受影响账户。邮件不包含 API Key 明文。<br>Review managed keys and affected accounts in Smart Operations. This email contains no API key value.</p>
+<tr><td>上游名称</td><td>%s</td></tr><tr><td>站点URL</td><td>%s</td></tr>
+<tr><td>分组编号</td><td>%s</td></tr><tr><td>密钥编号</td><td>%s</td></tr>
+<tr><td>事件类型</td><td>%s</td></tr><tr><td>核验时间：北京时间（UTC+08:00）</td><td>%s</td></tr></table>
+<p>请在智能运维中核对托管密钥和受影响账户。邮件不包含 API Key 明文。</p>
 <p style="font-size:12px;color:#64748b">%s</p></main></body></html>`,
 		html.EscapeString(title), html.EscapeString(notice.SiteName), html.EscapeString(notice.BaseURL),
 		html.EscapeString(notice.RemoteGroupID), html.EscapeString(notice.RemoteKeyID),

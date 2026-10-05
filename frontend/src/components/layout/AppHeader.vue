@@ -166,6 +166,11 @@
                   {{ t('nav.apiKeys') }}
                 </router-link>
 
+                <router-link to="/iq-detection" @click="closeDropdown" class="dropdown-item">
+                  <Icon name="brain" size="sm" />
+                  {{ t('nav.iqDetection') }}
+                </router-link>
+
               </div>
 
               <!-- Contact Support (only show if configured) -->

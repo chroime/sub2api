@@ -87,7 +87,7 @@ func (n *governanceBalanceNotifier) SendChange(ctx context.Context, recipient st
 <table style="border-collapse:collapse;width:100%%;line-height:1.8">
 <tr><td>上游名称</td><td>%s</td></tr><tr><td>站点URL</td><td>%s</td></tr>
 <tr><td>事件类型</td><td>%s</td></tr><tr><td>严重级别</td><td>%s</td></tr>
-<tr><td>观察时间（北京时间，+08:00）</td><td>%s</td></tr></table>
+<tr><td>观察时间：北京时间（UTC+08:00）</td><td>%s</td></tr></table>
 <p style="white-space:pre-wrap">%s</p>
 <p>请在智能运维中查看原始目录、倍率、定价与保护记录。</p>
 <p style="font-size:12px;color:#64748b">%s</p></main></body></html>`,

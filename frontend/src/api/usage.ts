@@ -118,6 +118,28 @@ export interface UsageDashboardSnapshotV2Response {
   groups?: GroupStat[]
 }
 
+export type TokenRankingPeriod = 'today' | 'yesterday' | '7d' | '30d'
+
+export interface TokenRankingItem {
+  rank: number
+  user_id: number
+  email: string
+  requests: number
+  input_tokens: number
+  output_tokens: number
+  cache_tokens: number
+  total_tokens: number
+}
+
+export interface TokenRankingResponse {
+  period: TokenRankingPeriod
+  start_date: string
+  end_date: string
+  total_tokens: number
+  ranking: TokenRankingItem[]
+  generated_at: string
+}
+
 /**
  * List usage logs with optional filters
  * @param page - Page number (default: 1)
@@ -356,6 +378,19 @@ export async function getDashboardApiKeysUsage(
   return data
 }
 
+/**
+ * Get the masked all-user token ranking for the selected Beijing-time period.
+ * The server fixes the result to the top 20 and reuses the usage-breakdown query.
+ */
+export async function getTokenRanking(
+  period: TokenRankingPeriod = 'today'
+): Promise<TokenRankingResponse> {
+  const { data } = await apiClient.get<TokenRankingResponse>('/user/token-ranking', {
+    params: { period },
+  })
+  return data
+}
+
 export async function listMyErrorRequests(
   params: UserErrorListParams
 ): Promise<PaginatedResponse<UserErrorRequest>> {
@@ -384,6 +419,7 @@ export const usageAPI = {
   getMyApiKeyDailyUsage,
   getDashboardSnapshotV2,
   getDashboardApiKeysUsage,
+  getTokenRanking,
   // Error requests
   listMyErrorRequests,
   getMyErrorDetail

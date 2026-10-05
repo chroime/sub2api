@@ -461,3 +461,14 @@ func (s *UsageService) GetStatsWithFilters(ctx context.Context, filters usagesta
 	}
 	return stats, nil
 }
+
+// GetUserBreakdownStats returns the per-user usage aggregation used by the
+// dashboard ranking. Callers choose the time range and the safe sort/filter
+// dimensions; the repository owns the aggregation query and its allowlist.
+func (s *UsageService) GetUserBreakdownStats(ctx context.Context, startTime, endTime time.Time, dimension usagestats.UserBreakdownDimension, limit int) ([]usagestats.UserBreakdownItem, error) {
+	stats, err := s.usageRepo.GetUserBreakdownStats(ctx, startTime, endTime, dimension, limit)
+	if err != nil {
+		return nil, fmt.Errorf("get user breakdown stats: %w", err)
+	}
+	return stats, nil
+}

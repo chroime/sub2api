@@ -5,6 +5,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/handler/admin"
 	"github.com/Wei-Shaw/sub2api/internal/securityaudit"
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	gov "github.com/Wei-Shaw/sub2api/internal/upstreamgovernance"
 
 	"github.com/google/wire"
 )
@@ -96,6 +97,23 @@ func ProvideAdminHandlers(
 		Compliance:             complianceHandler,
 		AuditLog:               auditLogHandler,
 	}
+}
+
+// ProvideUserHandler wires the optional governance projection through the
+// generated dependency graph. Keeping this in the provider set prevents a
+// future Wire regeneration from silently dropping the IQ detection endpoint.
+func ProvideUserHandler(
+	userService *service.UserService,
+	authService *service.AuthService,
+	emailService *service.EmailService,
+	emailCache service.EmailCache,
+	affiliateService *service.AffiliateService,
+	userPlatformQuotaRepo service.UserPlatformQuotaRepository,
+	governanceService *gov.Service,
+) *UserHandler {
+	h := NewUserHandler(userService, authService, emailService, emailCache, affiliateService, userPlatformQuotaRepo)
+	h.SetGovernanceService(governanceService)
+	return h
 }
 
 func ProvideGatewayHandler(
@@ -238,7 +256,7 @@ var ProviderSet = wire.NewSet(
 	admin.NewUpstreamGovernanceHandler,
 	// Top-level handlers
 	NewAuthHandler,
-	NewUserHandler,
+	ProvideUserHandler,
 	NewAPIKeyHandler,
 	NewUsageHandler,
 	NewRedeemHandler,

@@ -488,6 +488,18 @@ export default {
       detailCoordinates: '坐标',
     },
     tabs: { usage: '用量明细', errors: '错误请求', ranking: '用户排行' },
+    ranking: {
+      title: '总 Token 用量排行',
+      subtitle: '按所选时间范围统计全部用户的总 Token 用量',
+      periodLabel: '排行时间范围',
+      periods: { today: '今天', yesterday: '昨天', '7d': '近 7 天', '30d': '近 30 天' },
+      total: 'Top20 总 Token',
+      user: '用户',
+      requests: '{count} 次请求',
+      requestsLabel: '请求数',
+      empty: '暂无排行数据',
+      loadFailed: '排行榜加载失败，请稍后重试',
+    },
     errors: {
       time: '时间', model: '模型', endpoint: '端点', status: '状态码',
       category: '分类', platform: '平台', message: '错误信息',

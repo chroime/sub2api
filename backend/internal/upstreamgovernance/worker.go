@@ -15,6 +15,11 @@ func validProbeModel(model string) bool {
 	return model != "" && len(model) <= 256 && strings.TrimSpace(model) == model && strings.IndexFunc(model, unicode.IsControl) < 0
 }
 
+func isRateLimitError(err error) bool {
+	var limited *RateLimitError
+	return errors.As(err, &limited)
+}
+
 func (s *Service) binding(ctx context.Context, siteID, bindingID int64) (*Binding, error) {
 	bindings, err := s.store.ListBindings(ctx, siteID)
 	if err != nil {
@@ -196,12 +201,12 @@ func (s *Service) Start() {
 	}()
 }
 
-// workerWait returns the next persisted fast deadline, clamped to a short
-// wake-up. A legacy store without migration 261 retains its one-minute cadence.
+// workerWait uses the earliest durable deadline. Full second-based collection
+// must remain timely even when the optional fast observer is disabled.
 func (s *Service) workerWait(ctx context.Context) time.Duration {
 	wait := time.Minute
-	if fastStore, ok := s.store.(FastObservationScheduleStore); ok {
-		if next, err := fastStore.NextFastObservationAt(ctx); err == nil && next != nil {
+	consider := func(next *time.Time, err error) {
+		if err == nil && next != nil {
 			delta := next.Sub(s.now())
 			if delta < 100*time.Millisecond {
 				delta = 100 * time.Millisecond
@@ -210,6 +215,12 @@ func (s *Service) workerWait(ctx context.Context) time.Duration {
 				wait = delta
 			}
 		}
+	}
+	if siteStore, ok := s.store.(SiteScheduleStore); ok {
+		consider(siteStore.NextSiteDueAt(ctx))
+	}
+	if fastStore, ok := s.store.(FastObservationScheduleStore); ok {
+		consider(fastStore.NextFastObservationAt(ctx))
 	}
 	return wait
 }
@@ -286,9 +297,20 @@ func (s *Service) runFastDue(ctx context.Context) error {
 	var firstErr error
 	var mu sync.Mutex
 	var wg sync.WaitGroup
+	recordError := func(err error) {
+		if err == nil {
+			return
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		if firstErr == nil {
+			firstErr = err
+		}
+	}
 	for _, candidate := range candidates {
 		if ctx.Err() != nil {
-			return ctx.Err()
+			recordError(ctx.Err())
+			break
 		}
 		dueAt := candidate.NextFastObserveAt
 		if dueAt.IsZero() {
@@ -296,9 +318,7 @@ func (s *Service) runFastDue(ctx context.Context) error {
 		}
 		reserved, reserveErr := fastStore.ReserveFastObservation(ctx, candidate.ID, dueAt, now)
 		if reserveErr != nil {
-			if firstErr == nil {
-				firstErr = reserveErr
-			}
+			recordError(reserveErr)
 			continue
 		}
 		if !reserved {
@@ -308,21 +328,31 @@ func (s *Service) runFastDue(ctx context.Context) error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if runErr := s.runFastSite(ctx, candidateID); runErr != nil {
-				mu.Lock()
-				if firstErr == nil {
-					firstErr = runErr
-				}
-				mu.Unlock()
-			}
+			recordError(s.runFastSite(ctx, candidateID))
 		}()
 	}
 	wg.Wait()
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
 	return firstErr
 }
 
 func (s *Service) runFastSite(ctx context.Context, siteID int64) error {
 	fastStore := s.store.(FastObservationStore)
+	startedAt := s.now()
+	reservationSaved := false
+	defer func() {
+		if reservationSaved {
+			return
+		}
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
+		defer cancel()
+		// The candidate was reserved before this function was launched. If slot
+		// acquisition or the site lock is cancelled, clear that reservation now
+		// instead of leaving it in running state until the five-minute lease TTL.
+		_, _ = fastStore.ObserveFastResult(cleanupCtx, siteID, startedAt, startedAt.Add(time.Second), "error", ErrorCode(ctx.Err()), GroupObservation{})
+	}()
 	free, err := s.remoteSlot(ctx)
 	if err != nil {
 		return err
@@ -358,16 +388,25 @@ func (s *Service) runFastSite(ctx context.Context, siteID int64) error {
 	if sessionErr == nil {
 		connector, supported := s.connector.(FastObservationConnector)
 		if !supported {
-			message = ErrorCode(ErrUnsupported)
+			sessionErr = ErrUnsupported
+			message = ErrorCode(sessionErr)
 		} else {
-			observe, sessionErr = connector.ObserveGroups(ctx, *site, session)
+			observeCtx, stopObserve := context.WithTimeout(ctx, 10*time.Second)
+			observe, sessionErr = connector.ObserveGroups(observeCtx, *site, session)
+			stopObserve()
+			var limited *RateLimitError
 			if sessionErr == nil {
 				status, message = "healthy", ""
-			} else if limited, ok := sessionErr.(*RateLimitError); ok {
+			} else if errors.As(sessionErr, &limited) {
 				status, message = "rate_limited", "rate_limited"
-				next = addSeconds(now, int64(limited.RetryAfter/time.Second))
-				if !next.After(now) {
-					next = now.Add(time.Second)
+				retryAt := addSeconds(now, int64(limited.RetryAfter/time.Second))
+				if !retryAt.After(now) {
+					retryAt = now.Add(time.Second)
+				}
+				backoffAt := s.nextFastObservationAt(site.ID, now, interval, false)
+				next = retryAt
+				if backoffAt.After(next) {
+					next = backoffAt
 				}
 			} else {
 				message = ErrorCode(sessionErr)
@@ -375,6 +414,14 @@ func (s *Service) runFastSite(ctx context.Context, siteID int64) error {
 		}
 	} else {
 		message = ErrorCode(sessionErr)
+	}
+	// Unsupported contracts are recorded for administrators but should not
+	// exponentially retry forever. Rate limits retain the server-provided delay;
+	// all other failures use the persisted cadence plus bounded backoff/jitter.
+	if sessionErr != nil && !errors.Is(sessionErr, ErrUnsupported) && !isRateLimitError(sessionErr) {
+		next = s.nextFastObservationAt(site.ID, now, interval, false)
+	} else if sessionErr == nil || errors.Is(sessionErr, ErrUnsupported) {
+		next = s.nextFastObservationAt(site.ID, now, interval, true)
 	}
 	var previous *CatalogObservation
 	if sessionErr == nil && observe.GroupsComplete {
@@ -384,10 +431,15 @@ func (s *Service) runFastSite(ctx context.Context, siteID int64) error {
 			previous = nil
 		}
 	}
-	result, saveErr := fastStore.ObserveFastResult(ctx, siteID, now, next, status, message, observe)
+	// Persist the terminal state even if cancellation races with the write.
+	// This clears the running reservation instead of waiting for its lease.
+	saveCtx, stopSave := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
+	defer stopSave()
+	result, saveErr := fastStore.ObserveFastResult(saveCtx, siteID, now, next, status, message, observe)
 	if saveErr != nil {
 		return saveErr
 	}
+	reservationSaved = true
 	if sessionErr != nil {
 		// Some older upstream deployments support the complete catalog contract
 		// but do not expose the cheap group/rate endpoints. Keep the observation
@@ -482,6 +534,22 @@ func (s *Service) runSiteDue(ctx context.Context, siteID int64) error {
 			if auditErr != nil && !errors.Is(auditErr, ErrUnsupported) {
 				log.Printf("[UpstreamGovernance] scheduled key audit: %s", ErrorCode(auditErr))
 			}
+		}
+	}
+	if didSync {
+		status, message := "healthy", ""
+		if syncErr != nil {
+			status, message = "error", ErrorCode(syncErr)
+			if errors.Is(syncErr, ErrReauth) {
+				status = "reauth_required"
+			}
+		}
+		next := s.nextCollectionAt(site.ID, s.now(), collectionIntervalSeconds(*site), syncErr == nil)
+		// syncLockedWithAutoReauthorization has already persisted the catalog or
+		// error. This second projection only changes the next deadline, keeping
+		// the durable retry/backoff schedule across service restarts.
+		if scheduleErr := s.store.ObserveSite(ctx, site.ID, status, message, time.Time{}, next); scheduleErr != nil && syncErr == nil {
+			return scheduleErr
 		}
 	}
 	bindings, err := s.store.ListBindings(ctx, siteID)

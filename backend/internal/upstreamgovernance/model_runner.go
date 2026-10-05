@@ -63,6 +63,7 @@ func (c *platformConnector) RunModel(ctx context.Context, site Site, key RemoteK
 		if request.Template == "pelican" {
 			result.HTML = extractModelHTML(result.ResponseText)
 		}
+		result.Security = summarizeModelSecurity(request.Template, result)
 	}()
 	if key.Key == "" || c.factory == nil || !validProbeModel(request.Config.Model) {
 		result.ErrorCode = "invalid_request"

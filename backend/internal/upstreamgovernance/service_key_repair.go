@@ -135,25 +135,36 @@ func (s *Service) PrepareKeyRepair(ctx context.Context, siteID, keyID int64, inp
 	if err != nil {
 		return nil, err
 	}
+	return s.prepareKeyRepairLocked(ctx, store, *site, *key, input)
+}
+
+// prepareKeyRepairLocked freezes all of the context needed for a reviewed
+// replacement. It only reads the remote inventory and reserves a durable
+// repair row; the single remote create remains behind ConfirmKeyRepair's
+// post-intent state transition.
+func (s *Service) prepareKeyRepairLocked(ctx context.Context, store KeyRepairStore, site Site, key ManagedKey, input PrepareKeyRepairInput) (*KeyRepair, error) {
+	if !site.Enabled || site.Version != input.SiteVersion {
+		return nil, ErrConflict
+	}
 	if key.KeyCipher == "" || key.RemoteKeyID == "" || key.Health.Status != KeyHealthConfirmedMissing || key.Health.MissingCount < 2 {
 		return nil, ErrRepairContextChanged
 	}
-	session, err := s.managementSessionLocked(ctx, site, false)
+	session, err := s.managementSessionLocked(ctx, &site, false)
 	if err != nil {
 		return nil, err
 	}
 	if session.UserID <= 0 || session.UserID != key.OwnerUserID {
 		return nil, ErrRepairContextChanged
 	}
-	group, err := s.repairGroup(ctx, *site, key.RemoteGroupID, key.Platform)
+	group, err := s.repairGroup(ctx, site, key.RemoteGroupID, key.Platform)
 	if err != nil {
 		return nil, err
 	}
-	mode, binding, account, managedAccount, err := s.repairTarget(ctx, *site, *key, input.Mode)
+	mode, binding, account, managedAccount, err := s.repairTarget(ctx, site, key, input.Mode)
 	if err != nil {
 		return nil, err
 	}
-	inventory, err := s.inventoryForSite(ctx, *site, session, []ManagedKey{*key})
+	inventory, err := s.inventoryForSite(ctx, site, session, []ManagedKey{key})
 	if err != nil {
 		if errors.Is(err, ErrReauth) {
 			return nil, ErrReauth
@@ -165,7 +176,7 @@ func (s *Service) PrepareKeyRepair(ctx context.Context, siteID, keyID int64, inp
 	}
 	id := uuid.NewString()
 	name := repairKeyName(group, s.now(), site.Platform, id)
-	existing, err := s.connector.PrepareKey(ctx, *site, session, group, name)
+	existing, err := s.connector.PrepareKey(ctx, site, session, group, name)
 	if err != nil {
 		return nil, err
 	}
@@ -190,6 +201,29 @@ func (s *Service) PrepareKeyRepair(ctx context.Context, siteID, keyID int64, inp
 		return nil, err
 	}
 	return repairCapabilities(repair), nil
+}
+
+// ensureKeyRepairIntentLocked creates at most one repair intent for the
+// currently missing remote key. A prepared/post-intent/awaiting/candidate or
+// conflict/abandoned row is returned as-is so an automatic audit never starts
+// a second replacement operation. The caller owns the site lock.
+func (s *Service) ensureKeyRepairIntentLocked(ctx context.Context, site Site, key ManagedKey) (*KeyRepair, bool, error) {
+	store, ok := s.store.(KeyRepairStore)
+	if !ok {
+		return nil, false, ErrUnsupported
+	}
+	latest, err := store.LatestKeyRepair(ctx, site.ID, key.ID)
+	if err != nil {
+		return nil, false, err
+	}
+	if latest != nil && latest.OldRemoteKeyID == key.RemoteKeyID && latest.OldKeyCipher == key.KeyCipher {
+		return repairCapabilities(latest), false, nil
+	}
+	repair, err := s.prepareKeyRepairLocked(ctx, store, site, key, PrepareKeyRepairInput{SiteVersion: site.Version})
+	if err != nil {
+		return nil, false, err
+	}
+	return repair, true, nil
 }
 
 func (s *Service) ConfirmKeyRepair(ctx context.Context, siteID, keyID int64, repairID string) (*KeyRepair, error) {

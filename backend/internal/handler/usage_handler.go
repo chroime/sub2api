@@ -44,6 +44,17 @@ type userGroupStat struct {
 	ActualCost  float64 `json:"actual_cost"`
 }
 
+type userTokenRankingItem struct {
+	Rank         int    `json:"rank"`
+	UserID       int64  `json:"user_id"`
+	Email        string `json:"email"`
+	Requests     int64  `json:"requests"`
+	InputTokens  int64  `json:"input_tokens"`
+	OutputTokens int64  `json:"output_tokens"`
+	CacheTokens  int64  `json:"cache_tokens"`
+	TotalTokens  int64  `json:"total_tokens"`
+}
+
 // UsageHandler handles usage-related requests
 type UsageHandler struct {
 	usageService   *service.UsageService
@@ -421,6 +432,98 @@ func (h *UsageHandler) Stats(c *gin.Context) {
 	stats.EndpointPaths = nil
 
 	response.Success(c, stats)
+}
+
+const (
+	tokenRankingDefaultPeriod = "today"
+	tokenRankingLimit         = 20
+)
+
+var tokenRankingBeijingLocation = time.FixedZone("Asia/Shanghai", 8*60*60)
+
+func tokenRankingRange(period string, now time.Time) (time.Time, time.Time, bool) {
+	period = strings.TrimSpace(period)
+	if period == "" {
+		period = tokenRankingDefaultPeriod
+	}
+	now = now.In(tokenRankingBeijingLocation)
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, tokenRankingBeijingLocation)
+	switch period {
+	case "today":
+		return today, today.AddDate(0, 0, 1), true
+	case "yesterday":
+		return today.AddDate(0, 0, -1), today, true
+	case "7d":
+		return today.AddDate(0, 0, -6), today.AddDate(0, 0, 1), true
+	case "30d":
+		return today.AddDate(0, 0, -29), today.AddDate(0, 0, 1), true
+	default:
+		return time.Time{}, time.Time{}, false
+	}
+}
+
+// GetTokenRanking returns a privacy-preserving top-token ranking for the
+// public user area. It deliberately reuses the dashboard aggregation query,
+// but keeps the admin-only endpoint and its broader response projection
+// private.
+// GET /api/v1/user/token-ranking
+func (h *UsageHandler) GetTokenRanking(c *gin.Context) {
+	if _, ok := middleware2.GetAuthSubjectFromContext(c); !ok {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+	period := strings.TrimSpace(c.DefaultQuery("period", tokenRankingDefaultPeriod))
+	if values, present := c.Request.URL.Query()["period"]; present && len(values) != 1 {
+		response.BadRequest(c, "Invalid period")
+		return
+	}
+	startTime, endTime, ok := tokenRankingRange(period, time.Now())
+	if !ok {
+		response.BadRequest(c, "Invalid period, use today, yesterday, 7d, or 30d")
+		return
+	}
+
+	rows, err := h.usageService.GetUserBreakdownStats(
+		c.Request.Context(),
+		startTime,
+		endTime,
+		usagestats.UserBreakdownDimension{SortBy: "total_tokens"},
+		tokenRankingLimit,
+	)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	if len(rows) > tokenRankingLimit {
+		rows = rows[:tokenRankingLimit]
+	}
+
+	ranking := make([]userTokenRankingItem, 0, len(rows))
+	// The list endpoint is intentionally capped at 20 rows; this summary is the
+	// aggregate of the displayed Top 20 rows rather than a hidden second query.
+	var totalTokens int64
+	for index, row := range rows {
+		totalTokens += row.TotalTokens
+		ranking = append(ranking, userTokenRankingItem{
+			Rank:         index + 1,
+			UserID:       row.UserID,
+			Email:        service.MaskEmail(row.Email),
+			Requests:     row.Requests,
+			InputTokens:  row.InputTokens,
+			OutputTokens: row.OutputTokens,
+			CacheTokens:  row.CacheTokens,
+			TotalTokens:  row.TotalTokens,
+		})
+	}
+
+	response.Success(c, gin.H{
+		"period":       period,
+		"ranking":      ranking,
+		"total_tokens": totalTokens,
+		"start_date":   startTime.Format("2006-01-02"),
+		"end_date":     endTime.AddDate(0, 0, -1).Format("2006-01-02"),
+		"generated_at": time.Now().In(tokenRankingBeijingLocation).Format(time.RFC3339),
+	})
 }
 
 const (

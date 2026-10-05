@@ -283,6 +283,45 @@ func (s *Service) auditManagedKeysLocked(ctx context.Context, site Site) error {
 					return err
 				}
 			}
+			// A confirmed remote deletion is already paused above. Freeze a
+			// reviewed, idempotent repair intent while the site lock is held so
+			// scheduled audits can hand the operation to the existing repair
+			// state machine without ever issuing a remote create here.
+			// A key moved to another upstream group is a distinct manual
+			// reconciliation case. Only a confirmed absence may enqueue a
+			// replacement intent; never create a new key while the old key is
+			// still visible under a different group.
+			confirmedMissing := health.Status == KeyHealthConfirmedMissing
+			if confirmedMissing {
+				repairKey := key
+				repairKey.Health = health
+				_, created, repairErr := s.ensureKeyRepairIntentLocked(ctx, site, repairKey)
+				if repairErr != nil {
+					code := "key_repair_pending"
+					kind := "key_repair_pending"
+					if errors.Is(repairErr, ErrUnsupported) {
+						code = "key_repair_manual_required"
+						kind = "key_repair_manual_required"
+					}
+					if key.Health.ErrorCode != code {
+						if eventErr := s.store.AddEvent(ctx, &Event{SiteID: site.ID, Kind: kind, Resource: key.Marker, Before: key.RemoteKeyID, After: code, CreatedAt: now}); eventErr != nil {
+							log.Printf("[UpstreamGovernance] key repair intent: %s", ErrorCode(eventErr))
+						}
+					}
+					health.ErrorCode = code
+					if health.NextCheckAt == nil {
+						next := now.Add(5 * time.Minute)
+						health.NextCheckAt = &next
+					}
+					if err = store.SaveKeyHealth(ctx, key, health); err != nil {
+						return err
+					}
+				} else if created {
+					if eventErr := s.store.AddEvent(ctx, &Event{SiteID: site.ID, Kind: "key_repair_pending", Resource: key.Marker, Before: key.RemoteKeyID, After: "prepared", CreatedAt: now}); eventErr != nil {
+						log.Printf("[UpstreamGovernance] key repair intent event: %s", ErrorCode(eventErr))
+					}
+				}
+			}
 			if key.Health.Status != health.Status || key.Health.MissingCount < 2 && health.MissingCount >= 2 {
 				kind := "key_missing_suspected"
 				if health.Status == KeyHealthConfirmedMissing || health.Status == KeyHealthGroupChanged && health.MissingCount >= 2 {

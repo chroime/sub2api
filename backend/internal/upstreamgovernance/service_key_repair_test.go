@@ -249,6 +249,55 @@ func TestKeyRepairPreparesKeyOnlyWhenLocalAccountAbsent(t *testing.T) {
 	}
 }
 
+func TestConfirmedMissingAuditCreatesOnePreparedRepairIntent(t *testing.T) {
+	s, store, connector, _ := keyRepairFixture(t)
+
+	keys, err := s.AuditKeys(t.Context(), store.site.ID)
+	require.NoError(t, err)
+	require.Len(t, keys, 1)
+	require.Equal(t, KeyHealthConfirmedMissing, keys[0].Health.Status)
+	require.Len(t, store.repairs, 1, "confirmed deletion should enqueue a durable repair intent")
+
+	var first KeyRepair
+	for _, candidate := range store.repairs {
+		first = candidate
+	}
+	require.Equal(t, KeyRepairPrepared, first.Stage)
+	require.Equal(t, store.keys[0].ID, first.ManagedKeyID)
+	require.Equal(t, store.keys[0].RemoteKeyID, first.OldRemoteKeyID)
+	require.Zero(t, connector.createCalls, "automatic repair intent must not create a remote key")
+
+	// A repeated audit must observe the same intent instead of preparing a
+	// second operation for the same missing remote key.
+	_, err = s.AuditKeys(t.Context(), store.site.ID)
+	require.NoError(t, err)
+	require.Len(t, store.repairs, 1)
+	require.Zero(t, connector.createCalls)
+}
+
+func TestConfirmedMissingTransitionUsesUpdatedHealthForRepairIntent(t *testing.T) {
+	s, store, _, _ := keyRepairFixture(t)
+	firstMissing := s.now().Add(-time.Minute)
+	store.keys[0].Health = KeyHealth{Status: KeyHealthSuspectedMissing, MissingCount: 1, FirstMissingAt: &firstMissing, NextCheckAt: &firstMissing}
+
+	keys, err := s.AuditKeys(t.Context(), store.site.ID)
+	require.NoError(t, err)
+	require.Equal(t, KeyHealthConfirmedMissing, keys[0].Health.Status)
+	require.Len(t, store.repairs, 1, "the transition from suspected to confirmed must enqueue repair intent")
+}
+
+func TestConfirmedMissingAuditUsesKeyOnlyRepairWhenLocalAccountWasDeleted(t *testing.T) {
+	s, store, _, local := keyRepairFixture(t)
+	delete(local.accounts, store.keys[0].Marker)
+
+	_, err := s.AuditKeys(t.Context(), store.site.ID)
+	require.NoError(t, err)
+	require.Len(t, store.repairs, 1)
+	for _, repair := range store.repairs {
+		require.Equal(t, KeyRepairModeKeyOnly, repair.Mode)
+	}
+}
+
 func TestKeyOnlyRepairCommitsWithoutChangingOrRecreatingLocalAccount(t *testing.T) {
 	for _, historicalBinding := range []bool{true, false} {
 		t.Run(map[bool]string{true: "deleted historical account", false: "never imported"}[historicalBinding], func(t *testing.T) {

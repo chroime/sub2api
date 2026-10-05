@@ -226,6 +226,18 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/iq-detection',
+    name: 'IQDetection',
+    component: () => import('@/views/user/IQDetectionView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: 'IQ Detection',
+      titleKey: 'iqDetection.title',
+      descriptionKey: 'iqDetection.description'
+    }
+  },
+  {
     path: '/keys',
     name: 'Keys',
     component: () => import('@/views/user/KeysView.vue'),
@@ -272,6 +284,18 @@ const routes: RouteRecordRaw[] = [
       title: 'Usage Records',
       titleKey: 'usage.title',
       descriptionKey: 'usage.description'
+    }
+  },
+  {
+    path: '/token-ranking',
+    name: 'TokenRanking',
+    component: () => import('@/views/user/TokenRankingView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: 'Token Usage Ranking',
+      titleKey: 'usage.ranking.title',
+      descriptionKey: 'usage.ranking.subtitle'
     }
   },
   {

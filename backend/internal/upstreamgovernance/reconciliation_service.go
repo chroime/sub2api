@@ -294,7 +294,7 @@ func (s *Service) reconcileSnapshotLocked(ctx context.Context, site Site, snapsh
 	// credible increase is visible to the pricing coordinator even when the
 	// legacy account-rate reconciliation correctly leaves the row in review.
 	var pricingFacts PricingFactRecorder
-	if recorder, ok := s.store.(PricingFactRecorder); ok {
+	if recorder, ok := s.store.(PricingFactRecorder); ok && s.pricingCoordinator == nil {
 		pricingFacts = recorder
 	}
 	states, err := store.ReconciliationStates(ctx, site.ID)

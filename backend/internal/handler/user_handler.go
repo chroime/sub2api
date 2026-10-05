@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	gov "github.com/Wei-Shaw/sub2api/internal/upstreamgovernance"
 
 	"github.com/gin-gonic/gin"
 )
@@ -22,6 +24,7 @@ type UserHandler struct {
 	emailCache            service.EmailCache
 	affiliateService      *service.AffiliateService
 	userPlatformQuotaRepo service.UserPlatformQuotaRepository
+	governanceService     *gov.Service
 }
 
 // NewUserHandler creates a new UserHandler
@@ -41,6 +44,50 @@ func NewUserHandler(
 		affiliateService:      affiliateService,
 		userPlatformQuotaRepo: userPlatformQuotaRepo,
 	}
+}
+
+// SetGovernanceService wires the read-only model quality projection. Keeping
+// this setter optional preserves lightweight handler fixtures that do not load
+// the governance subsystem.
+func (h *UserHandler) SetGovernanceService(value *gov.Service) {
+	h.governanceService = value
+}
+
+// GetIQDetection returns the credential-free candy/pelican monitoring view for
+// authenticated users. It never exposes prompts, request bodies or raw JSON.
+// GET /api/v1/user/iq-detection
+func (h *UserHandler) GetIQDetection(c *gin.Context) {
+	if _, ok := middleware2.GetAuthSubjectFromContext(c); !ok {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+	hours, limit := 24, 8
+	if values, present := c.Request.URL.Query()["hours"]; present {
+		parsed, err := strconv.Atoi(c.Query("hours"))
+		if err != nil || len(values) != 1 || parsed <= 0 || parsed > 168 {
+			response.BadRequest(c, "Invalid hours")
+			return
+		}
+		hours = parsed
+	}
+	if values, present := c.Request.URL.Query()["limit"]; present {
+		parsed, err := strconv.Atoi(c.Query("limit"))
+		if err != nil || len(values) != 1 || parsed <= 0 || parsed > 20 {
+			response.BadRequest(c, "Invalid limit")
+			return
+		}
+		limit = parsed
+	}
+	if h.governanceService == nil {
+		response.Success(c, &gov.IQDashboard{CandyResults: []gov.IQCandyResult{}, PelicanWorks: []gov.IQPelicanWork{}, Timeline: []gov.IQTimelinePoint{}, StandardAnswer: 21, WindowHours: hours, GeneratedAt: time.Now().UTC()})
+		return
+	}
+	result, err := h.governanceService.PublicIQDashboard(c.Request.Context(), hours, limit)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, result)
 }
 
 // GetMyPlatformQuotas GET /user/platform-quotas

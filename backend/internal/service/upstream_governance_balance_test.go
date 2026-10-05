@@ -50,7 +50,7 @@ func TestGovernanceBalanceMailUsesCurrentSystemSMTPAndEscapesRemoteNames(t *test
 	require.NotContains(t, body, "<script>")
 	require.Contains(t, body, "500 quota")
 	require.Contains(t, body, "2026-09-26 08:00:00")
-	require.Contains(t, body, "北京时间，+08:00")
+	require.Contains(t, body, "北京时间（UTC+08:00）")
 	require.NotContains(t, body, "$500")
 	require.NoError(t, repo.Set(t.Context(), SettingKeySMTPFrom, "updated-sender@example.com"))
 	require.NoError(t, adapter.Send(t.Context(), "admin@example.com", notice))
@@ -58,4 +58,20 @@ func TestGovernanceBalanceMailUsesCurrentSystemSMTPAndEscapesRemoteNames(t *test
 	require.NoError(t, err)
 	require.Contains(t, message.Header.Get("From"), "updated-sender@example.com")
 	require.Equal(t, int64(2), server.messageCount())
+}
+
+func TestGovernanceBalanceRecoveryMailUsesChineseLabels(t *testing.T) {
+	repo := newNotificationEmailMemorySettingRepo()
+	server := startNotificationEmailTestSMTPServer(t)
+	require.NoError(t, repo.SetMultiple(t.Context(), server.settings()))
+	adapter := &governanceBalanceNotifier{mail: NewEmailService(repo, nil)}
+	notice := gov.BalanceNotice{SiteID: 7, SiteName: "测试上游", BaseURL: "https://upstream.example", Platform: "sub2api", Balance: 120, Threshold: 100, Unit: "usd", Recovered: true, ObservedAt: time.Date(2026, 10, 2, 16, 0, 0, 0, time.UTC)}
+	require.NoError(t, adapter.Send(t.Context(), "admin@example.com", notice))
+	body := server.lastMessageBody(t)
+	require.Contains(t, body, "上游余额已恢复")
+	require.Contains(t, body, "上游名称")
+	require.Contains(t, body, "站点URL")
+	require.Contains(t, body, "北京时间（UTC+08:00）")
+	require.NotContains(t, body, "Upstream")
+	require.NotContains(t, body, "Available")
 }

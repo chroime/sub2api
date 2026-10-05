@@ -483,6 +483,18 @@ export default {
       detailCoordinates: 'Coordinates',
     },
     tabs: { usage: 'Usage', errors: 'Error Requests', ranking: 'User Ranking' },
+    ranking: {
+      title: 'Total Token Usage Ranking',
+      subtitle: 'All-user total token usage for the selected period',
+      periodLabel: 'Ranking time range',
+      periods: { today: 'Today', yesterday: 'Yesterday', '7d': 'Last 7 days', '30d': 'Last 30 days' },
+      total: 'Top 20 Tokens',
+      user: 'User',
+      requests: '{count} requests',
+      requestsLabel: 'Requests',
+      empty: 'No ranking data',
+      loadFailed: 'Failed to load the ranking. Please try again later.',
+    },
     errors: {
       time: 'Time', model: 'Model', endpoint: 'Endpoint', status: 'Status',
       category: 'Category', platform: 'Platform', message: 'Message',
