@@ -169,7 +169,10 @@ type Group struct {
 // 注意：普通用户接口不得返回 model_routing/account_count/account_groups 等内部信息。
 type AdminGroup struct {
 	Group
-	StreamingACKEnabled *bool `json:"streaming_ack_enabled"`
+	BillingInputTokenMultiplier  float64 `json:"billing_input_token_multiplier"`
+	BillingOutputTokenMultiplier float64 `json:"billing_output_token_multiplier"`
+	BillingTokenAdjustmentMinInputTokens int `json:"billing_token_adjustment_min_input_tokens"`
+	StreamingACKEnabled          *bool   `json:"streaming_ack_enabled"`
 	// ForceOpenAIFast 是管理端请求策略，用户侧分组 DTO 无需暴露。
 	ForceOpenAIFast bool `json:"force_openai_fast"`
 	// FreeOpenAIFast 是管理端计费策略，用户侧分组 DTO 无需暴露。

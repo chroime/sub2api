@@ -207,6 +207,15 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	if actualInputTokens < 0 {
 		actualInputTokens = 0
 	}
+	if apiKey != nil {
+		adjusted := tokenUsageAdjustmentForGroup(apiKey.Group).ApplyForRequest(actualInputTokens, result.Usage.OutputTokens)
+		actualInputTokens = adjusted.InputTokens
+		result.Usage.OutputTokens = adjusted.OutputTokens
+		// Keep the OpenAI aggregate input field internally consistent with the
+		// separately retained cache buckets after applying the customer billing
+		// adjustment.
+		result.Usage.InputTokens = actualInputTokens + result.Usage.CacheReadInputTokens + result.Usage.CacheCreationInputTokens
+	}
 
 	// Calculate cost
 	tokens := UsageTokens{

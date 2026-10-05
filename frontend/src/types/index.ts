@@ -627,6 +627,10 @@ export interface Group {
 }
 
 export interface AdminGroup extends Group {
+	// 仅管理员可见：下游计费 Token 修正倍率。
+	billing_input_token_multiplier: number
+	billing_output_token_multiplier: number
+	billing_token_adjustment_min_input_tokens: number
   // Missing/null retains the pre-migration account preference.
   streaming_ack_enabled?: boolean | null
   force_openai_fast: boolean
@@ -798,6 +802,9 @@ export interface CreateGroupRequest {
   description?: string | null
   platform?: GroupPlatform
   rate_multiplier?: number
+  billing_input_token_multiplier?: number
+  billing_output_token_multiplier?: number
+  billing_token_adjustment_min_input_tokens?: number
   is_exclusive?: boolean
   subscription_type?: SubscriptionType
   daily_limit_usd?: number | null
@@ -864,6 +871,9 @@ export interface UpdateGroupRequest {
   description?: string | null
   platform?: GroupPlatform
   rate_multiplier?: number
+  billing_input_token_multiplier?: number
+  billing_output_token_multiplier?: number
+  billing_token_adjustment_min_input_tokens?: number
   is_exclusive?: boolean
   status?: 'active' | 'inactive'
   subscription_type?: SubscriptionType

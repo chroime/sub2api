@@ -21,6 +21,12 @@ type Group struct {
 	Description    string
 	Platform       string
 	RateMultiplier float64
+	// BillingInputTokenMultiplier and BillingOutputTokenMultiplier adjust the
+	// customer-facing token quantities before billing. A value of 1 preserves
+	// the upstream quantity.
+	BillingInputTokenMultiplier          float64
+	BillingOutputTokenMultiplier         float64
+	BillingTokenAdjustmentMinInputTokens int
 	// 高峰时段倍率：peak_rate_enabled 为 true 且当前时刻处于 [PeakStart, PeakEnd) 时，
 	// token 计费倍率额外乘以 PeakRateMultiplier。详见 PeakMultiplierAt。
 	PeakRateEnabled    bool

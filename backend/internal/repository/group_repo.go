@@ -169,6 +169,9 @@ func createGroupRecord(ctx context.Context, client *dbent.Client, groupIn *servi
 		SetDescription(groupIn.Description).
 		SetPlatform(groupIn.Platform).
 		SetRateMultiplier(groupIn.RateMultiplier).
+		SetBillingInputTokenMultiplier(groupIn.BillingInputTokenMultiplier).
+		SetBillingOutputTokenMultiplier(groupIn.BillingOutputTokenMultiplier).
+		SetBillingTokenAdjustmentMinInputTokens(groupIn.BillingTokenAdjustmentMinInputTokens).
 		SetSortOrder(groupIn.SortOrder).
 		SetIsExclusive(groupIn.IsExclusive).
 		SetStatus(groupIn.Status).
@@ -372,6 +375,9 @@ func (r *groupRepository) Update(ctx context.Context, groupIn *service.Group) er
 		SetDescription(groupIn.Description).
 		SetPlatform(groupIn.Platform).
 		SetRateMultiplier(groupIn.RateMultiplier).
+		SetBillingInputTokenMultiplier(groupIn.BillingInputTokenMultiplier).
+		SetBillingOutputTokenMultiplier(groupIn.BillingOutputTokenMultiplier).
+		SetBillingTokenAdjustmentMinInputTokens(groupIn.BillingTokenAdjustmentMinInputTokens).
 		SetIsExclusive(groupIn.IsExclusive).
 		SetStatus(groupIn.Status).
 		SetSubscriptionType(groupIn.SubscriptionType).

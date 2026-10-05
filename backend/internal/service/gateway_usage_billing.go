@@ -815,6 +815,15 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 		cacheTTLOverridden = (result.Usage.CacheCreation5mTokens + result.Usage.CacheCreation1hTokens) > 0
 	}
 
+	// Apply the group-level customer billing adjustment after cache buckets have
+	// been classified. Cache read/write tokens stay in their own buckets so they
+	// are not multiplied a second time.
+	if apiKey != nil {
+		adjusted := tokenUsageAdjustmentForGroup(apiKey.Group).ApplyForRequest(result.Usage.InputTokens, result.Usage.OutputTokens)
+		result.Usage.InputTokens = adjusted.InputTokens
+		result.Usage.OutputTokens = adjusted.OutputTokens
+	}
+
 	// 获取费率倍数（优先级：用户专属 > 分组默认 > 系统默认）
 	multiplier := 1.0
 	if s.cfg != nil {
