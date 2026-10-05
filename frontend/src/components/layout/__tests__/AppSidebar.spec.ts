@@ -90,3 +90,14 @@ describe('Infinite Canvas navigation', () => {
     expect(componentSource).toContain('const userNavItems = computed((): NavItem[] => finalizeNav(buildSelfNavItems(true)))')
   })
 })
+
+describe('Distinct navigation icons', () => {
+  it('uses dedicated icons for Smart Operations and token ranking', () => {
+    expect(componentSource).toContain("const SmartOperationsIcon = {")
+    expect(componentSource).toContain("render: () => h(Icon, { name: 'sparkles' })")
+    expect(componentSource).toContain("const TokenRankingIcon = {")
+    expect(componentSource).toContain("render: () => h(Icon, { name: 'trophy' })")
+    expect(componentSource).toMatch(/path: '\/token-ranking'[\s\S]*?icon: TokenRankingIcon/)
+    expect(componentSource).toMatch(/path: smartOperationsRootPath,[\s\S]*?icon: SmartOperationsIcon/)
+  })
+})

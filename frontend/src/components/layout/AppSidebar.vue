@@ -512,6 +512,14 @@ const IQIcon = {
   render: () => h(Icon, { name: 'brain' })
 }
 
+const SmartOperationsIcon = {
+  render: () => h(Icon, { name: 'sparkles' })
+}
+
+const TokenRankingIcon = {
+  render: () => h(Icon, { name: 'trophy' })
+}
+
 const BellIcon = {
   render: () =>
     h(
@@ -758,7 +766,7 @@ function buildSelfNavItems(withDashboard: boolean): NavItem[] {
     { path: '/batch-image', label: t('nav.batchImage'), icon: BatchImageIcon, hideInSimpleMode: true, featureFlag: flagBatchImageAccess },
     { path: '/infinite-canvas', label: t('nav.infiniteCanvas'), icon: InfiniteCanvasIcon, hideInSimpleMode: true },
     { path: '/usage', label: t('nav.usage'), icon: ChartIcon, hideInSimpleMode: true },
-    { path: '/token-ranking', label: t('nav.tokenRanking'), icon: ChartIcon, hideInSimpleMode: true },
+    { path: '/token-ranking', label: t('nav.tokenRanking'), icon: TokenRankingIcon, hideInSimpleMode: true },
     { path: '/available-channels', label: t('nav.availableChannels'), icon: ChannelIcon, hideInSimpleMode: true, featureFlag: flagAvailableChannels },
     { path: '/monitor', label: t('nav.channelStatus'), icon: SignalIcon, featureFlag: flagChannelMonitor },
     { path: '/iq-detection', label: t('nav.iqDetection'), icon: IQIcon },
@@ -830,7 +838,7 @@ const adminNavItems = computed((): NavItem[] => {
     {
       path: smartOperationsRootPath,
       label: t('governance.smartOperations.title'),
-      icon: GlobeIcon,
+      icon: SmartOperationsIcon,
       expandOnly: true,
       children: SMART_OPERATIONS_SECTIONS.map((section) => ({
         path: section.path,
