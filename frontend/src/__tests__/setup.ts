@@ -4,6 +4,25 @@
  */
 import { config } from '@vue/test-utils'
 import { vi } from 'vitest'
+import { createI18n } from 'vue-i18n'
+import en from '@/i18n/locales/en'
+import zh from '@/i18n/locales/zh'
+
+function toRuntimeMessages(value: unknown): unknown {
+  if (typeof value === 'string') return () => value
+  if (Array.isArray(value)) return value.map(toRuntimeMessages)
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, toRuntimeMessages(child)]))
+  }
+  return value
+}
+
+const testI18n = createI18n({
+  legacy: false,
+  locale: 'zh',
+  fallbackLocale: 'en',
+  messages: { zh: toRuntimeMessages(zh), en: toRuntimeMessages(en) },
+})
 
 function createMemoryStorage(): Storage {
   const values = new Map<string, string>()
@@ -93,6 +112,7 @@ globalThis.ResizeObserver = MockResizeObserver as unknown as typeof ResizeObserv
 config.global.stubs = {
   // 可以在这里添加全局 stub
 }
+config.global.plugins = [testI18n]
 
 // 设置全局测试超时
 vi.setConfig({ testTimeout: 10000 })

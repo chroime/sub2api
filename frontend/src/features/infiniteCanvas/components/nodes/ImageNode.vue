@@ -1,8 +1,10 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import type { CanvasNode } from '../../types'
 import NodeStatusBadge from './NodeStatusBadge.vue'
 
 const props = defineProps<{ node: CanvasNode; imageUrl?: string }>()
+const { t } = useI18n()
 const emit = defineEmits<{ (event: 'delete'): void; (event: 'retry'): void }>()
 const download = () => {
   if (!props.imageUrl) return
@@ -12,12 +14,12 @@ const download = () => {
 
 <template>
   <div class="image-node" data-canvas-no-zoom>
-    <div v-if="imageUrl" class="image-node__preview"><img :src="imageUrl" alt="Generated image" /></div>
-    <div v-else class="image-node__empty">{{ node.metadata.status === 'pending' ? '正在生成图片…' : '暂无图片预览' }}</div>
+    <div v-if="imageUrl" class="image-node__preview"><img :src="imageUrl" :alt="t('infiniteCanvas.image.alt')" /></div>
+    <div v-else class="image-node__empty">{{ node.metadata.status === 'pending' ? t('infiniteCanvas.image.generating') : t('infiniteCanvas.image.empty') }}</div>
     <div class="image-node__meta"><NodeStatusBadge :status="String(node.metadata.status ?? '')" /><span v-if="typeof node.metadata.model === 'string'">{{ node.metadata.model }}</span></div>
     <p v-if="typeof node.metadata.prompt === 'string'" class="image-node__prompt">{{ node.metadata.prompt }}</p>
     <p v-if="typeof node.metadata.error === 'string'" class="image-node__error">{{ node.metadata.error }}</p>
-    <div class="image-node__actions"><button type="button" data-canvas-no-zoom :disabled="!imageUrl" @pointerdown.stop @click.stop="download">下载</button><button v-if="node.metadata.status === 'failed' || node.metadata.status === 'error'" type="button" data-canvas-no-zoom @pointerdown.stop @click.stop="emit('retry')">重试</button><button type="button" data-canvas-no-zoom @pointerdown.stop @click.stop="emit('delete')">删除</button></div>
+    <div class="image-node__actions"><button type="button" data-canvas-no-zoom data-canvas-image-download :disabled="!imageUrl" @pointerdown.stop @click.stop="download">{{ t('infiniteCanvas.image.download') }}</button><button v-if="node.metadata.status === 'failed' || node.metadata.status === 'error'" type="button" data-canvas-no-zoom @pointerdown.stop @click.stop="emit('retry')">{{ t('infiniteCanvas.image.retry') }}</button><button type="button" data-canvas-no-zoom @pointerdown.stop @click.stop="emit('delete')">{{ t('infiniteCanvas.image.delete') }}</button></div>
   </div>
 </template>
 

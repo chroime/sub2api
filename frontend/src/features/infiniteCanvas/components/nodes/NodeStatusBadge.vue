@@ -1,14 +1,10 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 const props = defineProps<{ status?: string }>()
-const label = computed(() => ({
-  pending: '生成中',
-  completed: '已完成',
-  ready: '已完成',
-  failed: '生成失败',
-  error: '生成失败',
-}[props.status ?? ''] ?? '未知状态'))
+const { t } = useI18n()
+const label = computed(() => t(`infiniteCanvas.status.${props.status && ['pending', 'completed', 'ready', 'failed', 'error'].includes(props.status) ? props.status : 'unknown'}`))
 </script>
 
 <template>

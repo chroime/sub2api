@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { CanvasNode as CanvasNodeModel } from '../types'
 import PromptNode from './nodes/PromptNode.vue'
 import ConfigNode from './nodes/ConfigNode.vue'
@@ -7,6 +8,7 @@ import ImageNode from './nodes/ImageNode.vue'
 import type { ImageModel } from '@/api/imageGeneration'
 
 const props = defineProps<{ node: CanvasNodeModel; selected?: boolean; panMode?: boolean; imageUrl?: string; imageModels?: ImageModel[]; imageModelsLoading?: boolean; imageModelsError?: string }>()
+const { t } = useI18n()
 const emit = defineEmits<{
   (event: 'select', nodeId: string, additive: boolean): void
   (event: 'move', nodeId: string, screenDelta: { x: number; y: number }): void
@@ -23,10 +25,10 @@ const pendingDelta = ref({ x: 0, y: 0 })
 const emittedDelta = ref({ x: 0, y: 0 })
 let dragFrame: number | undefined
 const size = computed(() => props.node.size ?? { width: 240, height: 140 })
-const label = computed(() => props.node.type[0].toUpperCase() + props.node.type.slice(1))
+const label = computed(() => t(`infiniteCanvas.nodeTypes.${props.node.type}`))
 const metadataSummary = computed(() => {
   const keys = Object.keys(props.node.metadata).filter((key) => !['text', 'prompt', 'model', 'url', 'status'].includes(key))
-  return keys.length ? `${keys.length} metadata field${keys.length === 1 ? '' : 's'}` : 'Placeholder node'
+  return keys.length ? t(keys.length === 1 ? 'infiniteCanvas.node.metadataField' : 'infiniteCanvas.node.metadataFields', { count: keys.length }) : t('infiniteCanvas.node.placeholder')
 })
 
 function startDrag(event: PointerEvent) {
@@ -82,14 +84,14 @@ onBeforeUnmount(() => { if (dragFrame !== undefined) cancelAnimationFrame(dragFr
   >
     <header class="canvas-node__header">
       <span>{{ label }}</span>
-      <button type="button" title="Delete node" data-canvas-no-zoom @pointerdown.stop @click.stop="emit('delete', node.id)">×</button>
+      <button type="button" :title="t('infiniteCanvas.node.delete')" data-canvas-no-zoom @pointerdown.stop @click.stop="emit('delete', node.id)">×</button>
     </header>
-    <button class="canvas-node__handle canvas-node__handle--output" type="button" title="Connect node" aria-label="Connect node" @pointerdown="startConnection" />
+    <button class="canvas-node__handle canvas-node__handle--output" type="button" :title="t('infiniteCanvas.node.connect')" :aria-label="t('infiniteCanvas.node.connect')" @pointerdown="startConnection" />
     <div class="canvas-node__body">
       <PromptNode v-if="node.type === 'prompt'" :node="node" @update="emit('update', node.id, $event)" />
       <ConfigNode v-else-if="node.type === 'config'" :node="node" :models="imageModels" :models-loading="imageModelsLoading" :models-error="imageModelsError" @update="emit('update', node.id, $event)" @generate="emit('generate', node.id)" @retry-models="emit('retry-models')" />
       <ImageNode v-else-if="node.type === 'image'" :node="node" :image-url="imageUrl" @delete="emit('delete', node.id)" @retry="emit('retry', node.id)" />
-      <span v-if="metadataSummary !== 'Placeholder node'" class="canvas-node__placeholder">{{ metadataSummary }}</span>
+      <span v-if="Object.keys(node.metadata).filter((key) => !['text', 'prompt', 'model', 'url', 'status'].includes(key)).length" class="canvas-node__placeholder">{{ metadataSummary }}</span>
     </div>
   </article>
 </template>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { keysAPI, userGroupsAPI } from '@/api'
 import { listImageModels, type ImageModel } from '@/api/imageGeneration'
 import { useAuthStore } from '@/stores/auth'
@@ -46,6 +47,7 @@ function createSwitchableRepository(initial: CanvasRepository): SwitchableReposi
 const repository = createSwitchableRepository(props.repository ?? emptyRepository())
 const store = useInfiniteCanvasStore(repository)
 const authStore = useAuthStore()
+const { t } = useI18n()
 const groups = ref<Awaited<ReturnType<typeof userGroupsAPI.getAvailable>>>([])
 const eligibleKeys = ref<CanvasKeyOption[]>([])
 const keySecrets = new Map<number, string>()
@@ -55,7 +57,7 @@ const keysLoading = ref(true)
 const activeTab = ref<'canvas' | 'inspector'>('canvas')
 const mobileDrawer = ref<'sidebar' | 'inspector' | null>(null)
 const showCreateKey = ref(false)
-const newKeyName = ref('Canvas image key')
+const newKeyName = ref(t('infiniteCanvas.dialog.defaultKeyName'))
 const newKeyGroupId = ref<number | null>(null)
 const showDelete = ref(false)
 const projectToDelete = ref<string | null>(null)
@@ -80,7 +82,7 @@ const availableImageModels = computed(() => {
   if (allowlist === undefined) return imageModels.value
   return imageModels.value.filter((model) => isCanvasModelAllowed(model.id, allowlist))
 })
-const lastSaved = computed(() => activeProject.value ? `Last saved ${activeProject.value.updatedAt.toLocaleString()}` : '')
+const lastSaved = computed(() => activeProject.value ? t('infiniteCanvas.project.savedAt', { time: activeProject.value.updatedAt.toLocaleString() }) : '')
 let assetHydrationGeneration = 0
 
 function revokeImageUrls() {
@@ -150,18 +152,18 @@ async function loadKeys(preserveOnFailure = false, generation = lifecycleGenerat
 async function createKey() {
   const generation = lifecycleGeneration
   try {
-    const created = await keysAPI.create(newKeyName.value.trim() || 'Canvas image key', newKeyGroupId.value)
+    const created = await keysAPI.create(newKeyName.value.trim() || t('infiniteCanvas.dialog.defaultKeyName'), newKeyGroupId.value)
     if (!mounted || generation !== lifecycleGeneration) return
     const selectedGroupId = newKeyGroupId.value === null ? null : Number(newKeyGroupId.value)
     if (groupsGeneration !== generation || selectedGroupId === null || !canvasGroups.value.some((group) => group.id === selectedGroupId)) {
-      warningMessage.value = 'Image groups are still refreshing. Try creating the key again.'
+      warningMessage.value = t('infiniteCanvas.warnings.groupsRefreshing')
       showCreateKey.value = false
       return
     }
     const group = created.group ?? groups.value.find((item) => item.id === created.group_id)
     const createdOption = group ? selectEligibleCanvasKeys([created], [group])[0] : undefined
     if (!createdOption) {
-      warningMessage.value = 'The new key is not eligible for image generation in its group.'
+      warningMessage.value = t('infiniteCanvas.warnings.groupNotEligible')
       showCreateKey.value = false
     } else {
       keySecrets.set(created.id, created.key)
@@ -173,15 +175,15 @@ async function createKey() {
       if (!mounted || generation !== lifecycleGeneration) return
       const refreshedOption = groupsGeneration === generation ? eligibleKeys.value.find((item) => item.id === created.id) : undefined
       if (createdOption && !refreshedOption) {
-        warningMessage.value = 'The key group is no longer eligible for image generation.'
+        warningMessage.value = t('infiniteCanvas.warnings.groupNoLongerEligible')
         return
       }
       if (refreshedOption && store.activeKeyId.value !== created.id) store.setActiveKey(created.id)
     }).catch(() => {
-      if (mounted && generation === lifecycleGeneration) warningMessage.value = 'Key list refresh failed; the new key remains selected.'
+      if (mounted && generation === lifecycleGeneration) warningMessage.value = t('infiniteCanvas.warnings.refreshFailed')
     })
   } catch {
-    if (mounted && generation === lifecycleGeneration) warningMessage.value = 'Could not create the image key.'
+    if (mounted && generation === lifecycleGeneration) warningMessage.value = t('infiniteCanvas.warnings.createFailed')
   }
 }
 
@@ -189,12 +191,12 @@ function chooseKey(id: number | null) { store.setActiveKey(id ?? undefined) }
 function selectProject(id: string) { store.setActiveProject(id) }
 function createProject() {
   void store.ready.then(() => {
-    store.createProject(`Canvas ${store.projects.value.length + 1}`)
+    store.createProject(t('infiniteCanvas.project.defaultTitle', { number: store.projects.value.length + 1 }))
     addStarterNodes({ x: 120, y: 100 })
   })
 }
 function addStarterNodes(point = { x: 120, y: 100 }) {
-  const project = activeProject.value ?? store.createProject(`Canvas ${store.projects.value.length + 1}`)
+  const project = activeProject.value ?? store.createProject(t('infiniteCanvas.project.defaultTitle', { number: store.projects.value.length + 1 }))
   if (project.nodes.some((node) => node.type === 'prompt') || project.nodes.some((node) => node.type === 'config')) return
   const prompt = store.addNode({ type: 'prompt', position: point, metadata: { prompt: '' } })
   const config = store.addNode({ type: 'config', position: { x: point.x + 300, y: point.y }, metadata: { model: '', size: '1024x1024', quality: '', count: 1, background: '' } })
@@ -235,24 +237,24 @@ function updateViewport(viewport: CanvasProject['viewport']) {
   if (!current || (current.x === viewport.x && current.y === viewport.y && current.zoom === viewport.zoom)) return
   store.updateViewport(viewport)
 }
-async function saveNow() { await store.saveProject(); saveStatus.value = 'Saved'; window.setTimeout(() => { saveStatus.value = '' }, 1600) }
+async function saveNow() { await store.saveProject(); saveStatus.value = t('infiniteCanvas.project.saved'); window.setTimeout(() => { saveStatus.value = '' }, 1600) }
 async function exportProject() {
   if (!activeProject.value) return
   try {
     const blob = await exportCanvasProject(activeProject.value, repository)
     const safeTitle = sanitizeExportProject(activeProject.value).title.replace(/[^a-z0-9._-]+/gi, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'canvas'
     saveAs(blob, `${safeTitle}-${new Date().toISOString().slice(0, 10)}.canvas.zip`)
-  } catch { warningMessage.value = 'Could not export this canvas.' }
+  } catch { warningMessage.value = t('infiniteCanvas.messages.exportFailed') }
 }
 function importProject() { importInput.value?.click() }
 async function handleImport(event: Event) {
   const file = (event.target as HTMLInputElement).files?.[0]; if (!file) return
-  warningMessage.value = 'Importing canvas...'
+  warningMessage.value = t('infiniteCanvas.messages.importing')
   try {
     const imported = await importCanvasProject(file, repository)
     if (!store.importProject(imported)) throw new Error('Invalid canvas project')
     warningMessage.value = ''
-  } catch { warningMessage.value = 'The canvas file is invalid or too large.' }
+  } catch { warningMessage.value = t('infiniteCanvas.messages.importFailed') }
   if (importInput.value) importInput.value.value = ''
 }
 function clearSecrets() { keySecrets.clear(); eligibleKeys.value = []; groups.value = []; groupsGeneration = -1; newKeyGroupId.value = null }
@@ -269,7 +271,7 @@ async function loadImageModels(generation = lifecycleGeneration) {
     if (!mounted || generation !== lifecycleGeneration || requestId !== modelRequestGeneration) return
     imageModels.value = models
   } catch {
-    if (mounted && generation === lifecycleGeneration && requestId === modelRequestGeneration) imageModelsError.value = 'Could not load image models.'
+    if (mounted && generation === lifecycleGeneration && requestId === modelRequestGeneration) imageModelsError.value = t('infiniteCanvas.errors.loadModels')
   } finally {
     if (requestId === modelRequestGeneration) imageModelsLoading.value = false
   }
@@ -328,17 +330,17 @@ onBeforeUnmount(() => { mounted = false; lifecycleGeneration += 1; assetHydratio
         <section class="flex min-w-0 flex-1 flex-col">
           <CanvasToolbar :project="activeProject" :can-undo="store.canUndo.value" :can-redo="store.canRedo.value" :save-status="saveStatus || lastSaved" @background-change="changeBackground" @zoom="zoom" @undo="store.undo" @redo="store.redo" @save="saveNow" @add-nodes="addStarterNodes" />
           <div class="flex gap-1 border-b border-gray-200 bg-white px-3 pt-2 dark:border-dark-700 dark:bg-dark-900 lg:hidden">
-            <button type="button" aria-label="Open projects" data-canvas-drawer="sidebar" class="rounded-t-md px-3 py-1 text-xs" @click="openDrawer('sidebar')">Projects</button>
-            <button type="button" data-canvas-tab="canvas" :class="['rounded-t-md px-3 py-1 text-xs', activeTab === 'canvas' ? 'is-active bg-gray-100 font-semibold dark:bg-dark-800' : '']" @click="selectTab('canvas')">Canvas</button>
-            <button type="button" data-canvas-tab="inspector" :class="['rounded-t-md px-3 py-1 text-xs', activeTab === 'inspector' ? 'is-active bg-gray-100 font-semibold dark:bg-dark-800' : '']" @click="selectTab('inspector')">Inspector</button>
-            <button type="button" aria-label="Open inspector" data-canvas-drawer="inspector" class="rounded-t-md px-3 py-1 text-xs" @click="openDrawer('inspector')">Inspect</button>
+            <button type="button" :aria-label="t('infiniteCanvas.mobile.projects')" data-canvas-drawer="sidebar" class="rounded-t-md px-3 py-1 text-xs" @click="openDrawer('sidebar')">{{ t('infiniteCanvas.mobile.projects') }}</button>
+            <button type="button" data-canvas-tab="canvas" :class="['rounded-t-md px-3 py-1 text-xs', activeTab === 'canvas' ? 'is-active bg-gray-100 font-semibold dark:bg-dark-800' : '']" @click="selectTab('canvas')">{{ t('infiniteCanvas.mobile.canvas') }}</button>
+            <button type="button" data-canvas-tab="inspector" :class="['rounded-t-md px-3 py-1 text-xs', activeTab === 'inspector' ? 'is-active bg-gray-100 font-semibold dark:bg-dark-800' : '']" @click="selectTab('inspector')">{{ t('infiniteCanvas.mobile.inspector') }}</button>
+            <button type="button" :aria-label="t('infiniteCanvas.mobile.inspector')" data-canvas-drawer="inspector" class="rounded-t-md px-3 py-1 text-xs" @click="openDrawer('inspector')">{{ t('infiniteCanvas.mobile.inspect') }}</button>
           </div>
           <div class="flex min-h-0 flex-1 flex-col lg:flex-row">
-            <button v-if="mobileDrawer" type="button" aria-label="Close canvas drawer" class="fixed inset-0 z-30 bg-black/30 lg:hidden" @click="closeDrawer" />
-            <div v-if="!activeProject" data-canvas-empty="projects" class="flex min-h-[420px] flex-1 items-center justify-center p-8 text-center text-sm text-gray-500 dark:text-dark-400">No projects yet. <button type="button" class="ml-1 text-primary-600 hover:underline" @click="createProject">Create a project</button></div>
+            <button v-if="mobileDrawer" type="button" :aria-label="t('infiniteCanvas.mobile.closeDrawer')" data-canvas-drawer-close class="fixed inset-0 z-30 bg-black/30 lg:hidden" @click="closeDrawer" />
+            <div v-if="!activeProject" data-canvas-empty="projects" class="flex min-h-[420px] flex-1 items-center justify-center p-8 text-center text-sm text-gray-500 dark:text-dark-400">{{ t('infiniteCanvas.sidebar.noProjects') }}。<button type="button" class="ml-1 text-primary-600 hover:underline" @click="createProject">{{ t('infiniteCanvas.project.new') }}</button></div>
             <div v-else class="relative min-h-[420px] min-w-0 flex-1 overflow-auto" :class="{ hidden: activeTab !== 'canvas' }">
               <InfiniteCanvasSurface :project="activeProject" :image-urls="imageUrls" :selected-node-ids="store.selectedNodeIds.value" :image-models="availableImageModels" :image-models-loading="imageModelsLoading" :image-models-error="imageModelsError" @node-select="selectNode" @node-move="moveNode" @node-delete="removeCanvasNode" @node-update="updateCanvasNode" @node-retry="retryCanvasNode" @node-generate="generateCanvasNode" @edge-create="connectNodes" @viewport-update="updateViewport" @empty-canvas-double-click="handleEmptyCanvasDoubleClick" @retry-image-models="loadImageModels" />
-              <div v-if="selectedKeyId && !imageModelsLoading && !imageModelsError && !availableImageModels.length" class="pointer-events-none absolute left-1/2 top-6 w-72 -translate-x-1/2 rounded-md border border-amber-200 bg-amber-50 p-3 text-center text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-200" data-canvas-empty="image-models">No image models available for this key.</div>
+              <div v-if="selectedKeyId && !imageModelsLoading && !imageModelsError && !availableImageModels.length" class="pointer-events-none absolute left-1/2 top-6 w-72 -translate-x-1/2 rounded-md border border-amber-200 bg-amber-50 p-3 text-center text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-200" data-canvas-empty="image-models">{{ t('infiniteCanvas.warnings.noImageModels') }}</div>
             </div>
             <CanvasInspector v-if="activeProject" :mobile-open="mobileDrawer === 'inspector'" :node="selectedNode" @update="updateNode" @delete="removeSelectedNode" @close="closeDrawer" />
           </div>
@@ -348,10 +350,10 @@ onBeforeUnmount(() => { mounted = false; lifecycleGeneration += 1; assetHydratio
       <p v-if="warningMessage" role="status" class="border-t border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">{{ warningMessage }}</p>
     </div>
     <input ref="importInput" type="file" accept=".zip,.canvas.zip,application/zip" class="hidden" @change="handleImport" />
-    <BaseDialog :show="showCreateKey" title="Create image key" width="narrow" @close="showCreateKey = false">
-      <div class="space-y-3"><label class="block text-sm">Name<input v-model="newKeyName" class="mt-1 w-full rounded-md border px-3 py-2 dark:border-dark-600 dark:bg-dark-800" /></label><label class="block text-sm">Group<select v-model="newKeyGroupId" class="mt-1 w-full rounded-md border px-3 py-2 dark:border-dark-600 dark:bg-dark-800"><option :value="null">Select group</option><option v-for="group in canvasGroups" :key="group.id" :value="group.id">{{ group.name }}</option></select></label></div>
-      <template #footer><button type="button" :disabled="!canCreateKey" class="rounded-md bg-primary-600 px-3 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-50" @click="createKey">Create</button></template>
+    <BaseDialog :show="showCreateKey" :title="t('infiniteCanvas.dialog.createKeyTitle')" width="narrow" @close="showCreateKey = false">
+      <div class="space-y-3"><label class="block text-sm">{{ t('infiniteCanvas.dialog.name') }}<input v-model="newKeyName" class="mt-1 w-full rounded-md border px-3 py-2 dark:border-dark-600 dark:bg-dark-800" /></label><label class="block text-sm">{{ t('infiniteCanvas.dialog.group') }}<select v-model="newKeyGroupId" class="mt-1 w-full rounded-md border px-3 py-2 dark:border-dark-600 dark:bg-dark-800"><option :value="null">{{ t('infiniteCanvas.dialog.selectGroup') }}</option><option v-for="group in canvasGroups" :key="group.id" :value="group.id">{{ group.name }}</option></select></label></div>
+      <template #footer><button type="button" data-create-key-submit :disabled="!canCreateKey" class="rounded-md bg-primary-600 px-3 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-50" @click="createKey">{{ t('infiniteCanvas.dialog.create') }}</button></template>
     </BaseDialog>
-    <ConfirmDialog :show="showDelete" title="Delete project" message="Delete this project and its nodes?" danger @confirm="deleteProject" @cancel="showDelete = false" />
+    <ConfirmDialog :show="showDelete" :title="t('infiniteCanvas.dialog.deleteProjectTitle')" :message="t('infiniteCanvas.dialog.deleteProjectMessage')" danger @confirm="deleteProject" @cancel="showDelete = false" />
   </AppLayout>
 </template>

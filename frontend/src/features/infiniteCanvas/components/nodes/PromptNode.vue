@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { CanvasNode } from '../../types'
 
 const props = defineProps<{ node: CanvasNode }>()
+const { t } = useI18n()
 const emit = defineEmits<{ (event: 'update', patch: Partial<CanvasNode>): void }>()
 const prompt = computed(() => {
   const metadata = props.node.metadata as Record<string, unknown>
@@ -13,7 +15,7 @@ function update(value: string) { emit('update', { metadata: { prompt: value, tex
 
 <template>
   <label class="prompt-node" data-canvas-no-zoom>
-    <span class="prompt-node__label">Prompt</span>
+    <span class="prompt-node__label">{{ t('infiniteCanvas.inspector.prompt') }}</span>
     <textarea :value="prompt" rows="4" data-canvas-no-zoom @pointerdown.stop @input="update(($event.target as HTMLTextAreaElement).value)" />
   </label>
 </template>
