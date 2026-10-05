@@ -1,3 +1,4 @@
+import governance from './governance'
 import landing from './landing'
 import common from './common'
 import dashboard from './dashboard'
@@ -9,6 +10,7 @@ import misc from './misc'
 import publicDocs from './publicDocs'
 
 export default {
+  governance,
   ...landing,
   ...common,
   ...dashboard,

@@ -3,7 +3,7 @@
  * Defines all application routes with lazy loading and navigation guards
  */
 
-import { createRouter, createWebHistory, START_LOCATION, type RouteRecordRaw } from 'vue-router'
+import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useAppStore } from '@/stores/app'
 import { useAdminSettingsStore } from '@/stores/adminSettings'
@@ -18,6 +18,18 @@ import { resolveRouteDocumentTitle } from './title'
  * Route definitions with lazy loading
  */
 const routes: RouteRecordRaw[] = [
+  {
+    path: '/admin/upstream-governance/:section(overview|import|models|monitor|history)?',
+    name: 'AdminUpstreamGovernance',
+    component: () => import('@/views/admin/upstream-governance/UpstreamGovernanceView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Smart Operations',
+      titleKey: 'governance.smartOperations.title',
+      descriptionKey: 'governance.smartOperations.description',
+    },
+  },
   // ==================== Setup Routes ====================
   {
     path: '/setup',
@@ -754,18 +766,9 @@ const routes: RouteRecordRaw[] = [
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes,
-  scrollBehavior(to, from, savedPosition) {
-    const isFreshHomeNavigation = to.name === 'Home' && from === START_LOCATION &&
-      (performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined)?.type !== 'back_forward'
-    // Reloads can carry saved scroll too; preserve it only for history returns.
-    if (savedPosition && !isFreshHomeNavigation) {
+  scrollBehavior(_to, _from, savedPosition) {
+    if (savedPosition) {
       return savedPosition
-    }
-    if (to.name === 'Home' && ['#channels', '#top'].includes(to.hash)) {
-      return { el: to.hash, top: 24 }
-    }
-    if (isFreshHomeNavigation) {
-      return { left: 0, top: 0, behavior: 'instant' }
     }
     // Scroll to top for new routes
     return { top: 0 }

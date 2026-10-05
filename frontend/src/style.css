@@ -199,6 +199,45 @@
     @apply mt-1 text-xs text-red-500;
   }
 
+  /* Governance checkboxes retain native checked/indeterminate accessibility. */
+  .governance-checkbox {
+    @apply m-0 h-4 w-4 shrink-0 cursor-pointer align-middle accent-primary-600;
+    @apply dark:accent-primary-400;
+  }
+
+  .governance-checkbox:focus-visible {
+    @apply outline outline-2 outline-offset-2 outline-primary-600 dark:outline-primary-400;
+  }
+
+  .governance-checkbox:disabled {
+    @apply cursor-not-allowed opacity-50;
+  }
+
+  .governance-checkbox-label {
+    @apply min-h-6 cursor-pointer;
+  }
+
+  .governance-checkbox-hitarea {
+    @apply -m-2 inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded;
+  }
+
+  .governance-checkbox-label:has(input:disabled),
+  .governance-checkbox-hitarea:has(input:disabled) {
+    @apply cursor-not-allowed;
+  }
+
+  @media (pointer: coarse) {
+    .governance-checkbox-label {
+      min-height: 44px;
+    }
+
+    .governance-checkbox-hitarea {
+      width: 44px;
+      height: 44px;
+      margin: -14px -12px;
+    }
+  }
+
   /* Hide number input spinner buttons for cleaner UI */
   input[type='number']::-webkit-inner-spin-button,
   input[type='number']::-webkit-outer-spin-button {

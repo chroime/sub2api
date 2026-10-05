@@ -18,6 +18,30 @@ type userGroupRateResolver struct {
 	logComponent string
 }
 
+// A nil repository value means "no explicit user override". Keep that
+// presence bit in the cache instead of caching the group default itself; the
+// latter becomes stale immediately after an automatic local-group repricing
+// commit. Float64 entries remain readable for compatibility with existing
+// process-local caches and tests, where they represent an explicit override.
+type userGroupRateCacheEntry struct {
+	multiplier  float64
+	hasOverride bool
+}
+
+func cachedUserGroupRate(value any, groupDefault float64) (float64, bool) {
+	switch cached := value.(type) {
+	case float64:
+		return cached, true
+	case userGroupRateCacheEntry:
+		if cached.hasOverride {
+			return cached.multiplier, true
+		}
+		return groupDefault, true
+	default:
+		return 0, false
+	}
+}
+
 func newUserGroupRateResolver(repo UserGroupRateRepository, cache *gocache.Cache, cacheTTL time.Duration, sf *singleflight.Group, logComponent string) *userGroupRateResolver {
 	if cacheTTL <= 0 {
 		cacheTTL = defaultUserGroupRateCacheTTL
@@ -49,7 +73,7 @@ func (r *userGroupRateResolver) Resolve(ctx context.Context, userID, groupID int
 	key := fmt.Sprintf("%d:%d", userID, groupID)
 	if r.cache != nil {
 		if cached, ok := r.cache.Get(key); ok {
-			if multiplier, castOK := cached.(float64); castOK {
+			if multiplier, castOK := cachedUserGroupRate(cached, groupDefaultMultiplier); castOK {
 				userGroupRateCacheHitTotal.Add(1)
 				return multiplier
 			}
@@ -63,7 +87,7 @@ func (r *userGroupRateResolver) Resolve(ctx context.Context, userID, groupID int
 	value, err, shared := r.sf.Do(key, func() (any, error) {
 		if r.cache != nil {
 			if cached, ok := r.cache.Get(key); ok {
-				if multiplier, castOK := cached.(float64); castOK {
+				if multiplier, castOK := cachedUserGroupRate(cached, groupDefaultMultiplier); castOK {
 					userGroupRateCacheHitTotal.Add(1)
 					return multiplier, nil
 				}
@@ -81,7 +105,11 @@ func (r *userGroupRateResolver) Resolve(ctx context.Context, userID, groupID int
 			multiplier = *userRate
 		}
 		if r.cache != nil {
-			r.cache.Set(key, multiplier, r.cacheTTL)
+			if userRate == nil {
+				r.cache.Set(key, userGroupRateCacheEntry{multiplier: groupDefaultMultiplier, hasOverride: false}, r.cacheTTL)
+			} else {
+				r.cache.Set(key, multiplier, r.cacheTTL)
+			}
 		}
 		return multiplier, nil
 	})

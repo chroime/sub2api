@@ -24,7 +24,6 @@ import (
 	"github.com/cespare/xxhash/v2"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
-	"golang.org/x/sync/singleflight"
 )
 
 const (
@@ -76,6 +75,7 @@ var openaiAllowedHeaders = map[string]bool{
 	"accept-language":         true,
 	"content-type":            true,
 	"conversation_id":         true,
+	"openai-beta":             true,
 	"user-agent":              true,
 	"originator":              true,
 	"session_id":              true,
@@ -527,31 +527,6 @@ type OpenAIGatewayService struct {
 	// 剥离跨账号回带（openai_codex_turn_state.go）。
 	openaiCodexTurnStateOrigins sync.Map
 	openaiCodexTurnStateWrites  atomic.Uint64
-	// openaiCodexTickets: mode\x00accountID\x00model → *openAICodexTicket.
-	openaiCodexTickets                  sync.Map
-	openaiCodexTicketFlight             singleflight.Group
-	openaiCodexTicketLifecycleMu        sync.Mutex
-	openaiCodexTicketCancel             context.CancelFunc
-	openaiCodexTicketDone               chan struct{}
-	openaiCodexTicketStopped            bool
-	openaiCodexTicketRuntimeMu          sync.Mutex
-	openaiCodexTicketProxyRepo          ProxyRepository
-	openaiCodexTicketRuntime            map[string]openAICodexTicketRuntime
-	openaiCodexTicketMonitorStates      map[string]OpenAICodexTicketMonitorState
-	openaiCodexTicketEvents             []OpenAICodexTicketMonitorEvent
-	openaiCodexTicketEventID            uint64
-	openaiCodexTicketRevocations        map[string]openAICodexTicketRevocation
-	openaiCodexTicketRejectIssuedBefore time.Time
-	openaiCodexTicketObserveSlots       chan struct{}
-	openaiCodexTicketPersistLocks       [32]sync.Mutex
-	openaiCodexTicketDirty              map[string]bool
-	openaiCodexTicketPendingRevocations map[string]*openAICodexTicketUse
-	openaiCodexTicketWritesInFlight     map[string]bool
-	openaiCodexTicketInjectedUses       map[string]*openAICodexTicketUse
-	openaiCodexTicketWriteContext       context.Context
-	openaiCodexTicketWriteCancel        context.CancelFunc
-	openaiCodexTicketWritesStopping     bool
-	openaiCodexTicketWriteWG            sync.WaitGroup
 }
 
 // NewOpenAIGatewayService creates a new OpenAIGatewayService
@@ -629,7 +604,6 @@ func NewOpenAIGatewayService(
 		openAITokenProvider.SetAccountRuntimeBlocker(svc)
 	}
 	svc.logOpenAIWSModeBootstrap()
-	svc.StartOpenAICodexTicketHarvester()
 	return svc
 }
 

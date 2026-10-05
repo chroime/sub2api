@@ -84,14 +84,13 @@ type openAIWSAcquireRequest struct {
 }
 
 type openAIWSHandshakeCompatibilityKey struct {
-	betaFeatures         string
-	codexTicketSignature string
-	codexInstallationID  string
-	sessionIDHyphen      string
-	sessionIDUnderscore  string
-	threadID             string
-	clientRequestID      string
-	codexWindowID        string
+	betaFeatures        string
+	codexInstallationID string
+	sessionIDHyphen     string
+	sessionIDUnderscore string
+	threadID            string
+	clientRequestID     string
+	codexWindowID       string
 }
 
 type openAIWSConnLease struct {
@@ -2364,8 +2363,7 @@ func normalizeOpenAIWSBetaFeatures(headers http.Header) string {
 
 func normalizeOpenAIWSHandshakeCompatibility(account *Account, headers http.Header) openAIWSHandshakeCompatibilityKey {
 	key := openAIWSHandshakeCompatibilityKey{
-		betaFeatures:         normalizeOpenAIWSBetaFeatures(headers),
-		codexTicketSignature: headers.Get(openAIWSCodexTicketSignatureHeader),
+		betaFeatures: normalizeOpenAIWSBetaFeatures(headers),
 	}
 	mode := activeCodexFingerprintMode(account)
 	if mode == codexFingerprintOff {
@@ -2442,6 +2440,10 @@ func cloneHeader(src http.Header) http.Header {
 		dst[k] = copied
 	}
 	return dst
+}
+
+func openAIWSHeadersForUpstream(headers http.Header) http.Header {
+	return cloneHeader(headers)
 }
 
 func closeOpenAIWSConns(conns []*openAIWSConn) {

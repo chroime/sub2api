@@ -38,40 +38,32 @@ func (*sortChannelMonitorUserRepo) ListRecentHistoryForMonitors(context.Context,
 	return map[int64][]*service.ChannelMonitorHistoryEntry{}, nil
 }
 
-func TestChannelMonitorSortOrderUserAndPublicViewsPreserveRepositoryOrder(t *testing.T) {
+func TestChannelMonitorSortOrderUserViewPreservesRepositoryOrder(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	handler := NewChannelMonitorUserHandler(service.NewChannelMonitorService(&sortChannelMonitorUserRepo{}, nil), nil)
-	for _, test := range []struct {
-		name string
-		list gin.HandlerFunc
-	}{
-		{name: "authenticated", list: handler.List},
-		{name: "public", list: handler.ListPublic},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			recorder := httptest.NewRecorder()
-			ctx, _ := gin.CreateTestContext(recorder)
-			ctx.Request = httptest.NewRequest(http.MethodGet, "/channel-monitors", nil)
+	t.Run("authenticated", func(t *testing.T) {
+		recorder := httptest.NewRecorder()
+		ctx, _ := gin.CreateTestContext(recorder)
+		ctx.Request = httptest.NewRequest(http.MethodGet, "/channel-monitors", nil)
 
-			test.list(ctx)
+		handler.List(ctx)
 
-			require.Equal(t, http.StatusOK, recorder.Code)
-			var response struct {
-				Data struct {
-					Items []struct {
-						ID   int64  `json:"id"`
-						Name string `json:"name"`
-					} `json:"items"`
-				} `json:"data"`
-			}
-			require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &response))
-			require.Len(t, response.Data.Items, 3)
-			items := response.Data.Items
-			require.Equal(t, []int64{41, 3, 17}, []int64{items[0].ID, items[1].ID, items[2].ID})
-			require.Equal(t, []string{"Zulu", "Alpha", "Middle"}, []string{items[0].Name, items[1].Name, items[2].Name})
-			for _, sensitive := range []string{"secret-key", "private.example.com", "private-token", "api_key", "endpoint", "extra_headers", "account_id"} {
-				require.NotContains(t, recorder.Body.String(), sensitive)
-			}
-		})
-	}
+		require.Equal(t, http.StatusOK, recorder.Code)
+		var response struct {
+			Data struct {
+				Items []struct {
+					ID   int64  `json:"id"`
+					Name string `json:"name"`
+				} `json:"items"`
+			} `json:"data"`
+		}
+		require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &response))
+		require.Len(t, response.Data.Items, 3)
+		items := response.Data.Items
+		require.Equal(t, []int64{41, 3, 17}, []int64{items[0].ID, items[1].ID, items[2].ID})
+		require.Equal(t, []string{"Zulu", "Alpha", "Middle"}, []string{items[0].Name, items[1].Name, items[2].Name})
+		for _, sensitive := range []string{"secret-key", "private.example.com", "private-token", "api_key", "endpoint", "extra_headers", "account_id"} {
+			require.NotContains(t, recorder.Body.String(), sensitive)
+		}
+	})
 }

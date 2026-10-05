@@ -349,66 +349,6 @@ gateway:
   # Use this to avoid compact failures when newer models are not yet supported by the compact endpoint.
   # 当 compact 端点暂未支持更新模型时，可通过这里降级规避失败。
   openai_compact_model: "gpt-5.5"
-  # ChatGPT OAuth x-codex-turn-state ticket: harvest a 292-length header via a
-  # dedicated HTTP(S)/SOCKS proxy, store it for ttl_seconds (default 3600), then inject
-  # it on residential-IP production requests. Off by default.
-  # ChatGPT OAuth 门票：用独立 HTTP(S)/SOCKS 代理打到 292 长度的 x-codex-turn-state，默认缓存 1 小时，
-  # 再在住宅 IP 业务请求中覆盖该头。默认关闭。
-  # Env: GATEWAY_OPENAI_CODEX_TICKET_ENABLED=true
-  #      GATEWAY_OPENAI_CODEX_TICKET_HARVEST_PROXY_URL=socks5h://user:pass@host:port
-  # Admin UI 开关（系统设置 → 扩展功能 → Codex 292）可覆盖 enabled，无需重启。
-  # 账号编辑选择 codex_ticket_mode: "292" / "332" / "off"；未设置时采用 292。
-  # 两套机制按来源区分，不根据个人/团队套餐自动推断，target_length 固定为对应长度。
-  # Off: do not harvest or inject. On: harvest in the background and inject on production requests.
-  # The harvest proxy should rotate egress IPs itself (fresh CONNECT per request).
-  # Credential shadow accounts retain their existing forwarding policy and are not ticket-gated.
-  openai_codex_ticket:
-    enabled: false
-    target_length: 292
-    ttl_seconds: 3600
-    refresh_before_seconds: 600
-    # 后台「系统设置 → 扩展功能 → Codex 292」可覆盖此值，无需重启。
-    # 后台值的读取缓存为 5 秒，下个探测周期使用新代理；代理服务商自行负责轮换 IP。
-    harvest_proxy_url: ""
-    # 可选二次回放验证；关闭时 292 保留原有仅捕获响应头的方式。
-    verify_enabled: false
-    # IP 管理中的代理 ID，最多 32 个不重复正整数；与上面的独立代理 URL 组成采集线路池。
-    # 空数组不使用 IP 管理代理；停用、过期或不存在的代理会跳过。捕获与验证使用同一线路。
-    harvest_proxy_ids: []
-    # 此模式的后台采集并发上限（1..16）；独立于账号/分组的业务请求并发。
-    harvest_concurrency: 3
-    harvest_probe_interval_seconds: 6
-    harvest_attempt_timeout_seconds: 25
-    fail_closed: true
-    models:
-      - gpt-6-astra
-      - gpt-5.6-sol
-  # Imported 332 mode is independent of the official 292 mode. Both are off by default.
-  # The selected account mode determines which ticket and harvest proxy are used.
-  # 332 票据须完成 SSE 验证；缺票默认继续请求，管理员可独立开启 fail_closed。
-  # Env: GATEWAY_OPENAI_CODEX_TICKET_332_ENABLED
-  #      GATEWAY_OPENAI_CODEX_TICKET_332_HARVEST_PROXY_URL
-  # 两套模式的 VERIFY_ENABLED、HARVEST_PROXY_IDS、HARVEST_CONCURRENCY 环境变量也相互独立。
-  # HARVEST_PROXY_IDS 环境变量使用逗号分隔，例如 "7,9"。
-  # 后台「系统设置 → 扩展功能」可独立热更新两套模式的开关、缺票策略、验证、代理池和采集并发。
-  openai_codex_ticket_332:
-    enabled: false
-    target_length: 332
-    ttl_seconds: 3600
-    refresh_before_seconds: 600
-    harvest_proxy_url: ""
-    # 可选二次回放验证；332 捕获始终要求完整 SSE 成功结束并匹配实际模型。
-    verify_enabled: false
-    # 最多 32 个不重复正整数；与 harvest_proxy_url 组成线路池，不与 292 共享选择。
-    harvest_proxy_ids: []
-    # 此模式的后台采集并发上限（1..16），默认 3。
-    harvest_concurrency: 3
-    harvest_probe_interval_seconds: 6
-    harvest_attempt_timeout_seconds: 25
-    fail_closed: false
-    models:
-      - gpt-6-astra
-      - gpt-5.6-sol
   # ChatGPT Frameless Live 单会话硬上限（秒）。
   live:
     max_session_duration_seconds: 3600
@@ -814,6 +754,19 @@ api_key_auth_cache:
     # Maximum tracked client identities per process; memory remains bounded.
     # 每进程最多跟踪的客户端身份数量，确保内存有界。
     capacity: 16384
+
+# =============================================================================
+# API Key Creation Limits
+# 用户创建 API Key 的防滥用限制（0 表示不限制）
+# =============================================================================
+api_key_create:
+  # Maximum non-deleted API keys per user
+  # 单个用户同时存在（未删除）的 API Key 上限
+  max_active_per_user: 200
+  # Maximum API key creations per user per hour (custom and generated keys).
+  # Deleting a key does not refund the count, which blocks delete/recreate loops.
+  # 单个用户每小时可创建的 API Key 次数（自定义与自动生成均计入）；删除 Key 不返还次数，阻断删建循环
+  max_per_user_per_hour: 60
 
 # =============================================================================
 # Dashboard Cache Configuration
@@ -1224,6 +1177,35 @@ billing:
   # Cache TTL (seconds) for per-user × per-platform quota records
   # 用户 × 平台 quota 缓存 TTL（秒），默认 86400=1天，覆盖典型 daily 窗口
   user_platform_quota_cache_ttl_seconds: 86400
+  # In-flight balance reservation (Redis): at admission, estimate per-request cost
+  # (input estimate + output price x max_tokens) and atomically require
+  # cached_balance - in-flight reservations >= estimate. Released when the request ends.
+  # The first in-flight request of a user is always admitted (same as before).
+  # Fails open when the estimate cannot be computed or Redis is unavailable.
+  # 余额模式在途预留：准入时估算单请求费用，要求 缓存余额 - 在途预留合计 >= 估算；
+  # 用户无在途请求时始终放行（与旧行为一致）；估算失败/Redis 不可用时 fail-open。
+  inflight_reservation:
+    enabled: true
+    # Reservation TTL. Renewed every ttl/3 while the request is running; after the
+    # handler returns it is held (not renewed) until the async billing task has
+    # deducted the cached balance, so a stuck billing task frees it after at most one TTL.
+    # 预留 TTL（秒）。请求进行中每 ttl/3 续期；请求结束后不再续期，保持到异步计费
+    # 扣减余额缓存后释放，计费任务卡死时最多一个 TTL 后自动失效
+    ttl_seconds: 900
+    # Output tokens assumed when the request has no max_tokens
+    # 请求未携带 max_tokens 时假定的输出 token 数
+    default_max_tokens: 8192
+    # Cap for estimated output / input tokens
+    # 估算输出 / 输入 token 上限
+    max_output_tokens: 128000
+    max_input_tokens: 200000
+    # Cap for a single reservation in USD (0 = no cap)
+    # 单请求预留金额上限（USD，0 为不设上限）
+    max_reservation_usd: 0
+    # When a request cannot be priced (no base / group / channel pricing for the
+    # billing model), reject it instead of admitting it without reservation.
+    # 无法为请求定价（计费模型无基础/分组/渠道定价）时拒绝请求；默认 false 为放行不预留（节流告警日志）
+    fail_closed_on_unpriced: false
 
 # =============================================================================
 # Turnstile Configuration

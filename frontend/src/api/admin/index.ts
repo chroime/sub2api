@@ -1,3 +1,4 @@
+import upstreamGovernanceAPI from './upstream-governance'
 /**
  * Admin API barrel export
  * Centralized exports for all admin API modules
@@ -41,6 +42,7 @@ import pluginsAPI from './plugins'
  * Unified admin API object for convenient access
  */
 export const adminAPI = {
+  upstreamGovernance: upstreamGovernanceAPI,
   dashboard: dashboardAPI,
   users: usersAPI,
   groups: groupsAPI,
@@ -77,6 +79,7 @@ export const adminAPI = {
 }
 
 export {
+  upstreamGovernanceAPI,
   dashboardAPI,
   usersAPI,
   groupsAPI,

@@ -2,7 +2,6 @@ package admin
 
 import (
 	"log/slog"
-	"slices"
 
 	"github.com/Wei-Shaw/sub2api/internal/handler/dto"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
@@ -492,42 +491,6 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	if before.AntigravityUserAgentVersion != after.AntigravityUserAgentVersion {
 		changed = append(changed, "antigravity_user_agent_version")
 	}
-	if before.OpenAICodexTicketVerifyEnabled != after.OpenAICodexTicketVerifyEnabled {
-		changed = append(changed, "openai_codex_ticket_verify_enabled")
-	}
-	if before.OpenAICodexTicketHarvestConcurrency != after.OpenAICodexTicketHarvestConcurrency {
-		changed = append(changed, "openai_codex_ticket_harvest_concurrency")
-	}
-	if !slices.Equal(before.OpenAICodexTicketHarvestProxyIDs, after.OpenAICodexTicketHarvestProxyIDs) {
-		changed = append(changed, "openai_codex_ticket_harvest_proxy_ids")
-	}
-	if before.OpenAICodexTicket332VerifyEnabled != after.OpenAICodexTicket332VerifyEnabled {
-		changed = append(changed, "openai_codex_ticket_332_verify_enabled")
-	}
-	if before.OpenAICodexTicket332HarvestConcurrency != after.OpenAICodexTicket332HarvestConcurrency {
-		changed = append(changed, "openai_codex_ticket_332_harvest_concurrency")
-	}
-	if !slices.Equal(before.OpenAICodexTicket332HarvestProxyIDs, after.OpenAICodexTicket332HarvestProxyIDs) {
-		changed = append(changed, "openai_codex_ticket_332_harvest_proxy_ids")
-	}
-	if before.OpenAICodexTicketEnabled != after.OpenAICodexTicketEnabled {
-		changed = append(changed, "openai_codex_ticket_enabled")
-	}
-	if before.OpenAICodexTicketHarvestProxyURL != after.OpenAICodexTicketHarvestProxyURL {
-		changed = append(changed, "openai_codex_ticket_harvest_proxy_url")
-	}
-	if before.OpenAICodexTicketFailClosed != after.OpenAICodexTicketFailClosed {
-		changed = append(changed, "openai_codex_ticket_fail_closed")
-	}
-	if before.OpenAICodexTicket332Enabled != after.OpenAICodexTicket332Enabled {
-		changed = append(changed, "openai_codex_ticket_332_enabled")
-	}
-	if before.OpenAICodexTicket332FailClosed != after.OpenAICodexTicket332FailClosed {
-		changed = append(changed, "openai_codex_ticket_332_fail_closed")
-	}
-	if before.OpenAICodexTicket332HarvestProxyURL != after.OpenAICodexTicket332HarvestProxyURL {
-		changed = append(changed, "openai_codex_ticket_332_harvest_proxy_url")
-	}
 	if before.OpenAICodexUserAgent != after.OpenAICodexUserAgent {
 		changed = append(changed, "openai_codex_user_agent")
 	}
@@ -648,6 +611,9 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	}
 	if before.RiskControlEnabled != after.RiskControlEnabled {
 		changed = append(changed, "risk_control_enabled")
+	}
+	if before.CyberPolicyUserAllowlist != after.CyberPolicyUserAllowlist {
+		changed = append(changed, "cyber_policy_user_allowlist")
 	}
 	if before.CyberSessionBlockEnabled != after.CyberSessionBlockEnabled {
 		changed = append(changed, "cyber_session_block_enabled")
