@@ -147,26 +147,29 @@ func GroupFromServiceAdmin(g *service.Group) *AdminGroup {
 		return nil
 	}
 	out := &AdminGroup{
-		Group:                       groupFromServiceBase(g),
-		StreamingACKEnabled:         g.StreamingACKEnabled,
-		ForceOpenAIFast:             g.ForceOpenAIFast,
-		FreeOpenAIFast:              g.FreeOpenAIFast,
-		ProfitControlEnabled:        g.ProfitControlEnabled,
-		ProfitMinMargin:             g.ProfitMinMargin,
-		ProfitSafetyBuffer:          g.ProfitSafetyBuffer,
-		ModelPricing:                g.ModelPricing,
-		ModelRouting:                g.ModelRouting,
-		ModelRoutingEnabled:         g.ModelRoutingEnabled,
-		MCPXMLInject:                g.MCPXMLInject,
-		DefaultMappedModel:          g.DefaultMappedModel,
-		MessagesDispatchModelConfig: g.MessagesDispatchModelConfig,
-		ModelAllowlist:              g.ModelAllowlist,
-		CodexModelsManifestConfig:   g.CodexModelsManifestConfig,
-		SupportedModelScopes:        g.SupportedModelScopes,
-		AccountCount:                g.AccountCount,
-		ActiveAccountCount:          g.ActiveAccountCount,
-		RateLimitedAccountCount:     g.RateLimitedAccountCount,
-		SortOrder:                   g.SortOrder,
+		Group:                        groupFromServiceBase(g),
+		BillingInputTokenMultiplier:  g.BillingInputTokenMultiplier,
+		BillingOutputTokenMultiplier: g.BillingOutputTokenMultiplier,
+		BillingTokenAdjustmentMinInputTokens: g.BillingTokenAdjustmentMinInputTokens,
+		StreamingACKEnabled:          g.StreamingACKEnabled,
+		ForceOpenAIFast:              g.ForceOpenAIFast,
+		FreeOpenAIFast:               g.FreeOpenAIFast,
+		ProfitControlEnabled:         g.ProfitControlEnabled,
+		ProfitMinMargin:              g.ProfitMinMargin,
+		ProfitSafetyBuffer:           g.ProfitSafetyBuffer,
+		ModelPricing:                 g.ModelPricing,
+		ModelRouting:                 g.ModelRouting,
+		ModelRoutingEnabled:          g.ModelRoutingEnabled,
+		MCPXMLInject:                 g.MCPXMLInject,
+		DefaultMappedModel:           g.DefaultMappedModel,
+		MessagesDispatchModelConfig:  g.MessagesDispatchModelConfig,
+		ModelAllowlist:               g.ModelAllowlist,
+		CodexModelsManifestConfig:    g.CodexModelsManifestConfig,
+		SupportedModelScopes:         g.SupportedModelScopes,
+		AccountCount:                 g.AccountCount,
+		ActiveAccountCount:           g.ActiveAccountCount,
+		RateLimitedAccountCount:      g.RateLimitedAccountCount,
+		SortOrder:                    g.SortOrder,
 	}
 	if len(g.AccountGroups) > 0 {
 		out.AccountGroups = make([]AccountGroup, 0, len(g.AccountGroups))
@@ -193,6 +196,7 @@ func groupFromServiceBase(g *service.Group) Group {
 		MonthlyLimitUSD:                 g.MonthlyLimitUSD,
 		LongContextPricingEnabled:       g.LongContextPricingEnabled,
 		AllowImageGeneration:            g.AllowImageGeneration,
+		ModelAllowlist:                  g.ModelAllowlist,
 		AllowBatchImageGeneration:       g.AllowBatchImageGeneration,
 		ImageRateIndependent:            g.ImageRateIndependent,
 		ImageRateMultiplier:             g.ImageRateMultiplier,
@@ -427,8 +431,6 @@ func redactAccountManagedExtra(extra map[string]any) map[string]any {
 			key == service.OpenCodeGoUsageAutoRefreshExtraKey,
 			key == service.OpenCodeGoUsageSnapshotExtraKey:
 			continue
-		case service.IsOpenAICodexTicketPrivateExtraKey(key):
-			continue
 		default:
 			redacted[key] = value
 		}
@@ -468,7 +470,7 @@ func AccountListItemFromAccount(a *Account) *AccountListItem {
 	return &AccountListItem{
 		ID: a.ID, Name: a.Name, Notes: a.Notes, Platform: a.Platform, Type: a.Type,
 		Credentials: a.Credentials, CredentialsStatus: a.CredentialsStatus, Extra: a.Extra,
-		OllamaCloudUsage: a.OllamaCloudUsage, CodexTurnTickets: a.CodexTurnTickets, OpenCodeGoUsage: a.OpenCodeGoUsage,
+		OllamaCloudUsage: a.OllamaCloudUsage, OpenCodeGoUsage: a.OpenCodeGoUsage,
 		ProxyID: a.ProxyID, ProxyFallbackOriginID: a.ProxyFallbackOriginID, ProxyFallbackOriginName: a.ProxyFallbackOriginName,
 		Concurrency: a.Concurrency, LoadFactor: a.LoadFactor, Priority: a.Priority, RateMultiplier: a.RateMultiplier,
 		Status: a.Status, ErrorMessage: a.ErrorMessage, LastUsedAt: a.LastUsedAt, ExpiresAt: a.ExpiresAt,

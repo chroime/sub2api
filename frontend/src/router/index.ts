@@ -18,6 +18,18 @@ import { resolveRouteDocumentTitle } from './title'
  * Route definitions with lazy loading
  */
 const routes: RouteRecordRaw[] = [
+  {
+    path: '/admin/upstream-governance/:section(overview|import|models|monitor|history)?',
+    name: 'AdminUpstreamGovernance',
+    component: () => import('@/views/admin/upstream-governance/UpstreamGovernanceView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Smart Operations',
+      titleKey: 'governance.smartOperations.title',
+      descriptionKey: 'governance.smartOperations.description',
+    },
+  },
   // ==================== Setup Routes ====================
   {
     path: '/setup',
@@ -214,6 +226,18 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/iq-detection',
+    name: 'IQDetection',
+    component: () => import('@/views/user/IQDetectionView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: 'IQ Detection',
+      titleKey: 'iqDetection.title',
+      descriptionKey: 'iqDetection.description'
+    }
+  },
+  {
     path: '/keys',
     name: 'Keys',
     component: () => import('@/views/user/KeysView.vue'),
@@ -239,6 +263,18 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/infinite-canvas',
+    name: 'InfiniteCanvas',
+    component: () => import('@/views/user/InfiniteCanvasView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: 'Infinite Canvas',
+      titleKey: 'infiniteCanvas.title',
+      descriptionKey: 'infiniteCanvas.description'
+    }
+  },
+  {
     path: '/usage',
     name: 'Usage',
     component: () => import('@/views/user/UsageView.vue'),
@@ -248,6 +284,18 @@ const routes: RouteRecordRaw[] = [
       title: 'Usage Records',
       titleKey: 'usage.title',
       descriptionKey: 'usage.description'
+    }
+  },
+  {
+    path: '/token-ranking',
+    name: 'TokenRanking',
+    component: () => import('@/views/user/TokenRankingView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: 'Token Usage Ranking',
+      titleKey: 'usage.ranking.title',
+      descriptionKey: 'usage.ranking.subtitle'
     }
   },
   {

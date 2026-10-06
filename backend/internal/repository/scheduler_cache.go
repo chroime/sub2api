@@ -864,14 +864,8 @@ func (c *schedulerCache) mgetChunked(ctx context.Context, keys []string) ([]any,
 
 func buildSchedulerMetadataAccount(account service.Account) service.Account {
 	extra := filterSchedulerExtra(account.Extra)
-	// Derive the scheduling identity from the full account, never an injected
-	// extra value. The compact projection must not carry OAuth credentials.
-	if account.IsOpenAIOAuthLike() && account.GetCredential("access_token") != "" {
-		if extra == nil {
-			extra = make(map[string]any)
-		}
-		extra["_codex_ticket_credential_hash"] = service.OpenAICodexTicketCredentialHash(&account)
-	}
+	// The compact projection must not carry OAuth credentials or transient
+	// authentication material.
 	return service.Account{
 		ID:                      account.ID,
 		Name:                    account.Name,
@@ -983,6 +977,10 @@ func filterSchedulerExtra(extra map[string]any) map[string]any {
 		return nil
 	}
 	keys := []string{
+		// Candidate admission must retain the governance import's explicit model
+		// policy, rather than restoring a provider's implicit default allowlist.
+		"upstream_governance_marker",
+		"upstream_governance_rate_owner",
 		// Anthropic shared-window and Fable-only threshold checks run on this
 		// projection. UpdateExtra refreshes both payloads without a bucket rebuild.
 		"session_window_utilization",
@@ -1034,8 +1032,6 @@ func filterSchedulerExtra(extra map[string]any) map[string]any {
 		service.StreamingACKEnabledExtraKey,
 		"codex_fingerprint_mode",
 		"codex_fingerprint_seed",
-		// Mode selection participates in ticket gating before the full account is loaded.
-		"codex_ticket_mode",
 		"codex_5h_used_percent",
 		"codex_7d_used_percent",
 		"codex_5h_reset_at",
@@ -1047,6 +1043,13 @@ func filterSchedulerExtra(extra map[string]any) map[string]any {
 		"auto_pause_7d_threshold",
 		"auto_pause_5h_disabled",
 		"auto_pause_7d_disabled",
+		// 自动用卡：卡可用的 OpenAI 号在暂停阈值与用卡阈值之间继续调度。
+		// 候选过滤读的是本投影，缺这几个键时放行分支永远不会生效，
+		// 账号会在暂停阈值处被一刀切停调，直到窗口自然重置。
+		service.OpenAIAutoResetCreditEnabledExtraKey,
+		service.OpenAIAutoResetCredit5hThresholdExtraKey,
+		service.OpenAIAutoResetCredit7dThresholdExtraKey,
+		service.OpenAIAutoResetCreditStateExtraKey,
 		"model_rate_limits",
 		service.UpstreamBillingProbeExtraKey,
 		service.GrokMediaEligibleExtraKey,

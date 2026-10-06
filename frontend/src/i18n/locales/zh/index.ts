@@ -1,19 +1,25 @@
+import governance from './governance'
 import landing from './landing'
 import common from './common'
 import dashboard from './dashboard'
 import channelMonitorV2 from './channelMonitorV2'
 import batchImage from './batchImage'
+import infiniteCanvas from './infiniteCanvas'
 import admin from './admin'
 import misc from './misc'
 import publicDocs from './publicDocs'
+import iqDetection from './iqDetection'
 
 export default {
+  governance,
   ...landing,
   ...common,
   ...dashboard,
   ...channelMonitorV2,
   ...batchImage,
+  ...infiniteCanvas,
   admin,
   ...misc,
   ...publicDocs,
+  ...iqDetection,
 }

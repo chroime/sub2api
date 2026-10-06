@@ -11,6 +11,7 @@ import (
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/group"
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -62,6 +63,75 @@ func lockLiveGroups(ctx context.Context, exec sqlExecutor, groupIDs []int64) err
 	return nil
 }
 
+var errGroupMembershipChanged = infraerrors.Conflict("GROUP_MEMBERSHIP_CHANGED", "group membership changed concurrently; retry the operation")
+
+func groupMembershipAccountIDs(ctx context.Context, exec sqlExecutor, groupID int64) ([]int64, error) {
+	rows, err := exec.QueryContext(ctx, `SELECT account_id FROM account_groups WHERE group_id=$1 ORDER BY account_id`, groupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	ids := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+// Membership writers take account locks in ID order before any existing group
+// lock. This is the same order as account edits and governance's fingerprint CAS.
+func lockAccountsForGroupMembership(ctx context.Context, exec sqlExecutor, ids []int64) ([]int64, error) {
+	if len(ids) == 0 {
+		return []int64{}, nil
+	}
+	rows, err := exec.QueryContext(ctx, `/* group_membership_account_lock */ SELECT id FROM accounts WHERE id = ANY($1) ORDER BY id FOR UPDATE`, pq.Array(ids))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	locked := make([]int64, 0, len(ids))
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		locked = append(locked, id)
+	}
+	return locked, rows.Err()
+}
+
+func lockGroupMemberAccounts(ctx context.Context, exec sqlExecutor, groupID int64) ([]int64, error) {
+	ids, err := groupMembershipAccountIDs(ctx, exec, groupID)
+	if err != nil {
+		return nil, err
+	}
+	return lockAccountsForGroupMembership(ctx, exec, ids)
+}
+
+// Recheck after the group lock: a member could have joined while account locks
+// were being acquired. Never take an additional account lock after a group lock;
+// the caller must roll back and retry instead of reversing the lock order.
+func verifyGroupMembershipAccounts(ctx context.Context, exec sqlExecutor, groupID int64, locked []int64) error {
+	ids, err := groupMembershipAccountIDs(ctx, exec, groupID)
+	if err != nil {
+		return err
+	}
+	known := make(map[int64]struct{}, len(locked))
+	for _, id := range locked {
+		known[id] = struct{}{}
+	}
+	for _, id := range ids {
+		if _, ok := known[id]; !ok {
+			return errGroupMembershipChanged
+		}
+	}
+	return nil
+}
+
 func NewGroupRepository(client *dbent.Client, sqlDB *sql.DB) service.GroupRepository {
 	return newGroupRepositoryWithSQL(client, sqlDB)
 }
@@ -99,6 +169,9 @@ func createGroupRecord(ctx context.Context, client *dbent.Client, groupIn *servi
 		SetDescription(groupIn.Description).
 		SetPlatform(groupIn.Platform).
 		SetRateMultiplier(groupIn.RateMultiplier).
+		SetBillingInputTokenMultiplier(groupIn.BillingInputTokenMultiplier).
+		SetBillingOutputTokenMultiplier(groupIn.BillingOutputTokenMultiplier).
+		SetBillingTokenAdjustmentMinInputTokens(groupIn.BillingTokenAdjustmentMinInputTokens).
 		SetSortOrder(groupIn.SortOrder).
 		SetIsExclusive(groupIn.IsExclusive).
 		SetStatus(groupIn.Status).
@@ -216,6 +289,18 @@ func (r *groupRepository) CreateFromSource(ctx context.Context, groupIn *service
 		txClient = r.client
 	}
 
+	lockedAccounts, err := lockGroupMemberAccounts(ctx, txClient, sourceGroupID)
+	if err != nil {
+		return err
+	}
+	// SHARE remains compatible with fallback-group foreign-key locks. Copy only
+	// the locked account set below; a later source member is outside this copy.
+	if err := lockLiveGroups(ctx, txClient, []int64{sourceGroupID}); err != nil {
+		return err
+	}
+	if err := verifyGroupMembershipAccounts(ctx, txClient, sourceGroupID, lockedAccounts); err != nil {
+		return err
+	}
 	if err := createGroupRecord(ctx, txClient, groupIn); err != nil {
 		return err
 	}
@@ -226,6 +311,7 @@ func (r *groupRepository) CreateFromSource(ctx context.Context, groupIn *service
 		 FROM account_groups ag
 		 JOIN accounts a ON a.id = ag.account_id
 		 WHERE ag.group_id = $1
+		   AND ag.account_id = ANY($5::bigint[])
 		   AND a.deleted_at IS NULL
 		   AND (NOT $3 OR a.type <> $4)
 		 ON CONFLICT (account_id, group_id) DO NOTHING`,
@@ -233,6 +319,7 @@ func (r *groupRepository) CreateFromSource(ctx context.Context, groupIn *service
 		groupIn.ID,
 		groupIn.RequireOAuthOnly,
 		service.AccountTypeAPIKey,
+		pq.Array(lockedAccounts),
 	)
 	if err != nil {
 		return err
@@ -288,6 +375,9 @@ func (r *groupRepository) Update(ctx context.Context, groupIn *service.Group) er
 		SetDescription(groupIn.Description).
 		SetPlatform(groupIn.Platform).
 		SetRateMultiplier(groupIn.RateMultiplier).
+		SetBillingInputTokenMultiplier(groupIn.BillingInputTokenMultiplier).
+		SetBillingOutputTokenMultiplier(groupIn.BillingOutputTokenMultiplier).
+		SetBillingTokenAdjustmentMinInputTokens(groupIn.BillingTokenAdjustmentMinInputTokens).
 		SetIsExclusive(groupIn.IsExclusive).
 		SetStatus(groupIn.Status).
 		SetSubscriptionType(groupIn.SubscriptionType).
@@ -843,13 +933,47 @@ func (r *groupRepository) GetAccountCount(ctx context.Context, groupID int64) (t
 }
 
 func (r *groupRepository) DeleteAccountGroupsByGroupID(ctx context.Context, groupID int64) (int64, error) {
-	res, err := r.sql.ExecContext(ctx, "DELETE FROM account_groups WHERE group_id = $1", groupID)
+	tx, err := r.client.Tx(ctx)
+	if err != nil && !errors.Is(err, dbent.ErrTxStarted) {
+		return 0, err
+	}
+	exec := r.client
+	if tx != nil {
+		defer func() { _ = tx.Rollback() }()
+		exec = tx.Client()
+	}
+	lockedAccounts, err := lockGroupMemberAccounts(ctx, exec, groupID)
+	if err != nil {
+		return 0, err
+	}
+	// Keep clearing a missing/soft-deleted group a harmless zero-row operation.
+	rows, err := exec.QueryContext(ctx, `SELECT id FROM groups WHERE id=$1 FOR UPDATE`, groupID)
+	if err != nil {
+		return 0, err
+	}
+	for rows.Next() {
+	}
+	if err := rows.Close(); err != nil {
+		return 0, err
+	}
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	if err := verifyGroupMembershipAccounts(ctx, exec, groupID, lockedAccounts); err != nil {
+		return 0, err
+	}
+	res, err := exec.ExecContext(ctx, "DELETE FROM account_groups WHERE group_id = $1", groupID)
 	if err != nil {
 		return 0, err
 	}
 	affected, _ := res.RowsAffected()
-	if err := enqueueSchedulerOutbox(ctx, r.sql, service.SchedulerOutboxEventGroupChanged, nil, &groupID, nil); err != nil {
-		logger.LegacyPrintf("repository.group", "[SchedulerOutbox] enqueue group account clear failed: group=%d err=%v", groupID, err)
+	if err := enqueueSchedulerOutbox(ctx, exec, service.SchedulerOutboxEventGroupChanged, nil, &groupID, nil); err != nil {
+		return 0, err
+	}
+	if tx != nil {
+		if err := tx.Commit(); err != nil {
+			return 0, err
+		}
 	}
 	return affected, nil
 }
@@ -877,6 +1001,10 @@ func (r *groupRepository) deleteCascade(ctx context.Context, id int64, requireEm
 		txClient = exec
 	}
 	// err 为 dbent.ErrTxStarted 时，复用当前 client 参与同一事务。
+	lockedAccounts, err := lockGroupMemberAccounts(ctx, exec, id)
+	if err != nil {
+		return nil, err
+	}
 
 	// Lock the group row to avoid concurrent writes while we cascade.
 	// 这里使用 exec.QueryContext 手动扫描，确保同一事务内加锁并能区分"未找到"与其他错误。
@@ -900,6 +1028,9 @@ func (r *groupRepository) deleteCascade(ctx context.Context, id int64, requireEm
 	}
 	if lockedID == 0 {
 		return nil, service.ErrGroupNotFound
+	}
+	if err := verifyGroupMembershipAccounts(ctx, exec, id, lockedAccounts); err != nil {
+		return nil, err
 	}
 	if requireEmpty {
 		var hasAccount bool
@@ -1092,6 +1223,9 @@ func (r *groupRepository) BindAccountsToGroup(ctx context.Context, groupID int64
 	if tx != nil {
 		defer func() { _ = tx.Rollback() }()
 		exec = tx.Client()
+	}
+	if _, err := lockAccountsForGroupMembership(ctx, exec, accountIDs); err != nil {
+		return err
 	}
 	if err := lockLiveGroups(ctx, exec, []int64{groupID}); err != nil {
 		return err

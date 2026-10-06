@@ -106,6 +106,48 @@ func (_c *GroupCreate) SetNillableRateMultiplier(v *float64) *GroupCreate {
 	return _c
 }
 
+// SetBillingInputTokenMultiplier sets the "billing_input_token_multiplier" field.
+func (_c *GroupCreate) SetBillingInputTokenMultiplier(v float64) *GroupCreate {
+	_c.mutation.SetBillingInputTokenMultiplier(v)
+	return _c
+}
+
+// SetNillableBillingInputTokenMultiplier sets the "billing_input_token_multiplier" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableBillingInputTokenMultiplier(v *float64) *GroupCreate {
+	if v != nil {
+		_c.SetBillingInputTokenMultiplier(*v)
+	}
+	return _c
+}
+
+// SetBillingOutputTokenMultiplier sets the "billing_output_token_multiplier" field.
+func (_c *GroupCreate) SetBillingOutputTokenMultiplier(v float64) *GroupCreate {
+	_c.mutation.SetBillingOutputTokenMultiplier(v)
+	return _c
+}
+
+// SetNillableBillingOutputTokenMultiplier sets the "billing_output_token_multiplier" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableBillingOutputTokenMultiplier(v *float64) *GroupCreate {
+	if v != nil {
+		_c.SetBillingOutputTokenMultiplier(*v)
+	}
+	return _c
+}
+
+// SetBillingTokenAdjustmentMinInputTokens sets the "billing_token_adjustment_min_input_tokens" field.
+func (_c *GroupCreate) SetBillingTokenAdjustmentMinInputTokens(v int) *GroupCreate {
+	_c.mutation.SetBillingTokenAdjustmentMinInputTokens(v)
+	return _c
+}
+
+// SetNillableBillingTokenAdjustmentMinInputTokens sets the "billing_token_adjustment_min_input_tokens" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableBillingTokenAdjustmentMinInputTokens(v *int) *GroupCreate {
+	if v != nil {
+		_c.SetBillingTokenAdjustmentMinInputTokens(*v)
+	}
+	return _c
+}
+
 // SetPeakRateEnabled sets the "peak_rate_enabled" field.
 func (_c *GroupCreate) SetPeakRateEnabled(v bool) *GroupCreate {
 	_c.mutation.SetPeakRateEnabled(v)
@@ -1065,6 +1107,18 @@ func (_c *GroupCreate) defaults() error {
 		v := group.DefaultRateMultiplier
 		_c.mutation.SetRateMultiplier(v)
 	}
+	if _, ok := _c.mutation.BillingInputTokenMultiplier(); !ok {
+		v := group.DefaultBillingInputTokenMultiplier
+		_c.mutation.SetBillingInputTokenMultiplier(v)
+	}
+	if _, ok := _c.mutation.BillingOutputTokenMultiplier(); !ok {
+		v := group.DefaultBillingOutputTokenMultiplier
+		_c.mutation.SetBillingOutputTokenMultiplier(v)
+	}
+	if _, ok := _c.mutation.BillingTokenAdjustmentMinInputTokens(); !ok {
+		v := group.DefaultBillingTokenAdjustmentMinInputTokens
+		_c.mutation.SetBillingTokenAdjustmentMinInputTokens(v)
+	}
 	if _, ok := _c.mutation.PeakRateEnabled(); !ok {
 		v := group.DefaultPeakRateEnabled
 		_c.mutation.SetPeakRateEnabled(v)
@@ -1246,6 +1300,15 @@ func (_c *GroupCreate) check() error {
 	}
 	if _, ok := _c.mutation.RateMultiplier(); !ok {
 		return &ValidationError{Name: "rate_multiplier", err: errors.New(`ent: missing required field "Group.rate_multiplier"`)}
+	}
+	if _, ok := _c.mutation.BillingInputTokenMultiplier(); !ok {
+		return &ValidationError{Name: "billing_input_token_multiplier", err: errors.New(`ent: missing required field "Group.billing_input_token_multiplier"`)}
+	}
+	if _, ok := _c.mutation.BillingOutputTokenMultiplier(); !ok {
+		return &ValidationError{Name: "billing_output_token_multiplier", err: errors.New(`ent: missing required field "Group.billing_output_token_multiplier"`)}
+	}
+	if _, ok := _c.mutation.BillingTokenAdjustmentMinInputTokens(); !ok {
+		return &ValidationError{Name: "billing_token_adjustment_min_input_tokens", err: errors.New(`ent: missing required field "Group.billing_token_adjustment_min_input_tokens"`)}
 	}
 	if _, ok := _c.mutation.PeakRateEnabled(); !ok {
 		return &ValidationError{Name: "peak_rate_enabled", err: errors.New(`ent: missing required field "Group.peak_rate_enabled"`)}
@@ -1482,6 +1545,18 @@ func (_c *GroupCreate) createSpec() (*Group, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.RateMultiplier(); ok {
 		_spec.SetField(group.FieldRateMultiplier, field.TypeFloat64, value)
 		_node.RateMultiplier = value
+	}
+	if value, ok := _c.mutation.BillingInputTokenMultiplier(); ok {
+		_spec.SetField(group.FieldBillingInputTokenMultiplier, field.TypeFloat64, value)
+		_node.BillingInputTokenMultiplier = value
+	}
+	if value, ok := _c.mutation.BillingOutputTokenMultiplier(); ok {
+		_spec.SetField(group.FieldBillingOutputTokenMultiplier, field.TypeFloat64, value)
+		_node.BillingOutputTokenMultiplier = value
+	}
+	if value, ok := _c.mutation.BillingTokenAdjustmentMinInputTokens(); ok {
+		_spec.SetField(group.FieldBillingTokenAdjustmentMinInputTokens, field.TypeInt, value)
+		_node.BillingTokenAdjustmentMinInputTokens = value
 	}
 	if value, ok := _c.mutation.PeakRateEnabled(); ok {
 		_spec.SetField(group.FieldPeakRateEnabled, field.TypeBool, value)
@@ -1958,6 +2033,60 @@ func (u *GroupUpsert) UpdateRateMultiplier() *GroupUpsert {
 // AddRateMultiplier adds v to the "rate_multiplier" field.
 func (u *GroupUpsert) AddRateMultiplier(v float64) *GroupUpsert {
 	u.Add(group.FieldRateMultiplier, v)
+	return u
+}
+
+// SetBillingInputTokenMultiplier sets the "billing_input_token_multiplier" field.
+func (u *GroupUpsert) SetBillingInputTokenMultiplier(v float64) *GroupUpsert {
+	u.Set(group.FieldBillingInputTokenMultiplier, v)
+	return u
+}
+
+// UpdateBillingInputTokenMultiplier sets the "billing_input_token_multiplier" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateBillingInputTokenMultiplier() *GroupUpsert {
+	u.SetExcluded(group.FieldBillingInputTokenMultiplier)
+	return u
+}
+
+// AddBillingInputTokenMultiplier adds v to the "billing_input_token_multiplier" field.
+func (u *GroupUpsert) AddBillingInputTokenMultiplier(v float64) *GroupUpsert {
+	u.Add(group.FieldBillingInputTokenMultiplier, v)
+	return u
+}
+
+// SetBillingOutputTokenMultiplier sets the "billing_output_token_multiplier" field.
+func (u *GroupUpsert) SetBillingOutputTokenMultiplier(v float64) *GroupUpsert {
+	u.Set(group.FieldBillingOutputTokenMultiplier, v)
+	return u
+}
+
+// UpdateBillingOutputTokenMultiplier sets the "billing_output_token_multiplier" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateBillingOutputTokenMultiplier() *GroupUpsert {
+	u.SetExcluded(group.FieldBillingOutputTokenMultiplier)
+	return u
+}
+
+// AddBillingOutputTokenMultiplier adds v to the "billing_output_token_multiplier" field.
+func (u *GroupUpsert) AddBillingOutputTokenMultiplier(v float64) *GroupUpsert {
+	u.Add(group.FieldBillingOutputTokenMultiplier, v)
+	return u
+}
+
+// SetBillingTokenAdjustmentMinInputTokens sets the "billing_token_adjustment_min_input_tokens" field.
+func (u *GroupUpsert) SetBillingTokenAdjustmentMinInputTokens(v int) *GroupUpsert {
+	u.Set(group.FieldBillingTokenAdjustmentMinInputTokens, v)
+	return u
+}
+
+// UpdateBillingTokenAdjustmentMinInputTokens sets the "billing_token_adjustment_min_input_tokens" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateBillingTokenAdjustmentMinInputTokens() *GroupUpsert {
+	u.SetExcluded(group.FieldBillingTokenAdjustmentMinInputTokens)
+	return u
+}
+
+// AddBillingTokenAdjustmentMinInputTokens adds v to the "billing_token_adjustment_min_input_tokens" field.
+func (u *GroupUpsert) AddBillingTokenAdjustmentMinInputTokens(v int) *GroupUpsert {
+	u.Add(group.FieldBillingTokenAdjustmentMinInputTokens, v)
 	return u
 }
 
@@ -3093,6 +3222,69 @@ func (u *GroupUpsertOne) AddRateMultiplier(v float64) *GroupUpsertOne {
 func (u *GroupUpsertOne) UpdateRateMultiplier() *GroupUpsertOne {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateRateMultiplier()
+	})
+}
+
+// SetBillingInputTokenMultiplier sets the "billing_input_token_multiplier" field.
+func (u *GroupUpsertOne) SetBillingInputTokenMultiplier(v float64) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetBillingInputTokenMultiplier(v)
+	})
+}
+
+// AddBillingInputTokenMultiplier adds v to the "billing_input_token_multiplier" field.
+func (u *GroupUpsertOne) AddBillingInputTokenMultiplier(v float64) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.AddBillingInputTokenMultiplier(v)
+	})
+}
+
+// UpdateBillingInputTokenMultiplier sets the "billing_input_token_multiplier" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateBillingInputTokenMultiplier() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateBillingInputTokenMultiplier()
+	})
+}
+
+// SetBillingOutputTokenMultiplier sets the "billing_output_token_multiplier" field.
+func (u *GroupUpsertOne) SetBillingOutputTokenMultiplier(v float64) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetBillingOutputTokenMultiplier(v)
+	})
+}
+
+// AddBillingOutputTokenMultiplier adds v to the "billing_output_token_multiplier" field.
+func (u *GroupUpsertOne) AddBillingOutputTokenMultiplier(v float64) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.AddBillingOutputTokenMultiplier(v)
+	})
+}
+
+// UpdateBillingOutputTokenMultiplier sets the "billing_output_token_multiplier" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateBillingOutputTokenMultiplier() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateBillingOutputTokenMultiplier()
+	})
+}
+
+// SetBillingTokenAdjustmentMinInputTokens sets the "billing_token_adjustment_min_input_tokens" field.
+func (u *GroupUpsertOne) SetBillingTokenAdjustmentMinInputTokens(v int) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetBillingTokenAdjustmentMinInputTokens(v)
+	})
+}
+
+// AddBillingTokenAdjustmentMinInputTokens adds v to the "billing_token_adjustment_min_input_tokens" field.
+func (u *GroupUpsertOne) AddBillingTokenAdjustmentMinInputTokens(v int) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.AddBillingTokenAdjustmentMinInputTokens(v)
+	})
+}
+
+// UpdateBillingTokenAdjustmentMinInputTokens sets the "billing_token_adjustment_min_input_tokens" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateBillingTokenAdjustmentMinInputTokens() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateBillingTokenAdjustmentMinInputTokens()
 	})
 }
 
@@ -4560,6 +4752,69 @@ func (u *GroupUpsertBulk) AddRateMultiplier(v float64) *GroupUpsertBulk {
 func (u *GroupUpsertBulk) UpdateRateMultiplier() *GroupUpsertBulk {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateRateMultiplier()
+	})
+}
+
+// SetBillingInputTokenMultiplier sets the "billing_input_token_multiplier" field.
+func (u *GroupUpsertBulk) SetBillingInputTokenMultiplier(v float64) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetBillingInputTokenMultiplier(v)
+	})
+}
+
+// AddBillingInputTokenMultiplier adds v to the "billing_input_token_multiplier" field.
+func (u *GroupUpsertBulk) AddBillingInputTokenMultiplier(v float64) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.AddBillingInputTokenMultiplier(v)
+	})
+}
+
+// UpdateBillingInputTokenMultiplier sets the "billing_input_token_multiplier" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateBillingInputTokenMultiplier() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateBillingInputTokenMultiplier()
+	})
+}
+
+// SetBillingOutputTokenMultiplier sets the "billing_output_token_multiplier" field.
+func (u *GroupUpsertBulk) SetBillingOutputTokenMultiplier(v float64) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetBillingOutputTokenMultiplier(v)
+	})
+}
+
+// AddBillingOutputTokenMultiplier adds v to the "billing_output_token_multiplier" field.
+func (u *GroupUpsertBulk) AddBillingOutputTokenMultiplier(v float64) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.AddBillingOutputTokenMultiplier(v)
+	})
+}
+
+// UpdateBillingOutputTokenMultiplier sets the "billing_output_token_multiplier" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateBillingOutputTokenMultiplier() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateBillingOutputTokenMultiplier()
+	})
+}
+
+// SetBillingTokenAdjustmentMinInputTokens sets the "billing_token_adjustment_min_input_tokens" field.
+func (u *GroupUpsertBulk) SetBillingTokenAdjustmentMinInputTokens(v int) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetBillingTokenAdjustmentMinInputTokens(v)
+	})
+}
+
+// AddBillingTokenAdjustmentMinInputTokens adds v to the "billing_token_adjustment_min_input_tokens" field.
+func (u *GroupUpsertBulk) AddBillingTokenAdjustmentMinInputTokens(v int) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.AddBillingTokenAdjustmentMinInputTokens(v)
+	})
+}
+
+// UpdateBillingTokenAdjustmentMinInputTokens sets the "billing_token_adjustment_min_input_tokens" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateBillingTokenAdjustmentMinInputTokens() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateBillingTokenAdjustmentMinInputTokens()
 	})
 }
 

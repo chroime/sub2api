@@ -2622,6 +2622,9 @@ func (s *GatewayService) isModelSupportedByAccountWithContext(ctx context.Contex
 		if mapped == "" {
 			return false
 		}
+		if account.usesGovernanceModelPolicy() {
+			return true // Relay API-key accounts keep the reviewed upstream model name.
+		}
 		// 应用 thinking 后缀后检查最终模型是否在账号映射中
 		if enabled, ok := ThinkingEnabledFromContext(ctx); ok {
 			finalModel := applyThinkingModelSuffix(mapped, enabled)
@@ -2648,7 +2651,7 @@ func (s *GatewayService) isModelSupportedByAccount(account *Account, requestedMo
 		return ok
 	}
 	// OpenAI 透传模式：仅替换认证，允许所有模型
-	if account.Platform == PlatformOpenAI && account.IsOpenAIPassthroughEnabled() {
+	if account.Platform == PlatformOpenAI && account.IsOpenAIPassthroughEnabled() && !account.usesGovernanceModelPolicy() {
 		return true
 	}
 	// OAuth/SetupToken 账号使用 Anthropic 标准映射（短ID → 长ID）

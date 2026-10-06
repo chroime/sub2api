@@ -1,16 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent } from 'vue'
-import { flushPromises, mount } from '@vue/test-utils'
+import { mount } from '@vue/test-utils'
 
-const { updateAccountMock, checkMixedChannelRiskMock, authIsSimpleMode, getStreamingACKSettingsMock } = vi.hoisted(() => ({
+const { updateAccountMock, checkMixedChannelRiskMock, authIsSimpleMode } = vi.hoisted(() => ({
   updateAccountMock: vi.fn(),
   checkMixedChannelRiskMock: vi.fn(),
-  authIsSimpleMode: { value: true },
-  getStreamingACKSettingsMock: vi.fn()
-}))
-
-vi.mock('@/api/admin/settings', () => ({
-  getStreamingACKSettings: getStreamingACKSettingsMock
+  authIsSimpleMode: { value: true }
 }))
 
 vi.mock('@/stores/app', () => ({
@@ -75,6 +70,7 @@ const BaseDialogStub = defineComponent({
 const ModelWhitelistSelectorStub = defineComponent({
   name: 'ModelWhitelistSelector',
   props: {
+    modelMappings: { type: Array, default: () => [] },
     modelValue: {
       type: Array,
       default: () => []
@@ -331,68 +327,26 @@ function mountModal(account = buildAccount(), renderGroupSelector = false) {
 describe('EditAccountModal', () => {
   beforeEach(() => {
     authIsSimpleMode.value = true
-    getStreamingACKSettingsMock.mockReset().mockResolvedValue({ enabled: true })
   })
 
   afterEach(() => vi.useRealTimers())
 
-  it.each(['oauth', 'setup-token'])('selects Codex ticket mode explicitly for %s while preserving other extra fields', async (type) => {
-    const account = { ...buildOpenAIOAuthParentAccount(), type, extra: { retained: 'value' } }
+  it('passes existing non-identity mappings to the whitelist selector and preserves them on save', async () => {
+    const account = buildAccount()
+    account.credentials.model_mapping = { 'gpt-5.2': 'gpt-5.2', 'gpt-latest': 'deepseek-chat' }
     updateAccountMock.mockReset().mockResolvedValue(account)
     checkMixedChannelRiskMock.mockReset().mockResolvedValue({ has_risk: false })
     const wrapper = mountModal(account)
-    await flushPromises()
-    expect(wrapper.get<HTMLSelectElement>('#codex-ticket-mode').element.value).toBe('292')
-    await wrapper.get('#codex-ticket-mode').setValue('332')
+    expect(wrapper.getComponent(ModelWhitelistSelectorStub).props('modelMappings')).toEqual([
+      { from: 'gpt-latest', to: 'deepseek-chat' }
+    ])
     await wrapper.get('form#edit-account-form').trigger('submit.prevent')
-    await flushPromises()
-    expect(updateAccountMock.mock.calls[0]?.[1]?.extra).toMatchObject({ retained: 'value', codex_ticket_mode: '332' })
-    wrapper.unmount()
-  })
-
-  it.each([undefined, '332', 'off', 'future-mode'])('preserves the existing Codex ticket mode %s on unrelated edits', async (mode) => {
-    const extra = mode === undefined ? {} : { codex_ticket_mode: mode }
-    const account = { ...buildOpenAIOAuthParentAccount(), extra }
-    updateAccountMock.mockReset().mockResolvedValue(account)
-    checkMixedChannelRiskMock.mockReset().mockResolvedValue({ has_risk: false })
-    const wrapper = mountModal(account)
-    await flushPromises()
-    expect(wrapper.get<HTMLSelectElement>('#codex-ticket-mode').element.value).toBe(mode === undefined ? '292' : mode === 'future-mode' ? 'off' : mode)
-    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
-    await flushPromises()
-    expect(updateAccountMock.mock.calls[0]?.[1]?.extra?.codex_ticket_mode).toBe(mode)
-    wrapper.unmount()
-  })
-
-  it('hides Codex ticket selection for shadow and API key accounts', async () => {
-    for (const account of [buildOpenAISparkShadowAccount(), buildAccount()]) {
-      const wrapper = mountModal(account)
-      await flushPromises()
-      expect(wrapper.find('#codex-ticket-mode').exists()).toBe(false)
-      wrapper.unmount()
-    }
-  })
-
-  it('shows only the selected ticket mechanism and keeps paused text accurate', async () => {
-    const account = {
-      ...buildOpenAIOAuthParentAccount(),
-      extra: { codex_ticket_mode: '332' },
-      codex_turn_tickets: [
-        { mode: '292', model: 'official-model', ready: true, length: 292, blocked: false, remaining_seconds: 30 },
-        { mode: '332', model: 'imported-model', ready: false, blocked: true, remaining_seconds: 0 },
-      ],
-    }
-    const wrapper = mountModal(account)
-    await flushPromises()
-    const status = wrapper.get('[data-testid="codex-ticket-status-list"]')
-    expect(status.text()).toContain('Codex 332')
-    expect(status.text()).toContain('imported-model')
-    expect(status.text()).not.toContain('official-model')
-    expect(status.text()).toContain('admin.accounts.openai.codexTurnTicketPaused')
-    expect(status.text()).not.toContain('admin.accounts.openai.codexTurnTicketMissing')
-    await wrapper.get('#codex-ticket-mode').setValue('off')
-    expect(wrapper.find('[data-testid="codex-ticket-status-list"]').exists()).toBe(false)
-    wrapper.unmount()
+    expect(updateAccountMock.mock.calls[0]?.[1]?.credentials?.model_mapping).toEqual(account.credentials.model_mapping)
+    await wrapper.setProps({ show: false })
+    await wrapper.setProps({ show: true, account: { ...account } })
+    expect(wrapper.getComponent(ModelWhitelistSelectorStub).props('modelMappings')).toEqual([
+      { from: 'gpt-latest', to: 'deepseek-chat' }
+    ])
   })
 
   it('sets expiry presets from now instead of extending the saved expiry', async () => {
@@ -860,130 +814,6 @@ describe('EditAccountModal', () => {
 
     expect(updateAccountMock).toHaveBeenCalledTimes(1)
     expect(updateAccountMock.mock.calls[0]?.[1]?.extra?.openai_long_context_billing_enabled).toBe(false)
-  })
-
-  it('loads and submits the account-scoped synthetic first-response toggle', async () => {
-    const account = buildAccount()
-    account.extra = {
-      openai_synthetic_first_response_enabled: true
-    }
-    updateAccountMock.mockReset()
-    checkMixedChannelRiskMock.mockReset()
-    checkMixedChannelRiskMock.mockResolvedValue({ has_risk: false })
-    updateAccountMock.mockResolvedValue(account)
-
-    const wrapper = mountModal(account)
-    const toggle = wrapper.get('[data-testid="streaming-ack-toggle"]')
-    expect(toggle.attributes('aria-checked')).toBe('true')
-
-    await toggle.trigger('click')
-    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
-
-    expect(updateAccountMock).toHaveBeenCalledTimes(1)
-    expect(updateAccountMock.mock.calls[0]?.[1]?.extra?.streaming_ack_enabled).toBe(false)
-    expect(updateAccountMock.mock.calls[0]?.[1]?.extra).not.toHaveProperty(
-      'openai_synthetic_first_response_enabled'
-    )
-  })
-
-  it('shows that a saved ACK opt-in is blocked by the global setting', async () => {
-    const account = buildAccount()
-    account.extra = { openai_synthetic_first_response_enabled: true }
-    getStreamingACKSettingsMock.mockResolvedValue({ enabled: false })
-    const wrapper = mountModal(account)
-    await flushPromises()
-
-    expect(wrapper.get('[data-testid="streaming-ack-status"]').text()).toContain(
-      'admin.accounts.openai.syntheticFirstResponseStatusGlobalOff'
-    )
-    expect(wrapper.get('[data-testid="streaming-ack-settings-link"]').attributes('href')).toBe(
-      '/admin/settings#streaming-ack-settings'
-    )
-  })
-
-  it('does not describe an unsaved ACK toggle as effective', async () => {
-    const wrapper = mountModal()
-    await flushPromises()
-    await wrapper.get('[data-testid="streaming-ack-toggle"]').trigger('click')
-
-    const status = wrapper.get('[data-testid="streaming-ack-status"]').text()
-    expect(status).toContain('admin.accounts.openai.syntheticFirstResponseStatusPending')
-    expect(status).not.toContain('admin.accounts.openai.syntheticFirstResponseStatusEnabled')
-  })
-
-  it('does not render the synthetic first-response toggle for Spark shadow accounts', async () => {
-    const account = buildOpenAISparkShadowAccount()
-    updateAccountMock.mockReset().mockResolvedValue(account)
-    checkMixedChannelRiskMock.mockReset().mockResolvedValue({ has_risk: false })
-
-    const wrapper = mountModal(account)
-
-    expect(wrapper.find('[data-testid="streaming-ack-toggle"]').exists()).toBe(false)
-    expect(wrapper.find('[data-testid="streaming-ack-status"]').exists()).toBe(false)
-  })
-
-  it.each(['anthropic', 'gemini', 'antigravity', 'grok', 'kimi', 'zhipu', 'deepseek', 'minimax', 'opencode_go'])(
-    'loads and saves the streaming ACK setting for %s without dropping other extras',
-    async (platform) => {
-      const account = buildAccount()
-      account.platform = platform
-      account.extra = { streaming_ack_enabled: true, custom_provider_setting: 'retain' }
-      updateAccountMock.mockReset().mockResolvedValue(account)
-      checkMixedChannelRiskMock.mockReset().mockResolvedValue({ has_risk: false })
-      const wrapper = mountModal(account)
-      const toggle = wrapper.get('[data-testid="streaming-ack-toggle"]')
-      expect(toggle.attributes('aria-checked')).toBe('true')
-      await toggle.trigger('click')
-      await wrapper.get('form#edit-account-form').trigger('submit.prevent')
-      await flushPromises()
-
-      expect(updateAccountMock).toHaveBeenCalledTimes(1)
-      expect(updateAccountMock.mock.calls[0]?.[1]?.extra).toMatchObject({
-        streaming_ack_enabled: false,
-        custom_provider_setting: 'retain',
-      })
-      wrapper.unmount()
-    }
-  )
-
-  it.each([
-    ['anthropic', 'bedrock'],
-    ['anthropic', 'service_account'],
-    ['gemini', 'service_account'],
-    ['antigravity', 'upstream'],
-    ['grok', 'oauth'],
-  ])('shows ACK for %s %s accounts', async (platform, type) => {
-    const account = buildAccount()
-    account.platform = platform
-    account.type = type
-    account.extra = { streaming_ack_enabled: true }
-    const wrapper = mountModal(account)
-    expect(wrapper.get('[data-testid="streaming-ack-toggle"]').attributes('aria-checked')).toBe('true')
-    wrapper.unmount()
-  })
-
-  it('lets an explicit generic false override a legacy OpenAI opt-in', async () => {
-    const account = buildAccount()
-    account.extra = { streaming_ack_enabled: false, openai_synthetic_first_response_enabled: true }
-    updateAccountMock.mockReset().mockResolvedValue(account)
-    checkMixedChannelRiskMock.mockReset().mockResolvedValue({ has_risk: false })
-    const wrapper = mountModal(account)
-    await flushPromises()
-    expect(wrapper.get('[data-testid="streaming-ack-toggle"]').attributes('aria-checked')).toBe('false')
-    expect(wrapper.get('[data-testid="streaming-ack-status"]').text()).toContain('syntheticFirstResponseStatusAccountOff')
-    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
-    expect(updateAccountMock.mock.calls[0]?.[1]?.extra?.streaming_ack_enabled).toBe(false)
-    expect(updateAccountMock.mock.calls[0]?.[1]?.extra).not.toHaveProperty('openai_synthetic_first_response_enabled')
-    wrapper.unmount()
-  })
-
-  it('does not enable another platform from the legacy OpenAI-only key', async () => {
-    const account = buildAccount()
-    account.platform = 'anthropic'
-    account.extra = { openai_synthetic_first_response_enabled: true }
-    const wrapper = mountModal(account)
-    expect(wrapper.get('[data-testid="streaming-ack-toggle"]').attributes('aria-checked')).toBe('false')
-    wrapper.unmount()
   })
 
   it('loads and clears the OAuth-only Codex namespace flatten toggle', async () => {

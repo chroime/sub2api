@@ -639,6 +639,22 @@
           />
           <p class="input-hint">{{ t("admin.groups.rateMultiplierHint") }}</p>
         </div>
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div>
+            <label class="input-label">下游输入 Token 计费倍率</label>
+            <input v-model.number="createForm.billing_input_token_multiplier" type="number" min="0.1" max="10" step="0.01" class="input" />
+          </div>
+          <div>
+            <label class="input-label">下游输出 Token 计费倍率</label>
+            <input v-model.number="createForm.billing_output_token_multiplier" type="number" min="0.1" max="10" step="0.01" class="input" />
+          </div>
+        </div>
+        <div>
+          <label class="input-label">Token 倍率生效的最小输入量</label>
+          <input v-model.number="createForm.billing_token_adjustment_min_input_tokens" type="number" min="0" max="1000000" step="1" class="input" />
+          <p class="input-hint">原始输入 Token 少于此值时不应用输入/输出倍率；设置为 0 表示所有正常请求都应用。探针不使用自定义倍率，实际用量仅管理员可见，不进入普通用户记录。</p>
+        </div>
+        <p class="input-hint">仅影响下游扣费、配额和用量排行；普通用户不会看到修正痕迹。默认 1.00。</p>
         <div>
           <label class="input-label">{{ t("admin.groups.form.rpmLimit") }}</label>
           <input
@@ -851,7 +867,7 @@
                 <span class="min-w-0 flex-1 break-all text-sm text-gray-700 dark:text-gray-300">
                   {{ item.id }}
                   <span
-                    v-if="item.id.endsWith('*')"
+                    v-if="item.id.includes('*')"
                     class="ml-1 rounded bg-primary-50 px-1.5 py-0.5 text-[10px] font-medium text-primary-600 dark:bg-primary-900/30 dark:text-primary-400"
                   >
                     {{ t("admin.groups.modelAllowlist.wildcardTag") }}
@@ -2279,6 +2295,22 @@
             data-tour="group-form-multiplier"
           />
         </div>
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div>
+            <label class="input-label">下游输入 Token 计费倍率</label>
+            <input v-model.number="editForm.billing_input_token_multiplier" type="number" min="0.1" max="10" step="0.01" class="input" />
+          </div>
+          <div>
+            <label class="input-label">下游输出 Token 计费倍率</label>
+            <input v-model.number="editForm.billing_output_token_multiplier" type="number" min="0.1" max="10" step="0.01" class="input" />
+          </div>
+        </div>
+        <div>
+          <label class="input-label">Token 倍率生效的最小输入量</label>
+          <input v-model.number="editForm.billing_token_adjustment_min_input_tokens" type="number" min="0" max="1000000" step="1" class="input" />
+          <p class="input-hint">原始输入 Token 少于此值时不应用输入/输出倍率；设置为 0 表示所有正常请求都应用。探针不使用自定义倍率，实际用量仅管理员可见，不进入普通用户记录。</p>
+        </div>
+        <p class="input-hint">仅影响下游扣费、配额和用量排行；普通用户不会看到修正痕迹。默认 1.00。</p>
         <div>
           <label class="input-label">{{ t("admin.groups.form.rpmLimit") }}</label>
           <input
@@ -2493,7 +2525,7 @@
                 <span class="min-w-0 flex-1 break-all text-sm text-gray-700 dark:text-gray-300">
                   {{ item.id }}
                   <span
-                    v-if="item.id.endsWith('*')"
+                    v-if="item.id.includes('*')"
                     class="ml-1 rounded bg-primary-50 px-1.5 py-0.5 text-[10px] font-medium text-primary-600 dark:bg-primary-900/30 dark:text-primary-400"
                   >
                     {{ t("admin.groups.modelAllowlist.wildcardTag") }}
@@ -4962,6 +4994,9 @@ const createForm = reactive({
   description: "",
   platform: "anthropic" as GroupPlatform,
   rate_multiplier: 1.0,
+  billing_input_token_multiplier: 1.0,
+  billing_output_token_multiplier: 1.0,
+  billing_token_adjustment_min_input_tokens: 100,
   is_exclusive: false,
   subscription_type: "standard" as SubscriptionType,
   daily_limit_usd: null as number | null,
@@ -5327,6 +5362,9 @@ const editForm = reactive({
   description: "",
   platform: "anthropic" as GroupPlatform,
   rate_multiplier: 1.0,
+  billing_input_token_multiplier: 1.0,
+  billing_output_token_multiplier: 1.0,
+  billing_token_adjustment_min_input_tokens: 100,
   is_exclusive: false,
   status: "active" as "active" | "inactive",
   subscription_type: "standard" as SubscriptionType,
@@ -5790,6 +5828,9 @@ const closeCreateModal = () => {
   createForm.description = "";
   createForm.platform = "anthropic";
   createForm.rate_multiplier = 1.0;
+  createForm.billing_input_token_multiplier = 1.0;
+  createForm.billing_output_token_multiplier = 1.0;
+  createForm.billing_token_adjustment_min_input_tokens = 100;
   createForm.is_exclusive = false;
   createForm.subscription_type = "standard";
   createForm.daily_limit_usd = null;
@@ -6073,6 +6114,9 @@ const handleEdit = async (group: AdminGroup) => {
   editForm.description = group.description || "";
   editForm.platform = group.platform;
   editForm.rate_multiplier = group.rate_multiplier;
+  editForm.billing_input_token_multiplier = group.billing_input_token_multiplier ?? 1.0;
+  editForm.billing_output_token_multiplier = group.billing_output_token_multiplier ?? 1.0;
+  editForm.billing_token_adjustment_min_input_tokens = group.billing_token_adjustment_min_input_tokens ?? 100;
   editForm.is_exclusive = group.is_exclusive;
   editForm.status = group.status;
   editForm.subscription_type = group.subscription_type || "standard";

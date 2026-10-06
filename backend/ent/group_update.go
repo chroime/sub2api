@@ -118,6 +118,69 @@ func (_u *GroupUpdate) AddRateMultiplier(v float64) *GroupUpdate {
 	return _u
 }
 
+// SetBillingInputTokenMultiplier sets the "billing_input_token_multiplier" field.
+func (_u *GroupUpdate) SetBillingInputTokenMultiplier(v float64) *GroupUpdate {
+	_u.mutation.ResetBillingInputTokenMultiplier()
+	_u.mutation.SetBillingInputTokenMultiplier(v)
+	return _u
+}
+
+// SetNillableBillingInputTokenMultiplier sets the "billing_input_token_multiplier" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableBillingInputTokenMultiplier(v *float64) *GroupUpdate {
+	if v != nil {
+		_u.SetBillingInputTokenMultiplier(*v)
+	}
+	return _u
+}
+
+// AddBillingInputTokenMultiplier adds value to the "billing_input_token_multiplier" field.
+func (_u *GroupUpdate) AddBillingInputTokenMultiplier(v float64) *GroupUpdate {
+	_u.mutation.AddBillingInputTokenMultiplier(v)
+	return _u
+}
+
+// SetBillingOutputTokenMultiplier sets the "billing_output_token_multiplier" field.
+func (_u *GroupUpdate) SetBillingOutputTokenMultiplier(v float64) *GroupUpdate {
+	_u.mutation.ResetBillingOutputTokenMultiplier()
+	_u.mutation.SetBillingOutputTokenMultiplier(v)
+	return _u
+}
+
+// SetNillableBillingOutputTokenMultiplier sets the "billing_output_token_multiplier" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableBillingOutputTokenMultiplier(v *float64) *GroupUpdate {
+	if v != nil {
+		_u.SetBillingOutputTokenMultiplier(*v)
+	}
+	return _u
+}
+
+// AddBillingOutputTokenMultiplier adds value to the "billing_output_token_multiplier" field.
+func (_u *GroupUpdate) AddBillingOutputTokenMultiplier(v float64) *GroupUpdate {
+	_u.mutation.AddBillingOutputTokenMultiplier(v)
+	return _u
+}
+
+// SetBillingTokenAdjustmentMinInputTokens sets the "billing_token_adjustment_min_input_tokens" field.
+func (_u *GroupUpdate) SetBillingTokenAdjustmentMinInputTokens(v int) *GroupUpdate {
+	_u.mutation.ResetBillingTokenAdjustmentMinInputTokens()
+	_u.mutation.SetBillingTokenAdjustmentMinInputTokens(v)
+	return _u
+}
+
+// SetNillableBillingTokenAdjustmentMinInputTokens sets the "billing_token_adjustment_min_input_tokens" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableBillingTokenAdjustmentMinInputTokens(v *int) *GroupUpdate {
+	if v != nil {
+		_u.SetBillingTokenAdjustmentMinInputTokens(*v)
+	}
+	return _u
+}
+
+// AddBillingTokenAdjustmentMinInputTokens adds value to the "billing_token_adjustment_min_input_tokens" field.
+func (_u *GroupUpdate) AddBillingTokenAdjustmentMinInputTokens(v int) *GroupUpdate {
+	_u.mutation.AddBillingTokenAdjustmentMinInputTokens(v)
+	return _u
+}
+
 // SetPeakRateEnabled sets the "peak_rate_enabled" field.
 func (_u *GroupUpdate) SetPeakRateEnabled(v bool) *GroupUpdate {
 	_u.mutation.SetPeakRateEnabled(v)
@@ -1607,6 +1670,24 @@ func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.AddedRateMultiplier(); ok {
 		_spec.AddField(group.FieldRateMultiplier, field.TypeFloat64, value)
 	}
+	if value, ok := _u.mutation.BillingInputTokenMultiplier(); ok {
+		_spec.SetField(group.FieldBillingInputTokenMultiplier, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedBillingInputTokenMultiplier(); ok {
+		_spec.AddField(group.FieldBillingInputTokenMultiplier, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.BillingOutputTokenMultiplier(); ok {
+		_spec.SetField(group.FieldBillingOutputTokenMultiplier, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedBillingOutputTokenMultiplier(); ok {
+		_spec.AddField(group.FieldBillingOutputTokenMultiplier, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.BillingTokenAdjustmentMinInputTokens(); ok {
+		_spec.SetField(group.FieldBillingTokenAdjustmentMinInputTokens, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedBillingTokenAdjustmentMinInputTokens(); ok {
+		_spec.AddField(group.FieldBillingTokenAdjustmentMinInputTokens, field.TypeInt, value)
+	}
 	if value, ok := _u.mutation.PeakRateEnabled(); ok {
 		_spec.SetField(group.FieldPeakRateEnabled, field.TypeBool, value)
 	}
@@ -2335,6 +2416,69 @@ func (_u *GroupUpdateOne) SetNillableRateMultiplier(v *float64) *GroupUpdateOne 
 // AddRateMultiplier adds value to the "rate_multiplier" field.
 func (_u *GroupUpdateOne) AddRateMultiplier(v float64) *GroupUpdateOne {
 	_u.mutation.AddRateMultiplier(v)
+	return _u
+}
+
+// SetBillingInputTokenMultiplier sets the "billing_input_token_multiplier" field.
+func (_u *GroupUpdateOne) SetBillingInputTokenMultiplier(v float64) *GroupUpdateOne {
+	_u.mutation.ResetBillingInputTokenMultiplier()
+	_u.mutation.SetBillingInputTokenMultiplier(v)
+	return _u
+}
+
+// SetNillableBillingInputTokenMultiplier sets the "billing_input_token_multiplier" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableBillingInputTokenMultiplier(v *float64) *GroupUpdateOne {
+	if v != nil {
+		_u.SetBillingInputTokenMultiplier(*v)
+	}
+	return _u
+}
+
+// AddBillingInputTokenMultiplier adds value to the "billing_input_token_multiplier" field.
+func (_u *GroupUpdateOne) AddBillingInputTokenMultiplier(v float64) *GroupUpdateOne {
+	_u.mutation.AddBillingInputTokenMultiplier(v)
+	return _u
+}
+
+// SetBillingOutputTokenMultiplier sets the "billing_output_token_multiplier" field.
+func (_u *GroupUpdateOne) SetBillingOutputTokenMultiplier(v float64) *GroupUpdateOne {
+	_u.mutation.ResetBillingOutputTokenMultiplier()
+	_u.mutation.SetBillingOutputTokenMultiplier(v)
+	return _u
+}
+
+// SetNillableBillingOutputTokenMultiplier sets the "billing_output_token_multiplier" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableBillingOutputTokenMultiplier(v *float64) *GroupUpdateOne {
+	if v != nil {
+		_u.SetBillingOutputTokenMultiplier(*v)
+	}
+	return _u
+}
+
+// AddBillingOutputTokenMultiplier adds value to the "billing_output_token_multiplier" field.
+func (_u *GroupUpdateOne) AddBillingOutputTokenMultiplier(v float64) *GroupUpdateOne {
+	_u.mutation.AddBillingOutputTokenMultiplier(v)
+	return _u
+}
+
+// SetBillingTokenAdjustmentMinInputTokens sets the "billing_token_adjustment_min_input_tokens" field.
+func (_u *GroupUpdateOne) SetBillingTokenAdjustmentMinInputTokens(v int) *GroupUpdateOne {
+	_u.mutation.ResetBillingTokenAdjustmentMinInputTokens()
+	_u.mutation.SetBillingTokenAdjustmentMinInputTokens(v)
+	return _u
+}
+
+// SetNillableBillingTokenAdjustmentMinInputTokens sets the "billing_token_adjustment_min_input_tokens" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableBillingTokenAdjustmentMinInputTokens(v *int) *GroupUpdateOne {
+	if v != nil {
+		_u.SetBillingTokenAdjustmentMinInputTokens(*v)
+	}
+	return _u
+}
+
+// AddBillingTokenAdjustmentMinInputTokens adds value to the "billing_token_adjustment_min_input_tokens" field.
+func (_u *GroupUpdateOne) AddBillingTokenAdjustmentMinInputTokens(v int) *GroupUpdateOne {
+	_u.mutation.AddBillingTokenAdjustmentMinInputTokens(v)
 	return _u
 }
 
@@ -3856,6 +4000,24 @@ func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error)
 	}
 	if value, ok := _u.mutation.AddedRateMultiplier(); ok {
 		_spec.AddField(group.FieldRateMultiplier, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.BillingInputTokenMultiplier(); ok {
+		_spec.SetField(group.FieldBillingInputTokenMultiplier, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedBillingInputTokenMultiplier(); ok {
+		_spec.AddField(group.FieldBillingInputTokenMultiplier, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.BillingOutputTokenMultiplier(); ok {
+		_spec.SetField(group.FieldBillingOutputTokenMultiplier, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedBillingOutputTokenMultiplier(); ok {
+		_spec.AddField(group.FieldBillingOutputTokenMultiplier, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.BillingTokenAdjustmentMinInputTokens(); ok {
+		_spec.SetField(group.FieldBillingTokenAdjustmentMinInputTokens, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedBillingTokenAdjustmentMinInputTokens(); ok {
+		_spec.AddField(group.FieldBillingTokenAdjustmentMinInputTokens, field.TypeInt, value)
 	}
 	if value, ok := _u.mutation.PeakRateEnabled(); ok {
 		_spec.SetField(group.FieldPeakRateEnabled, field.TypeBool, value)

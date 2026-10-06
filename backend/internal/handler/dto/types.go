@@ -106,14 +106,17 @@ type Group struct {
 	LongContextPricingEnabled bool     `json:"long_context_pricing_enabled"`
 
 	// 图片生成计费配置（仅 antigravity 平台使用）
-	AllowImageGeneration         bool    `json:"allow_image_generation"`
-	AllowBatchImageGeneration    bool    `json:"allow_batch_image_generation"`
-	ImageRateIndependent         bool    `json:"image_rate_independent"`
-	ImageRateMultiplier          float64 `json:"image_rate_multiplier"`
-	BatchImageDiscountMultiplier float64 `json:"batch_image_discount_multiplier"`
-	BatchImageHoldMultiplier     float64 `json:"batch_image_hold_multiplier"`
-	VideoRateIndependent         bool    `json:"video_rate_independent"`
-	VideoRateMultiplier          float64 `json:"video_rate_multiplier"`
+	AllowImageGeneration bool `json:"allow_image_generation"`
+	// ModelAllowlist is safe for ordinary users and is required to filter
+	// models exposed by image-capable API keys.
+	ModelAllowlist               service.GroupModelAllowlist `json:"model_allowlist"`
+	AllowBatchImageGeneration    bool                        `json:"allow_batch_image_generation"`
+	ImageRateIndependent         bool                        `json:"image_rate_independent"`
+	ImageRateMultiplier          float64                     `json:"image_rate_multiplier"`
+	BatchImageDiscountMultiplier float64                     `json:"batch_image_discount_multiplier"`
+	BatchImageHoldMultiplier     float64                     `json:"batch_image_hold_multiplier"`
+	VideoRateIndependent         bool                        `json:"video_rate_independent"`
+	VideoRateMultiplier          float64                     `json:"video_rate_multiplier"`
 	// 高峰时段倍率配置
 	PeakRateEnabled    bool     `json:"peak_rate_enabled"`
 	PeakStart          string   `json:"peak_start"`
@@ -166,7 +169,10 @@ type Group struct {
 // 注意：普通用户接口不得返回 model_routing/account_count/account_groups 等内部信息。
 type AdminGroup struct {
 	Group
-	StreamingACKEnabled *bool `json:"streaming_ack_enabled"`
+	BillingInputTokenMultiplier  float64 `json:"billing_input_token_multiplier"`
+	BillingOutputTokenMultiplier float64 `json:"billing_output_token_multiplier"`
+	BillingTokenAdjustmentMinInputTokens int `json:"billing_token_adjustment_min_input_tokens"`
+	StreamingACKEnabled          *bool   `json:"streaming_ack_enabled"`
 	// ForceOpenAIFast 是管理端请求策略，用户侧分组 DTO 无需暴露。
 	ForceOpenAIFast bool `json:"force_openai_fast"`
 	// FreeOpenAIFast 是管理端计费策略，用户侧分组 DTO 无需暴露。
@@ -213,26 +219,25 @@ type Account struct {
 	Type     string  `json:"type"`
 	// Credentials 经 RedactCredentials 处理后只含非敏感子键；敏感 token / api_key / 私钥
 	// 的存在性通过 CredentialsStatus（has_<key>）暴露，原始值不返回前端。
-	Credentials             map[string]any                    `json:"credentials"`
-	CredentialsStatus       map[string]bool                   `json:"credentials_status,omitempty"`
-	Extra                   map[string]any                    `json:"extra"`
-	OllamaCloudUsage        *service.OllamaCloudUsageState    `json:"ollama_cloud_usage,omitempty"`
-	CodexTurnTickets        []service.OpenAICodexTicketStatus `json:"codex_turn_tickets,omitempty"`
-	ProxyID                 *int64                            `json:"proxy_id"`
-	ProxyFallbackOriginID   *int64                            `json:"proxy_fallback_origin_id"`
-	ProxyFallbackOriginName *string                           `json:"proxy_fallback_origin_name,omitempty"`
-	Concurrency             int                               `json:"concurrency"`
-	LoadFactor              *int                              `json:"load_factor,omitempty"`
-	Priority                int                               `json:"priority"`
-	RateMultiplier          float64                           `json:"rate_multiplier"`
-	Status                  string                            `json:"status"`
-	ErrorMessage            string                            `json:"error_message"`
-	LastUsedAt              *time.Time                        `json:"last_used_at"`
-	ExpiresAt               *int64                            `json:"expires_at"`
-	AutoPauseOnExpired      bool                              `json:"auto_pause_on_expired"`
-	CreatedAt               time.Time                         `json:"created_at"`
-	UpdatedAt               time.Time                         `json:"updated_at"`
-	OpenCodeGoUsage         *service.OpenCodeGoUsageState     `json:"opencode_go_usage,omitempty"`
+	Credentials             map[string]any                 `json:"credentials"`
+	CredentialsStatus       map[string]bool                `json:"credentials_status,omitempty"`
+	Extra                   map[string]any                 `json:"extra"`
+	OllamaCloudUsage        *service.OllamaCloudUsageState `json:"ollama_cloud_usage,omitempty"`
+	ProxyID                 *int64                         `json:"proxy_id"`
+	ProxyFallbackOriginID   *int64                         `json:"proxy_fallback_origin_id"`
+	ProxyFallbackOriginName *string                        `json:"proxy_fallback_origin_name,omitempty"`
+	Concurrency             int                            `json:"concurrency"`
+	LoadFactor              *int                           `json:"load_factor,omitempty"`
+	Priority                int                            `json:"priority"`
+	RateMultiplier          float64                        `json:"rate_multiplier"`
+	Status                  string                         `json:"status"`
+	ErrorMessage            string                         `json:"error_message"`
+	LastUsedAt              *time.Time                     `json:"last_used_at"`
+	ExpiresAt               *int64                         `json:"expires_at"`
+	AutoPauseOnExpired      bool                           `json:"auto_pause_on_expired"`
+	CreatedAt               time.Time                      `json:"created_at"`
+	UpdatedAt               time.Time                      `json:"updated_at"`
+	OpenCodeGoUsage         *service.OpenCodeGoUsageState  `json:"opencode_go_usage,omitempty"`
 
 	Schedulable bool `json:"schedulable"`
 
@@ -339,12 +344,11 @@ type AccountListItem struct {
 	Platform string  `json:"platform"`
 	Type     string  `json:"type"`
 
-	Credentials       map[string]any                    `json:"credentials,omitempty"`
-	CredentialsStatus map[string]bool                   `json:"credentials_status,omitempty"`
-	Extra             map[string]any                    `json:"extra,omitempty"`
-	OllamaCloudUsage  *service.OllamaCloudUsageState    `json:"ollama_cloud_usage,omitempty"`
-	CodexTurnTickets  []service.OpenAICodexTicketStatus `json:"codex_turn_tickets,omitempty"`
-	OpenCodeGoUsage   *service.OpenCodeGoUsageState     `json:"opencode_go_usage,omitempty"`
+	Credentials       map[string]any                 `json:"credentials,omitempty"`
+	CredentialsStatus map[string]bool                `json:"credentials_status,omitempty"`
+	Extra             map[string]any                 `json:"extra,omitempty"`
+	OllamaCloudUsage  *service.OllamaCloudUsageState `json:"ollama_cloud_usage,omitempty"`
+	OpenCodeGoUsage   *service.OpenCodeGoUsageState  `json:"opencode_go_usage,omitempty"`
 
 	ProxyID                 *int64     `json:"proxy_id"`
 	ProxyFallbackOriginID   *int64     `json:"proxy_fallback_origin_id"`

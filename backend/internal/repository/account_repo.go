@@ -57,11 +57,6 @@ var schedulerNeutralExtraKeyPrefixes = []string{
 	"codex_5h_",
 	"codex_7d_",
 	"codex_reset_credit_",
-	// 292/332 门票是纯运行态凭据：它不在 filterSchedulerExtra 的投影白名单里，
-	// 因此 bucket 重建事件永远搬不动门票状态，续期时开事务+发 outbox 是白干。
-	// 归为观测型后仍会同步单账号快照（见 UpdateExtra），不丢任何新鲜度。
-	"codex_turn_ticket:",
-	"codex_ticket_runtime:",
 	"passive_usage_",
 	"upstream_billing_probe",
 	"upstream_billing_rate_sync",
@@ -233,6 +228,9 @@ func (r *accountRepository) CreateWithAccountGroups(ctx context.Context, account
 		groupIDs = append(groupIDs, groups[i].GroupID)
 	}
 	if err := lockLiveGroups(ctx, txClient, groupIDs); err != nil {
+		return err
+	}
+	if err := checkGovernanceTargets(ctx, txClient); err != nil {
 		return err
 	}
 
@@ -490,6 +488,42 @@ func (r *accountRepository) updateAccount(
 		}
 	}
 
+	expectedGovernanceFingerprint, governanceGroups, governanceMutation := service.GovernanceMutationFromContext(ctx)
+	if governanceMutation {
+		if err := checkGovernanceAccountCAS(ctx, client, account.ID, expectedGovernanceFingerprint); err != nil {
+			return err
+		}
+		if err := checkGovernanceTargets(ctx, client); err != nil {
+			return err
+		}
+		// Preserve unrelated configuration and runtime fields from the locked row,
+		// not the earlier AdminService read. Only confirmed import fields change.
+		fresh, err := client.Account.Get(ctx, account.ID)
+		if err != nil {
+			return err
+		}
+		current := accountEntityToService(fresh)
+		if current.ParentAccountID != nil {
+			return service.ErrAccountNotFound
+		}
+		current.Name, current.Credentials, current.ProxyID = account.Name, account.Credentials, account.ProxyID
+		current.Notes, current.Concurrency = account.Notes, account.Concurrency
+		current.Priority = account.Priority
+		current.RateMultiplier = account.RateMultiplier
+		current.GroupIDs = append([]int64(nil), account.GroupIDs...)
+		if current.Extra == nil {
+			current.Extra = make(map[string]any)
+		}
+		for _, key := range []string{"quota_limit", "quota_daily_limit", "quota_weekly_limit", "openai_long_context_billing_enabled"} {
+			if value, exists := account.Extra[key]; exists {
+				current.Extra[key] = value
+			} else {
+				delete(current.Extra, key)
+			}
+		}
+		*account = *current
+	}
+
 	updated, err := r.updateLockedAccount(
 		ctx,
 		client,
@@ -500,6 +534,16 @@ func (r *accountRepository) updateAccount(
 	)
 	if err != nil {
 		return translatePersistenceError(err, service.ErrAccountNotFound, nil)
+	}
+	if governanceMutation {
+		if err := replaceAccountGroupsInTransaction(ctx, client, account.ID, governanceGroups); err != nil {
+			return err
+		}
+		oldGroups := append([]int64(nil), account.GroupIDs...)
+		account.GroupIDs = append([]int64(nil), governanceGroups...)
+		if err := enqueueSchedulerOutbox(ctx, client, service.SchedulerOutboxEventAccountGroupsChanged, &account.ID, nil, buildSchedulerGroupPayload(mergeGroupIDs(oldGroups, governanceGroups))); err != nil {
+			return err
+		}
 	}
 	if err := enqueueSchedulerOutbox(ctx, client, service.SchedulerOutboxEventAccountChanged, &account.ID, nil, buildSchedulerGroupPayload(account.GroupIDs)); err != nil {
 		return err
@@ -730,18 +774,27 @@ func lockAndMergeAccountProbeExtra(
 
 	// extra 理论上恒为 JSON 对象，但历史数据若存成非对象（数组/标量），在此硬失败
 	// 会让该账号的任何编辑都保存不了——而这条路径覆盖所有平台的账号更新。
-	// 门票是 1 小时 TTL 的临时凭据，下个打票周期会自动补回，因此解析失败时降级为
-	// 「无门票可保留」继续完成编辑，不要把整个账号更新拖垮。
 	var currentExtra map[string]any
 	if len(currentExtraJSON) > 0 {
 		if err := json.Unmarshal(currentExtraJSON, &currentExtra); err != nil {
 			logger.LegacyPrintf("repository.account",
-				"[Account] current extra unmarshal failed, codex ticket preservation skipped: id=%d err=%v",
+				"[Account] current extra unmarshal failed, runtime metadata preservation skipped: id=%d err=%v",
 				account.ID, err)
 			currentExtra = nil
 		}
 	}
-	extra := service.MergeOpenAICodexTicketExtra(copyJSONMap(normalizeJSONMap(account.Extra)), currentExtra)
+	extra := copyJSONMap(normalizeJSONMap(account.Extra))
+	service.MergeGovernanceRuntimeExtra(ctx, extra, currentExtra)
+	// Ordinary configuration edits carry a pre-transaction Account snapshot.
+	// Preserve the row-locked availability of governed accounts in both pause
+	// and restore races unless the administrator supplied an availability intent.
+	_, _, governanceImport := service.GovernanceMutationFromContext(ctx)
+	if marker, _ := currentExtra["upstream_governance_marker"].(string); marker != "" && !governanceImport && !service.GovernancePauseRevoked(ctx) {
+		_ = rows.Close()
+		if err := scanSingleRow(ctx, client, `SELECT schedulable FROM accounts WHERE id=$1`, []any{account.ID}, &account.Schedulable); err != nil {
+			return nil, err
+		}
+	}
 	for _, key := range []string{
 		service.UpstreamBillingProbeEnabledExtraKey,
 		service.UpstreamBillingRateSyncEnabledExtraKey,
@@ -979,10 +1032,7 @@ func (r *accountRepository) UpdateCredentials(ctx context.Context, id int64, cre
 }
 
 func (r *accountRepository) Delete(ctx context.Context, id int64) error {
-	groupIDs, err := r.loadAccountGroupIDs(ctx, id)
-	if err != nil {
-		return err
-	}
+
 	// 使用事务保证账号与关联分组的删除原子性
 	tx, err := r.client.Tx(ctx)
 	if err != nil && !errors.Is(err, dbent.ErrTxStarted) {
@@ -998,6 +1048,17 @@ func (r *accountRepository) Delete(ctx context.Context, id int64) error {
 		txClient = r.client
 	}
 
+	if err := lockAccountForGroupBind(ctx, txClient, id); err != nil {
+		return err
+	}
+	entries, err := txClient.AccountGroup.Query().Where(dbaccountgroup.AccountIDEQ(id)).All(ctx)
+	if err != nil {
+		return err
+	}
+	groupIDs := make([]int64, 0, len(entries))
+	for _, entry := range entries {
+		groupIDs = append(groupIDs, entry.GroupID)
+	}
 	if _, err := txClient.AccountGroup.Delete().Where(dbaccountgroup.AccountIDEQ(id)).Exec(ctx); err != nil {
 		return err
 	}
@@ -1892,6 +1953,9 @@ func (r *accountRepository) AddToGroup(ctx context.Context, accountID, groupID i
 		defer func() { _ = tx.Rollback() }()
 		client = tx.Client()
 	}
+	if err := lockAccountForGroupBind(ctx, client, accountID); err != nil {
+		return err
+	}
 	if err := lockLiveGroups(ctx, client, []int64{groupID}); err != nil {
 		return err
 	}
@@ -1916,22 +1980,29 @@ func (r *accountRepository) AddToGroup(ctx context.Context, accountID, groupID i
 }
 
 func (r *accountRepository) RemoveFromGroup(ctx context.Context, accountID, groupID int64) error {
-	_, err := r.client.AccountGroup.Delete().
-		Where(
-			dbaccountgroup.AccountIDEQ(accountID),
-			dbaccountgroup.GroupIDEQ(groupID),
-		).
-		Exec(ctx)
-	if err != nil {
+	tx, err := r.client.Tx(ctx)
+	if err != nil && !errors.Is(err, dbent.ErrTxStarted) {
 		return err
 	}
-	payload := buildSchedulerGroupPayload([]int64{groupID})
-	if err := enqueueSchedulerOutbox(ctx, r.sql, service.SchedulerOutboxEventAccountGroupsChanged, &accountID, nil, payload); err != nil {
-		logger.LegacyPrintf("repository.account", "[SchedulerOutbox] enqueue remove from group failed: account=%d group=%d err=%v", accountID, groupID, err)
+	client := r.client
+	if tx != nil {
+		defer func() { _ = tx.Rollback() }()
+		client = tx.Client()
+	}
+	if err := lockAccountForGroupBind(ctx, client, accountID); err != nil {
+		return err
+	}
+	if _, err := client.AccountGroup.Delete().Where(dbaccountgroup.AccountIDEQ(accountID), dbaccountgroup.GroupIDEQ(groupID)).Exec(ctx); err != nil {
+		return err
+	}
+	if err := enqueueSchedulerOutbox(ctx, client, service.SchedulerOutboxEventAccountGroupsChanged, &accountID, nil, buildSchedulerGroupPayload([]int64{groupID})); err != nil {
+		return err
+	}
+	if tx != nil {
+		return tx.Commit()
 	}
 	return nil
 }
-
 func (r *accountRepository) GetGroups(ctx context.Context, accountID int64) ([]service.Group, error) {
 	groups, err := r.client.Group.Query().
 		Where(
@@ -1950,64 +2021,39 @@ func (r *accountRepository) GetGroups(ctx context.Context, accountID int64) ([]s
 }
 
 func (r *accountRepository) BindGroups(ctx context.Context, accountID int64, groupIDs []int64) error {
-	existingGroupIDs, err := r.loadAccountGroupIDs(ctx, accountID)
-	if err != nil {
-		return err
-	}
-	// 使用事务保证删除旧绑定与创建新绑定的原子性
 	tx, err := r.client.Tx(ctx)
 	if err != nil && !errors.Is(err, dbent.ErrTxStarted) {
 		return err
 	}
-
-	var txClient *dbent.Client
-	if err == nil {
+	txClient := r.client
+	if tx != nil {
 		defer func() { _ = tx.Rollback() }()
 		txClient = tx.Client()
-	} else {
-		// 已处于外部事务中（ErrTxStarted），复用当前 client
-		txClient = r.client
 	}
-	if err := lockLiveGroups(ctx, txClient, groupIDs); err != nil {
+	// All group edits serialize on their parent account, as governance CAS does.
+	if err := lockAccountForGroupBind(ctx, txClient, accountID); err != nil {
 		return err
 	}
-
-	if _, err := txClient.AccountGroup.Delete().Where(dbaccountgroup.AccountIDEQ(accountID)).Exec(ctx); err != nil {
+	entries, err := txClient.AccountGroup.Query().Where(dbaccountgroup.AccountIDEQ(accountID)).All(ctx)
+	if err != nil {
 		return err
 	}
-
-	if len(groupIDs) == 0 {
-		if tx != nil {
-			return tx.Commit()
-		}
-		return nil
+	existingGroupIDs := make([]int64, 0, len(entries))
+	for _, entry := range entries {
+		existingGroupIDs = append(existingGroupIDs, entry.GroupID)
 	}
-
-	builders := make([]*dbent.AccountGroupCreate, 0, len(groupIDs))
-	for i, groupID := range groupIDs {
-		builders = append(builders, txClient.AccountGroup.Create().
-			SetAccountID(accountID).
-			SetGroupID(groupID).
-			SetPriority(i+1),
-		)
-	}
-
-	if _, err := txClient.AccountGroup.CreateBulk(builders...).Save(ctx); err != nil {
+	if err := replaceAccountGroupsInTransaction(ctx, txClient, accountID, groupIDs); err != nil {
 		return err
-	}
-
-	if tx != nil {
-		if err := tx.Commit(); err != nil {
-			return err
-		}
 	}
 	payload := buildSchedulerGroupPayload(mergeGroupIDs(existingGroupIDs, groupIDs))
-	if err := enqueueSchedulerOutbox(ctx, r.sql, service.SchedulerOutboxEventAccountGroupsChanged, &accountID, nil, payload); err != nil {
-		logger.LegacyPrintf("repository.account", "[SchedulerOutbox] enqueue bind groups failed: account=%d err=%v", accountID, err)
+	if err := enqueueSchedulerOutbox(ctx, txClient, service.SchedulerOutboxEventAccountGroupsChanged, &accountID, nil, payload); err != nil {
+		return err
+	}
+	if tx != nil {
+		return tx.Commit()
 	}
 	return nil
 }
-
 func (r *accountRepository) ListSchedulable(ctx context.Context) ([]service.Account, error) {
 	accounts, err := r.schedulableAccountsQuery(time.Now()).All(ctx)
 	if err != nil {
@@ -2694,10 +2740,7 @@ func (r *accountRepository) UpdateSessionWindowEnd(ctx context.Context, id int64
 }
 
 func (r *accountRepository) SetSchedulable(ctx context.Context, id int64, schedulable bool) error {
-	_, err := r.client.Account.Update().
-		Where(dbaccount.IDEQ(id)).
-		SetSchedulable(schedulable).
-		Save(ctx)
+	_, err := r.sql.ExecContext(ctx, `UPDATE accounts SET schedulable=$2, extra=COALESCE(extra,'{}'::jsonb)-'upstream_governance_pause'-'upstream_governance_reconcile_receipt',updated_at=NOW() WHERE id=$1 AND deleted_at IS NULL`, id, schedulable)
 	if err != nil {
 		return err
 	}
@@ -2751,34 +2794,8 @@ func (r *accountRepository) AutoPauseExpiredAccounts(ctx context.Context, now ti
 	return int64(len(accountIDs)), nil
 }
 
-// InvalidateCodexTicket removes only the credential-bound ticket used by the
-// failed request. A late upstream error must not delete a newer replacement.
-func (r *accountRepository) InvalidateCodexTicket(ctx context.Context, accountID int64, mode, model, state, credentialHash string) (bool, error) {
-	if accountID <= 0 || (mode != "292" && mode != "332") || strings.TrimSpace(model) == "" || state == "" || credentialHash == "" {
-		return false, nil
-	}
-	key := "codex_turn_ticket:" + mode + ":" + strings.TrimSpace(model)
-	result, err := clientFromContext(ctx, r.client).ExecContext(ctx,
-		`UPDATE accounts SET extra = COALESCE(extra, '{}'::jsonb) - $1, updated_at = NOW()
-		 WHERE id = $2 AND deleted_at IS NULL
-		 AND extra -> $1 ->> 'state' = $3
-		 AND extra -> $1 ->> 'credential_hash' = $4`,
-		key, accountID, state, credentialHash,
-	)
-	if err != nil {
-		return false, err
-	}
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return false, err
-	}
-	if affected > 0 && dbent.TxFromContext(ctx) == nil {
-		r.syncSchedulerAccountSnapshot(ctx, accountID)
-	}
-	return affected > 0, nil
-}
-
 func (r *accountRepository) UpdateExtra(ctx context.Context, id int64, updates map[string]any) error {
+	updates = stripGovernanceRuntimeExtra(updates)
 	updates = stripCodexFingerprintSeedFromExtraUpdate(updates)
 	if len(updates) == 0 {
 		return nil
@@ -2951,6 +2968,7 @@ func (r *accountRepository) updateUpstreamBillingProbeSnapshotInTx(
 				WHEN $10::numeric IS NOT NULL
 					AND extra @> '{"upstream_billing_probe_enabled": true}'::jsonb
 					AND extra @> '{"upstream_billing_rate_sync_enabled": true}'::jsonb
+					AND COALESCE(extra->>'upstream_governance_rate_owner','') = ''
 				THEN $10::numeric
 				ELSE rate_multiplier
 			END,
@@ -2963,8 +2981,9 @@ func (r *accountRepository) updateUpstreamBillingProbeSnapshotInTx(
 			AND COALESCE(extra -> 'upstream_billing_probe', 'null'::jsonb) = $7::jsonb
 			AND COALESCE(extra -> 'upstream_billing_probe_enabled', 'null'::jsonb) = $8::jsonb
 			AND COALESCE(extra -> 'upstream_billing_rate_sync_enabled', 'null'::jsonb) = $9::jsonb
+			AND COALESCE(extra->>'upstream_governance_rate_owner','') = $11
 			AND deleted_at IS NULL
-	`, string(payload), account.ID, account.Platform, account.Type, string(credentials), proxyID, string(expectedSnapshotJSON), string(expectedEnabledJSON), string(expectedRateSyncEnabledJSON), rateMultiplier)
+	`, string(payload), account.ID, account.Platform, account.Type, string(credentials), proxyID, string(expectedSnapshotJSON), string(expectedEnabledJSON), string(expectedRateSyncEnabledJSON), rateMultiplier, account.GetExtraString("upstream_governance_rate_owner"))
 	if err != nil {
 		return err
 	}
@@ -3057,6 +3076,7 @@ func (r *accountRepository) BulkUpdate(ctx context.Context, ids []int64, updates
 		return 0, nil
 	}
 	updates.Extra = stripCodexFingerprintSeedFromExtraUpdate(updates.Extra)
+	updates.Extra = stripGovernanceRuntimeExtra(updates.Extra)
 
 	setClauses := make([]string, 0, 8)
 	args := make([]any, 0, 8)
@@ -3176,7 +3196,7 @@ func (r *accountRepository) BulkUpdate(ctx context.Context, ids []int64, updates
 				" AND COALESCE(btrim("+credentialPlaceholder+"::jsonb ->> 'account_mode') <> 'zen', true) IS NOT TRUE")
 	}
 
-	if len(updates.Extra) > 0 || len(ollamaGroupIdentityChanges) > 0 || len(opencodeGroupIdentityChanges) > 0 || ollamaProxyIdentityChanged != "" || updates.EnsureCodexFingerprintSeed {
+	if len(updates.Extra) > 0 || len(ollamaGroupIdentityChanges) > 0 || len(opencodeGroupIdentityChanges) > 0 || ollamaProxyIdentityChanged != "" || updates.EnsureCodexFingerprintSeed || updates.Status != nil || updates.Schedulable != nil {
 		extraExpression := "COALESCE(extra, '{}'::jsonb)"
 		if len(updates.Extra) > 0 {
 			payload, err := json.Marshal(updates.Extra)
@@ -3194,6 +3214,9 @@ func (r *accountRepository) BulkUpdate(ctx context.Context, ids []int64, updates
 			}
 		}
 		eligibleAccount := "platform IN (" + ollamaCloudUsagePlatformsSQL + ") AND type = 'apikey'"
+		if updates.Status != nil || updates.Schedulable != nil {
+			extraExpression = "(" + extraExpression + ") - 'upstream_governance_pause' - 'upstream_governance_reconcile_receipt'"
+		}
 		groupIdentityChanged := ""
 		if len(ollamaGroupIdentityChanges) > 0 {
 			groupIdentityChanged = "(" + eligibleAccount + " AND (" + joinClauses(ollamaGroupIdentityChanges, " OR ") + "))"

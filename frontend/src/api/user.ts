@@ -19,6 +19,53 @@ import type {
   PlatformQuotasResponse,
 } from '@/types'
 
+export interface IQCandyResult {
+  id: string
+  site_name: string
+  group_name: string
+  account_label: string
+  model: string
+  effort: string
+  answer?: number | null
+  verdict: string
+  status: string
+  duration_ms: number
+  created_at: string
+  template_version?: string
+}
+
+export interface IQPelicanWork {
+  id: string
+  site_name: string
+  group_name: string
+  account_label: string
+  model: string
+  effort: string
+  html: string
+  status: string
+  duration_ms: number
+  created_at: string
+}
+
+export interface IQTimelinePoint {
+  at: string
+  status: 'pass' | 'fail' | 'empty'
+}
+
+export interface IQDashboard {
+  candy_results: IQCandyResult[]
+  pelican_works: IQPelicanWork[]
+  timeline: IQTimelinePoint[]
+  standard_answer: number
+  window_hours: number
+  generated_at: string
+}
+
+export async function getIQDetection(params: { hours?: number; limit?: number } = {}): Promise<IQDashboard> {
+  const { data } = await apiClient.get<IQDashboard>('/user/iq-detection', { params })
+  return data
+}
+
 /**
  * Get current user profile
  * @returns User profile data
@@ -210,6 +257,7 @@ export const userAPI = {
   getAffiliateDetail,
   transferAffiliateQuota,
   getMyPlatformQuotas,
+  getIQDetection,
 }
 
 export default userAPI

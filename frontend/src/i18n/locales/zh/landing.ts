@@ -111,6 +111,55 @@ export default {
     },
     footer: {
       allRightsReserved: '保留所有权利。'
+    },
+    public: {
+    b2: {
+      integrationTitle: '1 分钟接入', integrationDescription: '兼容 OpenAI SDK，只需更换 Base URL。',
+      fullDocs: '查看完整文档', codeLanguage: '代码语言', copyCode: '复制代码', copied: '已复制', copyFailed: '复制失败', contacts: '联系方式'
+    },
+    nav: {
+      apiGateway: 'API 网关', channels: '渠道', pricing: '价格', modelPlaza: '模型广场', docs: '接入文档', startBuilding: '开始构建'
+    },
+    contact: { joinNow: '立即加入交流群' },
+    hero: {
+      eyebrow: '统一模型网关', title: '一个 API，调度所有前沿模型，智能路由。',
+      titleLead: '一个 API，', titleAccent: '调度所有前沿模型，', titleEnd: '智能路由。',
+      subtitle: '通过兼容 OpenAI 的统一接口接入你的模型供应商，透明查看价格与运行状态。',
+      createApiKey: '创建 API 密钥', exploreApi: '查看接入文档', gatewayPreview: '网关预览', keysStayYours: '密钥由你掌控', joinGroup: '加入 QQ 群',
+      channels: '渠道', platforms: '平台', protocol: '协议', available: '可用 {count} 个', signInRequired: '需要登录', loading: '加载中', error: '暂时不可用', empty: '暂无渠道', notLoaded: '尚未加载', openAi: 'OpenAI',
+      routingLayer: '路由层', smartFallback: '智能故障切换', visibleChannels: '可见渠道', supportedModels: '支持模型', providers: '供应商', compatibility: '兼容性', routing: '路由', openAiApi: 'OpenAI API', smartSticky: '智能 + 粘性', p50Latency: 'p50 延迟', successRate: '成功率', activeRoutes: '活跃路由', readDocs: '阅读文档'
+    },
+    models: { title: '支持 8 大模型厂商', pricing: '查看模型详情', app: '你的应用', appType: 'Web · App · Agent', gateway: '统一模型接入', entry: 'API 入口', platforms: '模型厂商', coverage: '已接入 8 家主流模型厂商，持续扩展中' },
+    overview: {
+      channelStatus: '渠道状态', available: '可用 {count} 个', signInRequired: '需要登录', loading: '加载中', error: '暂时不可用', empty: '暂无渠道', notLoaded: '尚未加载', modelsIndexed: '已收录模型', platforms: '平台数', gateway: '网关', openAiCompatible: '兼容 OpenAI'
+    },
+    channelStatus: {
+      eyebrow: '平台覆盖', title: '渠道状态', description: '查看当前网关可用的模型供应商与分组。', platformsAvailable: '可用平台 {count} 个',
+      loadingAria: '正在加载渠道状态', errorTitle: '暂时无法获取渠道状态', errorFallback: '请稍后重试。', retry: '重试',
+      unavailableTitle: '渠道数据暂不可用', unavailableDescription: '公开渠道数据暂时无法读取，请稍后重试。',
+      idleTitle: '渠道状态尚未加载', idleDescription: '请求公开摘要后，渠道状态会显示在这里。', emptyTitle: '暂无渠道数据', emptyDescription: '当前工作区还没有可用渠道。',
+      active: '已启用', table: { platform: '平台', status: '状态', channels: '渠道', groups: '分组', models: '模型' }, noNamedChannels: '暂无命名渠道', moreChannels: '另有 {count} 个', namesNote: '展示已启用渠道的公开分组覆盖，不代表实时健康探测。', viewFullStatus: '查看模型详情'
+    },
+    pricing: {
+      eyebrow: '模型接入', title: '模型价格与覆盖范围', description: '按平台浏览已发布的模型价格；配置价格与官方参考价会明确区分。', modelsShown: '显示 {shown} / {total} 个模型',
+      loadingAria: '正在加载价格摘要', errorTitle: '暂时无法获取价格数据', errorFallback: '请稍后重试。', retry: '重试', unavailableTitle: '价格数据暂不可用', unavailableDescription: '公开价格数据暂时无法读取，请稍后重试。',
+      idleTitle: '价格尚未加载', idleDescription: '请求公开模型摘要后，价格会显示在这里。', emptyTitle: '暂无已发布模型', emptyDescription: '模型广场添加模型后，价格会显示在这里。', noMatchesTitle: '没有匹配的模型', noMatchesDescription: '请更换搜索关键词或平台筛选条件。',
+      searchPlaceholder: '搜索模型', platform: '平台', allPlatforms: '全部平台', clearFilters: '清除筛选', caption: '按平台展示已发布模型价格', table: { platform: '平台', model: '模型', billing: '计费方式', input: '输入', output: '输出', cacheRead: '缓存读取', groups: '分组', perToken: '美元 / token' },
+      officialReference: '官方参考价', noPricePublished: '未发布价格', perRequest: '按请求', perRequestWithPrice: '按请求 {price}', tokenBilling: '按 token', reference: '参考价', notSpecified: '未指定', footerNote: '价格来自平台配置，可能因计费模式而变化。', browseModelPlaza: '浏览模型广场'
+    },
+    integration: {
+      eyebrow: '即插即用', title: '1 分钟快速接入', description: '继续使用熟悉的 SDK，指向统一的 OpenAI 兼容 Base URL，由 {siteName} 处理供应商路由、重试与用量统计。',
+      benefits: { sdk: '兼容 OpenAI 的 REST API 与 SDK', failover: '在已配置渠道之间自动故障切换', limits: '按密钥限额、日志与用量可见' }, apiReference: '查看接入文档', codeExamples: '代码示例', copy: '复制', baseUrl: 'Base URL', curl: 'cURL', javascript: 'JavaScript', python: 'Python', codePanelAria: '代码示例', codePanelFor: '{label} 代码示例'
+    },
+    footer: {
+      builtForTeams: '为正在交付 AI 产品的团队而生。',
+      brandDescription: '统一模型接入与智能路由',
+      contactTitle: '联系我们',
+      serviceLabel: '客服联系方式',
+      copyContact: '复制联系方式',
+      linksLabel: '相关链接',
+      serviceStatus: '统一 API 网关 · 随时可接入'
+    }
     }
   },
 

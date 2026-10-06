@@ -233,18 +233,21 @@ type AdminBoundAuthIdentityChannel struct {
 }
 
 type CreateGroupInput struct {
-	StreamingACKEnabled       bool
-	Name                      string
-	Description               string
-	Platform                  string
-	RateMultiplier            float64
-	IsExclusive               bool
-	SubscriptionType          string   // standard/subscription
-	DailyLimitUSD             *float64 // 日限额 (USD)
-	WeeklyLimitUSD            *float64 // 周限额 (USD)
-	MonthlyLimitUSD           *float64 // 月限额 (USD)
-	LongContextPricingEnabled bool
-	ModelPricing              []ChannelModelPricing
+	StreamingACKEnabled          bool
+	Name                         string
+	Description                  string
+	Platform                     string
+	RateMultiplier               float64
+	BillingInputTokenMultiplier  float64
+	BillingOutputTokenMultiplier float64
+	BillingTokenAdjustmentMinInputTokens *int
+	IsExclusive                  bool
+	SubscriptionType             string   // standard/subscription
+	DailyLimitUSD                *float64 // 日限额 (USD)
+	WeeklyLimitUSD               *float64 // 周限额 (USD)
+	MonthlyLimitUSD              *float64 // 月限额 (USD)
+	LongContextPricingEnabled    bool
+	ModelPricing                 []ChannelModelPricing
 	// 图片生成计费配置（仅 antigravity 平台使用）
 	AllowImageGeneration         bool
 	AllowBatchImageGeneration    bool
@@ -314,19 +317,22 @@ type CreateGroupInput struct {
 }
 
 type UpdateGroupInput struct {
-	StreamingACKEnabled       *bool // nil preserves the existing legacy or explicit policy
-	Name                      string
-	Description               *string
-	Platform                  string
-	RateMultiplier            *float64 // 使用指针以支持设置为0
-	IsExclusive               *bool
-	Status                    string
-	SubscriptionType          string   // standard/subscription
-	DailyLimitUSD             *float64 // 日限额 (USD)
-	WeeklyLimitUSD            *float64 // 周限额 (USD)
-	MonthlyLimitUSD           *float64 // 月限额 (USD)
-	LongContextPricingEnabled *bool
-	ModelPricing              *[]ChannelModelPricing
+	StreamingACKEnabled          *bool // nil preserves the existing legacy or explicit policy
+	Name                         string
+	Description                  *string
+	Platform                     string
+	RateMultiplier               *float64 // 使用指针以支持设置为0
+	BillingInputTokenMultiplier  *float64
+	BillingOutputTokenMultiplier *float64
+	BillingTokenAdjustmentMinInputTokens *int
+	IsExclusive                  *bool
+	Status                       string
+	SubscriptionType             string   // standard/subscription
+	DailyLimitUSD                *float64 // 日限额 (USD)
+	WeeklyLimitUSD               *float64 // 周限额 (USD)
+	MonthlyLimitUSD              *float64 // 月限额 (USD)
+	LongContextPricingEnabled    *bool
+	ModelPricing                 *[]ChannelModelPricing
 	// 图片生成计费配置（仅 antigravity 平台使用）
 	AllowImageGeneration         *bool
 	AllowBatchImageGeneration    *bool
@@ -411,6 +417,7 @@ type CreateAccountInput struct {
 	ExpiresAt          *int64
 	AutoPauseOnExpired *bool
 	ProbeEnabled       *bool
+	RateSyncEnabled    *bool
 	// SkipDefaultGroupBind prevents auto-binding to platform default group when GroupIDs is empty.
 	SkipDefaultGroupBind bool
 	// SkipMixedChannelCheck skips the mixed channel risk check when binding groups.

@@ -11,6 +11,7 @@ import type {
   LoginAgreementDocument,
   NotifyEmailEntry,
 } from "@/types";
+import type { RechargeBonusTier } from "@/utils/rechargeBonus";
 
 export interface DefaultSubscriptionSetting {
   group_id: number;
@@ -18,7 +19,7 @@ export interface DefaultSubscriptionSetting {
 }
 
 // ── 平台限额类型 ──────────────────────────────────────────────────
-export type PlatformType = "anthropic" | "openai" | "gemini" | "antigravity" | "grok"
+export type PlatformType = "anthropic" | "openai" | "gemini" | "antigravity" | "grok" | "typesafe"
 export type QuotaWindowType = "daily" | "weekly" | "monthly"
 
 /** 单平台三档限额；null = 不限制，undefined = 未填（等价 null） */
@@ -31,7 +32,7 @@ export interface PlatformQuotaLimits {
 /** 全平台默认限额 map（key = PlatformType） */
 export type DefaultPlatformQuotasMap = Partial<Record<PlatformType, PlatformQuotaLimits>>
 
-const PLATFORMS: PlatformType[] = ["anthropic", "openai", "gemini", "antigravity", "grok"]
+const PLATFORMS: PlatformType[] = ["anthropic", "openai", "gemini", "antigravity", "grok", "typesafe"]
 
 export type SchedulingThresholdPlatformType =
   | "openai"
@@ -643,20 +644,6 @@ export interface SystemSettings {
   openai_codex_client_version: string;
   openai_codex_client_version_synced: string;
   openai_codex_version_auto_sync_enabled: boolean;
-  openai_codex_ticket_enabled: boolean;
-  openai_codex_ticket_fail_closed: boolean;
-  openai_codex_ticket_harvest_proxy_url: string;
-  openai_codex_ticket_harvest_proxy_configured: boolean;
-  openai_codex_ticket_verify_enabled: boolean;
-  openai_codex_ticket_harvest_proxy_ids: number[];
-  openai_codex_ticket_harvest_concurrency: number;
-  openai_codex_ticket_332_enabled: boolean;
-  openai_codex_ticket_332_fail_closed: boolean;
-  openai_codex_ticket_332_harvest_proxy_url: string;
-  openai_codex_ticket_332_harvest_proxy_configured: boolean;
-  openai_codex_ticket_332_verify_enabled: boolean;
-  openai_codex_ticket_332_harvest_proxy_ids: number[];
-  openai_codex_ticket_332_harvest_concurrency: number;
   claude_code_client_version: string;
   claude_code_client_version_synced: string;
   claude_code_version_auto_sync_enabled: boolean;
@@ -674,6 +661,7 @@ export interface SystemSettings {
   risk_control_enabled: boolean;
 
   // Cyber session block
+  cyber_policy_user_allowlist: string;
   cyber_session_block_enabled: boolean;
   cyber_session_block_ttl_seconds: number;
 
@@ -687,6 +675,9 @@ export interface SystemSettings {
   payment_balance_recharge_multiplier: number;
   payment_subscription_usd_to_cny_rate: number;
   payment_recharge_fee_rate: number;
+  payment_recharge_bonus_tiers?: RechargeBonusTier[];
+  payment_recharge_bonus_mode?: string;
+  payment_recharge_bonus_notice?: string;
   payment_load_balance_strategy: string;
   payment_product_name_prefix: string;
   payment_product_name_suffix: string;
@@ -983,18 +974,6 @@ export interface UpdateSettingsRequest {
   openai_codex_user_agent?: string;
   openai_codex_client_version?: string;
   openai_codex_version_auto_sync_enabled?: boolean;
-  openai_codex_ticket_enabled?: boolean;
-  openai_codex_ticket_fail_closed?: boolean;
-  openai_codex_ticket_harvest_proxy_url?: string;
-  openai_codex_ticket_verify_enabled?: boolean;
-  openai_codex_ticket_harvest_proxy_ids?: number[];
-  openai_codex_ticket_harvest_concurrency?: number;
-  openai_codex_ticket_332_enabled?: boolean;
-  openai_codex_ticket_332_fail_closed?: boolean;
-  openai_codex_ticket_332_harvest_proxy_url?: string;
-  openai_codex_ticket_332_verify_enabled?: boolean;
-  openai_codex_ticket_332_harvest_proxy_ids?: number[];
-  openai_codex_ticket_332_harvest_concurrency?: number;
   claude_code_client_version?: string;
   claude_code_version_auto_sync_enabled?: boolean;
   // codex_cli_only 加固
@@ -1009,6 +988,7 @@ export interface UpdateSettingsRequest {
   risk_control_enabled?: boolean;
 
   // Cyber session block
+  cyber_policy_user_allowlist?: string;
   cyber_session_block_enabled?: boolean;
   cyber_session_block_ttl_seconds?: number;
 
@@ -1022,6 +1002,9 @@ export interface UpdateSettingsRequest {
   payment_balance_recharge_multiplier?: number;
   payment_subscription_usd_to_cny_rate?: number;
   payment_recharge_fee_rate?: number;
+  payment_recharge_bonus_tiers?: RechargeBonusTier[];
+  payment_recharge_bonus_mode?: string;
+  payment_recharge_bonus_notice?: string;
   payment_load_balance_strategy?: string;
   payment_product_name_prefix?: string;
   payment_product_name_suffix?: string;
@@ -1694,59 +1677,7 @@ export async function updateStreamingACKSettings(
   return validateStreamingACKSettings(data);
 }
 
-export interface CodexTicketMonitorState {
-  mode: string;
-  account_id: number;
-  account_name: string;
-  model: string;
-  status: string;
-  phase: string;
-  proxy_id?: number;
-  proxy_name: string;
-  length: number;
-  expires_at?: string;
-  next_attempt_at?: string;
-  last_error: string;
-  updated_at: string;
-  uses: number;
-  last_used_at?: string;
-}
-
-export interface CodexTicketMonitorEvent {
-  id: number | string;
-  time: string;
-  mode: string;
-  account_id: number;
-  account_name: string;
-  model: string;
-  phase: string;
-  status: string;
-  proxy_id?: number;
-  proxy_name: string;
-  http_status: number;
-  length: number;
-  error_code: string;
-  next_attempt_at?: string;
-}
-
-export interface CodexTicketMonitorSnapshot {
-  updated_at: string;
-  states: CodexTicketMonitorState[];
-  events: CodexTicketMonitorEvent[];
-}
-
-export async function getCodexTicketMonitor(options?: { signal?: AbortSignal }): Promise<CodexTicketMonitorSnapshot> {
-  const { data } = await apiClient.get<CodexTicketMonitorSnapshot>("/admin/settings/codex-tickets/monitor", {
-    signal: options?.signal,
-  });
-  if (!data || !Array.isArray(data.states) || !Array.isArray(data.events) || typeof data.updated_at !== "string") {
-    throw new Error("Invalid Codex ticket monitor response");
-  }
-  return data;
-}
-
 export const settingsAPI = {
-  getCodexTicketMonitor,
   getBalancePrechargeSettings,
   updateBalancePrechargeSettings,
   getGroupBalancePrechargeSettings,

@@ -28,6 +28,12 @@ const (
 	FieldDescription = "description"
 	// FieldRateMultiplier holds the string denoting the rate_multiplier field in the database.
 	FieldRateMultiplier = "rate_multiplier"
+	// FieldBillingInputTokenMultiplier holds the string denoting the billing_input_token_multiplier field in the database.
+	FieldBillingInputTokenMultiplier = "billing_input_token_multiplier"
+	// FieldBillingOutputTokenMultiplier holds the string denoting the billing_output_token_multiplier field in the database.
+	FieldBillingOutputTokenMultiplier = "billing_output_token_multiplier"
+	// FieldBillingTokenAdjustmentMinInputTokens holds the string denoting the billing_token_adjustment_min_input_tokens field in the database.
+	FieldBillingTokenAdjustmentMinInputTokens = "billing_token_adjustment_min_input_tokens"
 	// FieldPeakRateEnabled holds the string denoting the peak_rate_enabled field in the database.
 	FieldPeakRateEnabled = "peak_rate_enabled"
 	// FieldPeakStart holds the string denoting the peak_start field in the database.
@@ -231,6 +237,9 @@ var Columns = []string{
 	FieldName,
 	FieldDescription,
 	FieldRateMultiplier,
+	FieldBillingInputTokenMultiplier,
+	FieldBillingOutputTokenMultiplier,
+	FieldBillingTokenAdjustmentMinInputTokens,
 	FieldPeakRateEnabled,
 	FieldPeakStart,
 	FieldPeakEnd,
@@ -331,6 +340,12 @@ var (
 	NameValidator func(string) error
 	// DefaultRateMultiplier holds the default value on creation for the "rate_multiplier" field.
 	DefaultRateMultiplier float64
+	// DefaultBillingInputTokenMultiplier holds the default value on creation for the "billing_input_token_multiplier" field.
+	DefaultBillingInputTokenMultiplier float64
+	// DefaultBillingOutputTokenMultiplier holds the default value on creation for the "billing_output_token_multiplier" field.
+	DefaultBillingOutputTokenMultiplier float64
+	// DefaultBillingTokenAdjustmentMinInputTokens holds the default value on creation for the "billing_token_adjustment_min_input_tokens" field.
+	DefaultBillingTokenAdjustmentMinInputTokens int
 	// DefaultPeakRateEnabled holds the default value on creation for the "peak_rate_enabled" field.
 	DefaultPeakRateEnabled bool
 	// DefaultPeakStart holds the default value on creation for the "peak_start" field.
@@ -475,6 +490,21 @@ func ByDescription(opts ...sql.OrderTermOption) OrderOption {
 // ByRateMultiplier orders the results by the rate_multiplier field.
 func ByRateMultiplier(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldRateMultiplier, opts...).ToFunc()
+}
+
+// ByBillingInputTokenMultiplier orders the results by the billing_input_token_multiplier field.
+func ByBillingInputTokenMultiplier(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBillingInputTokenMultiplier, opts...).ToFunc()
+}
+
+// ByBillingOutputTokenMultiplier orders the results by the billing_output_token_multiplier field.
+func ByBillingOutputTokenMultiplier(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBillingOutputTokenMultiplier, opts...).ToFunc()
+}
+
+// ByBillingTokenAdjustmentMinInputTokens orders the results by the billing_token_adjustment_min_input_tokens field.
+func ByBillingTokenAdjustmentMinInputTokens(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBillingTokenAdjustmentMinInputTokens, opts...).ToFunc()
 }
 
 // ByPeakRateEnabled orders the results by the peak_rate_enabled field.

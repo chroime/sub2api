@@ -80,3 +80,24 @@ describe('AppSidebar subscription feature flag', () => {
     expect(componentSource).toMatch(/path: '\/purchase'[^\n]*label: purchaseNavLabel\.value/)
   })
 })
+
+describe('Infinite Canvas navigation', () => {
+  it('shares the entry between regular and admin personal navigation without batch-image gating', () => {
+    expect(componentSource).toContain("path: '/infinite-canvas', label: t('nav.infiniteCanvas')")
+    expect(componentSource).toContain('icon: InfiniteCanvasIcon, hideInSimpleMode: true')
+    expect(componentSource).not.toMatch(/path: '\/infinite-canvas'[^\n]*featureFlag/)
+    expect(componentSource).toContain('const personalNavItems = computed((): NavItem[] => finalizeNav(buildSelfNavItems(false)))')
+    expect(componentSource).toContain('const userNavItems = computed((): NavItem[] => finalizeNav(buildSelfNavItems(true)))')
+  })
+})
+
+describe('Distinct navigation icons', () => {
+  it('uses dedicated icons for Smart Operations and token ranking', () => {
+    expect(componentSource).toContain("const SmartOperationsIcon = {")
+    expect(componentSource).toContain("render: () => h(Icon, { name: 'sparkles' })")
+    expect(componentSource).toContain("const TokenRankingIcon = {")
+    expect(componentSource).toContain("render: () => h(Icon, { name: 'trophy' })")
+    expect(componentSource).toMatch(/path: '\/token-ranking'[\s\S]*?icon: TokenRankingIcon/)
+    expect(componentSource).toMatch(/path: smartOperationsRootPath,[\s\S]*?icon: SmartOperationsIcon/)
+  })
+})

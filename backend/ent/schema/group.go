@@ -47,6 +47,17 @@ func (Group) Fields() []ent.Field {
 		field.Float("rate_multiplier").
 			SchemaType(map[string]string{dialect.Postgres: "decimal(10,4)"}).
 			Default(1.0),
+		field.Float("billing_input_token_multiplier").
+			SchemaType(map[string]string{dialect.Postgres: "decimal(10,4)"}).
+			Default(1.0).
+			Comment("下游计费输入 Token 修正倍率；1.0 表示沿用上游/网关计量"),
+		field.Float("billing_output_token_multiplier").
+			SchemaType(map[string]string{dialect.Postgres: "decimal(10,4)"}).
+			Default(1.0).
+			Comment("下游计费输出 Token 修正倍率；1.0 表示沿用上游计量"),
+		field.Int("billing_token_adjustment_min_input_tokens").
+			Default(100).
+			Comment("仅当原始输入 Token 达到此阈值时应用下游 Token 修正倍率；0 表示不设阈值"),
 		// 高峰时段倍率（added by migration 158）
 		field.Bool("peak_rate_enabled").
 			Default(false).

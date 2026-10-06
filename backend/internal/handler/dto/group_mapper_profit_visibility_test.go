@@ -73,3 +73,20 @@ func TestGroupFromServiceAdminIncludesProfitControl(t *testing.T) {
 		}
 	}
 }
+
+func TestGroupFromServiceIncludesModelAllowlist(t *testing.T) {
+	group := profitControlServiceGroup()
+	group.ModelAllowlist = service.GroupModelAllowlist{Enabled: true, Models: []string{"gpt-image-*", "imagen-3"}}
+	fields := marshalToMap(t, GroupFromService(group))
+	got, ok := fields["model_allowlist"].(map[string]any)
+	if !ok {
+		t.Fatalf("普通用户 DTO 应包含 model_allowlist: %#v", fields["model_allowlist"])
+	}
+	if got["enabled"] != true {
+		t.Fatalf("model_allowlist.enabled = %#v", got["enabled"])
+	}
+	models, ok := got["models"].([]any)
+	if !ok || len(models) != 2 || models[0] != "gpt-image-*" || models[1] != "imagen-3" {
+		t.Fatalf("model_allowlist.models = %#v", got["models"])
+	}
+}

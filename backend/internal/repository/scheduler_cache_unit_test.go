@@ -329,29 +329,6 @@ func TestBuildSchedulerMetadataAccount_KeepsOpenAIWSFlags(t *testing.T) {
 	require.Nil(t, got.Extra["unused_large_field"])
 }
 
-func TestBuildSchedulerMetadataAccount_KeepsCodexTicketModeWithoutTicketMaterial(t *testing.T) {
-	for _, mode := range []string{"292", "332", "off"} {
-		t.Run(mode, func(t *testing.T) {
-			account := service.Account{
-				ID: 42, Platform: service.PlatformOpenAI, Type: service.AccountTypeOAuth,
-				Extra: map[string]any{
-					"codex_ticket_mode":                 mode,
-					"codex_turn_ticket:292:gpt-6-astra": map[string]any{"state": "private-292"},
-					"codex_turn_ticket:332:gpt-6-astra": map[string]any{"state": "private-332"},
-					"codex_turn_ticket:gpt-6-astra":     map[string]any{"state": "private-legacy"},
-				},
-			}
-			projected := buildSchedulerMetadataAccount(account)
-			require.Equal(t, mode, projected.Extra["codex_ticket_mode"], "account mode must survive candidate projection")
-			require.Len(t, projected.Extra, 1, "full ticket material belongs only in the account payload")
-			full, metadata, err := marshalSchedulerCacheAccount(account)
-			require.NoError(t, err)
-			require.Contains(t, string(full), "private-332")
-			require.NotContains(t, string(metadata), "private-")
-		})
-	}
-}
-
 func TestBuildSchedulerMetadataAccount_KeepsGrokMediaEligibility(t *testing.T) {
 	t.Run("explicit override", func(t *testing.T) {
 		account := service.Account{
@@ -467,6 +444,47 @@ func TestBuildSchedulerMetadataAccount_KeepsQuotaAutoPauseFields(t *testing.T) {
 	require.Equal(t, 0.96, got.Extra["auto_pause_7d_threshold"])
 	require.Equal(t, true, got.Extra["auto_pause_5h_disabled"])
 	require.Equal(t, false, got.Extra["auto_pause_7d_disabled"])
+}
+
+// 候选过滤读的是 Redis 元数据投影；自动用卡的开关、阈值和卡状态缺失时，
+// 卡可用的 OpenAI 号会在暂停阈值处被一刀切停调，放行到用卡阈值的逻辑永远不生效。
+func TestSchedulerMetadataPayload_KeepsOpenAIAutoResetCreditFields(t *testing.T) {
+	checkedAt := time.Now().UTC().Format(time.RFC3339)
+	account := service.Account{
+		ID:          40,
+		Platform:    service.PlatformOpenAI,
+		Type:        service.AccountTypeOAuth,
+		Status:      service.StatusActive,
+		Schedulable: true,
+		Extra: map[string]any{
+			"codex_7d_used_percent":                          90.0,
+			service.OpenAIAutoResetCreditEnabledExtraKey:     true,
+			service.OpenAIAutoResetCredit5hThresholdExtraKey: 0.95,
+			service.OpenAIAutoResetCredit7dThresholdExtraKey: 0.98,
+			service.OpenAIAutoResetCreditStateExtraKey: map[string]any{
+				"status":          service.OpenAIAutoResetStatusAvailable,
+				"available_count": 3,
+				"checked_at":      checkedAt,
+				"trigger_window":  "7d",
+			},
+		},
+	}
+
+	_, metaPayload, err := marshalSchedulerCacheAccount(account)
+	require.NoError(t, err)
+	var cached service.Account
+	require.NoError(t, json.Unmarshal(metaPayload, &cached))
+
+	config := service.ResolveOpenAIAutoResetCreditConfig(&cached)
+	require.True(t, config.Enabled)
+	require.Equal(t, 0.95, config.Threshold5h)
+	require.Equal(t, 0.98, config.Threshold7d)
+
+	state, ok := cached.Extra[service.OpenAIAutoResetCreditStateExtraKey].(map[string]any)
+	require.True(t, ok, "卡状态必须进入调度投影")
+	require.Equal(t, service.OpenAIAutoResetStatusAvailable, state["status"])
+	require.EqualValues(t, 3, state["available_count"])
+	require.Equal(t, checkedAt, state["checked_at"])
 }
 
 func TestBuildSchedulerMetadataAccount_KeepsQuotaStateForCachedAccounts(t *testing.T) {

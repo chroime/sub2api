@@ -17,6 +17,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/typesafe"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
 )
 
@@ -296,6 +297,8 @@ func defaultModelsListCandidateIDs(platform string) []string {
 		return xai.DefaultModelIDs()
 	case PlatformOpenCodeGo:
 		return DefaultOpenCodeGoModelIDs()
+	case PlatformTypeSafe:
+		return []string{typesafe.JevLatestModel}
 	case PlatformComposite:
 		return compositeDefaultModelsListCandidateIDs()
 	default:
@@ -316,6 +319,9 @@ func defaultAllowImageGenerationForPlatform(platform string) bool {
 func compositeDefaultModelsListCandidateIDs() []string {
 	seen := make(map[string]struct{})
 	ids := make([]string, 0)
+	// TypeSafe stays out of the static composite candidates (jev-latest only works
+	// through /v1/systemone); groups with TypeSafe accounts still get it from the
+	// account model mappings collected by GetGroupModelsListCandidates.
 	for _, platform := range []string{PlatformAnthropic, PlatformGemini, PlatformOpenAI, PlatformAntigravity, PlatformGrok, PlatformKimi, PlatformZhipu, PlatformDeepseek, PlatformMiniMax, PlatformOpenCodeGo} {
 		for _, id := range defaultModelsListCandidateIDs(platform) {
 			if _, ok := seen[id]; ok {
@@ -384,6 +390,21 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 	}
 	if input.RateMultiplier <= 0 {
 		return nil, errors.New("rate_multiplier must be > 0")
+	}
+	billingInputMultiplier, err := normalizeBillingTokenMultiplier(input.BillingInputTokenMultiplier)
+	if err != nil {
+		return nil, err
+	}
+	billingOutputMultiplier, err := normalizeBillingTokenMultiplier(input.BillingOutputTokenMultiplier)
+	if err != nil {
+		return nil, err
+	}
+	billingMinInputTokens := 100
+	if input.BillingTokenAdjustmentMinInputTokens != nil {
+		billingMinInputTokens, err = normalizeBillingTokenAdjustmentMinInputTokens(*input.BillingTokenAdjustmentMinInputTokens)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	platform := NormalizeGroupPlatform(input.Platform)
@@ -560,6 +581,9 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 		Description:                     input.Description,
 		Platform:                        platform,
 		RateMultiplier:                  input.RateMultiplier,
+		BillingInputTokenMultiplier:     billingInputMultiplier,
+		BillingOutputTokenMultiplier:    billingOutputMultiplier,
+		BillingTokenAdjustmentMinInputTokens: billingMinInputTokens,
 		IsExclusive:                     input.IsExclusive,
 		Status:                          StatusActive,
 		SubscriptionType:                subscriptionType,
@@ -658,6 +682,23 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 	}
 
 	return group, nil
+}
+
+func normalizeBillingTokenMultiplier(value float64) (float64, error) {
+	if value == 0 {
+		return 1, nil
+	}
+	if value < 0.1 || value > 10 {
+		return 0, fmt.Errorf("billing token multiplier must be between 0.1 and 10")
+	}
+	return value, nil
+}
+
+func normalizeBillingTokenAdjustmentMinInputTokens(value int) (int, error) {
+	if value < 0 || value > 1_000_000 {
+		return 0, fmt.Errorf("billing token adjustment minimum input tokens must be between 0 and 1000000")
+	}
+	return value, nil
 }
 
 // normalizeLimit 将负数转换为 nil（表示无限制），0 保留（表示限额为零）
@@ -780,6 +821,27 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 			return nil, errors.New("rate_multiplier must be > 0")
 		}
 		group.RateMultiplier = *input.RateMultiplier
+	}
+	if input.BillingInputTokenMultiplier != nil {
+		value, normalizeErr := normalizeBillingTokenMultiplier(*input.BillingInputTokenMultiplier)
+		if normalizeErr != nil {
+			return nil, normalizeErr
+		}
+		group.BillingInputTokenMultiplier = value
+	}
+	if input.BillingOutputTokenMultiplier != nil {
+		value, normalizeErr := normalizeBillingTokenMultiplier(*input.BillingOutputTokenMultiplier)
+		if normalizeErr != nil {
+			return nil, normalizeErr
+		}
+		group.BillingOutputTokenMultiplier = value
+	}
+	if input.BillingTokenAdjustmentMinInputTokens != nil {
+		value, normalizeErr := normalizeBillingTokenAdjustmentMinInputTokens(*input.BillingTokenAdjustmentMinInputTokens)
+		if normalizeErr != nil {
+			return nil, normalizeErr
+		}
+		group.BillingTokenAdjustmentMinInputTokens = value
 	}
 	if input.IsExclusive != nil {
 		group.IsExclusive = *input.IsExclusive

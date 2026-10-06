@@ -541,7 +541,7 @@ export interface PaginationConfig {
 
 // ==================== API Key & Group Types ====================
 
-export type GroupPlatform = 'anthropic' | 'openai' | 'gemini' | 'antigravity' | 'grok' | 'kimi' | 'zhipu' | 'deepseek' | 'minimax' | 'opencode_go' | 'composite'
+export type GroupPlatform = 'anthropic' | 'openai' | 'gemini' | 'antigravity' | 'grok' | 'kimi' | 'zhipu' | 'deepseek' | 'minimax' | 'opencode_go' | 'typesafe' | 'composite'
 
 export type VideoModelPrices = Record<string, Record<string, number>>
 
@@ -582,6 +582,7 @@ export interface Group {
   long_context_pricing_enabled: boolean
   // 图片生成计费配置
   allow_image_generation: boolean
+  model_allowlist?: ModelAllowlist
   allow_batch_image_generation: boolean
   image_rate_independent: boolean
   image_rate_multiplier: number
@@ -626,6 +627,10 @@ export interface Group {
 }
 
 export interface AdminGroup extends Group {
+	// 仅管理员可见：下游计费 Token 修正倍率。
+	billing_input_token_multiplier: number
+	billing_output_token_multiplier: number
+	billing_token_adjustment_min_input_tokens: number
   // Missing/null retains the pre-migration account preference.
   streaming_ack_enabled?: boolean | null
   force_openai_fast: boolean
@@ -797,6 +802,9 @@ export interface CreateGroupRequest {
   description?: string | null
   platform?: GroupPlatform
   rate_multiplier?: number
+  billing_input_token_multiplier?: number
+  billing_output_token_multiplier?: number
+  billing_token_adjustment_min_input_tokens?: number
   is_exclusive?: boolean
   subscription_type?: SubscriptionType
   daily_limit_usd?: number | null
@@ -863,6 +871,9 @@ export interface UpdateGroupRequest {
   description?: string | null
   platform?: GroupPlatform
   rate_multiplier?: number
+  billing_input_token_multiplier?: number
+  billing_output_token_multiplier?: number
+  billing_token_adjustment_min_input_tokens?: number
   is_exclusive?: boolean
   status?: 'active' | 'inactive'
   subscription_type?: SubscriptionType
@@ -925,7 +936,7 @@ export interface UpdateGroupRequest {
 
 // ==================== Account & Proxy Types ====================
 
-export type AccountPlatform = 'anthropic' | 'openai' | 'gemini' | 'antigravity' | 'grok' | 'kimi' | 'zhipu' | 'deepseek' | 'minimax' | 'opencode_go'
+export type AccountPlatform = 'anthropic' | 'openai' | 'gemini' | 'antigravity' | 'grok' | 'kimi' | 'zhipu' | 'deepseek' | 'minimax' | 'opencode_go' | 'typesafe'
 export type AccountType = 'oauth' | 'setup-token' | 'apikey' | 'upstream' | 'bedrock' | 'service_account'
 export type OAuthAddMethod = 'oauth' | 'setup-token'
 export type ProxyProtocol = 'http' | 'https' | 'socks5' | 'socks5h'
@@ -1162,18 +1173,6 @@ export interface OllamaCloudUsageSettings {
   debounce_minutes: number
 }
 
-export type CodexTicketMode = '292' | '332' | 'off'
-
-export interface CodexTurnTicketStatus {
-  mode: string
-  model: string
-  length?: number
-  ready: boolean
-  remaining_seconds: number
-  blocked: boolean
-  expires_at?: string
-}
-
 export type OpenCodeGoUsageStatus = 'ok' | 'unauthorized' | 'failed'
 
 export interface OpenCodeGoUsageWindow {
@@ -1227,7 +1226,6 @@ export interface Account {
   credentials?: Record<string, unknown>
   credentials_status?: Record<string, boolean>
   ollama_cloud_usage?: OllamaCloudUsageState
-  codex_turn_tickets?: CodexTurnTicketStatus[]
   opencode_go_usage?: OpenCodeGoUsageState
   // Extra fields including Codex usage, OpenAI compact capability, and model-level rate limits.
   extra?: (CodexUsageSnapshot & OpenAICompactState & {
@@ -1236,7 +1234,6 @@ export interface Account {
     upstream_billing_probe_enabled?: boolean
     upstream_billing_rate_sync_enabled?: boolean
     openai_synthetic_first_response_enabled?: boolean
-    codex_ticket_mode?: string
     upstream_billing_probe?: UpstreamBillingProbeSnapshot
     codex_reset_credit_snapshot?: {
       available_count?: number

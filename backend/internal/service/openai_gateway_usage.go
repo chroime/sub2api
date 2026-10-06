@@ -207,6 +207,15 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	if actualInputTokens < 0 {
 		actualInputTokens = 0
 	}
+	if apiKey != nil {
+		adjusted := tokenUsageAdjustmentForGroup(apiKey.Group).ApplyForRequest(actualInputTokens, result.Usage.OutputTokens)
+		actualInputTokens = adjusted.InputTokens
+		result.Usage.OutputTokens = adjusted.OutputTokens
+		// Keep the OpenAI aggregate input field internally consistent with the
+		// separately retained cache buckets after applying the customer billing
+		// adjustment.
+		result.Usage.InputTokens = actualInputTokens + result.Usage.CacheReadInputTokens + result.Usage.CacheCreationInputTokens
+	}
 
 	// Calculate cost
 	tokens := UsageTokens{
@@ -339,10 +348,12 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 			longContextBillingGate,
 			pricingAt,
 		)
-		if standardErr != nil {
+		if standardErr != nil && !isUsagePricingUnavailableError(standardErr) {
 			return standardErr
 		}
-		if cost != nil && standardCost != nil {
+		// Missing pricing already fell back to a zero-cost log above; keep that
+		// usage row instead of dropping it on the Standard re-evaluation.
+		if standardErr == nil && cost != nil && standardCost != nil {
 			cost.ActualCost = standardCost.ActualCost
 		}
 	}
@@ -508,6 +519,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		applyAccountStatsCost(ctx, usageLog, s.channelService, s.billingService,
 			account.ID, *apiKey.GroupID, result.UpstreamModel, result.Model,
 			tokens, cost.TotalCost, pricingAt,
+			accountStatsLongContextPricingEnabled(longContextBillingGate),
 		)
 	}
 	if isZeroTokenZeroCostOpenAIUsage(usageLog) {
