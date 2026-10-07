@@ -54,6 +54,23 @@ func (h *UpstreamGovernanceHandler) ModelPolicies(c *gin.Context) {
 	}
 }
 
+// LocalModelTargets returns only the current administrator's usable local
+// gateway keys and group metadata. Credential material is never serialized.
+func (h *UpstreamGovernanceHandler) LocalModelTargets(c *gin.Context) {
+	subject, ok := middleware.GetAuthSubjectFromContext(c)
+	if !ok || subject.UserID <= 0 {
+		response.Unauthorized(c, "Administrator identity is required")
+		return
+	}
+	value, err := h.svc.ListLocalModelTargets(c.Request.Context(), subject.UserID)
+	if !governanceError(c, err) {
+		if value == nil {
+			value = []gov.LocalModelTarget{}
+		}
+		response.Success(c, value)
+	}
+}
+
 func (h *UpstreamGovernanceHandler) SaveModelPolicy(c *gin.Context) {
 	id, ok := governanceID(c, "id")
 	if !ok {
@@ -79,12 +96,17 @@ func (h *UpstreamGovernanceHandler) SaveModelPolicy(c *gin.Context) {
 		governanceError(c, gov.ErrInvalid)
 		return
 	}
+	subject, ok := middleware.GetAuthSubjectFromContext(c)
+	if !ok || subject.UserID <= 0 {
+		response.Unauthorized(c, "Administrator identity is required")
+		return
+	}
 	value, err := h.svc.SaveModelPolicy(c.Request.Context(), id, gov.ModelPolicy{
 		ID: input.ID, Name: input.Name, Config: input.Config, Enabled: input.Enabled,
 		IntervalMinutes: input.IntervalMinutes, DailyRequestLimit: input.DailyRequestLimit,
 		NotifyEnabled: input.NotifyEnabled, Recipients: input.Recipients,
 		FailureThreshold: input.FailureThreshold, TakeOverLegacy: input.TakeOverLegacy, Version: input.Version,
-	})
+	}, subject.UserID)
 	if !governanceError(c, err) {
 		response.Success(c, value)
 	}
@@ -126,7 +148,12 @@ func (h *UpstreamGovernanceHandler) StartModelBatch(c *gin.Context) {
 		governanceError(c, gov.ErrInvalid)
 		return
 	}
-	value, err := h.svc.StartModelBatch(c.Request.Context(), id, input)
+	subject, ok := middleware.GetAuthSubjectFromContext(c)
+	if !ok || subject.UserID <= 0 {
+		response.Unauthorized(c, "Administrator identity is required")
+		return
+	}
+	value, err := h.svc.StartModelBatch(c.Request.Context(), id, input, subject.UserID)
 	if !governanceError(c, err) {
 		response.Success(c, value)
 	}
@@ -183,6 +210,22 @@ func (h *UpstreamGovernanceHandler) ModelRun(c *gin.Context) {
 	value, err := h.svc.GetModelRun(c.Request.Context(), id, run)
 	if !governanceError(c, err) {
 		response.Success(c, value)
+	}
+}
+
+// DeleteModelRun hides one model-monitoring result from the user-facing IQ
+// projection while retaining the run in the administrator workbench.
+func (h *UpstreamGovernanceHandler) DeleteModelRun(c *gin.Context) {
+	id, ok := governanceID(c, "id")
+	if !ok {
+		return
+	}
+	run, ok := governanceModelUUID(c, c.Param("run_id"))
+	if !ok {
+		return
+	}
+	if !governanceError(c, h.svc.HideModelRun(c.Request.Context(), id, run)) {
+		response.Success(c, gin.H{"deleted": true})
 	}
 }
 

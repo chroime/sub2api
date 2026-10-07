@@ -20,6 +20,18 @@ const messages = {
   } } },
 }
 
+// The Vitest environment uses vue-i18n's runtime-only build. Convert test
+// strings into message functions instead of relying on the unavailable
+// message compiler.
+function toRuntimeMessages(value: unknown): unknown {
+  if (typeof value === 'string') return () => value
+  if (Array.isArray(value)) return value.map(toRuntimeMessages)
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, toRuntimeMessages(child)]))
+  }
+  return value
+}
+
 const wrappers: ReturnType<typeof mount>[] = []
 let resize: () => void
 
@@ -27,7 +39,9 @@ function mountIntegration(props: Partial<{ baseUrl: string; model: string; docsH
   const wrapper = mount(PublicHomeB2Integration, {
     attachTo: document.body,
     props: { baseUrl: 'https://api.example.test/v1', model: 'gpt-4o-mini', docsHref: '/docs', ...props },
-    global: { plugins: [createI18n({ legacy: false, locale: 'en', messages: { en: messages } })] },
+    global: {
+      plugins: [createI18n({ legacy: false, locale: 'en', messages: { en: toRuntimeMessages(messages) } })],
+    },
   })
   wrappers.push(wrapper)
   return wrapper

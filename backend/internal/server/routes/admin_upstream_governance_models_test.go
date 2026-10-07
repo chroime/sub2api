@@ -59,5 +59,5 @@ func TestGovernanceModelRoutesDenyPublicAndNonAdminUsers(t *testing.T) {
 			require.Equal(t, want, w.Code, route.Method+" "+path)
 		}
 	}
-	require.Equal(t, 9, count)
+	require.Equal(t, 10, count)
 }

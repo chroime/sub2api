@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"strconv"
 	"strings"
 	"unicode"
 )
@@ -27,7 +28,24 @@ func modelConfigHash(value any) string {
 }
 
 func validateModelConfig(c *ModelTestConfig) error {
-	if c.ManagedKeyID <= 0 || !validProbeModel(c.Model) || c.Samples < 1 || c.Samples > 100 || c.Concurrency < 1 || c.Concurrency > 32 || c.MaxOutputTokens < 1 || c.MaxOutputTokens > 65536 || c.TimeoutSeconds < 1 || c.TimeoutSeconds > 1800 || c.InputTokens < 0 || c.InputTokens > 500000 {
+	if c == nil {
+		return ErrInvalid
+	}
+	targetType := c.TargetType
+	if targetType == "" {
+		targetType = "upstream"
+		c.TargetType = targetType
+	}
+	if targetType != "upstream" && targetType != "local_group" {
+		return ErrInvalid
+	}
+	if targetType == "upstream" && c.ManagedKeyID <= 0 {
+		return ErrInvalid
+	}
+	if targetType == "local_group" && (c.LocalGroupID <= 0 || c.LocalAPIKeyID <= 0 || c.TargetOwnerUserID <= 0) {
+		return ErrInvalid
+	}
+	if !validProbeModel(c.Model) || c.Samples < 1 || c.Samples > 100 || c.Concurrency < 1 || c.Concurrency > 32 || c.MaxOutputTokens < 1 || c.MaxOutputTokens > 65536 || c.TimeoutSeconds < 1 || c.TimeoutSeconds > 1800 || c.InputTokens < 0 || c.InputTokens > 500000 {
 		return ErrInvalid
 	}
 	if c.FirstContentTimeoutSeconds < 0 || c.FirstContentTimeoutSeconds > c.TimeoutSeconds || c.IdleTimeoutSeconds < 0 || c.IdleTimeoutSeconds > c.TimeoutSeconds {
@@ -77,14 +95,20 @@ func validateModelConfig(c *ModelTestConfig) error {
 
 func (s *Service) modelTarget(ctx context.Context, siteID int64, c *ModelTestConfig) (*Site, *ManagedKey, modelIdentity, error) {
 	var empty modelIdentity
+	if err := validateModelConfig(c); err != nil {
+		return nil, nil, empty, err
+	}
+	if c.TargetType == "local_group" {
+		if s.localModelRunner == nil {
+			return nil, nil, empty, ErrUnsupported
+		}
+		return s.localModelTarget(ctx, siteID, c)
+	}
 	if !s.durableKey || s.cipher == nil {
 		return nil, nil, empty, ErrEncryption
 	}
 	if _, ok := s.connector.(ModelRunner); !ok {
 		return nil, nil, empty, ErrUnsupported
-	}
-	if err := validateModelConfig(c); err != nil {
-		return nil, nil, empty, err
 	}
 	site, err := s.store.GetSite(ctx, siteID)
 	if err != nil {
@@ -141,6 +165,66 @@ func (s *Service) modelTarget(ctx context.Context, siteID int64, c *ModelTestCon
 	return site, k, identity, nil
 }
 
+func (s *Service) localModelTarget(ctx context.Context, siteID int64, c *ModelTestConfig) (*Site, *ManagedKey, modelIdentity, error) {
+	var empty modelIdentity
+	reader, ok := s.local.(LocalModelTargetReader)
+	if !ok {
+		return nil, nil, empty, ErrUnsupported
+	}
+	site, err := s.store.GetSite(ctx, siteID)
+	if err != nil {
+		return nil, nil, empty, err
+	}
+	if site == nil {
+		return nil, nil, empty, ErrConflict
+	}
+	target, err := reader.ResolveLocalModelTarget(ctx, c.TargetOwnerUserID, c.LocalGroupID, c.LocalAPIKeyID)
+	if err != nil {
+		return nil, nil, empty, err
+	}
+	if target.OwnerUserID != c.TargetOwnerUserID || target.GroupID != c.LocalGroupID || target.APIKeyID != c.LocalAPIKeyID || target.Key == "" || target.GroupFingerprint == "" || target.KeyFingerprint == "" {
+		return nil, nil, empty, ErrConflict
+	}
+	if c.Platform != "" && c.Platform != target.Platform {
+		return nil, nil, empty, ErrInvalid
+	}
+	c.Platform = target.Platform
+	if !validLocalModelProtocol(c.APIMode, target.Platform) {
+		return nil, nil, empty, ErrInvalid
+	}
+	identity := modelIdentity{TargetType: "local_group", BaseURL: site.BaseURL, SitePlatform: site.Platform, ManagedKeyID: 0, GroupID: strconv.FormatInt(target.GroupID, 10), LocalGroupID: target.GroupID, LocalAPIKeyID: target.APIKeyID, Platform: target.Platform, KeyHash: target.KeyFingerprint, OwnerUserID: target.OwnerUserID, GroupHash: target.GroupFingerprint}
+	return site, nil, identity, nil
+}
+
+func validLocalModelProtocol(mode, platform string) bool {
+	if !validTransport(platform) {
+		return false
+	}
+	switch mode {
+	case "chat_completions", "responses":
+		return platform != "anthropic" && platform != "gemini"
+	case "anthropic":
+		return platform == "anthropic" || platform == "antigravity"
+	case "gemini":
+		return platform == "gemini" || platform == "antigravity"
+	default:
+		return false
+	}
+}
+
+// ListLocalModelTargets returns metadata for the current administrator's own
+// keys. It deliberately exposes no credential material.
+func (s *Service) ListLocalModelTargets(ctx context.Context, ownerID int64) ([]LocalModelTarget, error) {
+	if ownerID <= 0 {
+		return nil, ErrInvalid
+	}
+	reader, ok := s.local.(LocalModelTargetReader)
+	if !ok {
+		return nil, ErrUnsupported
+	}
+	return reader.ListLocalModelTargets(ctx, ownerID)
+}
+
 func (s *Service) ListModelPolicies(ctx context.Context, siteID int64) ([]ModelPolicy, error) {
 	if _, err := s.store.GetSite(ctx, siteID); err != nil {
 		return nil, err
@@ -151,7 +235,7 @@ func (s *Service) ListModelPolicies(ctx context.Context, siteID int64) ([]ModelP
 	}
 	return m.policies(ctx, siteID)
 }
-func (s *Service) SaveModelPolicy(ctx context.Context, siteID int64, p ModelPolicy) (*ModelPolicy, error) {
+func (s *Service) SaveModelPolicy(ctx context.Context, siteID int64, p ModelPolicy, actorIDs ...int64) (*ModelPolicy, error) {
 	m, err := s.models()
 	if err != nil {
 		return nil, err
@@ -159,6 +243,31 @@ func (s *Service) SaveModelPolicy(ctx context.Context, siteID int64, p ModelPoli
 	p.Name = strings.TrimSpace(p.Name)
 	if p.ID < 0 || p.Name == "" || len(p.Name) > 150 || strings.IndexFunc(p.Name, unicode.IsControl) >= 0 || !validIntervalMinutes(p.IntervalMinutes) || p.DailyRequestLimit < 1 || p.DailyRequestLimit > 1000000 || p.FailureThreshold < 1 || p.FailureThreshold > 100 {
 		return nil, ErrInvalid
+	}
+	var actorID int64
+	if len(actorIDs) > 0 {
+		actorID = actorIDs[0]
+	}
+	if p.Config.TargetType == "local_group" {
+		if actorID <= 0 {
+			return nil, ErrConflict
+		}
+		if p.ID > 0 {
+			existing, loadErr := m.policy(ctx, siteID, p.ID)
+			if loadErr != nil {
+				return nil, loadErr
+			}
+			if existing.Config.TargetType == "local_group" && (existing.Config.TargetOwnerUserID != actorID || p.Config.TargetOwnerUserID != existing.Config.TargetOwnerUserID) {
+				return nil, ErrConflict
+			}
+		}
+		if p.Config.TargetOwnerUserID > 0 && p.Config.TargetOwnerUserID != actorID {
+			return nil, ErrConflict
+		}
+		p.Config.TargetOwnerUserID = actorID
+	} else {
+		// Never persist a caller-supplied local owner on an upstream policy.
+		p.Config.TargetOwnerUserID = 0
 	}
 	if err = validateModelConfig(&p.Config); err != nil {
 		return nil, err
@@ -314,16 +423,16 @@ func (s *Service) modelEnqueueInput(ctx context.Context, siteID int64, in ModelB
 		}
 	}
 	e.TargetHash = modelConfigHash(struct {
-		SiteID                       int64
-		Group, Platform, Mode, Model string
-	}{siteID, identity.GroupID, identity.Platform, e.Config.APIMode, e.Config.Model})
+		SiteID                                   int64
+		TargetType, Group, Platform, Mode, Model string
+	}{siteID, identity.TargetType, identity.GroupID, identity.Platform, e.Config.APIMode, e.Config.Model})
 	e.RequestHash = modelConfigHash(struct {
 		PolicyID int64
 		Config   ModelTestConfig
 	}{e.PolicyID, e.Config})
 	return e, nil
 }
-func (s *Service) StartModelBatch(ctx context.Context, siteID int64, in ModelBatchInput) (*ModelBatch, error) {
+func (s *Service) StartModelBatch(ctx context.Context, siteID int64, in ModelBatchInput, actorIDs ...int64) (*ModelBatch, error) {
 	m, err := s.models()
 	if err != nil {
 		return nil, err
@@ -333,6 +442,24 @@ func (s *Service) StartModelBatch(ctx context.Context, siteID int64, in ModelBat
 		return nil, err
 	}
 	defer release()
+	if in.PolicyID > 0 && len(actorIDs) > 0 {
+		policy, policyErr := m.policy(ctx, siteID, in.PolicyID)
+		if policyErr != nil {
+			return nil, policyErr
+		}
+		if policy.Config.TargetType == "local_group" && policy.Config.TargetOwnerUserID != actorIDs[0] {
+			return nil, ErrConflict
+		}
+	}
+	if in.PolicyID == 0 && in.Config.TargetType == "local_group" {
+		if len(actorIDs) == 0 || actorIDs[0] <= 0 {
+			return nil, ErrConflict
+		}
+		if in.Config.TargetOwnerUserID > 0 && in.Config.TargetOwnerUserID != actorIDs[0] {
+			return nil, ErrConflict
+		}
+		in.Config.TargetOwnerUserID = actorIDs[0]
+	}
 	e, err := s.modelEnqueueInput(ctx, siteID, in, false)
 	if err != nil {
 		return nil, err
@@ -362,6 +489,20 @@ func (s *Service) GetModelRun(ctx context.Context, siteID int64, id string) (*Mo
 		return nil, err
 	}
 	return m.getRun(ctx, siteID, id)
+}
+
+// HideModelRun removes a selected model-monitoring result from the public IQ
+// page while retaining the full result for administrators. It is intentionally
+// idempotent so a repeated click cannot fail after the first successful hide.
+func (s *Service) HideModelRun(ctx context.Context, siteID int64, id string) error {
+	if siteID <= 0 || strings.TrimSpace(id) == "" {
+		return ErrInvalid
+	}
+	m, err := s.models()
+	if err != nil {
+		return err
+	}
+	return m.hideRunFromPublic(ctx, siteID, id)
 }
 func (s *Service) CancelModelBatch(ctx context.Context, siteID int64, id string) error {
 	m, err := s.models()
@@ -432,20 +573,57 @@ func (s *Service) ReviewModelRun(ctx context.Context, siteID int64, id, review, 
 	return m.getRun(ctx, siteID, id)
 }
 
-func (s *Service) verifyModelIdentity(ctx context.Context, c modelClaim) (Site, RemoteKey, error) {
+type modelExecutionTarget struct {
+	site  Site
+	key   RemoteKey
+	local *LocalModelTarget
+}
+
+func (s *Service) verifyModelExecution(ctx context.Context, c modelClaim) (modelExecutionTarget, error) {
 	config := c.Run.Request.Config
+	if config.TargetType == "local_group" {
+		site, _, identity, err := s.modelTarget(ctx, c.Run.SiteID, &config)
+		if err != nil {
+			return modelExecutionTarget{}, err
+		}
+		if !reflect.DeepEqual(identity, c.Identity) {
+			return modelExecutionTarget{}, errModelIdentityChanged
+		}
+		reader, ok := s.local.(LocalModelTargetReader)
+		if !ok {
+			return modelExecutionTarget{}, ErrUnsupported
+		}
+		target, err := reader.ResolveLocalModelTarget(ctx, config.TargetOwnerUserID, config.LocalGroupID, config.LocalAPIKeyID)
+		if err != nil {
+			return modelExecutionTarget{}, err
+		}
+		return modelExecutionTarget{site: *site, local: &target}, nil
+	}
 	site, k, identity, err := s.modelTarget(ctx, c.Run.SiteID, &config)
 	if err != nil {
-		return Site{}, RemoteKey{}, err
+		return modelExecutionTarget{}, err
 	}
 	if !reflect.DeepEqual(identity, c.Identity) {
-		return Site{}, RemoteKey{}, errModelIdentityChanged
+		return modelExecutionTarget{}, errModelIdentityChanged
 	}
 	key, err := s.decryptManagedKey(k.KeyCipher)
 	if err != nil {
+		return modelExecutionTarget{}, err
+	}
+	return modelExecutionTarget{site: *site, key: key}, nil
+}
+
+// verifyModelIdentity is retained for callers that only support an upstream
+// managed key. Local-group workers use verifyModelExecution instead.
+func (s *Service) verifyModelIdentity(ctx context.Context, c modelClaim) (Site, RemoteKey, error) {
+	target, err := s.verifyModelExecution(ctx, c)
+	if err != nil {
 		return Site{}, RemoteKey{}, err
 	}
-	return *site, key, nil
+	if target.local != nil {
+		return Site{}, RemoteKey{}, ErrUnsupported
+	}
+	return target.site, target.key, nil
 }
 
 func (s *Service) modelLegacyConflict(ctx context.Context, siteID int64, b *Binding, model string) (bool, error) {

@@ -93,6 +93,14 @@ func scanModelRun(row rowScanner) (*ModelRun, error) {
 func (m *modelStore) getRun(ctx context.Context, siteID int64, id string) (*ModelRun, error) {
 	return scanModelRun(m.db.QueryRowContext(ctx, `SELECT `+modelRunColumns+` FROM upstream_governance_model_runs WHERE site_id=$1 AND id=$2`, siteID, id))
 }
+
+// hideRunFromPublic marks a completed or in-flight model run as unavailable to
+// the user-facing IQ projection. The run and its diagnostic evidence stay in
+// the administrator workbench so deletion cannot destroy an audit trail.
+func (m *modelStore) hideRunFromPublic(ctx context.Context, siteID int64, id string) error {
+	result, err := m.db.ExecContext(ctx, `UPDATE upstream_governance_model_runs SET public_visible=FALSE WHERE site_id=$1 AND id=$2`, siteID, id)
+	return affected(result, err, ErrNotFound)
+}
 func (m *modelStore) listRuns(ctx context.Context, siteID int64, page, size int, batchID string) (*ModelRunPage, error) {
 	p := &ModelRunPage{Items: []ModelRun{}, Page: page, PageSize: size, Counts: map[string]int64{}}
 	if err := m.db.QueryRowContext(ctx, `SELECT count(*) FROM upstream_governance_model_runs WHERE site_id=$1 AND ($2='' OR batch_id=$2)`, siteID, batchID).Scan(&p.Total); err != nil {
@@ -132,14 +140,18 @@ func (m *modelStore) listRuns(ctx context.Context, siteID int64, page, size int,
 }
 
 type modelIdentity struct {
-	BaseURL      string `json:"base_url"`
-	SitePlatform string `json:"site_platform"`
-	ProxyID      *int64 `json:"proxy_id"`
-	ManagedKeyID int64  `json:"managed_key_id"`
-	GroupID      string `json:"group_id"`
-	Platform     string `json:"platform"`
-	KeyHash      string `json:"key_hash"`
-	OwnerUserID  int64  `json:"owner_user_id"`
+	TargetType    string `json:"target_type,omitempty"`
+	BaseURL       string `json:"base_url"`
+	SitePlatform  string `json:"site_platform"`
+	ProxyID       *int64 `json:"proxy_id"`
+	ManagedKeyID  int64  `json:"managed_key_id"`
+	GroupID       string `json:"group_id"`
+	LocalGroupID  int64  `json:"local_group_id,omitempty"`
+	LocalAPIKeyID int64  `json:"local_api_key_id,omitempty"`
+	Platform      string `json:"platform"`
+	KeyHash       string `json:"key_hash"`
+	OwnerUserID   int64  `json:"owner_user_id"`
+	GroupHash     string `json:"group_hash,omitempty"`
 }
 type modelEnqueue struct {
 	SiteID                             int64

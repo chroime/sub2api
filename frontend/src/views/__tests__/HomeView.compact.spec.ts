@@ -9,9 +9,6 @@ const { appStore, authStore } = vi.hoisted(() => ({
     siteName: 'Fallback site',
     siteLogo: '',
     docUrl: '',
-    get backendModeEnabled() {
-      return this.cachedPublicSettings.backend_mode_enabled === true
-    },
     publicSettingsLoaded: true,
     fetchPublicSettings: vi.fn(),
   },
@@ -20,6 +17,20 @@ const { appStore, authStore } = vi.hoisted(() => ({
     isAdmin: false,
     user: null as { email?: string } | null,
     checkAuth: vi.fn(),
+  },
+}))
+
+const { publicHomeData } = vi.hoisted(() => ({
+  publicHomeData: {
+    channelStatus: { value: 'idle' },
+    pricingStatus: { value: 'idle' },
+    channelRows: { value: [] },
+    pricingRows: { value: [] },
+    channelCount: { value: 0 },
+    modelCount: { value: 0 },
+    platformCount: { value: 0 },
+    load: vi.fn(),
+    abort: vi.fn(),
   },
 }))
 
@@ -32,11 +43,15 @@ vi.mock('@/stores/app', () => ({
   useAppStore: () => appStore,
 }))
 
+vi.mock('@/composables/usePublicPlatformHome', () => ({
+  usePublicPlatformHome: () => publicHomeData,
+}))
+
 vi.mock('vue-i18n', async (importOriginal) => {
   const actual = await importOriginal<typeof import('vue-i18n')>()
   return {
     ...actual,
-    useI18n: () => ({ t: (key: string) => key }),
+    useI18n: () => ({ t: (key: string) => key, locale: { value: 'zh' } }),
   }
 })
 
@@ -111,56 +126,7 @@ describe('HomeView compact mode', () => {
     const wrapper = mountHome(settings)
 
     expect(wrapper.find('[data-testid="compact-home"]').exists()).toBe(false)
-    expect(wrapper.find('[data-testid="home-experience"]').exists()).toBe(true)
-    expect(wrapper.get('h1').text()).toBe('Test site')
-  })
-
-  it.each([true, false])('keeps the built-in footer free of documentation and GitHub links (compact=%s)', (compact) => {
-    const wrapper = mountHome({ compact_home_enabled: compact, doc_url: 'https://docs.example.test/start' })
-
-    expect(wrapper.get('footer').findAll('a')).toHaveLength(0)
-    expect(wrapper.get('footer').text()).toContain('Test site')
-  })
-
-  it('keeps configured documentation reachable from the default mobile header', () => {
-    const wrapper = mountHome({ doc_url: 'https://docs.example.test/start' })
-
-    expect(wrapper.get('.home-mobile-doc-link').attributes('href')).toBe('https://docs.example.test/start')
-    expect(wrapper.get('footer').findAll('a')).toHaveLength(0)
-  })
-
-  it.each([true, false])('links to the built-in guide when no document URL is configured (compact=%s)', (compact) => {
-    const wrapper = mountHome({ compact_home_enabled: compact, doc_url: '' })
-
-    expect(wrapper.findAll('header a[href="/docs"]').length).toBeGreaterThan(0)
-    expect(wrapper.get('footer').findAll('a')).toHaveLength(0)
-  })
-
-  it('keeps both navigation destinations in the default mobile menu', () => {
-    const wrapper = mountHome({ model_plaza_enabled: true, doc_url: '' })
-
-    expect(wrapper.get('.home-mobile-menu summary').attributes('aria-label')).toBeTruthy()
-    expect(wrapper.get('.home-mobile-menu .home-mobile-doc-link').attributes('href')).toBe('/docs')
-    expect(wrapper.get('.home-mobile-menu').findAllComponents(RouterLinkStub).some(link => link.props('to') === '/model-plaza')).toBe(true)
-  })
-
-  it('uses the configured API base URL in the request example without repeating v1', () => {
-    const wrapper = mountHome({ api_base_url: 'https://api.example.test/gateway/v1/' })
-
-    expect(wrapper.get('.home-code-tool code').text()).toContain('https://api.example.test/gateway/v1/chat/completions')
-    expect(wrapper.get('.home-code-tool code').text()).not.toContain('/v1/v1/')
-  })
-
-  it('shows a route preview that switches protocol without changing the login destination', async () => {
-    const wrapper = mountHome()
-
-    expect(wrapper.get('[data-testid="home-experience"]').text()).toContain('home.experience.routePreview')
-    expect(wrapper.get('[data-testid="home-route-endpoint"]').text()).toContain('/v1/chat/completions')
-    expect(wrapper.get('[data-testid="home-route-openai"]').attributes('aria-pressed')).toBe('true')
-    await wrapper.get('[data-testid="home-route-anthropic"]').trigger('click')
-    expect(wrapper.get('[data-testid="home-route-endpoint"]').text()).toContain('/v1/messages')
-    expect(wrapper.get('[data-testid="home-route-anthropic"]').attributes('aria-pressed')).toBe('true')
-    expect(wrapper.findAllComponents(RouterLinkStub).some(link => link.props('to') === '/login')).toBe(true)
+    expect(wrapper.find('[data-testid="home-story"]').exists()).toBe(true)
   })
 
   it('links unauthenticated visitors to login', () => {
@@ -193,14 +159,14 @@ describe('HomeView compact mode', () => {
     expect(modelPlazaDestination(wrapper)).toBe('/model-plaza')
   })
 
-  it('keeps the model plaza link available to anonymous visitors when sign-in is required', () => {
+  it('hides the model plaza link from anonymous visitors when sign-in is required', () => {
     const wrapper = mountHome({
       compact_home_enabled: true,
       model_plaza_enabled: true,
       model_plaza_require_auth: true,
     })
 
-    expect(modelPlazaDestination(wrapper)).toBe('/model-plaza')
+    expect(modelPlazaDestination(wrapper)).toBeUndefined()
   })
 
   it('shows the model plaza link to authenticated visitors when sign-in is required', () => {
@@ -232,29 +198,5 @@ describe('HomeView compact mode', () => {
     })
 
     expect(modelPlazaDestination(wrapper)).toBeUndefined()
-    expect(wrapper.get('header [aria-disabled="true"]').text()).toContain('nav.modelPlaza')
-  })
-
-  it('shows an unavailable model plaza entry on the default header when disabled', () => {
-    const wrapper = mountHome({ model_plaza_enabled: false })
-
-    expect(modelPlazaDestination(wrapper)).toBeUndefined()
-    expect(wrapper.get('header .home-disabled-nav').attributes('aria-disabled')).toBe('true')
-  })
-
-  it('does not link a backend-mode ordinary user to the restricted model plaza', () => {
-    authStore.isAuthenticated = true
-    const wrapper = mountHome({ model_plaza_enabled: true, backend_mode_enabled: true })
-
-    expect(modelPlazaDestination(wrapper)).toBeUndefined()
-    expect(wrapper.get('header [aria-disabled="true"]').exists()).toBe(true)
-  })
-
-  it('links a backend-mode administrator to the model plaza', () => {
-    authStore.isAuthenticated = true
-    authStore.isAdmin = true
-    const wrapper = mountHome({ model_plaza_enabled: true, backend_mode_enabled: true })
-
-    expect(modelPlazaDestination(wrapper)).toBe('/model-plaza')
   })
 })

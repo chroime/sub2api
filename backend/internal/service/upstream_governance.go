@@ -7,9 +7,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"reflect"
 	"sort"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	gov "github.com/Wei-Shaw/sub2api/internal/upstreamgovernance"
@@ -27,6 +29,90 @@ type governanceAdmin interface {
 type governanceLocalAccounts struct {
 	db    *sql.DB
 	admin governanceAdmin
+}
+
+func governanceLocalModelTarget(row scanner) (gov.LocalModelTarget, error) {
+	var target gov.LocalModelTarget
+	var ownerID, groupID int64
+	var key, keyName, keyStatus, groupName, groupPlatform, groupStatus string
+	var expiresAt sql.NullTime
+	var quota, quotaUsed float64
+	var keyUpdatedAt, groupUpdatedAt time.Time
+	if err := row.Scan(&target.APIKeyID, &ownerID, &key, &keyName, &groupID, &keyStatus, &expiresAt, &quota, &quotaUsed, &keyUpdatedAt, &target.GroupID, &groupName, &groupPlatform, &groupStatus, &groupUpdatedAt); err != nil {
+		return gov.LocalModelTarget{}, err
+	}
+	if ownerID <= 0 || target.APIKeyID <= 0 || groupID <= 0 || target.GroupID != groupID || key == "" || keyStatus != StatusAPIKeyActive || groupStatus != StatusActive || (expiresAt.Valid && !expiresAt.Time.After(time.Now())) || (quota > 0 && quotaUsed >= quota) {
+		return gov.LocalModelTarget{}, gov.ErrConflict
+	}
+	target.OwnerUserID, target.Key, target.APIKeyName, target.GroupName, target.Platform = ownerID, key, keyName, groupName, groupPlatform
+	target.GroupFingerprint = governanceFingerprint(struct {
+		ID                     int64
+		Name, Platform, Status string
+		UpdatedAt              time.Time
+	}{target.GroupID, groupName, groupPlatform, groupStatus, groupUpdatedAt})
+	target.KeyFingerprint = governanceFingerprint(struct {
+		ID, OwnerID, GroupID int64
+		Status               string
+		ExpiresAt            *time.Time
+		Quota                float64
+		KeyHash              string
+	}{target.APIKeyID, ownerID, groupID, keyStatus, nullTimePtr(expiresAt), quota, governanceFingerprint(key)})
+	return target, nil
+}
+
+type scanner interface{ Scan(...any) error }
+
+func nullTimePtr(value sql.NullTime) *time.Time {
+	if !value.Valid {
+		return nil
+	}
+	v := value.Time
+	return &v
+}
+
+const localModelTargetQuery = `SELECT k.id,k.user_id,k.key,k.name,k.group_id,k.status,k.expires_at,k.quota,k.quota_used,k.updated_at,g.id,g.name,g.platform,g.status,g.updated_at FROM api_keys k JOIN groups g ON g.id=k.group_id JOIN users u ON u.id=k.user_id WHERE k.deleted_at IS NULL AND g.deleted_at IS NULL AND u.deleted_at IS NULL AND u.status=$3 AND k.id=$1 AND k.user_id=$2`
+
+func (l *governanceLocalAccounts) ResolveLocalModelTarget(ctx context.Context, ownerID, groupID, apiKeyID int64) (gov.LocalModelTarget, error) {
+	if l == nil || l.db == nil || ownerID <= 0 || groupID <= 0 || apiKeyID <= 0 {
+		return gov.LocalModelTarget{}, gov.ErrInvalid
+	}
+	target, err := governanceLocalModelTarget(l.db.QueryRowContext(ctx, localModelTargetQuery, apiKeyID, ownerID, StatusActive))
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return gov.LocalModelTarget{}, gov.ErrNotFound
+		}
+		return gov.LocalModelTarget{}, err
+	}
+	if target.GroupID != groupID {
+		return gov.LocalModelTarget{}, gov.ErrConflict
+	}
+	return target, nil
+}
+
+func (l *governanceLocalAccounts) ListLocalModelTargets(ctx context.Context, ownerID int64) ([]gov.LocalModelTarget, error) {
+	if l == nil || l.db == nil || ownerID <= 0 {
+		return nil, gov.ErrInvalid
+	}
+	rows, err := l.db.QueryContext(ctx, `SELECT k.id,k.user_id,k.key,k.name,k.group_id,k.status,k.expires_at,k.quota,k.quota_used,k.updated_at,g.id,g.name,g.platform,g.status,g.updated_at FROM api_keys k JOIN groups g ON g.id=k.group_id JOIN users u ON u.id=k.user_id WHERE k.deleted_at IS NULL AND g.deleted_at IS NULL AND u.deleted_at IS NULL AND u.status=$1 AND k.user_id=$2 AND k.status=$3 AND g.status=$4 AND (k.expires_at IS NULL OR k.expires_at>$5) AND (k.quota<=0 OR k.quota_used<k.quota) ORDER BY g.name,k.name,k.id`, StatusActive, ownerID, StatusAPIKeyActive, StatusActive, time.Now())
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := make([]gov.LocalModelTarget, 0)
+	for rows.Next() {
+		target, scanErr := governanceLocalModelTarget(rows)
+		if scanErr != nil {
+			if errors.Is(scanErr, gov.ErrConflict) {
+				continue
+			}
+			return nil, scanErr
+		}
+		// Metadata responses never include the credential or fingerprints.
+		target.Key = ""
+		target.GroupFingerprint, target.KeyFingerprint, target.OwnerUserID = "", "", 0
+		result = append(result, target)
+	}
+	return result, rows.Err()
 }
 
 func governanceFingerprint(v any) string {
@@ -239,7 +325,13 @@ func governanceClientFactory(upstream HTTPUpstream, proxies ProxyRepository) gov
 	}
 }
 func ProvideUpstreamGovernanceService(db *sql.DB, admin AdminService, upstream HTTPUpstream, proxies ProxyRepository, cipher SecretEncryptor, cfg *config.Config, email *EmailService, settings SettingRepository, users UserRepository) *gov.Service {
-	svc := gov.NewService(gov.NewSQLStore(db), gov.NewConnector(governanceClientFactory(upstream, proxies)), &governanceLocalAccounts{db: db, admin: admin}, cipher, cfg != nil && cfg.Totp.EncryptionKeyConfigured)
+	localAccounts := &governanceLocalAccounts{db: db, admin: admin}
+	svc := gov.NewService(gov.NewSQLStore(db), gov.NewConnector(governanceClientFactory(upstream, proxies)), localAccounts, cipher, cfg != nil && cfg.Totp.EncryptionKeyConfigured)
+	if cfg != nil && cfg.Server.Port > 0 {
+		if runner, err := gov.NewLocalGatewayModelRunner(fmt.Sprintf("http://127.0.0.1:%d", cfg.Server.Port)); err == nil {
+			svc.SetLocalModelRunner(runner)
+		}
+	}
 	if pricingStore, ok := gov.NewSQLStore(db).(gov.PricingPersistence); ok {
 		svc.SetPricingCoordinator(gov.NewPricingCoordinator(pricingStore))
 	}

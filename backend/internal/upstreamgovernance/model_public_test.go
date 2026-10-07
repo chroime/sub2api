@@ -75,6 +75,41 @@ func TestPublicIQDashboardSeparatesTemplateLimitsAndMarksWrongCandyAsFailed(t *t
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestPublicIQDashboardPrefersLocalGroupNameProjection(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	now := time.Date(2026, 10, 2, 12, 8, 0, 0, time.UTC)
+	svc := NewService(NewSQLStore(db), nil, nil, nil, false)
+	svc.now = func() time.Time { return now }
+	since := now.Add(-24 * time.Hour)
+
+	mock.ExpectQuery(regexp.QuoteMeta(iqTimelineQuery)).
+		WithArgs(since, now).
+		WillReturnRows(sqlmock.NewRows([]string{"bucket_at", "quality_status"}))
+
+	localGroupProjection := regexp.QuoteMeta("COALESCE(NULLIF(local_group.name,''), NULLIF(remote_group.group_name,''), '检测分组')")
+	localGroupJoin := `[\s\S]*LEFT JOIN groups local_group`
+	candyQuery := "SELECT r.id,r.created_at,s.name,r.status,[\\s\\S]*" + localGroupProjection + localGroupJoin
+	mock.ExpectQuery(candyQuery).
+		WithArgs(since, 1).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at", "name", "status", "group_name", "managed_key_id", "model", "effort", "answer", "verdict", "duration_ms", "template_version"}).
+			AddRow("candy-local-group", now.Add(-time.Minute), "site", "succeeded", "本地 GPT 分组", "", "gpt-6", "high", "21", "numeric_correct", "10", "v1"))
+
+	pelicanQuery := "SELECT r.id,r.created_at,s.name,r.status,[\\s\\S]*" + localGroupProjection + localGroupJoin
+	mock.ExpectQuery(pelicanQuery).
+		WithArgs(since, 1).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at", "name", "status", "group_name", "managed_key_id", "model", "effort", "html", "response_text", "duration_ms"}))
+
+	dashboard, err := svc.PublicIQDashboard(t.Context(), 24, 1)
+	require.NoError(t, err)
+	require.Len(t, dashboard.CandyResults, 1)
+	require.Equal(t, "本地 GPT 分组", dashboard.CandyResults[0].GroupName)
+	require.Empty(t, dashboard.PelicanWorks)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestPublicIQDashboardRejectsInvalidBounds(t *testing.T) {
 	db, _, err := sqlmock.New()
 	require.NoError(t, err)

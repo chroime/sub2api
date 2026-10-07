@@ -1,7 +1,7 @@
 export default {
   iqDetection: {
     eyebrow: 'Model quality lab',
-    title: 'IQ Detection',
+    title: 'IQ Monitoring',
     description: 'Review candy logic and pelican animation results from model monitoring in one safe, redacted view.',
     candyResults: 'Candy logic results',
     candyHint: 'Standard answer: {answer} candies. Results compare rule-following stability.',
@@ -24,7 +24,7 @@ export default {
     emptyPelican: 'No pelican works yet. They appear after an administrator runs the pelican test.',
     replay: 'Replay',
     generated: 'Generation time',
-    loadFailed: 'Unable to load IQ detection results. Try again later.',
+    loadFailed: 'Unable to load IQ monitoring results. Try again later.',
     effort: { low: 'Low reasoning', medium: 'Medium reasoning', high: 'High reasoning' },
   },
 }

@@ -2,11 +2,16 @@ import { apiClient } from '../client'
 import type { Transport } from './upstream-governance'
 
 export type ModelAPIMode = 'chat_completions' | 'responses' | 'anthropic' | 'gemini'
+export type ModelTargetType = 'upstream' | 'local_group'
 export type ModelEffort = 'low' | 'medium' | 'high'
 export type ModelTestTemplate = 'candy' | 'pelican' | 'token_audit' | 'context' | 'probe'
 export type ModelReview = 'pending' | 'pass' | 'fail'
 export interface ModelTestConfig {
+  target_type?: ModelTargetType
   managed_key_id: number
+  local_group_id?: number
+  local_api_key_id?: number
+  target_owner_user_id?: number
   platform: Transport
   model: string
   api_mode: ModelAPIMode
@@ -21,6 +26,15 @@ export interface ModelTestConfig {
   input_tokens: number
   tokenizer: 'auto' | 'o200k_base' | 'cl100k_base' | 'none'
   token_tolerance_percent: number
+}
+export interface LocalModelTarget {
+  group_id: number
+  group_name: string
+  platform: Transport
+  api_key_id: number
+  api_key_name: string
+  status?: string
+  expires_at?: string | null
 }
 export interface ModelPolicy {
   id: number
@@ -124,6 +138,9 @@ export interface ModelStatsGroup {
   model: string
   api_mode: ModelAPIMode
   managed_key_id: number
+  target_type?: ModelTargetType
+  local_group_id?: number
+  local_api_key_id?: number
   template: ModelTestTemplate
   effort: ModelEffort
   config_hash: string
@@ -144,6 +161,7 @@ export interface ModelStatsGroup {
 export interface ModelStats { days: number; groups: ModelStatsGroup[]; truncated?: boolean }
 const site = (id: number) => `/admin/upstream-governance/sites/${id}`
 const api = {
+  async localTargets() { return (await apiClient.get<LocalModelTarget[]>('/admin/upstream-governance/local-model-targets')).data },
   async policies(id: number) { return (await apiClient.get<ModelPolicy[]>(`${site(id)}/model-policies`)).data },
   async savePolicy(id: number, input: ModelPolicy) {
     const { id: policyId, name, config, enabled, interval_minutes, daily_request_limit, notify_enabled, recipients, failure_threshold, take_over_legacy, version } = input
@@ -154,6 +172,7 @@ const api = {
   async cancelBatch(id: number, batchId: string) { await apiClient.post(`${site(id)}/model-batches/${encodeURIComponent(batchId)}/cancel`, {}) },
   async runs(id: number, page = 1, batchId = '') { return (await apiClient.get<ModelRunPage>(`${site(id)}/model-runs`, { params: { page, page_size: 20, ...(batchId ? { batch_id: batchId } : {}) } })).data },
   async run(id: number, runId: string) { return (await apiClient.get<ModelRun>(`${site(id)}/model-runs/${encodeURIComponent(runId)}`)).data },
+  async deleteRun(id: number, runId: string) { await apiClient.delete(`${site(id)}/model-runs/${encodeURIComponent(runId)}`) },
   async review(id: number, runId: string, review: ModelReview, note: string) { return (await apiClient.put<ModelRun>(`${site(id)}/model-runs/${encodeURIComponent(runId)}/review`, { review, note })).data },
   async stats(id: number, days = 7) { return (await apiClient.get<ModelStats>(`${site(id)}/model-stats`, { params: { days } })).data },
 }

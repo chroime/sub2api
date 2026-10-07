@@ -1,6 +1,6 @@
 <template>
   <AppLayout>
-    <div class="iq-page mx-auto min-h-full max-w-7xl space-y-8 px-4 py-6 sm:px-6 lg:px-8" data-test="iq-detection-page">
+    <div class="iq-page mx-auto min-h-full max-w-screen-2xl space-y-8 px-4 py-6 sm:px-6 lg:px-8" data-test="iq-detection-page">
     <header class="flex flex-wrap items-end justify-between gap-4">
       <div>
         <div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-primary-600 dark:text-primary-300">
@@ -75,16 +75,22 @@
           </div>
           <span class="text-xs text-gray-500 dark:text-dark-400">{{ t('iqDetection.recentCount', { count: dashboard.pelican_works.length }) }}</span>
         </div>
-        <div v-if="dashboard.pelican_works.length" class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div v-if="dashboard.pelican_works.length" class="grid grid-cols-1 items-start gap-5 md:grid-cols-2 2xl:grid-cols-3" data-test="pelican-work-grid">
           <article v-for="work in dashboard.pelican_works" :key="work.id" class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-dark-700 dark:bg-dark-800" data-test="pelican-work-card">
-            <div class="relative aspect-[4/3] overflow-hidden bg-slate-50 dark:bg-dark-900">
-              <iframe :key="`${work.id}:${replayNonce[work.id] || 0}`" :srcdoc="preview(work.html)" :title="`${t('iqDetection.pelicanTitle')} ${work.model}`" sandbox="allow-scripts" referrerpolicy="no-referrer" class="h-full w-full border-0" />
+            <div class="relative aspect-[6/5] overflow-hidden bg-slate-50 dark:bg-dark-900" data-test="pelican-work-preview">
+              <iframe :key="`${work.id}:${replayNonce[work.id] || 0}`" :srcdoc="preview(work.html)" :title="`${t('iqDetection.pelicanTitle')} ${work.model}`" sandbox="allow-scripts" scrolling="no" referrerpolicy="no-referrer" class="h-full w-full border-0" />
               <button type="button" class="absolute bottom-3 right-3 inline-flex items-center gap-1.5 rounded-full bg-slate-900/85 px-3 py-1.5 text-xs font-medium text-white shadow-lg transition hover:bg-slate-900" @click="replay(work.id)"><Icon name="play" size="xs" />{{ t('iqDetection.replay') }}</button>
             </div>
             <div class="space-y-2 p-4 text-sm">
-              <div class="flex justify-between gap-3"><span class="truncate font-medium text-gray-800 dark:text-dark-100">{{ work.group_name || work.account_label }}</span><time class="shrink-0 text-xs text-gray-400">{{ formatTime(work.created_at) }}</time></div>
-              <div class="flex justify-between gap-3 text-xs text-gray-500 dark:text-dark-400"><span class="truncate">{{ work.model }}</span><span>{{ effortLabel(work.effort) }}</span></div>
-              <div class="flex justify-between gap-3 text-xs text-gray-500 dark:text-dark-400"><span>{{ t('iqDetection.generated') }}</span><span>{{ work.duration_ms }} ms</span></div>
+              <div class="min-w-0">
+                <p class="break-words font-medium leading-5 text-gray-800 dark:text-dark-100" data-test="pelican-work-group">{{ work.group_name || work.account_label }}</p>
+                <time class="mt-1 block text-xs leading-4 text-gray-400" :datetime="work.created_at" data-test="pelican-work-time">{{ formatTime(work.created_at) }}</time>
+              </div>
+              <div class="flex min-w-0 items-center justify-between gap-3 text-xs text-gray-500 dark:text-dark-400">
+                <span class="min-w-0 truncate">{{ work.model }}</span>
+                <span class="shrink-0">{{ effortLabel(work.effort) }}</span>
+              </div>
+              <div class="flex items-center justify-between gap-3 text-xs text-gray-500 dark:text-dark-400"><span>{{ t('iqDetection.generated') }}</span><span class="shrink-0">{{ work.duration_ms }} ms</span></div>
             </div>
           </article>
         </div>
@@ -108,6 +114,7 @@ const loading = ref(true)
 const error = ref('')
 const dashboard = ref<IQDashboard>({ candy_results: [], pelican_works: [], timeline: [], standard_answer: 21, window_hours: 24, generated_at: '' })
 const replayNonce = ref<Record<string, number>>({})
+const pelicanPreviewStyle = '<style data-pelican-preview-style>html,body{height:100%!important;min-height:0!important;overflow:hidden!important}body{margin:0!important}</style>'
 
 async function load() {
   loading.value = true; error.value = ''
@@ -126,7 +133,15 @@ function isCandyPassing(value: IQCandyResult) { return value.status === 'succeed
 function verdictLabel(value: IQCandyResult) { return isCandyPassing(value) ? t('iqDetection.rulePass') : t('iqDetection.needsReview') }
 function timelineClass(status: string) { return status === 'pass' ? 'bg-emerald-500' : status === 'fail' ? 'bg-rose-500' : 'bg-amber-300' }
 function timelineLabel(status: string) { return status === 'pass' ? t('iqDetection.pass') : status === 'fail' ? t('iqDetection.fail') : t('iqDetection.empty') }
-function preview(html: string) { return `${modelPreviewDocument(html)}<!-- ${modelPreviewCSP} -->` }
+function preview(html: string) {
+  const source = html || ''
+  const styled = /<\/head\s*>/i.test(source)
+    ? source.replace(/<\/head\s*>/i, `${pelicanPreviewStyle}</head>`)
+    : /<html(?:\s[^>]*)?>/i.test(source)
+      ? source.replace(/<html(?:\s[^>]*)?>/i, (tag) => `${tag}<head>${pelicanPreviewStyle}</head>`)
+      : `${pelicanPreviewStyle}${source}`
+  return `${modelPreviewDocument(styled)}<!-- ${modelPreviewCSP} -->`
+}
 function replay(id: string) { replayNonce.value[id] = (replayNonce.value[id] || 0) + 1 }
 onMounted(load)
 </script>

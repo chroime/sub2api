@@ -45,6 +45,7 @@ type Service struct {
 	modelWake            chan struct{}
 	modelActive          map[string]modelActiveRun
 	modelNotifier        ModelNotifier
+	localModelRunner     LocalModelRunner
 	changeNotifier       ChangeNotifier
 	changeQueue          *ChangeNotificationQueue
 	pricingCoordinator   *PricingCoordinator
@@ -54,6 +55,11 @@ type Service struct {
 func NewService(store Store, connector Connector, local LocalAccounts, cipher Encryptor, durableKey bool) *Service {
 	return &Service{store: store, connector: connector, local: local, cipher: cipher, durableKey: durableKey, slots: make(chan struct{}, 2), collectionFailures: map[int64]int{}, fastFailures: map[int64]int{}, now: func() time.Time { return time.Now().UTC() }}
 }
+
+// SetLocalModelRunner wires the optional in-process gateway runner used by
+// local-group model monitoring. Keeping it optional preserves all existing
+// upstream-only fixtures and deployments during rolling upgrades.
+func (s *Service) SetLocalModelRunner(r LocalModelRunner) { s.localModelRunner = r }
 
 func (s *Service) nextCollectionAt(siteID int64, now time.Time, intervalSeconds int64, success bool) time.Time {
 	s.scheduleMu.Lock()

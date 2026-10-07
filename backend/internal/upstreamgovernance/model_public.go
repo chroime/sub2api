@@ -24,7 +24,7 @@ MAX(CASE
  WHEN r.status='succeeded' AND (r.request->>'template'='pelican' OR r.result->>'candy_verdict' IN ('numeric_correct','pass')) THEN 1
  ELSE 0 END) AS quality_status
 FROM upstream_governance_model_runs r
-WHERE r.created_at >= $1 AND r.created_at <= $2 AND r.request->>'template' IN ('candy','pelican')
+WHERE r.public_visible AND r.created_at >= $1 AND r.created_at <= $2 AND r.request->>'template' IN ('candy','pelican')
 GROUP BY bucket_at ORDER BY bucket_at`
 
 // IQDashboard is a credential-free projection of model monitoring results for
@@ -122,13 +122,15 @@ func (s *Service) PublicIQDashboard(ctx context.Context, hours, limit int) (*IQD
 	timelineRows.Close()
 
 	candyRows, err := m.db.QueryContext(ctx, `SELECT r.id,r.created_at,s.name,r.status,
-       COALESCE(NULLIF(remote_group.group_name,''), '检测分组'),
+       COALESCE(NULLIF(local_group.name,''), NULLIF(remote_group.group_name,''), '检测分组'),
        r.request->'config'->>'managed_key_id',r.request->'config'->>'model',r.request->>'effort',
        r.result->>'candy_answer',r.result->>'candy_verdict',r.result->>'duration_ms',r.result->>'template_version'
 FROM upstream_governance_model_runs r
 JOIN upstream_governance_sites s ON s.id=r.site_id
 LEFT JOIN upstream_governance_keys managed_key
   ON managed_key.id = CASE WHEN r.request->'config'->>'managed_key_id' ~ '^[0-9]+$' THEN (r.request->'config'->>'managed_key_id')::bigint END
+LEFT JOIN groups local_group
+  ON local_group.id = CASE WHEN r.request->'config'->>'local_group_id' ~ '^[0-9]+$' THEN (r.request->'config'->>'local_group_id')::bigint END
 LEFT JOIN LATERAL (
   SELECT group_item->>'name' AS group_name
   FROM upstream_governance_snapshots snapshot
@@ -136,7 +138,7 @@ LEFT JOIN LATERAL (
   WHERE snapshot.site_id=r.site_id AND group_item->>'id'=managed_key.remote_group_id
   ORDER BY snapshot.id DESC LIMIT 1
 ) remote_group ON TRUE
-WHERE r.created_at >= $1 AND r.request->>'template'='candy'
+WHERE r.public_visible AND r.created_at >= $1 AND r.request->>'template'='candy'
 ORDER BY r.created_at DESC,r.id DESC LIMIT $2`, since, limit)
 	if err != nil {
 		return nil, err
@@ -159,7 +161,7 @@ ORDER BY r.created_at DESC,r.id DESC LIMIT $2`, since, limit)
 	candyRows.Close()
 
 	pelicanRows, err := m.db.QueryContext(ctx, fmt.Sprintf(`SELECT r.id,r.created_at,s.name,r.status,
-       COALESCE(NULLIF(remote_group.group_name,''), '检测分组'),
+       COALESCE(NULLIF(local_group.name,''), NULLIF(remote_group.group_name,''), '检测分组'),
        r.request->'config'->>'managed_key_id',r.request->'config'->>'model',r.request->>'effort',
        CASE WHEN octet_length(r.result->>'html') <= %d THEN r.result->>'html' ELSE '' END,
        CASE WHEN octet_length(r.result->>'response_text') <= %d THEN r.result->>'response_text' ELSE '' END,
@@ -168,6 +170,8 @@ FROM upstream_governance_model_runs r
 JOIN upstream_governance_sites s ON s.id=r.site_id
 LEFT JOIN upstream_governance_keys managed_key
   ON managed_key.id = CASE WHEN r.request->'config'->>'managed_key_id' ~ '^[0-9]+$' THEN (r.request->'config'->>'managed_key_id')::bigint END
+LEFT JOIN groups local_group
+  ON local_group.id = CASE WHEN r.request->'config'->>'local_group_id' ~ '^[0-9]+$' THEN (r.request->'config'->>'local_group_id')::bigint END
 LEFT JOIN LATERAL (
   SELECT group_item->>'name' AS group_name
   FROM upstream_governance_snapshots snapshot
@@ -175,7 +179,7 @@ LEFT JOIN LATERAL (
   WHERE snapshot.site_id=r.site_id AND group_item->>'id'=managed_key.remote_group_id
   ORDER BY snapshot.id DESC LIMIT 1
 ) remote_group ON TRUE
-WHERE r.created_at >= $1 AND r.request->>'template'='pelican'
+WHERE r.public_visible AND r.created_at >= $1 AND r.request->>'template'='pelican'
 ORDER BY r.created_at DESC,r.id DESC LIMIT $2`, maxIQHTMLBytes, maxIQHTMLBytes), since, limit)
 	if err != nil {
 		return nil, err

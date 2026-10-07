@@ -1,8 +1,8 @@
 export default {
   iqDetection: {
     eyebrow: '模型质量实验室',
-    title: '智商检测',
-    description: '集中查看模型监测中的糖果逻辑题和鹈鹕动画结果，结果仅展示经过脱敏的检测证据。',
+    title: '智商监测',
+    description: '集中查看模型监测中的糖果逻辑题和鹈鹕动画结果，结果仅展示经过脱敏的监测证据。',
     candyResults: '糖果题结果',
     candyHint: '标准答案 {answer} 颗；结果用于比较模型遵循规则的稳定性。',
     recentCount: '最近 {count} 次',
@@ -24,7 +24,7 @@ export default {
     emptyPelican: '暂无鹈鹕作品。管理员运行鹈鹕测试后，生成的动画会显示在这里。',
     replay: '重新播放',
     generated: '生成耗时',
-    loadFailed: '智商检测结果读取失败，请稍后重试。',
+    loadFailed: '智商监测结果读取失败，请稍后重试。',
     effort: { low: '推理低', medium: '推理中', high: '推理高' },
   },
 }

@@ -5,7 +5,7 @@ import Select from '@/components/common/Select.vue'
 import api, { type ModelPolicy, type ModelRunPage } from '@/api/admin/upstream-model-monitoring'
 import { modelConfig, modelGroup, modelKey, modelPolicy, modelRun } from './__tests__/model-fixtures'
 vi.mock('vue-i18n', async importOriginal => ({ ...await importOriginal<typeof import('vue-i18n')>(), useI18n: () => ({ t: (key: string) => key }) }))
-vi.mock('@/api/admin/upstream-model-monitoring', () => ({ default: { policies: vi.fn(), runs: vi.fn(), stats: vi.fn(), startBatch: vi.fn(), savePolicy: vi.fn(), deletePolicy: vi.fn(), cancelBatch: vi.fn(), run: vi.fn(), review: vi.fn() } }))
+vi.mock('@/api/admin/upstream-model-monitoring', () => ({ default: { policies: vi.fn(), runs: vi.fn(), stats: vi.fn(), startBatch: vi.fn(), savePolicy: vi.fn(), deletePolicy: vi.fn(), deleteRun: vi.fn(), cancelBatch: vi.fn(), run: vi.fn(), review: vi.fn() } }))
 enableAutoUnmount(afterEach)
 const empty: ModelRunPage = { items: [], total: 0, page: 1, page_size: 20, counts: {} }
 const setup = () => mount(ModelMonitorPanel, { props: { siteId: 1, remoteGroups: [modelGroup], managedKeys: [modelKey] } })
@@ -189,6 +189,15 @@ describe('model monitoring configuration and persistent work', () => {
     await wrapper.get('button[aria-label="common.delete"]').trigger('click')
     await wrapper.get('[data-test=model-policy-delete-8]').trigger('click'); await flushPromises()
     expect(api.deletePolicy).toHaveBeenCalledWith(1, 8, 4)
+  })
+  it('lets administrators hide a completed run from the public monitoring view', async () => {
+    vi.mocked(api.runs).mockResolvedValue({ ...empty, items: [modelRun()], total: 1, counts: { succeeded: 1 } })
+    vi.mocked(api.deleteRun).mockResolvedValue(undefined)
+    const wrapper = setup(); await flushPromises()
+    await wrapper.get('[data-test=model-run-delete-run-medium]').trigger('click')
+    expect(wrapper.get('[data-test=model-run-delete-confirm-run-medium]').exists()).toBe(true)
+    await wrapper.get('[data-test=model-run-delete-confirm-run-medium]').trigger('click'); await flushPromises()
+    expect(api.deleteRun).toHaveBeenCalledWith(1, 'run-medium')
   })
   it('keeps exact statistics groups separate and does not display unsupported small-sample percentiles', async () => {
     const group = { model: 'gpt-fixture', api_mode: 'responses' as const, managed_key_id: 17, template: 'candy' as const, effort: 'medium' as const, config_hash: 'first', samples: 3, successes: 3, failures: 0, unknown: 0, comparable: true, ttft_samples: 3, p50_ttft_ms: 123, p95_ttft_ms: 234, avg_duration_ms: 500, last_run_at: '2026-09-27T12:00:00Z', points: [] }
