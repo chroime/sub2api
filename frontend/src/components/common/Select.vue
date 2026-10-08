@@ -365,7 +365,21 @@ const calculateDropdownPosition = () => {
 
   nextTick(() => {
     if (!dropdownRef.value || !triggerRect.value) return
-    const dropdownHeight = dropdownRef.value.offsetHeight || 240
+    // `offsetHeight` reflects the current max-height-constrained box. Use the
+    // options list's natural scroll height so a dropdown near the viewport
+    // edge can flip upward before its options are clipped by the initial
+    // bottom placement. The portal itself has overflow hidden, so its
+    // scrollHeight can be limited to the current max-height and cannot be
+    // used as the source of truth.
+    const optionsList = dropdownRef.value.querySelector<HTMLElement>('.select-options')
+    const searchBar = dropdownRef.value.querySelector<HTMLElement>('.select-search')
+    const naturalOptionsHeight = optionsList?.scrollHeight || 0
+    const naturalSearchHeight = searchBar?.offsetHeight || 0
+    const dropdownHeight =
+      naturalOptionsHeight + naturalSearchHeight ||
+      dropdownRef.value.scrollHeight ||
+      dropdownRef.value.offsetHeight ||
+      240
     const spaceBelow = window.innerHeight - triggerRect.value.bottom
     const spaceAbove = triggerRect.value.top
 

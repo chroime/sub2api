@@ -123,6 +123,46 @@ describe('Select dropdown viewport constraints', () => {
     expect(dropdown?.style.maxWidth).toBe('200px')
   })
 
+  it('uses the natural dropdown height when deciding to flip above the trigger', async () => {
+    setViewportHeight(500)
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      x: 20, y: 360, top: 360, right: 220, bottom: 400, left: 20,
+      width: 200, height: 40, toJSON: () => ({}),
+    })
+    vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockImplementation(function () {
+      return this.classList.contains('select-dropdown-portal') ? 176 : 0
+    })
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function () {
+      return this.classList.contains('select-dropdown-portal') ? 43 : 0
+    })
+
+    const dropdown = await openSelect()
+    await nextTick()
+
+    expect(dropdown?.style.bottom).toBe('144px')
+    expect(dropdown?.style.maxHeight).toBe('348px')
+  })
+
+  it('uses the options list height when the portal itself is max-height constrained', async () => {
+    setViewportHeight(500)
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      x: 20, y: 360, top: 360, right: 220, bottom: 400, left: 20,
+      width: 200, height: 40, toJSON: () => ({}),
+    })
+    vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockImplementation(function () {
+      return this.classList.contains('select-options') ? 176 : 32
+    })
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function () {
+      return this.classList.contains('select-dropdown-portal') ? 43 : 0
+    })
+
+    const dropdown = await openSelect()
+    await nextTick()
+
+    expect(dropdown?.style.bottom).toBe('144px')
+    expect(dropdown?.style.maxHeight).toBe('348px')
+  })
+
   it('caps a dropdown to the available height above a bottom-edge trigger', async () => {
     setViewportHeight(300)
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
