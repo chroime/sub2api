@@ -191,7 +191,14 @@ func (s *Service) ListSites(ctx context.Context) ([]Site, error) {
 			sites[i].KeyIssueCount = counts[sites[i].ID]
 		}
 	}
-	return sites, nil
+	visible := sites[:0]
+	for _, site := range sites {
+		if isLocalModelSite(site) {
+			continue
+		}
+		visible = append(visible, site)
+	}
+	return visible, nil
 }
 func (s *Service) Catalog(ctx context.Context, id int64) (*Snapshot, error) {
 	return s.store.LatestSnapshot(ctx, id)
@@ -366,11 +373,14 @@ func (s *Service) UpdateSiteWithLogin(ctx context.Context, id int64, input Site,
 		}
 		login = &normalized
 	}
-	site, release, e := s.siteLock(ctx, id)
+	site, release, e := s.remoteSiteLock(ctx, id)
 	if e != nil {
 		return nil, e
 	}
 	defer release()
+	if isLocalModelSite(*site) {
+		return nil, ErrInvalid
+	}
 	if input.Version != site.Version {
 		return nil, ErrConflict
 	}
@@ -454,11 +464,14 @@ func (s *Service) UpdateSiteWithLogin(ctx context.Context, id int64, input Site,
 	return site, nil
 }
 func (s *Service) DeleteSite(ctx context.Context, id int64) error {
-	_, release, e := s.siteLock(ctx, id)
+	site, release, e := s.remoteSiteLock(ctx, id)
 	if e != nil {
 		return e
 	}
 	defer release()
+	if isLocalModelSite(*site) {
+		return ErrInvalid
+	}
 	return s.store.DeleteSite(ctx, id)
 }
 func (s *Service) remoteSlot(ctx context.Context) (func(), error) {
@@ -502,11 +515,14 @@ func (s *Service) Connect(ctx context.Context, id int64, input LoginInput) (*Con
 		return nil, e
 	}
 	defer free()
-	site, release, e := s.siteLock(ctx, id)
+	site, release, e := s.remoteSiteLock(ctx, id)
 	if e != nil {
 		return nil, e
 	}
 	defer release()
+	if isLocalModelSite(*site) {
+		return nil, ErrInvalid
+	}
 	// Saved login details belong to the site version displayed by the editor.
 	// Check while holding the site lock before sending credentials upstream.
 	if input.ExpectedSiteVersion != nil {
@@ -666,9 +682,13 @@ func (s *Service) Sync(ctx context.Context, id int64) (*Snapshot, error) {
 			free()
 		}
 	}()
-	site, release, e := s.siteLock(ctx, id)
+	site, release, e := s.remoteSiteLock(ctx, id)
 	if e != nil {
 		return nil, e
+	}
+	if isLocalModelSite(*site) {
+		release()
+		return nil, ErrInvalid
 	}
 	siteReleased := false
 	defer func() {
@@ -827,11 +847,14 @@ func (s *Service) Preview(ctx context.Context, id int64, selections []Selection)
 	if len(selections) == 0 || len(selections) > 100 {
 		return nil, ErrInvalid
 	}
-	site, release, e := s.siteLock(ctx, id)
+	site, release, e := s.remoteSiteLock(ctx, id)
 	if e != nil {
 		return nil, e
 	}
 	defer release()
+	if isLocalModelSite(*site) {
+		return nil, ErrInvalid
+	}
 	if _, e = s.session(*site); e != nil {
 		return nil, e
 	}
@@ -937,7 +960,7 @@ func (s *Service) Apply(ctx context.Context, id int64, previewID string) (*Apply
 		return nil, e
 	}
 	defer free()
-	site, release, e := s.siteLock(ctx, id)
+	site, release, e := s.remoteSiteLock(ctx, id)
 	if e != nil {
 		return nil, e
 	}

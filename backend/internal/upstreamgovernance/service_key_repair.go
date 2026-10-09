@@ -123,7 +123,7 @@ func (s *Service) PrepareKeyRepair(ctx context.Context, siteID, keyID int64, inp
 		return nil, err
 	}
 	defer free()
-	site, release, err := s.siteLock(ctx, siteID)
+	site, release, err := s.remoteSiteLock(ctx, siteID)
 	if err != nil {
 		return nil, err
 	}
@@ -239,7 +239,7 @@ func (s *Service) ConfirmKeyRepair(ctx context.Context, siteID, keyID int64, rep
 		return nil, err
 	}
 	defer free()
-	site, release, err := s.siteLock(ctx, siteID)
+	site, release, err := s.remoteSiteLock(ctx, siteID)
 	if err != nil {
 		return nil, err
 	}
@@ -480,7 +480,7 @@ func (s *Service) AbandonKeyRepair(ctx context.Context, siteID, keyID int64, rep
 		return nil, err
 	}
 	defer free()
-	site, release, err := s.siteLock(ctx, siteID)
+	site, release, err := s.remoteSiteLock(ctx, siteID)
 	if err != nil {
 		return nil, err
 	}

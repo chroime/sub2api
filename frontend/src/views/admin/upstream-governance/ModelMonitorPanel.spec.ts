@@ -2,15 +2,15 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import ModelMonitorPanel from './ModelMonitorPanel.vue'
 import Select from '@/components/common/Select.vue'
-import api, { type ModelPolicy, type ModelRunPage } from '@/api/admin/upstream-model-monitoring'
+import api, { type LocalModelTarget, type ModelPolicy, type ModelRunPage } from '@/api/admin/upstream-model-monitoring'
 import { modelConfig, modelGroup, modelKey, modelPolicy, modelRun } from './__tests__/model-fixtures'
 vi.mock('vue-i18n', async importOriginal => ({ ...await importOriginal<typeof import('vue-i18n')>(), useI18n: () => ({ t: (key: string) => key }) }))
-vi.mock('@/api/admin/upstream-model-monitoring', () => ({ default: { policies: vi.fn(), runs: vi.fn(), stats: vi.fn(), startBatch: vi.fn(), savePolicy: vi.fn(), deletePolicy: vi.fn(), deleteRun: vi.fn(), cancelBatch: vi.fn(), run: vi.fn(), review: vi.fn() } }))
+vi.mock('@/api/admin/upstream-model-monitoring', () => ({ default: { policies: vi.fn(), runs: vi.fn(), stats: vi.fn(), localTargets: vi.fn(), startBatch: vi.fn(), savePolicy: vi.fn(), deletePolicy: vi.fn(), deleteRun: vi.fn(), cancelBatch: vi.fn(), run: vi.fn(), review: vi.fn() } }))
 enableAutoUnmount(afterEach)
 const empty: ModelRunPage = { items: [], total: 0, page: 1, page_size: 20, counts: {} }
 const setup = () => mount(ModelMonitorPanel, { props: { siteId: 1, remoteGroups: [modelGroup], managedKeys: [modelKey] } })
 describe('model monitoring configuration and persistent work', () => {
-  beforeEach(() => { vi.resetAllMocks(); vi.mocked(api.policies).mockResolvedValue([]); vi.mocked(api.runs).mockResolvedValue(empty); vi.mocked(api.stats).mockResolvedValue({ days: 7, groups: [] }) })
+  beforeEach(() => { vi.resetAllMocks(); vi.mocked(api.policies).mockResolvedValue([]); vi.mocked(api.runs).mockResolvedValue(empty); vi.mocked(api.stats).mockResolvedValue({ days: 7, groups: [] }); vi.mocked(api.localTargets).mockResolvedValue([]) })
   afterEach(() => { vi.useRealTimers() })
   it('only reads on entry and submits explicit effort/template combinations with chosen concurrency', async () => {
     const wrapper = setup(); await flushPromises()
@@ -219,5 +219,135 @@ describe('model monitoring configuration and persistent work', () => {
     finish(modelPolicy); await flushPromises()
     expect(wrapper.find('[data-test=model-editor]').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('Daily fixture')
+  })
+  it('uses workspace targets for a local-only panel and sends a local-group payload without reloading targets', async () => {
+    const localTarget = { group_id: 42, group_name: 'Local fixture', platform: 'openai' as const, api_key_id: 77, api_key_name: 'Local key' }
+    const wrapper = mount(ModelMonitorPanel, { props: { siteId: 99, localOnly: true, localTargets: [localTarget], remoteGroups: [], managedKeys: [] } })
+    await flushPromises()
+    expect(api.localTargets).not.toHaveBeenCalled()
+    await wrapper.get('[data-test=model-new]').trigger('click')
+    expect(wrapper.get('[data-test=model-target-type]').text()).not.toContain('governance.modelMonitoring.upstreamTarget')
+    expect(wrapper.get('[data-test=model-local-target]').text()).toContain('Local fixture')
+    wrapper.findAllComponents(Select).find(select => select.attributes('data-test') === 'model-name')!.vm.$emit('update:modelValue', 'local-model')
+    await flushPromises()
+    vi.mocked(api.startBatch).mockResolvedValue({ id: 'local-batch', total: 2, concurrency: 1 })
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(api.startBatch).toHaveBeenCalledWith(99, expect.objectContaining({ config: expect.objectContaining({ target_type: 'local_group', local_group_id: 42, local_api_key_id: 77, managed_key_id: 0 }) }))
+  })
+  it('does not let a late local-target response replace an edited policy target', async () => {
+    const saved = { ...modelPolicy, config: { ...modelPolicy.config, target_type: 'local_group' as const, local_group_id: 404, local_api_key_id: 505, managed_key_id: 0 }, enabled: false }
+    let finish!: (value: LocalModelTarget[]) => void
+    vi.mocked(api.policies).mockResolvedValue([saved])
+    vi.mocked(api.localTargets).mockReturnValue(new Promise(resolve => { finish = resolve }))
+    const wrapper = mount(ModelMonitorPanel, { props: { siteId: 99, localOnly: true, remoteGroups: [], managedKeys: [] } })
+    await flushPromises()
+    await wrapper.get('[data-test=model-policy-edit-8]').trigger('click')
+    finish([{ group_id: 1, group_name: 'Other local group', platform: 'openai', api_key_id: 2, api_key_name: 'Other key' }])
+    await flushPromises()
+    expect(wrapper.get('[data-test=model-local-target]').text()).not.toContain('Other local group')
+    vi.mocked(api.savePolicy).mockResolvedValue(saved)
+    await wrapper.get('[data-test=model-policy-save]').trigger('click')
+    await flushPromises()
+    expect(api.savePolicy).not.toHaveBeenCalled()
+  })
+  it('can pause a local policy whose previously selected key is no longer returned', async () => {
+    const saved = { ...modelPolicy, config: { ...modelPolicy.config, target_type: 'local_group' as const, local_group_id: 404, local_api_key_id: 505, managed_key_id: 0 }, enabled: true }
+    vi.mocked(api.policies).mockResolvedValue([saved])
+    vi.mocked(api.localTargets).mockResolvedValue([])
+    vi.mocked(api.savePolicy).mockResolvedValue({ ...saved, enabled: false, version: 5 })
+    const wrapper = mount(ModelMonitorPanel, { props: { siteId: 99, localOnly: true, remoteGroups: [], managedKeys: [] } })
+    await flushPromises()
+    await wrapper.get('[data-test=model-policy-toggle-8]').trigger('click')
+    await flushPromises()
+    expect(api.savePolicy).toHaveBeenCalledWith(99, { ...saved, enabled: false, take_over_legacy: false })
+  })
+  it('keeps an ordinary upstream panel limited to managed upstream keys', async () => {
+    vi.mocked(api.localTargets).mockResolvedValue([{ group_id: 42, group_name: 'Local fixture', platform: 'openai', api_key_id: 77, api_key_name: 'Local key' }])
+    const wrapper = setup()
+    await flushPromises()
+    await wrapper.get('[data-test=model-new]').trigger('click')
+    const target = wrapper.findAllComponents(Select).find(select => select.attributes('data-test') === 'model-target-type')!
+    expect(target.props('options')).toEqual([{ value: 'upstream', label: 'governance.modelMonitoring.upstreamTarget' }])
+    target.vm.$emit('update:modelValue', 'local_group')
+    await flushPromises()
+    expect(wrapper.find('[data-test=model-key]').exists()).toBe(true)
+    expect(api.localTargets).not.toHaveBeenCalled()
+  })
+  it('defaults a new local draft after delayed keys arrive while retaining a manually entered model', async () => {
+    let finish!: (value: LocalModelTarget[]) => void
+    vi.mocked(api.localTargets).mockReturnValue(new Promise(resolve => { finish = resolve }))
+    const wrapper = mount(ModelMonitorPanel, { props: { siteId: 99, localOnly: true, remoteGroups: [], managedKeys: [] } })
+    await flushPromises()
+    await wrapper.get('[data-test=model-new]').trigger('click')
+    expect(wrapper.find('[data-test=model-key]').exists()).toBe(false)
+    const model = wrapper.findAllComponents(Select).find(select => select.attributes('data-test') === 'model-name')!
+    model.vm.$emit('update:modelValue', 'manual-local-model')
+    await flushPromises()
+    finish([{ group_id: 42, group_name: 'Local fixture', platform: 'openai', api_key_id: 77, api_key_name: 'Local key' }])
+    await flushPromises()
+    expect(wrapper.get('[data-test=model-local-target]').text()).toContain('Local fixture')
+    expect(model.props('modelValue')).toBe('manual-local-model')
+    expect(wrapper.get('[data-test=model-start]').attributes('disabled')).toBeUndefined()
+  })
+  it('keeps a chosen compatible API mode when a local draft receives delayed default targets', async () => {
+    let finish!: (value: LocalModelTarget[]) => void
+    vi.mocked(api.localTargets).mockReturnValue(new Promise(resolve => { finish = resolve }))
+    const wrapper = mount(ModelMonitorPanel, { props: { siteId: 99, localOnly: true, remoteGroups: [], managedKeys: [] } })
+    await flushPromises()
+    await wrapper.get('[data-test=model-new]').trigger('click')
+    const mode = wrapper.findAllComponents(Select).find(select => select.attributes('data-test') === 'model-mode')!
+    mode.vm.$emit('update:modelValue', 'responses')
+    await flushPromises()
+    finish([{ group_id: 42, group_name: 'Local fixture', platform: 'openai', api_key_id: 77, api_key_name: 'Local key' }])
+    await flushPromises()
+    expect(mode.props('modelValue')).toBe('responses')
+  })
+  it('shows the local empty-key state and keeps the target local even without keys', async () => {
+    const wrapper = mount(ModelMonitorPanel, { props: { siteId: 99, localOnly: true, localTargets: [], remoteGroups: [], managedKeys: [modelKey] } })
+    await flushPromises()
+    expect(wrapper.text()).toContain('governance.modelMonitoring.noLocalKeys')
+    await wrapper.get('[data-test=model-manage-keys]').trigger('click')
+    expect(wrapper.emitted('manageKeys')).toHaveLength(1)
+    await wrapper.get('[data-test=model-new]').trigger('click')
+    expect(wrapper.find('[data-test=model-local-target]').exists()).toBe(true)
+    expect(wrapper.find('[data-test=model-key]').exists()).toBe(false)
+    expect(wrapper.get('[data-test=model-start]').attributes('disabled')).toBeDefined()
+  })
+  it('keeps an edited missing local key unchanged when workspace targets are refreshed', async () => {
+    const saved = { ...modelPolicy, config: { ...modelPolicy.config, target_type: 'local_group' as const, local_group_id: 404, local_api_key_id: 505, managed_key_id: 0 } }
+    vi.mocked(api.policies).mockResolvedValue([saved])
+    const wrapper = mount(ModelMonitorPanel, { props: { siteId: 99, localOnly: true, localTargets: [], remoteGroups: [], managedKeys: [] } })
+    await flushPromises()
+    await wrapper.get('[data-test=model-policy-edit-8]').trigger('click')
+    await wrapper.setProps({ localTargets: [{ group_id: 1, group_name: 'Replacement', platform: 'openai', api_key_id: 2, api_key_name: 'New key' }] })
+    await flushPromises()
+    const key = wrapper.findAllComponents(Select).find(select => select.attributes('data-test') === 'model-local-target')!
+    expect(key.props('modelValue')).toBeNull()
+    expect(wrapper.get('[data-test=model-start]').attributes('disabled')).toBeDefined()
+    expect(wrapper.text()).toContain('governance.modelMonitoring.localTargetUnavailable')
+  })
+  it('ignores targets from an older local workspace after switching scope', async () => {
+    let finish!: (value: LocalModelTarget[]) => void
+    vi.mocked(api.localTargets).mockReturnValueOnce(new Promise(resolve => { finish = resolve }))
+    const wrapper = mount(ModelMonitorPanel, { props: { siteId: 99, localOnly: true, remoteGroups: [], managedKeys: [] } })
+    await wrapper.setProps({ siteId: 1, localOnly: false, remoteGroups: [modelGroup], managedKeys: [modelKey] })
+    await flushPromises()
+    finish([{ group_id: 42, group_name: 'Late local fixture', platform: 'openai', api_key_id: 77, api_key_name: 'Local key' }])
+    await flushPromises()
+    await wrapper.get('[data-test=model-new]').trigger('click')
+    expect(wrapper.get('[data-test=model-key]').text()).toContain('Fixture group')
+    expect(wrapper.find('[data-test=model-local-target]').exists()).toBe(false)
+  })
+  it('allows pausing an enabled local policy while its targets are still loading', async () => {
+    const saved = { ...modelPolicy, config: { ...modelPolicy.config, target_type: 'local_group' as const, local_group_id: 404, local_api_key_id: 505, managed_key_id: 0 }, enabled: true }
+    vi.mocked(api.policies).mockResolvedValue([saved])
+    vi.mocked(api.localTargets).mockReturnValue(new Promise(() => {}))
+    vi.mocked(api.savePolicy).mockResolvedValue({ ...saved, enabled: false, version: 5 })
+    const wrapper = mount(ModelMonitorPanel, { props: { siteId: 99, localOnly: true, remoteGroups: [], managedKeys: [] } })
+    await flushPromises()
+    await wrapper.get('[data-test=model-policy-toggle-8]').trigger('click')
+    await flushPromises()
+    expect(api.savePolicy).toHaveBeenCalledWith(99, { ...saved, enabled: false, take_over_legacy: false })
   })
 })

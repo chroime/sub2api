@@ -62,6 +62,21 @@ describe('project transfer', () => {
     expect(JSON.stringify(sanitized)).not.toMatch(/apiKey|do-not-export|activeKeySecret/)
   })
 
+  it('preserves prompt reference image data URLs across export and import', async () => {
+    const reference = { dataUrl: 'data:image/png;base64,YQ==', mimeType: 'image/png', name: 'reference.png' }
+    const sourceProject: CanvasProject = {
+      ...project(),
+      id: 'prompt-project',
+      nodes: [{ id: 'prompt-node', type: 'prompt', position: { x: 0, y: 0 }, metadata: { prompt: 'Use [参考图1]', referenceImages: [reference] } }],
+      edges: [],
+      assetKeys: [],
+    }
+    const archive = await exportProject(sourceProject, repository())
+    const target = repository()
+    const imported = await importProject(archive, target)
+    expect(imported.nodes[0].metadata.referenceImages).toEqual([reference])
+  })
+
   it('rejects an export when a referenced asset is missing', async () => {
     await expect(exportProject(project(), repository())).rejects.toThrow('Missing asset')
   })

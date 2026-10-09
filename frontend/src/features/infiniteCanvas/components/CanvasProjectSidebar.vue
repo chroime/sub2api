@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import BaseDialog from '@/components/common/BaseDialog.vue'
 import type { CanvasProject } from '../types'
 
 defineProps<{ projects: CanvasProject[]; activeProjectId?: string | null; mobileOpen?: boolean }>()
@@ -14,9 +16,25 @@ const emit = defineEmits<{
   (event: 'close'): void
 }>()
 const { t } = useI18n()
+const showRename = ref(false)
+const renameProject = ref<CanvasProject | null>(null)
+const renameTitle = ref('')
 function promptRename(project: CanvasProject) {
-  const title = window.prompt(t('infiniteCanvas.sidebar.namePrompt'), project.title)
-  if (title?.trim()) emit('rename', project.id, title.trim())
+  renameProject.value = project
+  renameTitle.value = project.title
+  showRename.value = true
+}
+function closeRename() {
+  showRename.value = false
+  renameProject.value = null
+  renameTitle.value = ''
+}
+function confirmRename() {
+  const project = renameProject.value
+  const title = renameTitle.value.trim()
+  if (!project || !title) return
+  emit('rename', project.id, title)
+  closeRename()
 }
 </script>
 
@@ -40,4 +58,22 @@ function promptRename(project: CanvasProject) {
       <button type="button" class="text-xs text-gray-500 hover:text-primary-600" @click="emit('export')">{{ t('infiniteCanvas.sidebar.export') }}</button>
     </div>
   </aside>
+  <BaseDialog :show="showRename" :title="t('infiniteCanvas.project.rename')" width="narrow" @close="closeRename">
+    <label class="block text-sm text-gray-700 dark:text-gray-200">
+      {{ t('infiniteCanvas.sidebar.namePrompt') }}
+      <input
+        v-model="renameTitle"
+        data-rename-input
+        type="text"
+        maxlength="200"
+        class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 dark:border-dark-600 dark:bg-dark-800"
+        @keydown.enter.prevent="confirmRename"
+        @keydown.esc.prevent="closeRename"
+      />
+    </label>
+    <template #footer>
+      <button type="button" class="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 dark:border-dark-600 dark:text-gray-200" @click="closeRename">{{ t('common.cancel') }}</button>
+      <button type="button" data-rename-submit :disabled="!renameTitle.trim()" class="rounded-md bg-primary-600 px-3 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-50" @click="confirmRename">{{ t('common.confirm') }}</button>
+    </template>
+  </BaseDialog>
 </template>

@@ -75,10 +75,10 @@
           </div>
           <span class="text-xs text-gray-500 dark:text-dark-400">{{ t('iqDetection.recentCount', { count: dashboard.pelican_works.length }) }}</span>
         </div>
-        <div v-if="dashboard.pelican_works.length" class="grid grid-cols-1 items-start gap-5 md:grid-cols-2 2xl:grid-cols-3" data-test="pelican-work-grid">
+        <div v-if="dashboard.pelican_works.length" class="grid grid-cols-1 items-stretch gap-5 md:grid-cols-2 2xl:grid-cols-3" data-test="pelican-work-grid">
           <article v-for="work in dashboard.pelican_works" :key="work.id" class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-dark-700 dark:bg-dark-800" data-test="pelican-work-card">
             <div class="relative aspect-[6/5] overflow-hidden bg-slate-50 dark:bg-dark-900" data-test="pelican-work-preview">
-              <iframe :key="`${work.id}:${replayNonce[work.id] || 0}`" :srcdoc="preview(work.html)" :title="`${t('iqDetection.pelicanTitle')} ${work.model}`" sandbox="allow-scripts" scrolling="no" referrerpolicy="no-referrer" class="h-full w-full border-0" />
+              <iframe :key="`${work.id}:${replayNonce[work.id] || 0}`" :srcdoc="preview(work.html)" :title="`${t('iqDetection.pelicanTitle')} ${work.model}`" sandbox="allow-scripts" scrolling="no" referrerpolicy="no-referrer" class="block h-full w-full border-0" />
               <button type="button" class="absolute bottom-3 right-3 inline-flex items-center gap-1.5 rounded-full bg-slate-900/85 px-3 py-1.5 text-xs font-medium text-white shadow-lg transition hover:bg-slate-900" @click="replay(work.id)"><Icon name="play" size="xs" />{{ t('iqDetection.replay') }}</button>
             </div>
             <div class="space-y-2 p-4 text-sm">
@@ -94,6 +94,13 @@
             </div>
           </article>
         </div>
+        <div v-if="dashboard.pelican_works.length || pelicanPage > 1 || dashboard.pelican_has_more" class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-dark-700 dark:bg-dark-800" data-test="pelican-pagination">
+          <span class="text-xs text-gray-500 dark:text-dark-400">{{ t('iqDetection.page', { page: pelicanPage }) }}</span>
+          <div class="flex items-center gap-2">
+            <button type="button" class="btn btn-secondary btn-sm" data-test="pelican-prev" :disabled="pelicanLoading || pelicanPage <= 1" @click="changePelicanPage(pelicanPage - 1)">{{ t('pagination.previous') }}</button>
+            <button type="button" class="btn btn-secondary btn-sm" data-test="pelican-next" :disabled="pelicanLoading || !dashboard.pelican_has_more" @click="changePelicanPage(pelicanPage + 1)">{{ t('pagination.next') }}</button>
+          </div>
+        </div>
         <div v-else class="rounded-xl border border-dashed border-gray-300 bg-white px-5 py-8 text-center text-sm text-gray-500 dark:border-dark-600 dark:bg-dark-800">{{ t('iqDetection.emptyPelican') }}</div>
       </section>
     </template>
@@ -102,7 +109,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from '@/components/icons/Icon.vue'
 import AppLayout from '@/components/layout/AppLayout.vue'
@@ -112,14 +119,32 @@ import { modelPreviewDocument, modelPreviewCSP } from '@/views/admin/upstream-go
 const { t } = useI18n()
 const loading = ref(true)
 const error = ref('')
-const dashboard = ref<IQDashboard>({ candy_results: [], pelican_works: [], timeline: [], standard_answer: 21, window_hours: 24, generated_at: '' })
+const dashboard = ref<IQDashboard>({ candy_results: [], pelican_works: [], pelican_page: 1, pelican_page_size: 8, pelican_has_more: false, timeline: [], standard_answer: 21, window_hours: 24, generated_at: '' })
 const replayNonce = ref<Record<string, number>>({})
-const pelicanPreviewStyle = '<style data-pelican-preview-style>html,body{height:100%!important;min-height:0!important;overflow:hidden!important}body{margin:0!important}</style>'
+const pelicanLoading = ref(false)
+const pelicanPage = computed(() => dashboard.value.pelican_page || 1)
+const pelicanPreviewStyle = '<style data-pelican-preview-style>html,body{width:100%!important;height:100%!important;min-height:0!important;max-height:100%!important;margin:0!important;overflow:hidden!important;overscroll-behavior:none!important;scrollbar-width:none!important}html::-webkit-scrollbar,body::-webkit-scrollbar{display:none!important;width:0!important;height:0!important}*,*::before,*::after{box-sizing:border-box!important}body>*{max-width:100%!important;max-height:100%!important}svg,canvas,img,video{max-width:100%!important;max-height:100%!important}</style>'
 
-async function load() {
-  loading.value = true; error.value = ''
-  try { dashboard.value = await userAPI.getIQDetection({ hours: 24, limit: 8 }) } catch { error.value = t('iqDetection.loadFailed') } finally { loading.value = false }
+async function fetchDashboard(page = 1) {
+  const initialLoad = page === 1 && !dashboard.value.generated_at
+  if (initialLoad) loading.value = true
+  pelicanLoading.value = true
+  error.value = ''
+  try {
+    dashboard.value = await userAPI.getIQDetection({
+      hours: 24,
+      limit: 8,
+      ...(page > 1 ? { pelican_page: page, pelican_page_size: 8 } : {})
+    })
+  } catch {
+    error.value = t('iqDetection.loadFailed')
+  } finally {
+    pelicanLoading.value = false
+    if (initialLoad) loading.value = false
+  }
 }
+function load() { void fetchDashboard(1) }
+function changePelicanPage(page: number) { if (page >= 1 && !pelicanLoading.value) void fetchDashboard(page) }
 function formatTime(value: string) {
   if (!value) return '—'
   const date = new Date(value)

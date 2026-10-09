@@ -17,6 +17,7 @@ func registerUpstreamGovernanceRoutes(admin *gin.RouterGroup, h *handler.Handler
 	g.GET("/sites/:id/timeline", api.Timeline)
 	g.GET("/model-templates", api.ModelTemplates)
 	g.PUT("/model-templates", api.SaveModelTemplates)
+	g.GET("/local-model-workspace", api.LocalModelWorkspace)
 	g.GET("/local-model-targets", api.LocalModelTargets)
 	g.GET("/sites", api.List)
 	g.POST("/sites", api.Create)

@@ -161,7 +161,7 @@ func (a *BrowserAuthorizer) Start(ctx context.Context, actorID, siteID int64, in
 	if err != nil || login.Username == "" {
 		return nil, ErrInvalid
 	}
-	site, release, err := a.service.siteLock(ctx, siteID)
+	site, release, err := a.service.remoteSiteLock(ctx, siteID)
 	if err != nil {
 		return nil, err
 	}

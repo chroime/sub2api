@@ -61,7 +61,7 @@ func (h *UserHandler) GetIQDetection(c *gin.Context) {
 		response.Unauthorized(c, "User not authenticated")
 		return
 	}
-	hours, limit := 24, 8
+	hours, limit, pelicanPage, pelicanPageSize := 24, 8, 1, 8
 	if values, present := c.Request.URL.Query()["hours"]; present {
 		parsed, err := strconv.Atoi(c.Query("hours"))
 		if err != nil || len(values) != 1 || parsed <= 0 || parsed > 168 {
@@ -78,11 +78,27 @@ func (h *UserHandler) GetIQDetection(c *gin.Context) {
 		}
 		limit = parsed
 	}
+	if values, present := c.Request.URL.Query()["pelican_page"]; present {
+		parsed, err := strconv.Atoi(c.Query("pelican_page"))
+		if err != nil || len(values) != 1 || parsed <= 0 || parsed > 1000000 {
+			response.BadRequest(c, "Invalid pelican_page")
+			return
+		}
+		pelicanPage = parsed
+	}
+	if values, present := c.Request.URL.Query()["pelican_page_size"]; present {
+		parsed, err := strconv.Atoi(c.Query("pelican_page_size"))
+		if err != nil || len(values) != 1 || parsed <= 0 || parsed > 20 {
+			response.BadRequest(c, "Invalid pelican_page_size")
+			return
+		}
+		pelicanPageSize = parsed
+	}
 	if h.governanceService == nil {
-		response.Success(c, &gov.IQDashboard{CandyResults: []gov.IQCandyResult{}, PelicanWorks: []gov.IQPelicanWork{}, Timeline: []gov.IQTimelinePoint{}, StandardAnswer: 21, WindowHours: hours, GeneratedAt: time.Now().UTC()})
+		response.Success(c, &gov.IQDashboard{CandyResults: []gov.IQCandyResult{}, PelicanWorks: []gov.IQPelicanWork{}, PelicanPage: pelicanPage, PelicanPageSize: pelicanPageSize, Timeline: []gov.IQTimelinePoint{}, StandardAnswer: 21, WindowHours: hours, GeneratedAt: time.Now().UTC()})
 		return
 	}
-	result, err := h.governanceService.PublicIQDashboard(c.Request.Context(), hours, limit)
+	result, err := h.governanceService.PublicIQDashboardPage(c.Request.Context(), hours, limit, pelicanPage, pelicanPageSize)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return

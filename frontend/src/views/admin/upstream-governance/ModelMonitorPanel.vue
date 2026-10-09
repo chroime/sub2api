@@ -13,7 +13,19 @@ import { errorKey } from './feedback'
 import { formatGovernanceTime } from './format'
 import { intervalValidationKey } from './interval'
 
-const props = defineProps<{ siteId: number; remoteGroups: RemoteGroup[]; managedKeys: ManagedKey[]; collectedAt?: string; disabled?: boolean }>()
+const props = defineProps<{
+  siteId: number
+  remoteGroups: RemoteGroup[]
+  managedKeys: ManagedKey[]
+  collectedAt?: string
+  disabled?: boolean
+  /** Restrict this instance to the administrator's hidden local workspace. */
+  localOnly?: boolean
+  /** Targets already returned by the local workspace read. */
+  localTargets?: LocalModelTarget[]
+  /** Alias kept for callers that pass the workspace response field by name. */
+  workspaceTargets?: LocalModelTarget[]
+}>()
 const emit = defineEmits<{ busy: [value: boolean]; manageKeys: [] }>()
 const { t } = useI18n()
 const mt = (key: string) => t(`governance.modelMonitoring.${key}`)
@@ -21,8 +33,10 @@ const failure = (value: unknown) => {
   const reason = (value as { reason?: string })?.reason
   return reason === 'model_budget_exhausted' ? mt('budgetExhausted') : reason === 'model_group_gone' ? mt('groupGone') : t(errorKey(value))
 }
-const policies = ref<ModelPolicy[]>([]), runs = ref<ModelRunPage | null>(null), localTargets = ref<LocalModelTarget[]>([])
+const providedLocalTargets = computed(() => props.localTargets ?? props.workspaceTargets)
+const policies = ref<ModelPolicy[]>([]), runs = ref<ModelRunPage | null>(null), availableLocalTargets = ref<LocalModelTarget[]>(providedLocalTargets.value ? [...providedLocalTargets.value] : [])
 const loading = ref(false), busy = ref(false), error = ref(''), notice = ref(''), editorOpen = ref(false)
+const localTargetsLoading = ref(false), localTargetsError = ref('')
 const page = ref(1), batchId = ref(''), detailId = ref(''), deleteId = ref<number | null>(null), deleteRunId = ref<string | null>(null)
 const comparison = ref<{ batchId: string; template: ModelTestTemplate; sample: number } | null>(null)
 const stats = ref<ModelStats | null>(null), statsError = ref(''), statsDays = ref(7), statsExpanded = ref(false)
@@ -33,17 +47,22 @@ const modes: ModelAPIMode[] = ['chat_completions', 'responses', 'anthropic', 'ge
 const efforts: ModelEffort[] = ['low', 'medium', 'high']
 const templates: ModelTestTemplate[] = ['candy', 'pelican', 'token_audit', 'context', 'probe']
 const statuses = new Set(['queued', 'running', 'succeeded', 'failed', 'cancelled', 'indeterminate', 'skipped'])
-const initialConfig = (): ModelTestConfig => ({ target_type: 'upstream', managed_key_id: 0, local_group_id: 0, local_api_key_id: 0, platform: 'openai', model: '', api_mode: 'chat_completions', efforts: ['medium'], templates: ['candy', 'token_audit'], samples: 1, concurrency: 1, max_output_tokens: 4096, timeout_seconds: 180, first_content_timeout_seconds: 60, idle_timeout_seconds: 30, input_tokens: 1024, tokenizer: 'auto', token_tolerance_percent: 10 })
+const initialConfig = (): ModelTestConfig => ({ target_type: props.localOnly ? 'local_group' : 'upstream', managed_key_id: 0, local_group_id: 0, local_api_key_id: 0, platform: 'openai', model: '', api_mode: 'chat_completions', efforts: ['medium'], templates: ['candy', 'token_audit'], samples: 1, concurrency: 1, max_output_tokens: 4096, timeout_seconds: 180, first_content_timeout_seconds: 60, idle_timeout_seconds: 30, input_tokens: 1024, tokenizer: 'auto', token_tolerance_percent: 10 })
 const config = ref<ModelTestConfig>(initialConfig())
 let generation = 0, refreshGeneration = 0, timer: ReturnType<typeof setTimeout> | undefined
+let localTargetsGeneration = 0
+let localTargetsRequest = 0
+let localSelectionTouched = false
+let localModelTouched = false
+let localModeTouched = false
 let pendingStart: { fingerprint: string; requestId: string } | null = null
 const locked = computed(() => props.disabled || busy.value)
 const readyKeys = computed(() => props.managedKeys.filter(key => key.site_id === props.siteId && key.has_key))
-const targetType = computed<ModelTargetType>(() => config.value.target_type || 'upstream')
+const targetType = computed<ModelTargetType>(() => props.localOnly ? 'local_group' : 'upstream')
 const groupNames = computed(() => new Map(props.remoteGroups.map(group => [group.id, group.name])))
 const keyOptions = computed(() => readyKeys.value.map(key => ({ value: key.id, platform: key.platform, label: `${groupNames.value.get(key.remote_group_id) || mt('unnamedGroup')} · ${key.platform}`, group: key.remote_group_id })))
 const selectedKey = computed(() => readyKeys.value.find(key => key.id === config.value.managed_key_id))
-const selectedLocalTarget = computed(() => localTargets.value.find(target => target.group_id === config.value.local_group_id && target.api_key_id === config.value.local_api_key_id))
+const selectedLocalTarget = computed(() => availableLocalTargets.value.find(target => target.group_id === config.value.local_group_id && target.api_key_id === config.value.local_api_key_id))
 const selectedGroup = computed(() => props.remoteGroups.find(group => group.id === selectedKey.value?.remote_group_id))
 const usingCandidateModels = computed(() => !!selectedGroup.value && !selectedGroup.value.models?.length)
 const modelOptions = computed(() => {
@@ -79,8 +98,8 @@ const keyLabel = (id: number) => {
   return key ? groupNames.value.get(key.remote_group_id) || `${mt('groupKey')} #${id}` : `${mt('groupKey')} #${id}`
 }
 const targetLabel = (value: ModelTestConfig) => {
-  if (value.target_type === 'local_group') {
-    const target = localTargets.value.find(item => item.group_id === value.local_group_id && item.api_key_id === value.local_api_key_id)
+  if (value.target_type === 'local_group' || props.localOnly) {
+    const target = availableLocalTargets.value.find(item => item.group_id === value.local_group_id && item.api_key_id === value.local_api_key_id)
     return target ? `${target.group_name} · ${target.api_key_name}` : `${mt('localGroup')} #${value.local_group_id || 0}`
   }
   return keyLabel(value.managed_key_id)
@@ -88,10 +107,9 @@ const targetLabel = (value: ModelTestConfig) => {
 const statsTargetLabel = (value: ModelStats['groups'][number]) => value.target_type === 'local_group'
   ? `${mt('localGroup')} #${value.local_group_id || 0}`
   : keyLabel(value.managed_key_id)
-const targetOptions = computed(() => [
-  { value: 'upstream' as ModelTargetType, label: mt('upstreamTarget') },
-  { value: 'local_group' as ModelTargetType, label: mt('localTarget') },
-])
+const targetOptions = computed(() => props.localOnly
+  ? [{ value: 'local_group' as ModelTargetType, label: mt('localTarget') }]
+  : [{ value: 'upstream' as ModelTargetType, label: mt('upstreamTarget') }])
 const canRunTarget = computed(() => targetType.value === 'local_group' ? !!selectedLocalTarget.value : !!selectedKey.value)
 const statsGroups = computed(() => statsExpanded.value ? stats.value?.groups || [] : (stats.value?.groups || []).slice(0, 6))
 const statsWindowOptions = computed(() => [1, 7, 30].map(value => ({ value, label: mt(`window_${value}`) })))
@@ -106,11 +124,41 @@ function schedulePoll() {
   clearTimer()
   if (runningCount.value || policies.value.some(policy => policy.enabled)) timer = setTimeout(() => { void refresh(true) }, 4000)
 }
+function hasWorkspaceTargets() {
+  return providedLocalTargets.value !== undefined
+}
+function applyLocalTargetDefault() {
+  if (!props.localOnly || localSelectionTouched || config.value.local_group_id || config.value.local_api_key_id) return
+  const target = availableLocalTargets.value[0]
+  if (target) changeLocalTarget(target.api_key_id, false)
+}
 async function refreshLocalTargets() {
+  const request = ++localTargetsRequest
+  const requestGeneration = ++localTargetsGeneration
+  if (!props.localOnly || hasWorkspaceTargets()) {
+    localTargetsLoading.value = false
+    localTargetsError.value = ''
+    if (props.localOnly && hasWorkspaceTargets()) {
+      availableLocalTargets.value = [...(providedLocalTargets.value || [])]
+      applyLocalTargetDefault()
+    } else if (!props.localOnly) {
+      availableLocalTargets.value = []
+    }
+    return
+  }
+  localTargetsLoading.value = true
+  localTargetsError.value = ''
   try {
-    localTargets.value = await api.localTargets()
+    const targets = await api.localTargets()
+    if (request !== localTargetsRequest || requestGeneration !== localTargetsGeneration || !props.localOnly || hasWorkspaceTargets()) return
+    availableLocalTargets.value = targets || []
+    applyLocalTargetDefault()
   } catch {
-    localTargets.value = []
+    if (request !== localTargetsRequest || requestGeneration !== localTargetsGeneration || !props.localOnly || hasWorkspaceTargets()) return
+    availableLocalTargets.value = []
+    localTargetsError.value = mt('localTargetsUnavailable')
+  } finally {
+    if (request === localTargetsRequest && requestGeneration === localTargetsGeneration) localTargetsLoading.value = false
   }
 }
 async function refresh(silent = false) {
@@ -130,6 +178,7 @@ async function refresh(silent = false) {
 }
 function changeKey(value: unknown) {
   if (locked.value) return
+  if (props.localOnly) return
   const key = readyKeys.value.find(item => item.id === value)
   if (!key) return
   config.value.target_type = 'upstream'; config.value.managed_key_id = key.id; config.value.local_group_id = 0; config.value.local_api_key_id = 0; config.value.platform = key.platform
@@ -138,51 +187,72 @@ function changeKey(value: unknown) {
   config.value.model = models[0] || ''
 }
 function changeTargetType(value: unknown) {
-  if (locked.value || (value !== 'upstream' && value !== 'local_group')) return
+  if (locked.value || (value !== 'upstream' && value !== 'local_group') || (props.localOnly && value !== 'local_group') || (!props.localOnly && value !== 'upstream')) return
   config.value.target_type = value as ModelTargetType
   if (value === 'upstream') {
     config.value.local_group_id = 0; config.value.local_api_key_id = 0
     if (readyKeys.value[0]) changeKey(readyKeys.value[0].id)
   } else {
     config.value.managed_key_id = 0
-    const target = localTargets.value[0]
-    if (target) changeLocalTarget(target)
+    const target = availableLocalTargets.value[0]
+    if (target) changeLocalTarget(target.api_key_id)
   }
 }
-function changeLocalTarget(value: unknown) {
-  if (locked.value) return
-  const target = localTargets.value.find(item => item.api_key_id === value || `${item.api_key_id}` === String(value))
+function changeLocalTarget(value: unknown, markTouched = true) {
+  if (locked.value || !props.localOnly) return
+  const target = availableLocalTargets.value.find(item => item.api_key_id === value || `${item.api_key_id}` === String(value))
   if (!target) return
+  if (markTouched) localSelectionTouched = true
+  const preserveModel = !markTouched && localModelTouched
+  const preserveMode = !markTouched && localModeTouched
   config.value.target_type = 'local_group'; config.value.managed_key_id = 0; config.value.local_group_id = target.group_id; config.value.local_api_key_id = target.api_key_id; config.value.platform = target.platform
-  config.value.api_mode = target.platform === 'anthropic' ? 'anthropic' : target.platform === 'gemini' ? 'gemini' : 'chat_completions'
-  config.value.model = ''
+  if (!preserveMode) config.value.api_mode = target.platform === 'anthropic' ? 'anthropic' : target.platform === 'gemini' ? 'gemini' : 'chat_completions'
+  if (!preserveModel) config.value.model = ''
 }
-function changeModel(value: unknown) { if (!locked.value && typeof value === 'string') config.value.model = value }
-function changeMode(value: unknown) { if (!locked.value && modes.includes(value as ModelAPIMode) && modeAvailable(value as ModelAPIMode)) config.value.api_mode = value as ModelAPIMode }
+function changeModel(value: unknown) { if (!locked.value && typeof value === 'string') { if (props.localOnly) localModelTouched = true; config.value.model = value } }
+function changeMode(value: unknown) { if (!locked.value && modes.includes(value as ModelAPIMode) && modeAvailable(value as ModelAPIMode)) { if (props.localOnly) localModeTouched = true; config.value.api_mode = value as ModelAPIMode } }
 function changeTokenizer(value: unknown) { if (!locked.value && ['auto', 'none', 'o200k_base', 'cl100k_base'].includes(String(value))) config.value.tokenizer = value as ModelTestConfig['tokenizer'] }
 function newConfiguration() {
   if (locked.value) return
+  localSelectionTouched = false; localModelTouched = false; localModeTouched = false
   editingPolicy.value = null; config.value = initialConfig(); policyName.value = ''; interval.value = 1440; dailyLimit.value = 100
   notifyEnabled.value = false; recipients.value = ''; failureThreshold.value = 3; takeOverLegacy.value = false
   error.value = ''; notice.value = ''; editorOpen.value = true
-  if (readyKeys.value[0]) changeKey(readyKeys.value[0].id)
-  else if (localTargets.value[0]) changeTargetType('local_group')
+  if (props.localOnly) applyLocalTargetDefault()
+  else if (readyKeys.value[0]) changeKey(readyKeys.value[0].id)
 }
-watch(readyKeys, keys => { if (targetType.value === 'upstream' && !config.value.managed_key_id && keys[0]) changeKey(keys[0].id) })
-watch(localTargets, targets => { if (targetType.value === 'local_group' && !selectedLocalTarget.value && targets[0]) changeLocalTarget(targets[0].api_key_id) })
+watch(readyKeys, keys => { if (!props.localOnly && !config.value.managed_key_id && keys[0]) changeKey(keys[0].id) })
+watch(availableLocalTargets, () => applyLocalTargetDefault())
+watch(providedLocalTargets, targets => {
+  if (targets === undefined) return
+  ++localTargetsGeneration
+  ++localTargetsRequest
+  availableLocalTargets.value = [...targets]
+  localTargetsError.value = ''
+  localTargetsLoading.value = false
+  applyLocalTargetDefault()
+})
 watch(() => props.siteId, () => {
-  generation++; refreshGeneration++; clearTimer(); pendingStart = null
+  generation++; refreshGeneration++; ++localTargetsGeneration; ++localTargetsRequest; clearTimer(); pendingStart = null
   policies.value = []; runs.value = null; loading.value = false; busy.value = false; error.value = ''; notice.value = ''
   page.value = 1; batchId.value = ''; detailId.value = ''; deleteId.value = null; deleteRunId.value = null; editorOpen.value = false
   comparison.value = null; statsGeneration++; stats.value = null; statsError.value = ''; statsExpanded.value = false
-  editingPolicy.value = null; config.value = initialConfig()
-  if (readyKeys.value[0]) changeKey(readyKeys.value[0].id)
-  else if (localTargets.value[0]) changeTargetType('local_group')
+  editingPolicy.value = null; localSelectionTouched = false; localModelTouched = false; localModeTouched = false; config.value = initialConfig()
+  if (!props.localOnly && readyKeys.value[0]) changeKey(readyKeys.value[0].id)
+  else if (props.localOnly) applyLocalTargetDefault()
   void refreshLocalTargets()
   void refresh()
 }, { immediate: true })
+watch(() => props.localOnly, () => {
+  ++localTargetsGeneration
+  ++localTargetsRequest
+  localSelectionTouched = false; localModelTouched = false; localModeTouched = false
+  config.value = initialConfig()
+  if (props.localOnly) applyLocalTargetDefault()
+  void refreshLocalTargets()
+})
 watch(busy, value => emit('busy', value), { flush: 'sync' })
-onUnmounted(() => { generation++; refreshGeneration++; clearTimer(); emit('busy', false) })
+onUnmounted(() => { generation++; refreshGeneration++; ++localTargetsGeneration; ++localTargetsRequest; clearTimer(); emit('busy', false) })
 function integer(value: number, maximum: number) { return Number.isInteger(value) && value > 0 && value <= maximum }
 function validatedConfig(): ModelTestConfig | null {
   const value = config.value
@@ -239,7 +309,9 @@ function editPolicy(policy: ModelPolicy) {
   installPolicy(policy)
 }
 function installPolicy(policy: ModelPolicy) {
+  localSelectionTouched = true; localModelTouched = true; localModeTouched = true
   editingPolicy.value = policy; config.value = { ...initialConfig(), ...policy.config, efforts: [...policy.config.efforts], templates: [...policy.config.templates] }
+  config.value.target_type = props.localOnly ? 'local_group' : 'upstream'
   config.value.first_content_timeout_seconds ||= 60; config.value.idle_timeout_seconds ||= 30
   policyName.value = policy.name; interval.value = policy.interval_minutes; dailyLimit.value = policy.daily_request_limit
   notifyEnabled.value = policy.notify_enabled; recipients.value = policy.recipients.join('\n'); failureThreshold.value = policy.failure_threshold; takeOverLegacy.value = false
@@ -294,17 +366,21 @@ function comparisonDetail(id: string) { comparison.value = null; detailId.value 
     <header class="flex flex-wrap items-start justify-between gap-3"><div class="min-w-0 flex-1"><h3 class="font-semibold">{{ mt('title') }}</h3><p class="mt-1 max-w-3xl text-xs leading-relaxed text-gray-500">{{ mt('description') }}</p></div><div class="flex flex-wrap gap-2"><button type="button" class="btn btn-secondary text-sm" :disabled="locked || loading" :aria-label="t('common.refresh')" @click="refresh()"><Icon name="refresh" size="sm" /></button><button type="button" data-test="model-new" class="btn btn-primary text-sm" :disabled="locked" @click="newConfiguration">{{ mt('newTest') }}</button></div></header>
     <p v-if="error" role="alert" class="rounded-xl bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">{{ error }}</p><p v-if="notice" role="status" class="rounded-xl bg-primary-50 p-3 text-sm text-primary-700 dark:bg-primary-900/20 dark:text-primary-300">{{ notice }}</p>
     <div class="grid grid-cols-2 gap-3 xl:grid-cols-4"><div class="rounded-xl bg-gray-50 p-4 dark:bg-dark-900"><p class="text-xs text-gray-500">{{ mt('scheduledPolicies') }}</p><p class="mt-1 text-xl font-semibold tabular-nums">{{ activePolicyCount }}<span class="ml-1 text-xs font-normal text-gray-400">/ {{ policies.length }}</span></p></div><div class="rounded-xl bg-gray-50 p-4 dark:bg-dark-900"><p class="text-xs text-gray-500">{{ mt('inProgress') }}</p><p class="mt-1 text-xl font-semibold tabular-nums">{{ runningCount }}</p></div><div class="rounded-xl bg-gray-50 p-4 dark:bg-dark-900"><p class="text-xs text-gray-500">{{ mt('finished') }}</p><p class="mt-1 text-xl font-semibold tabular-nums">{{ completedCount }}</p></div><div class="rounded-xl bg-gray-50 p-4 dark:bg-dark-900"><p class="text-xs text-gray-500">{{ mt('needsAttention') }}</p><p class="mt-1 text-xl font-semibold tabular-nums">{{ (counts.failed || 0) + (counts.indeterminate || 0) }}</p></div></div>
-    <p v-if="!readyKeys.length && !localTargets.length" class="rounded-xl border border-dashed border-gray-200 p-5 text-sm text-gray-500 dark:border-dark-600">{{ mt('noKeys') }} <button type="button" class="font-medium text-primary-700 dark:text-primary-300" :disabled="locked" @click="emit('manageKeys')">{{ t('governance.viewKeys') }}</button></p>
+    <p v-if="localOnly && localTargetsLoading" role="status" class="rounded-xl border border-dashed border-gray-200 p-5 text-sm text-gray-500 dark:border-dark-600">{{ mt('localTargetsLoading') }}</p>
+    <p v-else-if="localOnly && localTargetsError" role="alert" class="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-300">{{ localTargetsError }} <span class="mt-2 block text-xs">{{ mt('localTargetsUnavailableHint') }}</span><span class="mt-3 flex flex-wrap gap-3"><button type="button" class="btn btn-secondary text-xs" :disabled="locked" data-test="model-local-target-retry" @click="refreshLocalTargets">{{ mt('retry') }}</button><button type="button" class="btn btn-secondary text-xs" :disabled="locked" data-test="model-manage-keys" @click="emit('manageKeys')">{{ t('governance.viewKeys') }}</button></span></p>
+    <p v-else-if="localOnly && !availableLocalTargets.length" class="rounded-xl border border-dashed border-gray-200 p-5 text-sm text-gray-500 dark:border-dark-600">{{ mt('noLocalKeys') }} <button type="button" class="font-medium text-primary-700 dark:text-primary-300" data-test="model-manage-keys" :disabled="locked" @click="emit('manageKeys')">{{ t('governance.viewKeys') }}</button></p>
+    <p v-else-if="!localOnly && !readyKeys.length" class="rounded-xl border border-dashed border-gray-200 p-5 text-sm text-gray-500 dark:border-dark-600">{{ mt('noKeys') }} <button type="button" class="font-medium text-primary-700 dark:text-primary-300" :disabled="locked" @click="emit('manageKeys')">{{ t('governance.viewKeys') }}</button></p>
     <section v-if="editorOpen" class="rounded-xl border border-gray-200 p-4 dark:border-dark-600 sm:p-5" data-test="model-editor">
       <div class="mb-4 flex items-center justify-between gap-3"><h4 class="font-semibold">{{ editingPolicy ? mt('editPolicy') : mt('configureTest') }}</h4><button type="button" class="rounded p-1 text-gray-500" :aria-label="t('common.close')" :disabled="locked" @click="editorOpen = false"><Icon name="x" size="sm" /></button></div>
       <form class="space-y-5" @submit.prevent="start"><fieldset :disabled="locked" class="min-w-0 space-y-5">
         <div class="grid gap-4 lg:grid-cols-4">
           <div class="min-w-0"><label :for="`model-target-type-${siteId}`" class="mb-1 block text-sm font-medium">{{ mt('targetType') }}</label><Select :id="`model-target-type-${siteId}`" data-test="model-target-type" :model-value="targetType" :options="targetOptions" :disabled="locked" :aria-label="mt('targetType')" @update:model-value="changeTargetType" /></div>
           <div v-if="targetType === 'upstream'" class="min-w-0"><label :for="`model-key-${siteId}`" class="mb-1 block text-sm font-medium">{{ mt('groupKey') }}</label><Select :id="`model-key-${siteId}`" data-test="model-key" :model-value="config.managed_key_id || null" :options="keyOptions" :disabled="locked" :aria-label="mt('groupKey')" @update:model-value="changeKey"><template #selected="{ option }"><span v-if="option" class="flex items-center gap-2"><PlatformIcon :platform="option.platform as Transport" size="sm" /><span class="truncate">{{ option.label }}</span></span><span v-else>{{ mt('selectKeyFirst') }}</span></template><template #option="{ option }"><span class="flex min-w-0 items-center gap-2"><PlatformIcon :platform="option.platform as Transport" size="sm" /><span class="break-words">{{ option.label }}</span></span></template></Select></div>
-          <div v-else class="min-w-0"><label :for="`model-local-target-${siteId}`" class="mb-1 block text-sm font-medium">{{ mt('localTarget') }}</label><Select :id="`model-local-target-${siteId}`" data-test="model-local-target" :model-value="selectedLocalTarget?.api_key_id || null" :options="localTargets.map(target => ({ value: target.api_key_id, label: `${target.group_name} · ${target.api_key_name}`, platform: target.platform }))" :disabled="locked" :aria-label="mt('localTarget')" @update:model-value="changeLocalTarget"><template #selected="{ option }"><span v-if="option" class="flex items-center gap-2"><PlatformIcon :platform="option.platform as Transport" size="sm" /><span class="truncate">{{ option.label }}</span></span><span v-else>{{ mt('selectLocalTarget') }}</span></template><template #option="{ option }"><span class="flex min-w-0 items-center gap-2"><PlatformIcon :platform="option.platform as Transport" size="sm" /><span class="break-words">{{ option.label }}</span></span></template></Select></div>
+          <div v-else class="min-w-0"><label :for="`model-local-target-${siteId}`" class="mb-1 block text-sm font-medium">{{ mt('localTarget') }}</label><Select :id="`model-local-target-${siteId}`" data-test="model-local-target" :model-value="selectedLocalTarget?.api_key_id || null" :options="availableLocalTargets.map(target => ({ value: target.api_key_id, label: `${target.group_name} · ${target.api_key_name}`, platform: target.platform }))" :disabled="locked" :aria-label="mt('localTarget')" @update:model-value="changeLocalTarget"><template #selected="{ option }"><span v-if="option" class="flex items-center gap-2"><PlatformIcon :platform="option.platform as Transport" size="sm" /><span class="truncate">{{ option.label }}</span></span><span v-else>{{ mt('selectLocalTarget') }}</span></template><template #option="{ option }"><span class="flex min-w-0 items-center gap-2"><PlatformIcon :platform="option.platform as Transport" size="sm" /><span class="break-words">{{ option.label }}</span></span></template></Select></div>
           <div class="min-w-0"><label :for="`model-name-${siteId}`" class="mb-1 block text-sm font-medium">{{ t('governance.model') }}</label><Select :id="`model-name-${siteId}`" data-test="model-name" :model-value="config.model" :options="modelOptions" searchable creatable :disabled="locked" :aria-label="t('governance.model')" :placeholder="mt('modelPlaceholder')" @update:model-value="changeModel" /></div>
           <div class="min-w-0"><label :for="`model-mode-${siteId}`" class="mb-1 block text-sm font-medium">{{ mt('apiMode') }}</label><Select :id="`model-mode-${siteId}`" data-test="model-mode" :model-value="config.api_mode" :options="modeOptions" :disabled="locked" :aria-label="mt('apiMode')" @update:model-value="changeMode"><template #selected="{ option }"><span v-if="option" class="flex items-center gap-2"><PlatformIcon :platform="option.platform as Transport" size="sm" />{{ option.label }}</span></template><template #option="{ option }"><span class="flex items-center gap-2"><PlatformIcon :platform="option.platform as Transport" size="sm" />{{ option.label }}</span></template></Select></div>
         </div>
+        <p v-if="localOnly && config.local_group_id && !selectedLocalTarget" class="-mt-3 text-xs text-amber-700 dark:text-amber-300">{{ mt('localTargetUnavailable') }}</p>
         <p class="-mt-2 text-xs leading-relaxed" :class="usingCandidateModels ? 'text-amber-700 dark:text-amber-300' : 'text-gray-500'">{{ mt(targetType === 'local_group' ? 'localTargetHint' : (usingCandidateModels ? 'candidateModelsHint' : 'modelCandidatesHint')) }}<span v-if="collectedAt && targetType === 'upstream' && !usingCandidateModels"> · {{ formatGovernanceTime(collectedAt) }}</span></p>
         <div class="grid gap-5 lg:grid-cols-[1fr_2fr]"><fieldset class="space-y-2"><legend class="mb-2 text-sm font-medium">{{ mt('efforts') }}</legend><div class="flex flex-wrap gap-2"><label v-for="effort in efforts" :key="effort" class="governance-checkbox-label flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm" :class="config.efforts.includes(effort) ? 'border-primary-300 bg-primary-50 dark:border-primary-700 dark:bg-primary-900/20' : 'border-gray-200 dark:border-dark-600'"><input v-model="config.efforts" :data-test="`model-effort-${effort}`" type="checkbox" class="governance-checkbox" :value="effort" />{{ mt(`effort_${effort}`) }}</label></div><p class="text-xs leading-relaxed text-gray-500">{{ mt('effortHint') }}</p></fieldset><fieldset><legend class="mb-2 text-sm font-medium">{{ mt('templates') }}</legend><div class="flex flex-wrap gap-2"><label v-for="template in templates" :key="template" class="governance-checkbox-label flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm" :class="config.templates.includes(template) ? 'border-primary-300 bg-primary-50 dark:border-primary-700 dark:bg-primary-900/20' : 'border-gray-200 dark:border-dark-600'"><input v-model="config.templates" :data-test="`model-template-${template}`" type="checkbox" class="governance-checkbox" :value="template" />{{ mt(`template_${template}`) }}</label></div></fieldset></div>
         <div class="grid gap-4 sm:grid-cols-2"><label class="text-sm font-medium">{{ mt('samples') }}<input v-model.number="config.samples" data-test="model-samples" type="number" min="1" max="100" step="1" required class="input mt-1 w-full" /></label><label class="text-sm font-medium">{{ mt('concurrency') }}<input v-model.number="config.concurrency" data-test="model-concurrency" type="number" min="1" max="32" step="1" required class="input mt-1 w-full" /></label></div>

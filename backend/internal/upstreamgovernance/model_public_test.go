@@ -18,6 +18,23 @@ func TestExtractIQHTMLArtifactKeepsOnlyHTMLOrSVG(t *testing.T) {
 	require.Equal(t, "<html><body><svg></svg></body></html>", extractIQHTMLArtifact("<html><body><svg></svg></body></html>"))
 }
 
+func TestExtractIQHTMLArtifactStripsProseAndFencesAroundRawSVG(t *testing.T) {
+	raw := "Here is the requested preview:\n```svg\n<svg viewBox=\"0 0 10 10\"><path d=\"M0 0\"/></svg>\n```\nI hope this helps."
+	got := extractIQHTMLArtifact(raw)
+	require.Contains(t, got, "<svg viewBox=\"0 0 10 10\">")
+	require.NotContains(t, got, "Here is the requested preview")
+	require.NotContains(t, got, "I hope this helps")
+	require.NotContains(t, got, "```")
+}
+
+func TestExtractIQHTMLArtifactStripsInnerMarkdownFenceLines(t *testing.T) {
+	raw := "```html\n<html><body>\n```svg\n<svg><circle/></svg>\n```\n</body></html>\n```"
+	got := extractIQHTMLArtifact(raw)
+	require.Contains(t, got, "<html><body>")
+	require.Contains(t, got, "<svg><circle/></svg>")
+	require.NotContains(t, got, "```")
+}
+
 func TestBuildIQTimelineUsesDynamicWindowAndFailurePrecedence(t *testing.T) {
 	now := time.Date(2026, 10, 2, 12, 8, 0, 0, time.UTC)
 	base := now.Add(-24 * time.Hour)
@@ -51,7 +68,7 @@ func TestPublicIQDashboardSeparatesTemplateLimitsAndMarksWrongCandyAsFailed(t *t
 			AddRow("candy-wrong", now.Add(-2*time.Minute), "site", "succeeded", "GPT Lite", "4", "gpt-6", "low", "20", "numeric_incorrect", "10", "v1").
 			AddRow("candy-right", now.Add(-4*time.Minute), "site", "succeeded", "GPT Lite", "21", "gpt-6", "high", "21", "numeric_correct", "20", "v1"))
 	mock.ExpectQuery("SELECT r.id,r.created_at,s.name,r.status,").
-		WithArgs(since, 2).
+		WithArgs(since, 3, 0).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at", "name", "status", "group_name", "managed_key_id", "model", "effort", "html", "response_text", "duration_ms"}).
 			AddRow("pelican-1", now.Add(-3*time.Minute), "site", "succeeded", "GPT Lite", "5", "gpt-6", "medium", "<svg />", "", "30"))
 
@@ -89,17 +106,17 @@ func TestPublicIQDashboardPrefersLocalGroupNameProjection(t *testing.T) {
 		WithArgs(since, now).
 		WillReturnRows(sqlmock.NewRows([]string{"bucket_at", "quality_status"}))
 
-	localGroupProjection := regexp.QuoteMeta("COALESCE(NULLIF(local_group.name,''), NULLIF(remote_group.group_name,''), '检测分组')")
-	localGroupJoin := `[\s\S]*LEFT JOIN groups local_group`
-	candyQuery := "SELECT r.id,r.created_at,s.name,r.status,[\\s\\S]*" + localGroupProjection + localGroupJoin
+	require.Contains(t, iqPublicGroupProjection, "imported_group.name")
+	require.NotContains(t, iqPublicGroupJoins, "remote_group.group_name")
+	candyQuery := "string_agg.*upstream_governance_bindings"
 	mock.ExpectQuery(candyQuery).
 		WithArgs(since, 1).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at", "name", "status", "group_name", "managed_key_id", "model", "effort", "answer", "verdict", "duration_ms", "template_version"}).
 			AddRow("candy-local-group", now.Add(-time.Minute), "site", "succeeded", "本地 GPT 分组", "", "gpt-6", "high", "21", "numeric_correct", "10", "v1"))
 
-	pelicanQuery := "SELECT r.id,r.created_at,s.name,r.status,[\\s\\S]*" + localGroupProjection + localGroupJoin
+	pelicanQuery := "string_agg.*upstream_governance_bindings"
 	mock.ExpectQuery(pelicanQuery).
-		WithArgs(since, 1).
+		WithArgs(since, 2, 0).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at", "name", "status", "group_name", "managed_key_id", "model", "effort", "html", "response_text", "duration_ms"}))
 
 	dashboard, err := svc.PublicIQDashboard(t.Context(), 24, 1)
@@ -110,18 +127,83 @@ func TestPublicIQDashboardPrefersLocalGroupNameProjection(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestPublicIQDashboardPaginatesPelicanWorks(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	now := time.Date(2026, 10, 2, 12, 8, 0, 0, time.UTC)
+	svc := NewService(NewSQLStore(db), nil, nil, nil, false)
+	svc.now = func() time.Time { return now }
+	since := now.Add(-24 * time.Hour)
+
+	mock.ExpectQuery(regexp.QuoteMeta(iqTimelineQuery)).
+		WithArgs(since, now).
+		WillReturnRows(sqlmock.NewRows([]string{"bucket_at", "quality_status"}))
+	mock.ExpectQuery("SELECT r.id,r.created_at,s.name,r.status,").
+		WithArgs(since, 2).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at", "name", "status", "group_name", "managed_key_id", "model", "effort", "answer", "verdict", "duration_ms", "template_version"}))
+	mock.ExpectQuery("SELECT r.id,r.created_at,s.name,r.status,[\\s\\S]*r.request->>'template'='pelican'").
+		WithArgs(since, 3, 2).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at", "name", "status", "group_name", "managed_key_id", "model", "effort", "html", "response_text", "duration_ms"}).
+			AddRow("pelican-3", now.Add(-time.Minute), "site", "succeeded", "Group", "", "gpt-6", "low", "<svg />", "", "30").
+			AddRow("pelican-4", now.Add(-2*time.Minute), "site", "succeeded", "Group", "", "gpt-6", "low", "<svg />", "", "30").
+			AddRow("pelican-5", now.Add(-3*time.Minute), "site", "succeeded", "Group", "", "gpt-6", "low", "<svg />", "", "30"))
+
+	dashboard, err := svc.PublicIQDashboardPage(t.Context(), 24, 2, 2, 2)
+	require.NoError(t, err)
+	require.Equal(t, 2, dashboard.PelicanPage)
+	require.Equal(t, 2, dashboard.PelicanPageSize)
+	require.True(t, dashboard.PelicanHasMore)
+	require.Len(t, dashboard.PelicanWorks, 2)
+	require.Equal(t, "pelican-3", dashboard.PelicanWorks[0].ID)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestPublicIQDashboardHasMoreUsesRowsWhenArtifactsAreSkipped(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	now := time.Date(2026, 10, 2, 12, 8, 0, 0, time.UTC)
+	svc := NewService(NewSQLStore(db), nil, nil, nil, false)
+	svc.now = func() time.Time { return now }
+	since := now.Add(-24 * time.Hour)
+
+	mock.ExpectQuery(regexp.QuoteMeta(iqTimelineQuery)).
+		WithArgs(since, now).
+		WillReturnRows(sqlmock.NewRows([]string{"bucket_at", "quality_status"}))
+	mock.ExpectQuery("SELECT r.id,r.created_at,s.name,r.status,").
+		WithArgs(since, 2).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at", "name", "status", "group_name", "managed_key_id", "model", "effort", "answer", "verdict", "duration_ms", "template_version"}))
+	valid := "<svg><path/></svg>"
+	mock.ExpectQuery("SELECT r.id,r.created_at,s.name,r.status,[\\s\\S]*r.request->>'template'='pelican'").
+		WithArgs(since, 3, 0).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at", "name", "status", "group_name", "managed_key_id", "model", "effort", "html", "response_text", "duration_ms"}).
+			AddRow("pelican-invalid", now.Add(-time.Minute), "site", "succeeded", "Group", "", "gpt-6", "low", "prose only", "", "30").
+			AddRow("pelican-valid-1", now.Add(-2*time.Minute), "site", "succeeded", "Group", "", "gpt-6", "low", valid, "", "30").
+			AddRow("pelican-valid-2", now.Add(-3*time.Minute), "site", "succeeded", "Group", "", "gpt-6", "low", valid, "", "30"))
+
+	dashboard, err := svc.PublicIQDashboardPage(t.Context(), 24, 2, 1, 2)
+	require.NoError(t, err)
+	require.True(t, dashboard.PelicanHasMore)
+	require.Len(t, dashboard.PelicanWorks, 1)
+	require.Equal(t, "pelican-valid-1", dashboard.PelicanWorks[0].ID)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestPublicIQDashboardRejectsInvalidBounds(t *testing.T) {
 	db, _, err := sqlmock.New()
 	require.NoError(t, err)
 	defer db.Close()
 	svc := NewService(NewSQLStore(db), nil, nil, nil, false)
 	for _, tc := range []struct {
-		hours int
-		limit int
+		hours, limit, page, pageSize int
 	}{
-		{0, 1}, {169, 1}, {1, 0}, {1, 21}, {-1, 1}, {1, -1},
+		{0, 1, 1, 8}, {169, 1, 1, 8}, {1, 0, 1, 8}, {1, 21, 1, 8}, {-1, 1, 1, 8}, {1, -1, 1, 8},
+		{1, 1, 0, 8}, {1, 1, 1000001, 8}, {1, 1, 1, 0}, {1, 1, 1, 21},
 	} {
-		_, err := svc.PublicIQDashboard(t.Context(), tc.hours, tc.limit)
+		_, err := svc.PublicIQDashboardPage(t.Context(), tc.hours, tc.limit, tc.page, tc.pageSize)
 		require.ErrorIs(t, err, ErrInvalid)
 	}
 }
@@ -150,7 +232,7 @@ func TestPublicIQDashboardEnforcesTotalHTMLBudgetAndSafeProjection(t *testing.T)
 	for i := 0; i < 6; i++ {
 		rows.AddRow(fmt.Sprint(i), now, "site", "succeeded", "GPT Lite", "4", "gpt-model", "low", html, "", "10")
 	}
-	mock.ExpectQuery("SELECT r.id,r.created_at,s.name,r.status,[\\s\\S]*octet_length[\\s\\S]*r.request->>'template'='pelican'[\\s\\S]*LIMIT \\$2").WithArgs(since, 8).WillReturnRows(rows)
+	mock.ExpectQuery("SELECT r.id,r.created_at,s.name,r.status,[\\s\\S]*octet_length[\\s\\S]*r.request->>'template'='pelican'[\\s\\S]*LIMIT \\$2").WithArgs(since, 9, 0).WillReturnRows(rows)
 	dashboard, err := svc.PublicIQDashboard(t.Context(), 1, 8)
 	require.NoError(t, err)
 	require.Len(t, dashboard.PelicanWorks, 4)

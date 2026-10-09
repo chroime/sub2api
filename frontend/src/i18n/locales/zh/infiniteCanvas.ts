@@ -35,6 +35,10 @@ export default {
       plain: '纯色',
       save: '保存',
       addNodes: '添加节点',
+      fitView: '适应视图',
+      focus: '专注模式',
+      exitFocus: '退出专注',
+      connectionHint: '正在连接：请选择目标节点左侧连接点',
     },
     sidebar: {
       title: '项目',
@@ -62,6 +66,15 @@ export default {
       deleteNode: '删除节点',
       empty: '选择一个节点查看详情。',
     },
+    prompt: {
+      addReferenceImage: '添加参考图',
+      removeReferenceImage: '移除参考图',
+      referenceImageAlt: '参考图 {index}',
+      maxReferenceImages: '最多添加 {count} 张参考图。',
+      referenceImageTooLarge: '参考图必须小于 {size}。',
+      unsupportedReferenceImage: '请使用 PNG、JPEG 或 WebP 图片。',
+      referenceImageReadFailed: '无法读取该参考图。',
+    },
     nodeTypes: {
       prompt: '提示词',
       config: '设置',
@@ -73,6 +86,9 @@ export default {
       metadataField: '{count} 个元数据字段',
       metadataFields: '{count} 个元数据字段',
       placeholder: '占位节点',
+      connectOutput: '从此节点开始连接',
+      connectInput: '连接到此节点',
+      connectionHint: '正在连接：请选择目标节点左侧连接点',
     },
     config: {
       selectModel: '选择模型',

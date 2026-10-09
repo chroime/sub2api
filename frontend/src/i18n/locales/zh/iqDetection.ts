@@ -6,6 +6,7 @@ export default {
     candyResults: '糖果题结果',
     candyHint: '标准答案 {answer} 颗；结果用于比较模型遵循规则的稳定性。',
     recentCount: '最近 {count} 次',
+    page: '第 {page} 页',
     modelAnswer: '模型答案',
     items: '颗',
     rulePass: '规则通过',

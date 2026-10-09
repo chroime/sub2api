@@ -61,6 +61,8 @@ const newKeyName = ref(t('infiniteCanvas.dialog.defaultKeyName'))
 const newKeyGroupId = ref<number | null>(null)
 const showDelete = ref(false)
 const projectToDelete = ref<string | null>(null)
+const focusMode = ref(false)
+const surfaceRef = ref<InstanceType<typeof InfiniteCanvasSurface>>()
 const saveStatus = ref('')
 const importInput = ref<HTMLInputElement>()
 const warningMessage = ref('')
@@ -197,11 +199,18 @@ function createProject() {
 }
 function addStarterNodes(point = { x: 120, y: 100 }) {
   const project = activeProject.value ?? store.createProject(t('infiniteCanvas.project.defaultTitle', { number: store.projects.value.length + 1 }))
-  if (project.nodes.some((node) => node.type === 'prompt') || project.nodes.some((node) => node.type === 'config')) return
-  const prompt = store.addNode({ type: 'prompt', position: point, metadata: { prompt: '' } })
-  const config = store.addNode({ type: 'config', position: { x: point.x + 300, y: point.y }, metadata: { model: '', size: '1024x1024', quality: '', count: 1, background: '' } })
+  const existing = project.nodes
+  let pairPoint = { ...point }
+  let attempt = 0
+  // Keep each newly added prompt/config pair in its own lane so repeated clicks
+  // never stack cards or hide the connection handles underneath one another.
+  while (existing.some((node) => Math.abs(node.position.x - pairPoint.x) < 620 && Math.abs(node.position.y - pairPoint.y) < 340)) {
+    attempt += 1
+    pairPoint = { x: point.x + (attempt % 4) * 660, y: point.y + Math.floor(attempt / 4) * 380 }
+  }
+  const prompt = store.addNode({ type: 'prompt', position: pairPoint, metadata: { prompt: '', text: '' } })
+  const config = store.addNode({ type: 'config', position: { x: pairPoint.x + 340, y: pairPoint.y }, metadata: { model: '', size: '1024x1024', quality: '', count: 1, background: '' } })
   store.connectNodes({ sourceNodeId: prompt.id, targetNodeId: config.id, kind: 'prompt' })
-  store.connectNodes({ sourceNodeId: config.id, targetNodeId: prompt.id, kind: 'config' })
 }
 function renameProject(id: string, title: string) { store.renameProject(id, title) }
 function duplicateProject(id: string) { store.duplicateProject(id) }
@@ -214,9 +223,33 @@ function generateCanvasNode(nodeId: string) {
   const project = activeProject.value
   const node = project?.nodes.find((candidate) => candidate.id === nodeId)
   if (!project || !node) return
-  const promptId = node.type === 'prompt' ? node.id : project.edges.find((edge) => edge.targetNodeId === node.id && edge.kind === 'prompt')?.sourceNodeId ?? project.nodes.find((candidate) => candidate.type === 'prompt')?.id
-  const configId = node.type === 'config' ? node.id : project.edges.find((edge) => edge.targetNodeId === node.id && edge.kind === 'config')?.sourceNodeId ?? project.nodes.find((candidate) => candidate.type === 'config')?.id
-  if (promptId && configId) void generation.generateFromNodes(promptId, configId)
+  const prompts = project.nodes.filter((candidate) => candidate.type === 'prompt')
+  const configs = project.nodes.filter((candidate) => candidate.type === 'config')
+  let promptId: string | undefined
+  let configId: string | undefined
+  if (node.type === 'prompt') {
+    promptId = node.id
+    configId = project.edges.find((edge) => edge.sourceNodeId === node.id && edge.kind === 'prompt' && configs.some((candidate) => candidate.id === edge.targetNodeId))?.targetNodeId
+    if (!configId && configs.length === 1) configId = configs[0].id
+  } else if (node.type === 'config') {
+    configId = node.id
+    promptId = project.edges.find((edge) => edge.targetNodeId === node.id && edge.kind === 'prompt' && prompts.some((candidate) => candidate.id === edge.sourceNodeId))?.sourceNodeId
+    if (!promptId && prompts.length === 1) promptId = prompts[0].id
+  } else {
+    promptId = project.edges.find((edge) => edge.targetNodeId === node.id && edge.kind === 'prompt' && prompts.some((candidate) => candidate.id === edge.sourceNodeId))?.sourceNodeId
+    configId = project.edges.find((edge) => edge.targetNodeId === node.id && edge.kind === 'config' && configs.some((candidate) => candidate.id === edge.sourceNodeId))?.sourceNodeId
+    if (!promptId && prompts.length === 1) promptId = prompts[0].id
+    if (!configId && configs.length === 1) configId = configs[0].id
+  }
+  if (!promptId || !configId) return
+  const prompt = project.nodes.find((candidate) => candidate.id === promptId)
+  const promptText = prompt && typeof prompt.metadata.prompt === 'string' ? prompt.metadata.prompt : prompt && typeof prompt.metadata.text === 'string' ? prompt.metadata.text : ''
+  if (!promptText.trim()) {
+    warningMessage.value = t('infiniteCanvas.errors.invalidPrompt')
+    return
+  }
+  const alreadyGenerating = project.nodes.some((candidate) => candidate.type === 'image' && candidate.metadata.status === 'pending' && candidate.metadata.promptNodeId === promptId && candidate.metadata.configNodeId === configId)
+  if (!alreadyGenerating) void generation.generateFromNodes(promptId, configId)
 }
 async function removeCanvasNode(nodeId: string) {
   const url = imageUrls.value[nodeId]
@@ -227,7 +260,10 @@ async function removeCanvasNode(nodeId: string) {
 }
 async function removeSelectedNode() { if (selectedNode.value) await removeCanvasNode(selectedNode.value.id) }
 function changeBackground(mode: CanvasBackgroundMode) { store.setBackgroundMode(mode) }
-function zoom(factor: number) { const current = activeProject.value?.viewport; if (current) store.updateViewport({ ...current, zoom: Math.max(0.2, Math.min(3, current.zoom * factor)) }) }
+function zoom(factor: number) { const current = activeProject.value?.viewport; if (current) store.updateViewport({ ...current, zoom: Math.max(0.05, Math.min(5, current.zoom * factor)) }) }
+function fitView() { surfaceRef.value?.fitView?.() }
+function toggleFocus() { focusMode.value = !focusMode.value }
+function handleFocusKeydown(event: KeyboardEvent) { if (focusMode.value && event.key === 'Escape') focusMode.value = false }
 function selectNode(nodeId: string, additive: boolean) { store.selectedNodeIds.value = additive ? [...new Set([...store.selectedNodeIds.value, nodeId])] : [nodeId] }
 function moveNode(nodeId: string, position: { x: number; y: number }) { store.updateNode(nodeId, { position }) }
 function connectNodes(edge: { sourceNodeId: string; targetNodeId: string; kind: 'prompt' | 'config' | 'reference' }) { store.connectNodes(edge) }
@@ -309,6 +345,7 @@ watch(() => activeProject.value?.id, (id, previous) => { if (id !== previous) vo
 watch(() => activeProject.value?.nodes.map((node) => `${node.id}:${typeof node.metadata.storageKey === 'string' ? node.metadata.storageKey : typeof node.metadata.assetKey === 'string' ? node.metadata.assetKey : ''}`).join('|'), () => { void hydrateImageUrls(activeProject.value) })
 onMounted(async () => {
   mounted = true
+  window.addEventListener('keydown', handleFocusKeydown)
   lifecycleGeneration += 1
   if (!props.repository && authStore.user?.id !== undefined && authStore.user?.id !== null) repository.switchTo(createIndexedDbCanvasRepositoryForUser(authStore.user.id))
   await store.ready
@@ -319,17 +356,17 @@ onMounted(async () => {
   await hydrateImageUrls(activeProject.value)
   await loadKeys(false, lifecycleGeneration).catch(() => undefined)
 })
-onBeforeUnmount(() => { mounted = false; lifecycleGeneration += 1; assetHydrationGeneration += 1; revokeImageUrls(); clearSecrets() })
+onBeforeUnmount(() => { mounted = false; lifecycleGeneration += 1; assetHydrationGeneration += 1; revokeImageUrls(); clearSecrets(); window.removeEventListener('keydown', handleFocusKeydown) })
 </script>
 
 <template>
   <AppLayout>
-    <div class="infinite-canvas-view min-h-[calc(100vh-8rem)] overflow-hidden rounded-lg bg-gray-100 shadow-sm dark:bg-dark-950 dark:bg-dark-950" data-page="infinite-canvas">
+    <div :class="['infinite-canvas-view min-h-[calc(100vh-8rem)] overflow-hidden rounded-lg bg-gray-100 shadow-sm dark:bg-dark-950', { 'infinite-canvas-view--focus': focusMode }]" data-page="infinite-canvas">
       <div class="flex min-h-[calc(100vh-8rem)] flex-col lg:flex-row">
-        <CanvasProjectSidebar :projects="store.projects.value" :active-project-id="activeProject?.id" :mobile-open="mobileDrawer === 'sidebar'" @select="selectProject" @new="createProject" @rename="renameProject" @duplicate="duplicateProject" @delete="requestDelete" @import="importProject" @export="exportProject" @close="closeDrawer" />
+        <CanvasProjectSidebar v-if="!focusMode" :projects="store.projects.value" :active-project-id="activeProject?.id" :mobile-open="mobileDrawer === 'sidebar'" @select="selectProject" @new="createProject" @rename="renameProject" @duplicate="duplicateProject" @delete="requestDelete" @import="importProject" @export="exportProject" @close="closeDrawer" />
         <section class="flex min-w-0 flex-1 flex-col">
-          <CanvasToolbar :project="activeProject" :can-undo="store.canUndo.value" :can-redo="store.canRedo.value" :save-status="saveStatus || lastSaved" @background-change="changeBackground" @zoom="zoom" @undo="store.undo" @redo="store.redo" @save="saveNow" @add-nodes="addStarterNodes" />
-          <div class="flex gap-1 border-b border-gray-200 bg-white px-3 pt-2 dark:border-dark-700 dark:bg-dark-900 lg:hidden">
+          <CanvasToolbar :project="activeProject" :can-undo="store.canUndo.value" :can-redo="store.canRedo.value" :save-status="saveStatus || lastSaved" :focus-mode="focusMode" @background-change="changeBackground" @zoom="zoom" @undo="store.undo" @redo="store.redo" @save="saveNow" @add-nodes="addStarterNodes" @fit-view="fitView" @toggle-focus="toggleFocus" />
+          <div v-if="!focusMode" class="flex gap-1 border-b border-gray-200 bg-white px-3 pt-2 dark:border-dark-700 dark:bg-dark-900 lg:hidden">
             <button type="button" :aria-label="t('infiniteCanvas.mobile.projects')" data-canvas-drawer="sidebar" class="rounded-t-md px-3 py-1 text-xs" @click="openDrawer('sidebar')">{{ t('infiniteCanvas.mobile.projects') }}</button>
             <button type="button" data-canvas-tab="canvas" :class="['rounded-t-md px-3 py-1 text-xs', activeTab === 'canvas' ? 'is-active bg-gray-100 font-semibold dark:bg-dark-800' : '']" @click="selectTab('canvas')">{{ t('infiniteCanvas.mobile.canvas') }}</button>
             <button type="button" data-canvas-tab="inspector" :class="['rounded-t-md px-3 py-1 text-xs', activeTab === 'inspector' ? 'is-active bg-gray-100 font-semibold dark:bg-dark-800' : '']" @click="selectTab('inspector')">{{ t('infiniteCanvas.mobile.inspector') }}</button>
@@ -338,13 +375,13 @@ onBeforeUnmount(() => { mounted = false; lifecycleGeneration += 1; assetHydratio
           <div class="flex min-h-0 flex-1 flex-col lg:flex-row">
             <button v-if="mobileDrawer" type="button" :aria-label="t('infiniteCanvas.mobile.closeDrawer')" data-canvas-drawer-close class="fixed inset-0 z-30 bg-black/30 lg:hidden" @click="closeDrawer" />
             <div v-if="!activeProject" data-canvas-empty="projects" class="flex min-h-[420px] flex-1 items-center justify-center p-8 text-center text-sm text-gray-500 dark:text-dark-400">{{ t('infiniteCanvas.sidebar.noProjects') }}。<button type="button" class="ml-1 text-primary-600 hover:underline" @click="createProject">{{ t('infiniteCanvas.project.new') }}</button></div>
-            <div v-else class="relative min-h-[420px] min-w-0 flex-1 overflow-auto" :class="{ hidden: activeTab !== 'canvas' }">
-              <InfiniteCanvasSurface :project="activeProject" :image-urls="imageUrls" :selected-node-ids="store.selectedNodeIds.value" :image-models="availableImageModels" :image-models-loading="imageModelsLoading" :image-models-error="imageModelsError" @node-select="selectNode" @node-move="moveNode" @node-delete="removeCanvasNode" @node-update="updateCanvasNode" @node-retry="retryCanvasNode" @node-generate="generateCanvasNode" @edge-create="connectNodes" @viewport-update="updateViewport" @empty-canvas-double-click="handleEmptyCanvasDoubleClick" @retry-image-models="loadImageModels" />
+            <div v-else class="relative h-full min-h-[420px] min-w-0 flex-1 overflow-hidden" :class="{ hidden: activeTab !== 'canvas' }">
+              <InfiniteCanvasSurface ref="surfaceRef" :project="activeProject" :image-urls="imageUrls" :selected-node-ids="store.selectedNodeIds.value" :image-models="availableImageModels" :image-models-loading="imageModelsLoading" :image-models-error="imageModelsError" @node-select="selectNode" @node-move="moveNode" @node-delete="removeCanvasNode" @node-update="updateCanvasNode" @node-retry="retryCanvasNode" @node-generate="generateCanvasNode" @edge-create="connectNodes" @viewport-update="updateViewport" @empty-canvas-double-click="handleEmptyCanvasDoubleClick" @retry-image-models="loadImageModels" />
               <div v-if="selectedKeyId && !imageModelsLoading && !imageModelsError && !availableImageModels.length" class="pointer-events-none absolute left-1/2 top-6 w-72 -translate-x-1/2 rounded-md border border-amber-200 bg-amber-50 p-3 text-center text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-200" data-canvas-empty="image-models">{{ t('infiniteCanvas.warnings.noImageModels') }}</div>
             </div>
-            <CanvasInspector v-if="activeProject" :mobile-open="mobileDrawer === 'inspector'" :node="selectedNode" @update="updateNode" @delete="removeSelectedNode" @close="closeDrawer" />
+            <CanvasInspector v-if="activeProject && !focusMode" :mobile-open="mobileDrawer === 'inspector'" :node="selectedNode" @update="updateNode" @delete="removeSelectedNode" @close="closeDrawer" />
           </div>
-          <div class="border-t border-gray-200 bg-white p-3 dark:border-dark-700 dark:bg-dark-900"><CanvasKeyPicker :options="eligibleKeys" :model-value="selectedKeyId" :loading="keysLoading" @update:model-value="chooseKey" @create-key="showCreateKey = true" /></div>
+          <div v-if="!focusMode" class="border-t border-gray-200 bg-white p-3 dark:border-dark-700 dark:bg-dark-900"><CanvasKeyPicker :options="eligibleKeys" :model-value="selectedKeyId" :loading="keysLoading" @update:model-value="chooseKey" @create-key="showCreateKey = true" /></div>
         </section>
       </div>
       <p v-if="warningMessage" role="status" class="border-t border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">{{ warningMessage }}</p>
@@ -357,3 +394,24 @@ onBeforeUnmount(() => { mounted = false; lifecycleGeneration += 1; assetHydratio
     <ConfirmDialog :show="showDelete" :title="t('infiniteCanvas.dialog.deleteProjectTitle')" :message="t('infiniteCanvas.dialog.deleteProjectMessage')" danger @confirm="deleteProject" @cancel="showDelete = false" />
   </AppLayout>
 </template>
+
+<style scoped>
+.infinite-canvas-view--focus {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  width: 100vw;
+  height: 100vh;
+  min-height: 100vh;
+  border-radius: 0;
+}
+
+.infinite-canvas-view--focus > div {
+  height: 100%;
+  min-height: 100%;
+}
+
+.infinite-canvas-view--focus section {
+  min-height: 0;
+}
+</style>

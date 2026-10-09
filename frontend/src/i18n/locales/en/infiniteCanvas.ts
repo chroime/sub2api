@@ -35,6 +35,10 @@ export default {
       plain: 'Plain',
       save: 'Save',
       addNodes: 'Add nodes',
+      fitView: 'Fit view',
+      focus: 'Focus mode',
+      exitFocus: 'Exit focus',
+      connectionHint: 'Connecting: choose the target input handle',
     },
     sidebar: {
       title: 'Projects',
@@ -62,6 +66,15 @@ export default {
       deleteNode: 'Delete node',
       empty: 'Select a node to inspect it.',
     },
+    prompt: {
+      addReferenceImage: 'Add reference image',
+      removeReferenceImage: 'Remove reference image',
+      referenceImageAlt: 'Reference image {index}',
+      maxReferenceImages: 'You can add up to {count} reference images.',
+      referenceImageTooLarge: 'Reference images must be smaller than {size}.',
+      unsupportedReferenceImage: 'Use a PNG, JPEG, or WebP image.',
+      referenceImageReadFailed: 'Could not read that reference image.',
+    },
     nodeTypes: {
       prompt: 'Prompt',
       config: 'Settings',
@@ -73,6 +86,9 @@ export default {
       metadataField: '{count} metadata field',
       metadataFields: '{count} metadata fields',
       placeholder: 'Placeholder node',
+      connectOutput: 'Start a connection from this node',
+      connectInput: 'Connect to this node',
+      connectionHint: 'Connecting: choose the target input handle',
     },
     config: {
       selectModel: 'Select model',

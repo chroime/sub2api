@@ -25,4 +25,8 @@ describe('administrator model monitoring transport', () => {
     await api.localTargets()
     expect(apiClient.get).toHaveBeenCalledWith('/admin/upstream-governance/local-model-targets')
   })
+  it('loads the hidden local monitoring workspace without exposing credentials', async () => {
+    await api.localWorkspace()
+    expect(apiClient.get).toHaveBeenCalledWith('/admin/upstream-governance/local-model-workspace')
+  })
 })

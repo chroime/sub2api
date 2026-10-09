@@ -36,6 +36,14 @@ export interface LocalModelTarget {
   status?: string
   expires_at?: string | null
 }
+export interface LocalModelWorkspace {
+  site: {
+    id: number
+    name: string
+    version: number
+  }
+  targets: LocalModelTarget[]
+}
 export interface ModelPolicy {
   id: number
   site_id: number
@@ -161,6 +169,7 @@ export interface ModelStatsGroup {
 export interface ModelStats { days: number; groups: ModelStatsGroup[]; truncated?: boolean }
 const site = (id: number) => `/admin/upstream-governance/sites/${id}`
 const api = {
+  async localWorkspace() { return (await apiClient.get<LocalModelWorkspace>('/admin/upstream-governance/local-model-workspace')).data },
   async localTargets() { return (await apiClient.get<LocalModelTarget[]>('/admin/upstream-governance/local-model-targets')).data },
   async policies(id: number) { return (await apiClient.get<ModelPolicy[]>(`${site(id)}/model-policies`)).data },
   async savePolicy(id: number, input: ModelPolicy) {

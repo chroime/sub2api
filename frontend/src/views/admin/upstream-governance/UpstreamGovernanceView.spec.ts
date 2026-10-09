@@ -55,7 +55,7 @@ vi.mock('@/api/admin/upstream-governance', () => ({
 vi.mock('@/api/admin/groups', () => ({
   default: { getAll: vi.fn().mockResolvedValue([]) },
 }))
-vi.mock('@/api/admin/upstream-model-monitoring', () => ({ default: { policies: vi.fn().mockResolvedValue([]), runs: vi.fn().mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20, counts: {} }), stats: vi.fn().mockResolvedValue({ days: 7, groups: [] }) } }))
+vi.mock('@/api/admin/upstream-model-monitoring', () => ({ default: { localWorkspace: vi.fn(), localTargets: vi.fn().mockResolvedValue([]), policies: vi.fn().mockResolvedValue([]), runs: vi.fn().mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20, counts: {} }), stats: vi.fn().mockResolvedValue({ days: 7, groups: [] }) } }))
 vi.mock('@/api/admin/upstream-operations', () => ({ default: { workbench: vi.fn(), timeline: vi.fn() } }))
 vi.mock('@/api/admin/upstream-import-templates', () => ({ default: { list: vi.fn().mockResolvedValue({ version: 0, templates: [] }), save: vi.fn() } }))
 vi.mock('@/api/admin/proxies', () => ({
@@ -75,6 +75,7 @@ describe('governance page', () => {
       history: createMemoryHistory(),
       routes: [
         { path: '/admin/upstream-governance/:section?', component: View },
+        { path: '/keys', component: { template: '<div>Keys</div>' } },
         { path: '/login', component: { template: '<div>Login</div>' } },
       ],
     })
@@ -173,6 +174,52 @@ describe('governance page', () => {
     expect(wrapper.get('[data-test=sites-overview-compact]').isVisible()).toBe(true)
     expect(api.catalog).not.toHaveBeenCalled()
     expect(modelAPI.policies).not.toHaveBeenCalled()
+  })
+  it('does not create or load the local workspace on the default governance page', async () => {
+    setupNavigationSites()
+    const wrapper = mount(View)
+    await flushPromises()
+    expect(modelAPI.localWorkspace).not.toHaveBeenCalled()
+    expect(wrapper.find('[data-test=local-model-workspace]').exists()).toBe(false)
+  })
+  it('loads the hidden local workspace only when opening models without a selected site and passes targets through', async () => {
+    setupNavigationSites()
+    vi.mocked(modelAPI.localWorkspace).mockResolvedValue({ site: { id: 91, name: 'Local workspace', version: 1 }, targets: [{ group_id: 42, group_name: 'Local fixture', platform: 'openai', api_key_id: 77, api_key_name: 'Local key' }] })
+    const wrapper = mount(View)
+    await flushPromises()
+    await wrapper.get('#governance-models-tab').trigger('click')
+    await flushPromises()
+    expect(modelAPI.localWorkspace).toHaveBeenCalledTimes(1)
+    const panel = wrapper.getComponent(ModelMonitorPanel)
+    expect(panel.props('localOnly')).toBe(true)
+    expect(panel.props('localTargets')).toEqual([{ group_id: 42, group_name: 'Local fixture', platform: 'openai', api_key_id: 77, api_key_name: 'Local key' }])
+    expect(modelAPI.localTargets).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+  it('does not start a local workspace read for a direct link to a selected upstream model tab', async () => {
+    setupNavigationSites()
+    vi.mocked(modelAPI.localWorkspace).mockResolvedValue({ site: { id: 91, name: 'Local workspace', version: 1 }, targets: [] })
+    await router.push('/admin/upstream-governance/models?site=2')
+    const wrapper = mount(View)
+    await flushPromises()
+    expect(modelAPI.localWorkspace).not.toHaveBeenCalled()
+    expect(wrapper.getComponent(ModelMonitorPanel).props('localOnly')).toBe(false)
+    wrapper.unmount()
+  })
+  it('shows a retry and key-management path when the local workspace cannot be read', async () => {
+    setupNavigationSites()
+    vi.mocked(modelAPI.localWorkspace).mockRejectedValue(new Error('unavailable'))
+    const wrapper = mount(View)
+    await flushPromises()
+    await wrapper.get('#governance-models-tab').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('governance.modelMonitoring.localWorkspaceUnavailable')
+    expect(wrapper.get('[data-test=local-workspace-retry]').exists()).toBe(true)
+    expect(wrapper.get('[data-test=local-workspace-manage-keys]').exists()).toBe(true)
+    await wrapper.get('[data-test=local-workspace-manage-keys]').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/keys')
+    wrapper.unmount()
   })
   it('restores the selected site and model section from a direct link', async () => {
     setupNavigationSites()

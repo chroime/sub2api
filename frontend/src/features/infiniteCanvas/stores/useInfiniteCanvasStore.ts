@@ -39,6 +39,12 @@ function parseDate(value: unknown): Date | undefined {
   return undefined
 }
 
+function isCanvasEdgeAllowed(sourceType: CanvasNode['type'], targetType: CanvasNode['type'], kind: CanvasEdge['kind']): boolean {
+  if (kind === 'prompt') return sourceType === 'prompt' && (targetType === 'config' || targetType === 'image')
+  if (kind === 'config') return sourceType === 'config' && (targetType === 'image' || targetType === 'prompt')
+  return sourceType === 'image' && (targetType === 'prompt' || targetType === 'image')
+}
+
 export function validateCanvasProjectImport(input: unknown): CanvasProject | undefined {
   if (!isRecord(input) || input.schemaVersion !== CANVAS_SCHEMA_VERSION || containsSecret(input)) return undefined
   const idValue = input.id
@@ -211,7 +217,13 @@ export function useInfiniteCanvasStore(repository: CanvasRepository) {
     const target = typeof sourceNodeIdOrEdge === 'string' ? targetNodeId : sourceNodeIdOrEdge.targetNodeId
     const edgeKind = typeof sourceNodeIdOrEdge === 'string' ? kind : sourceNodeIdOrEdge.kind
     const edge: CanvasEdge = { id: id('edge'), sourceNodeId, targetNodeId: target!, kind: edgeKind, ...(metadata ? { metadata: clone(metadata) } : {}) }
-    mutate((project) => { if (sourceNodeId !== target && !project.edges.some((item) => item.sourceNodeId === sourceNodeId && item.targetNodeId === target)) project.edges.push(edge) })
+    const project = activeProject.value
+    const source = project?.nodes.find((node) => node.id === sourceNodeId)
+    const destination = project?.nodes.find((node) => node.id === target)
+    if (!project || !source || !destination || sourceNodeId === target || !isCanvasEdgeAllowed(source.type, destination.type, edgeKind)) return edge
+    const existing = project.edges.find((item) => item.sourceNodeId === sourceNodeId && item.targetNodeId === target)
+    if (existing) return existing
+    mutate((current) => { current.edges.push(edge) })
     return edge
   }
 

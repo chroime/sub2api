@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import CanvasEdgeLayer from './CanvasEdgeLayer.vue'
 import CanvasMinimap from './CanvasMinimap.vue'
 import CanvasNode from './CanvasNode.vue'
 import { useCanvasViewport } from '../composables/useCanvasViewport'
-import type { CanvasEdge, CanvasNode as CanvasNodeModel, CanvasPoint, CanvasProject, CanvasViewport } from '../types'
+import { getCanvasNodeSize, type CanvasEdge, type CanvasNode as CanvasNodeModel, type CanvasPoint, type CanvasProject, type CanvasViewport } from '../types'
 import type { ImageModel } from '@/api/imageGeneration'
 
 const props = defineProps<{ project?: CanvasProject | null; activeProject?: CanvasProject | null; selectedNodeIds?: string[]; imageUrls?: Record<string, string>; imageModels?: ImageModel[]; imageModelsLoading?: boolean; imageModelsError?: string }>()
@@ -21,6 +22,7 @@ const emit = defineEmits<{
   (event: 'retry-image-models'): void
 }>()
 const surface = ref<HTMLElement>()
+const { t } = useI18n()
 const currentProject = computed(() => props.project ?? props.activeProject ?? null)
 const { viewport, panBy, zoomAt, screenToWorld } = useCanvasViewport(currentProject.value?.viewport)
 let panPointer: number | undefined
@@ -31,12 +33,17 @@ const panMode = ref(false)
 const connectingNodeId = ref<string | undefined>()
 const surfaceSize = ref({ width: 800, height: 600 })
 const dragPositions = new Map<string, CanvasPoint>()
+const connectionLabel = computed(() => {
+  if (!connectingNodeId.value) return ''
+  return t('infiniteCanvas.node.connectionHint')
+})
 watch(() => currentProject.value?.viewport, (value) => { if (value) viewport.value = { ...value } }, { deep: true })
 watch(() => currentProject.value?.id, () => { connectingNodeId.value = undefined; dragPositions.clear() })
 watch(viewport, (value) => emit('viewport-update', { ...value }), { deep: true })
 function pointerDown(event: PointerEvent) {
   if (event.button !== 0 && event.button !== 1 && !event.ctrlKey && !event.shiftKey) return
   if ((event.target as HTMLElement).closest('[data-canvas-no-pan]')) return
+  if (connectingNodeId.value) connectingNodeId.value = undefined
   panPointer = event.pointerId
   lastPointer = { x: event.clientX, y: event.clientY }
   surface.value?.setPointerCapture(event.pointerId)
@@ -62,10 +69,15 @@ function wheel(event: WheelEvent) {
 }
 function emptyDoubleClick(event: MouseEvent) {
   if ((event.target as HTMLElement).closest('[data-canvas-no-zoom]')) return
+  connectingNodeId.value = undefined
   const rect = surface.value?.getBoundingClientRect()
   if (rect) emit('empty-canvas-double-click', screenToWorld({ x: event.clientX - rect.left, y: event.clientY - rect.top }))
 }
 function keyboard(event: KeyboardEvent) {
+  if (event.key === 'Escape') {
+    connectingNodeId.value = undefined
+    return
+  }
   if (event.key === ' ' || event.key === 'Spacebar' || event.key === 'Control' || event.ctrlKey) {
     panMode.value = true
     if (event.key === ' ') event.preventDefault()
@@ -99,16 +111,60 @@ function handleNodeSelect(nodeId: string, additive: boolean) {
   }
   emit('node-select', nodeId, additive)
 }
+function inferEdgeKind(sourceNode: CanvasNodeModel, targetNode: CanvasNodeModel): CanvasEdge['kind'] {
+  if (sourceNode.type === 'image' && targetNode.type === 'prompt') return 'reference'
+  if (sourceNode.type === 'config' && (targetNode.type === 'image' || targetNode.type === 'prompt')) return 'config'
+  if (sourceNode.type === 'prompt' && (targetNode.type === 'config' || targetNode.type === 'image')) return 'prompt'
+  return 'reference'
+}
+function handleNodeConnectTarget(nodeId: string) {
+  const sourceId = connectingNodeId.value
+  if (!sourceId || sourceId === nodeId) {
+    connectingNodeId.value = undefined
+    return
+  }
+  const source = currentProject.value?.nodes.find((node) => node.id === sourceId)
+  const target = currentProject.value?.nodes.find((node) => node.id === nodeId)
+  if (source && target) emit('edge-create', { sourceNodeId: source.id, targetNodeId: target.id, kind: inferEdgeKind(source, target) })
+  connectingNodeId.value = undefined
+}
+function startConnection(nodeId: string) {
+  connectingNodeId.value = connectingNodeId.value === nodeId ? undefined : nodeId
+}
 function centerViewport(point: CanvasPoint) {
   viewport.value = { x: surfaceSize.value.width / 2 - point.x * viewport.value.zoom, y: surfaceSize.value.height / 2 - point.y * viewport.value.zoom, zoom: viewport.value.zoom }
 }
+function fitView() {
+  const nodes = currentProject.value?.nodes ?? []
+  if (!nodes.length) {
+    viewport.value = { x: surfaceSize.value.width / 2, y: surfaceSize.value.height / 2, zoom: 1 }
+    return
+  }
+  const padding = 72
+  const minX = Math.min(...nodes.map((node) => node.position.x))
+  const minY = Math.min(...nodes.map((node) => node.position.y))
+  const maxX = Math.max(...nodes.map((node) => node.position.x + getCanvasNodeSize(node).width))
+  const maxY = Math.max(...nodes.map((node) => node.position.y + getCanvasNodeSize(node).height))
+  const contentWidth = Math.max(1, maxX - minX)
+  const contentHeight = Math.max(1, maxY - minY)
+  const availableWidth = Math.max(240, surfaceSize.value.width - padding * 2)
+  const availableHeight = Math.max(240, surfaceSize.value.height - padding * 2)
+  const zoom = Math.min(5, Math.max(0.05, Math.min(availableWidth / contentWidth, availableHeight / contentHeight)))
+  viewport.value = {
+    x: surfaceSize.value.width / 2 - (minX + contentWidth / 2) * zoom,
+    y: surfaceSize.value.height / 2 - (minY + contentHeight / 2) * zoom,
+    zoom,
+  }
+}
+defineExpose({ fitView })
 </script>
 
 <template>
   <section ref="surface" class="canvas-surface" :class="`canvas-surface--${currentProject?.backgroundMode ?? 'grid'}`" @pointerdown="pointerDown" @pointermove="pointerMove" @pointerup="pointerUp" @pointercancel="pointerUp" @wheel="wheel" @dblclick="emptyDoubleClick">
+    <div v-if="connectionLabel" class="canvas-surface__connection-hint" role="status">{{ connectionLabel }}</div>
     <div v-if="currentProject" class="canvas-surface__world" :style="{ transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})` }">
       <CanvasEdgeLayer :nodes="currentProject.nodes" :edges="currentProject.edges" />
-      <CanvasNode v-for="node in currentProject.nodes" :key="node.id" :node="node" :image-url="imageUrls?.[node.id]" :selected="selectedNodeIds?.includes(node.id)" :pan-mode="panMode" :image-models="imageModels" :image-models-loading="imageModelsLoading" :image-models-error="imageModelsError" @select="handleNodeSelect" @connect-start="(id) => { connectingNodeId = id }" @move="updateNode" @delete="(id) => emit('node-delete', id)" @update="(id, patch) => emit('node-update', id, patch)" @retry="(id) => emit('node-retry', id)" @generate="(id) => emit('node-generate', id)" @retry-models="emit('retry-image-models')" />
+      <CanvasNode v-for="node in currentProject.nodes" :key="node.id" :node="node" :image-url="imageUrls?.[node.id]" :selected="selectedNodeIds?.includes(node.id)" :pan-mode="panMode" :image-models="imageModels" :image-models-loading="imageModelsLoading" :image-models-error="imageModelsError" @select="handleNodeSelect" @connect-start="startConnection" @connect-target="handleNodeConnectTarget" @move="updateNode" @delete="(id) => emit('node-delete', id)" @update="(id, patch) => emit('node-update', id, patch)" @retry="(id) => emit('node-retry', id)" @generate="(id) => emit('node-generate', id)" @retry-models="emit('retry-image-models')" />
     </div>
     <CanvasMinimap v-if="currentProject" class="canvas-surface__minimap" :nodes="currentProject.nodes" :viewport="viewport" :host-width="surfaceSize.width" :host-height="surfaceSize.height" @navigate="centerViewport" />
   </section>
@@ -120,4 +176,5 @@ function centerViewport(point: CanvasPoint) {
 .canvas-surface--dots { background-image: radial-gradient(#cbd5e1 1px, transparent 1px); background-size: 20px 20px; }
 .canvas-surface__world { position: absolute; inset: 0; transform-origin: 0 0; }
 .canvas-surface__minimap { position: absolute; right: 16px; bottom: 16px; z-index: 2; }
+.canvas-surface__connection-hint { position: absolute; top: 14px; left: 50%; z-index: 4; transform: translateX(-50%); border: 1px solid #93c5fd; border-radius: 999px; padding: 6px 12px; color: #1e40af; background: rgb(239 246 255 / 95%); box-shadow: 0 4px 12px rgb(15 23 42 / 12%); font-size: 12px; pointer-events: none; }
 </style>

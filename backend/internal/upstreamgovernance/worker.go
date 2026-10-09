@@ -46,7 +46,7 @@ func (s *Service) ConfigureMonitor(ctx context.Context, siteID, bindingID int64,
 	if !validIntervalMinutes(interval) || (enabled && !validProbeModel(model)) {
 		return nil, ErrInvalid
 	}
-	_, release, err := s.siteLock(ctx, siteID)
+	_, release, err := s.remoteSiteLock(ctx, siteID)
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +90,7 @@ func (s *Service) Probe(ctx context.Context, siteID, bindingID int64, model stri
 		return nil, err
 	}
 	defer free()
-	site, release, err := s.siteLock(ctx, siteID)
+	site, release, err := s.remoteSiteLock(ctx, siteID)
 	if err != nil {
 		return nil, err
 	}
@@ -363,7 +363,7 @@ func (s *Service) runFastSite(ctx context.Context, siteID int64) error {
 			free()
 		}
 	}()
-	site, release, err := s.siteLock(ctx, siteID)
+	site, release, err := s.remoteSiteLock(ctx, siteID)
 	if err != nil {
 		return err
 	}
@@ -479,7 +479,7 @@ func (s *Service) runSiteDue(ctx context.Context, siteID int64) error {
 		return err
 	}
 	defer free()
-	site, release, err := s.siteLock(ctx, siteID)
+	site, release, err := s.remoteSiteLock(ctx, siteID)
 	if err != nil {
 		return err
 	}

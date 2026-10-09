@@ -150,6 +150,40 @@ describe('useCanvasGeneration', () => {
     expect(gemini).toHaveBeenCalled(); expect(generic).not.toHaveBeenCalled()
   })
 
+  it('dispatches reference prompts through the image edit adapter for OpenAI-compatible keys', async () => {
+    const repo = repository([fixture()]); const store = useInfiniteCanvasStore(repo.value); await store.ready
+    const prompt = store.addNode({ type: 'prompt', position: { x: 0, y: 0 }, metadata: {
+      prompt: 'Use this [参考图1]',
+      referenceImages: [{ dataUrl: 'data:image/png;base64,YQ==', mimeType: 'image/png', name: 'reference.png' }],
+    } })
+    const config = store.addNode({ type: 'config', position: { x: 200, y: 0 }, metadata: { model: 'image-model' } })
+    const generate = vi.fn()
+    const edit = vi.fn().mockResolvedValue([{ blob: new Blob(['ok'], { type: 'image/png' }), mimeType: 'image/png' }])
+    const generation = useCanvasGeneration({ store, repository: repo.value, getKeySecret: () => 'secret', generate, editImage: edit })
+    await generation.generateFromNodes(prompt.id, config.id)
+    expect(edit).toHaveBeenCalledWith('secret', expect.objectContaining({
+      prompt: 'Use this [参考图1]',
+      referenceImages: [{ dataUrl: 'data:image/png;base64,YQ==', mimeType: 'image/png', name: 'reference.png' }],
+    }))
+    expect(generate).not.toHaveBeenCalled()
+  })
+
+  it('loads linked image nodes as reference images for a prompt', async () => {
+    const repo = repository([fixture()]); const store = useInfiniteCanvasStore(repo.value); await store.ready
+    repo.assets.push({ key: 'linked-reference', blob: new Blob(['reference'], { type: 'image/png' }) })
+    const prompt = store.addNode({ type: 'prompt', position: { x: 0, y: 0 }, metadata: { prompt: 'Use the linked image' } })
+    const config = store.addNode({ type: 'config', position: { x: 200, y: 0 }, metadata: { model: 'image-model' } })
+    const reference = store.addNode({ type: 'image', position: { x: -360, y: 0 }, metadata: { status: 'completed', storageKey: 'linked-reference', mimeType: 'image/png' } })
+    store.connectNodes(reference.id, prompt.id, 'reference')
+    const edit = vi.fn().mockResolvedValue([{ blob: new Blob(['ok'], { type: 'image/png' }), mimeType: 'image/png' }])
+    const generation = useCanvasGeneration({ store, repository: repo.value, getKeySecret: () => 'secret', editImage: edit })
+    await generation.generateFromNodes(prompt.id, config.id)
+    expect(edit).toHaveBeenCalledWith('secret', expect.objectContaining({
+      prompt: 'Use the linked image',
+      referenceImages: [expect.objectContaining({ mimeType: 'image/png', name: `${reference.id}.png` })],
+    }))
+  })
+
   it('aborts stale key selections before dispatching the old secret', async () => {
     const repo = repository([fixture()]); const store = useInfiniteCanvasStore(repo.value); await store.ready
     store.setActiveKey(1)

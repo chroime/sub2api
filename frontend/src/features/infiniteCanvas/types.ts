@@ -21,7 +21,23 @@ export interface CanvasSize {
 
 export interface PromptNodeMetadata {
   text?: string
+  prompt?: string
+  referenceImages?: PromptReferenceImage[]
   [key: string]: unknown
+}
+
+export const MAX_PROMPT_REFERENCE_IMAGES = 4
+export const MAX_PROMPT_REFERENCE_IMAGE_BYTES = 5 * 1024 * 1024
+export const MAX_PROMPT_REFERENCE_IMAGE_DATA_URL_LENGTH = Math.ceil(MAX_PROMPT_REFERENCE_IMAGE_BYTES * 4 / 3) + 128
+
+/**
+ * A small, self-contained image snapshot kept with a prompt node.
+ * Data URLs make references survive IndexedDB saves and project exports.
+ */
+export interface PromptReferenceImage {
+  dataUrl: string
+  mimeType: string
+  name?: string
 }
 
 export interface ConfigNodeMetadata {
@@ -45,6 +61,16 @@ export interface CanvasNode {
   position: CanvasPoint
   size?: CanvasSize
   metadata: CanvasNodeMetadata
+}
+
+export const DEFAULT_CANVAS_NODE_SIZES: Record<CanvasNodeType, CanvasSize> = {
+  prompt: { width: 300, height: 260 },
+  config: { width: 260, height: 330 },
+  image: { width: 300, height: 330 },
+}
+
+export function getCanvasNodeSize(node: Pick<CanvasNode, 'type' | 'size'>): CanvasSize {
+  return node.size ?? DEFAULT_CANVAS_NODE_SIZES[node.type]
 }
 
 export interface CanvasEdge {

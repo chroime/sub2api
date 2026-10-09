@@ -104,15 +104,21 @@ func (s *Service) modelTarget(ctx context.Context, siteID int64, c *ModelTestCon
 		}
 		return s.localModelTarget(ctx, siteID, c)
 	}
+	// The synthetic local workspace is only a durable scope for local-group
+	// probes. Never let an upstream managed key be attached to it, even when a
+	// caller knows the hidden site id.
+	site, err := s.store.GetSite(ctx, siteID)
+	if err != nil {
+		return nil, nil, empty, err
+	}
+	if site == nil || isLocalModelSite(*site) {
+		return nil, nil, empty, ErrConflict
+	}
 	if !s.durableKey || s.cipher == nil {
 		return nil, nil, empty, ErrEncryption
 	}
 	if _, ok := s.connector.(ModelRunner); !ok {
 		return nil, nil, empty, ErrUnsupported
-	}
-	site, err := s.store.GetSite(ctx, siteID)
-	if err != nil {
-		return nil, nil, empty, err
 	}
 	if !site.Enabled {
 		return nil, nil, empty, ErrConflict
@@ -176,6 +182,10 @@ func (s *Service) localModelTarget(ctx context.Context, siteID int64, c *ModelTe
 		return nil, nil, empty, err
 	}
 	if site == nil {
+		return nil, nil, empty, ErrConflict
+	}
+	owner, localSite := localModelOwner(*site)
+	if !localSite || owner != c.TargetOwnerUserID {
 		return nil, nil, empty, ErrConflict
 	}
 	target, err := reader.ResolveLocalModelTarget(ctx, c.TargetOwnerUserID, c.LocalGroupID, c.LocalAPIKeyID)

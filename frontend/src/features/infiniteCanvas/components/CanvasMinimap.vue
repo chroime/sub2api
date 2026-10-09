@@ -1,21 +1,29 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { CanvasNode, CanvasViewport } from '../types'
+import { getCanvasNodeSize, type CanvasNode, type CanvasViewport } from '../types'
 
 const props = withDefaults(defineProps<{ nodes: CanvasNode[]; viewport: CanvasViewport; width?: number; height?: number; hostWidth?: number; hostHeight?: number }>(), { nodes: () => [], width: 200, height: 120, hostWidth: 800, hostHeight: 600 })
 const emit = defineEmits<{ (event: 'navigate', point: { x: number; y: number }): void }>()
 const bounds = computed(() => {
-  if (!props.nodes.length) return { x: -200, y: -120, width: 400, height: 240 }
   const xs = props.nodes.map((node) => node.position.x)
   const ys = props.nodes.map((node) => node.position.y)
-  const xe = props.nodes.map((node) => node.position.x + (node.size?.width ?? 240))
-  const ye = props.nodes.map((node) => node.position.y + (node.size?.height ?? 140))
-  const x = Math.min(...xs) - 80
-  const y = Math.min(...ys) - 80
-  return { x, y, width: Math.max(400, Math.max(...xe) - x + 80), height: Math.max(240, Math.max(...ye) - y + 80) }
+  const xe = props.nodes.map((node) => node.position.x + getCanvasNodeSize(node).width)
+  const ye = props.nodes.map((node) => node.position.y + getCanvasNodeSize(node).height)
+  // Keep the current viewport inside the minimap even after the user pans
+  // well beyond the node cluster, so the blue viewport indicator never
+  // disappears off the minimap bounds.
+  const visibleLeft = -props.viewport.x / props.viewport.zoom
+  const visibleTop = -props.viewport.y / props.viewport.zoom
+  const visibleRight = (props.hostWidth - props.viewport.x) / props.viewport.zoom
+  const visibleBottom = (props.hostHeight - props.viewport.y) / props.viewport.zoom
+  const minX = Math.min(-200, ...xs, visibleLeft) - 80
+  const minY = Math.min(-120, ...ys, visibleTop) - 80
+  const maxX = Math.max(200, ...xe, visibleRight) + 80
+  const maxY = Math.max(120, ...ye, visibleBottom) + 80
+  return { x: minX, y: minY, width: Math.max(400, maxX - minX), height: Math.max(240, maxY - minY) }
 })
 const scale = computed(() => Math.min(props.width / bounds.value.width, props.height / bounds.value.height))
-const nodeStyle = (node: CanvasNode) => ({ left: `${(node.position.x - bounds.value.x) * scale.value}px`, top: `${(node.position.y - bounds.value.y) * scale.value}px`, width: `${Math.max(3, (node.size?.width ?? 240) * scale.value)}px`, height: `${Math.max(3, (node.size?.height ?? 140) * scale.value)}px` })
+const nodeStyle = (node: CanvasNode) => ({ left: `${(node.position.x - bounds.value.x) * scale.value}px`, top: `${(node.position.y - bounds.value.y) * scale.value}px`, width: `${Math.max(3, getCanvasNodeSize(node).width * scale.value)}px`, height: `${Math.max(3, getCanvasNodeSize(node).height * scale.value)}px` })
 function getMinimapViewportRect(viewport: CanvasViewport, bounds: { x: number; y: number }, scaleValue: number, hostWidth: number, hostHeight: number) {
   return {
     left: (0 - viewport.x / viewport.zoom - bounds.x) * scaleValue,
@@ -36,7 +44,7 @@ function navigate(event: MouseEvent) {
 </script>
 
 <template>
-  <div class="canvas-minimap" :style="{ width: `${width}px`, height: `${height}px` }" @click="navigate">
+  <div class="canvas-minimap" data-canvas-no-pan data-canvas-no-zoom :style="{ width: `${width}px`, height: `${height}px` }" @pointerdown.stop @pointermove.stop @pointerup.stop @wheel.stop @dblclick.stop @click.stop="navigate">
     <span v-for="node in nodes" :key="node.id" class="canvas-minimap__node" :style="nodeStyle(node)" />
     <span class="canvas-minimap__viewport" :style="viewportStyle" />
   </div>

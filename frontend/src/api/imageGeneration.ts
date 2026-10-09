@@ -7,6 +7,13 @@ export interface ImageGenerationRequest {
   size?: string
   quality?: string
   background?: string
+  referenceImages?: ImageReference[]
+}
+
+export interface ImageReference {
+  dataUrl: string
+  mimeType: string
+  name?: string
 }
 export interface GeneratedImage {
   blob: Blob
@@ -97,6 +104,17 @@ function normalizeGeminiPart(part: any): GeneratedImage | undefined {
   return { blob: decodeBase64(inline.data, mimeType), mimeType, width: inline.width, height: inline.height }
 }
 
+function splitDataUrl(dataUrl: string): { mimeType: string; data: string } {
+  const match = /^data:([^;,]+)?;base64,(.*)$/i.exec(dataUrl.trim())
+  if (!match || !match[2]) throw new ImageGenerationError(400, 'invalid_reference_image', 'Reference image must be a base64 data URL')
+  return { mimeType: match[1] || 'image/png', data: match[2] }
+}
+
+function referenceData(reference: ImageReference): { mimeType: string; data: string } {
+  const parsed = splitDataUrl(reference.dataUrl)
+  return { mimeType: reference.mimeType || parsed.mimeType, data: parsed.data }
+}
+
 export async function generateImage(apiKey: string, request: ImageGenerationRequest): Promise<GeneratedImage[]> {
   const body: Record<string, unknown> = { model: request.model, prompt: request.prompt, n: request.count ?? 1 }
   if (request.size) body.size = request.size
@@ -110,15 +128,22 @@ export async function generateImage(apiKey: string, request: ImageGenerationRequ
   return Promise.all((payload?.data ?? []).map(normalizeResult))
 }
 
-export interface ImageEditRequest extends ImageGenerationRequest { image: Blob }
+export interface ImageEditRequest extends ImageGenerationRequest { image?: Blob | Blob[] }
 
 export async function editImage(apiKey: string, request: ImageEditRequest): Promise<GeneratedImage[]> {
   const form = new FormData()
   form.append('model', request.model)
   form.append('prompt', request.prompt)
-  form.append('image', request.image, 'reference.png')
+  const images = request.image ? (Array.isArray(request.image) ? request.image : [request.image]) : (request.referenceImages ?? []).map((reference) => {
+    const parsed = referenceData(reference)
+    return decodeBase64(parsed.data, parsed.mimeType)
+  })
+  if (!images.length) throw new ImageGenerationError(400, 'missing_reference_image', 'At least one reference image is required for image edits')
+  images.forEach((image, index) => form.append(index === 0 ? 'image' : 'image[]', image, request.referenceImages?.[index]?.name || `reference-${index + 1}.png`))
+  if (request.count) form.append('n', String(request.count))
   if (request.size) form.append('size', request.size)
   if (request.quality) form.append('quality', request.quality)
+  if (request.background) form.append('background', request.background)
   const response = await fetch(buildGatewayUrl('/v1/images/edits'), { method: 'POST', headers: authHeaders(apiKey), body: form })
   if (!response.ok) await throwImageError(response)
   const payload = await response.json()
@@ -143,5 +168,10 @@ export async function generateGeminiImage(apiKey: string, request: ImageGenerati
 export function buildGeminiRequest(request: ImageGenerationRequest): Record<string, unknown> {
   const generationConfig: Record<string, unknown> = { responseModalities: ['TEXT', 'IMAGE'] }
   if (request.size) generationConfig.imageConfig = { imageSize: request.size }
-  return { contents: [{ parts: [{ text: request.prompt }] }], generationConfig }
+  const parts: Record<string, unknown>[] = [{ text: request.prompt }]
+  for (const reference of request.referenceImages ?? []) {
+    const parsed = referenceData(reference)
+    parts.push({ inlineData: { mimeType: parsed.mimeType, data: parsed.data } })
+  }
+  return { contents: [{ parts }], generationConfig }
 }

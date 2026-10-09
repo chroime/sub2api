@@ -38,7 +38,7 @@ func (s *Service) ConfigureAutomation(ctx context.Context, id int64, value Autom
 	if value.Version < 0 || p.MissingConfirmations < 2 || p.MissingConfirmations > 10 || math.IsNaN(p.MaxRateIncreasePercent) || math.IsInf(p.MaxRateIncreasePercent, 0) || p.MaxRateIncreasePercent < 0 || p.MaxRateIncreasePercent > 10000 {
 		return AutomationConfig{}, ErrInvalid
 	}
-	_, release, err := s.siteLock(ctx, id)
+	_, release, err := s.remoteSiteLock(ctx, id)
 	if err != nil {
 		return AutomationConfig{}, err
 	}
@@ -130,7 +130,7 @@ func (s *Service) previewReconciliationLocked(ctx context.Context, site Site) (*
 	return p, nil
 }
 func (s *Service) PreviewReconciliation(ctx context.Context, id int64) (*ReconciliationPreview, error) {
-	site, release, err := s.siteLock(ctx, id)
+	site, release, err := s.remoteSiteLock(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -154,7 +154,7 @@ func (s *Service) ApplyReconciliation(ctx context.Context, id int64, previewID s
 	if !validReconciliationSelection(ids) {
 		return nil, ErrInvalid
 	}
-	site, release, err := s.siteLock(ctx, id)
+	site, release, err := s.remoteSiteLock(ctx, id)
 	if err != nil {
 		return nil, err
 	}

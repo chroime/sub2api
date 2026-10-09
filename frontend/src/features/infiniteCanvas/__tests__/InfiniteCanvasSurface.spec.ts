@@ -83,6 +83,22 @@ describe('InfiniteCanvasSurface interactions', () => {
     expect(wrapper.emitted('edge-create')?.at(-1)).toEqual([{ sourceNodeId: 'source', targetNodeId: 'target', kind: 'reference' }])
   })
 
+  it('creates a typed edge when the target input handle is selected', async () => {
+    const wrapper = mount(InfiniteCanvasSurface, { props: { project: project({ viewport: { x: 0, y: 0, zoom: 1 } }) } })
+    const nodes = wrapper.findAll('.canvas-node')
+    await nodes[0].find('.canvas-node__handle--output').trigger('pointerdown', { button: 0, pointerId: 10 })
+    await nodes[1].find('.canvas-node__handle--input').trigger('pointerdown', { button: 0, pointerId: 11 })
+    expect(wrapper.emitted('edge-create')?.at(-1)).toEqual([{ sourceNodeId: 'source', targetNodeId: 'target', kind: 'prompt' }])
+  })
+
+  it('cancels a pending connection with Escape', async () => {
+    const wrapper = mount(InfiniteCanvasSurface, { props: { project: project({ viewport: { x: 0, y: 0, zoom: 1 } }) } })
+    await wrapper.findAll('.canvas-node')[0].find('.canvas-node__handle--output').trigger('pointerdown', { button: 0, pointerId: 12 })
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await wrapper.findAll('.canvas-node')[1].find('.canvas-node__handle--input').trigger('pointerdown', { button: 0, pointerId: 13 })
+    expect(wrapper.emitted('edge-create')).toBeUndefined()
+  })
+
   it('clears a pending edge source when the active project changes', async () => {
     const wrapper = mount(InfiniteCanvasSurface, { props: { project: project() } })
     await wrapper.findAll('.canvas-node')[0].find('.canvas-node__handle--output').trigger('pointerdown', { button: 0, pointerId: 7 })

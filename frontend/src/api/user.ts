@@ -55,13 +55,16 @@ export interface IQTimelinePoint {
 export interface IQDashboard {
   candy_results: IQCandyResult[]
   pelican_works: IQPelicanWork[]
+  pelican_page: number
+  pelican_page_size: number
+  pelican_has_more: boolean
   timeline: IQTimelinePoint[]
   standard_answer: number
   window_hours: number
   generated_at: string
 }
 
-export async function getIQDetection(params: { hours?: number; limit?: number } = {}): Promise<IQDashboard> {
+export async function getIQDetection(params: { hours?: number; limit?: number; pelican_page?: number; pelican_page_size?: number } = {}): Promise<IQDashboard> {
   const { data } = await apiClient.get<IQDashboard>('/user/iq-detection', { params })
   return data
 }

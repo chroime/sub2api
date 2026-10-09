@@ -44,6 +44,28 @@ describe('IQDetectionView', () => {
     expect(wrapper.get('iframe').attributes('sandbox')).toBe('allow-scripts')
     expect(wrapper.get('iframe').attributes('scrolling')).toBe('no')
     expect(wrapper.get('iframe').attributes('srcdoc')).toContain('data-pelican-preview-style')
+    expect(wrapper.get('iframe').attributes('srcdoc')).toContain('scrollbar-width:none')
     expect(getIQDetection).toHaveBeenCalledWith({ hours: 24, limit: 8 })
+  })
+
+  it('paginates pelican works with a next-page request', async () => {
+    const page = (id: string, pelican_page: number, pelican_has_more: boolean) => ({
+      standard_answer: 21,
+      window_hours: 24,
+      generated_at: '2026-10-02T12:00:00Z',
+      candy_results: [],
+      timeline: [],
+      pelican_page,
+      pelican_page_size: 2,
+      pelican_has_more,
+      pelican_works: [{ id, site_name: 'fixture', group_name: 'GPT Lite', account_label: 'GPT Lite', model: 'gpt-6-astra', effort: 'low', html: '<html><body><svg /></body></html>', status: 'succeeded', duration_ms: 50, created_at: '2026-10-02T12:00:00Z' }],
+    })
+    getIQDetection.mockResolvedValueOnce(page('pelican-1', 1, true)).mockResolvedValueOnce(page('pelican-2', 2, false))
+    const wrapper = mount(IQDetectionView, { global: { stubs: { Icon: true } } })
+    await flushPromises()
+    await wrapper.get('[data-test="pelican-next"]').trigger('click')
+    await flushPromises()
+    expect(getIQDetection).toHaveBeenLastCalledWith({ hours: 24, limit: 8, pelican_page: 2, pelican_page_size: 8 })
+    expect(wrapper.get('[data-test="pelican-work-card"]').text()).toContain('GPT Lite')
   })
 })

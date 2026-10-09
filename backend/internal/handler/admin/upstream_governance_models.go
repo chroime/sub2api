@@ -20,6 +20,38 @@ func governanceModelUUID(c *gin.Context, value string) (string, bool) {
 	return value, true
 }
 
+func (h *UpstreamGovernanceHandler) authorizeModelSite(c *gin.Context, siteID int64) bool {
+	subject, ok := middleware.GetAuthSubjectFromContext(c)
+	if !ok || subject.UserID <= 0 {
+		response.Unauthorized(c, "Administrator identity is required")
+		return false
+	}
+	return !governanceError(c, h.svc.AuthorizeModelSite(c.Request.Context(), siteID, subject.UserID))
+}
+
+// LocalModelWorkspace creates or returns the current administrator's hidden
+// local monitoring scope. The scope reuses durable model-monitoring storage,
+// while its site row is never returned by the upstream site list.
+func (h *UpstreamGovernanceHandler) LocalModelWorkspace(c *gin.Context) {
+	subject, ok := middleware.GetAuthSubjectFromContext(c)
+	if !ok || subject.UserID <= 0 {
+		response.Unauthorized(c, "Administrator identity is required")
+		return
+	}
+	site, err := h.svc.EnsureLocalModelSite(c.Request.Context(), subject.UserID)
+	if governanceError(c, err) {
+		return
+	}
+	targets, err := h.svc.ListLocalModelTargets(c.Request.Context(), subject.UserID)
+	if governanceError(c, err) {
+		return
+	}
+	response.Success(c, gin.H{
+		"site":    gin.H{"id": site.ID, "name": site.Name, "version": site.Version},
+		"targets": targets,
+	})
+}
+
 func (h *UpstreamGovernanceHandler) ModelStats(c *gin.Context) {
 	id, ok := governanceID(c, "id")
 	if !ok {
@@ -34,6 +66,9 @@ func (h *UpstreamGovernanceHandler) ModelStats(c *gin.Context) {
 		}
 		days = value
 	}
+	if !h.authorizeModelSite(c, id) {
+		return
+	}
 	value, err := h.svc.ModelStats(c.Request.Context(), id, days)
 	if !governanceError(c, err) {
 		response.Success(c, value)
@@ -43,6 +78,9 @@ func (h *UpstreamGovernanceHandler) ModelStats(c *gin.Context) {
 func (h *UpstreamGovernanceHandler) ModelPolicies(c *gin.Context) {
 	id, ok := governanceID(c, "id")
 	if !ok {
+		return
+	}
+	if !h.authorizeModelSite(c, id) {
 		return
 	}
 	value, err := h.svc.ListModelPolicies(c.Request.Context(), id)
@@ -101,6 +139,9 @@ func (h *UpstreamGovernanceHandler) SaveModelPolicy(c *gin.Context) {
 		response.Unauthorized(c, "Administrator identity is required")
 		return
 	}
+	if governanceError(c, h.svc.AuthorizeModelSite(c.Request.Context(), id, subject.UserID)) {
+		return
+	}
 	value, err := h.svc.SaveModelPolicy(c.Request.Context(), id, gov.ModelPolicy{
 		ID: input.ID, Name: input.Name, Config: input.Config, Enabled: input.Enabled,
 		IntervalMinutes: input.IntervalMinutes, DailyRequestLimit: input.DailyRequestLimit,
@@ -125,6 +166,9 @@ func (h *UpstreamGovernanceHandler) DeleteModelPolicy(c *gin.Context) {
 	version, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil || version <= 0 || strconv.FormatInt(version, 10) != raw {
 		governanceError(c, gov.ErrInvalid)
+		return
+	}
+	if !h.authorizeModelSite(c, id) {
 		return
 	}
 	if !governanceError(c, h.svc.DeleteModelPolicy(c.Request.Context(), id, policyID, version)) {
@@ -153,6 +197,9 @@ func (h *UpstreamGovernanceHandler) StartModelBatch(c *gin.Context) {
 		response.Unauthorized(c, "Administrator identity is required")
 		return
 	}
+	if governanceError(c, h.svc.AuthorizeModelSite(c.Request.Context(), id, subject.UserID)) {
+		return
+	}
 	value, err := h.svc.StartModelBatch(c.Request.Context(), id, input, subject.UserID)
 	if !governanceError(c, err) {
 		response.Success(c, value)
@@ -170,6 +217,9 @@ func (h *UpstreamGovernanceHandler) CancelModelBatch(c *gin.Context) {
 	}
 	var input struct{}
 	if !governanceBody(c, &input) {
+		return
+	}
+	if !h.authorizeModelSite(c, id) {
 		return
 	}
 	if !governanceError(c, h.svc.CancelModelBatch(c.Request.Context(), id, batch)) {
@@ -192,6 +242,9 @@ func (h *UpstreamGovernanceHandler) ModelRuns(c *gin.Context) {
 			return
 		}
 	}
+	if !h.authorizeModelSite(c, id) {
+		return
+	}
 	value, err := h.svc.ListModelRuns(c.Request.Context(), id, page, size, batch)
 	if !governanceError(c, err) {
 		response.Success(c, value)
@@ -205,6 +258,9 @@ func (h *UpstreamGovernanceHandler) ModelRun(c *gin.Context) {
 	}
 	run, ok := governanceModelUUID(c, c.Param("run_id"))
 	if !ok {
+		return
+	}
+	if !h.authorizeModelSite(c, id) {
 		return
 	}
 	value, err := h.svc.GetModelRun(c.Request.Context(), id, run)
@@ -222,6 +278,9 @@ func (h *UpstreamGovernanceHandler) DeleteModelRun(c *gin.Context) {
 	}
 	run, ok := governanceModelUUID(c, c.Param("run_id"))
 	if !ok {
+		return
+	}
+	if !h.authorizeModelSite(c, id) {
 		return
 	}
 	if !governanceError(c, h.svc.HideModelRun(c.Request.Context(), id, run)) {
@@ -252,6 +311,9 @@ func (h *UpstreamGovernanceHandler) ReviewModelRun(c *gin.Context) {
 	subject, ok := middleware.GetAuthSubjectFromContext(c)
 	if !ok || subject.UserID <= 0 {
 		response.Unauthorized(c, "Administrator identity is required")
+		return
+	}
+	if governanceError(c, h.svc.AuthorizeModelSite(c.Request.Context(), id, subject.UserID)) {
 		return
 	}
 	value, err := h.svc.ReviewModelRun(c.Request.Context(), id, run, input.Review, input.Note, subject.UserID)

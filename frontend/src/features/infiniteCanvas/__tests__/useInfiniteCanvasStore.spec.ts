@@ -54,6 +54,22 @@ describe('useInfiniteCanvasStore', () => {
     expect(project.id).toBe(store.activeProject.value?.id)
   })
 
+  it('rejects self-links and edges whose kind does not match node roles', async () => {
+    const store = useInfiniteCanvasStore(repository())
+    await store.ready
+    store.createProject('Typed graph')
+    const prompt = store.addNode({ type: 'prompt', position: { x: 0, y: 0 }, metadata: {} })
+    const config = store.addNode({ type: 'config', position: { x: 300, y: 0 }, metadata: {} })
+    const invalid = store.connectNodes(prompt.id, config.id, 'reference')
+    const self = store.connectNodes(prompt.id, prompt.id, 'prompt')
+    expect(store.activeProject.value?.edges).toHaveLength(0)
+    expect(invalid.sourceNodeId).toBe(prompt.id)
+    expect(self.targetNodeId).toBe(prompt.id)
+    const valid = store.connectNodes(prompt.id, config.id, 'prompt')
+    expect(store.activeProject.value?.edges).toEqual([valid])
+    expect(store.connectNodes(prompt.id, config.id, 'prompt')).toEqual(valid)
+  })
+
   it('supports undo and redo and persists updated timestamps', async () => {
     vi.useFakeTimers()
     const repo = repository([fixture()])

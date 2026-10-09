@@ -87,6 +87,25 @@ describe('InfiniteCanvasView', () => {
     expect(wrapper.find('.config-node').exists()).toBe(true)
   })
 
+  it('adds another starter pair when the project already has nodes', async () => {
+    const wrapper = mountPage([])
+    await wrapper.find('[data-canvas-empty="projects"] button').trigger('click')
+    await vi.waitFor(() => expect(wrapper.findAll('.canvas-node')).toHaveLength(2))
+    await wrapper.find('[data-canvas-add-nodes]').trigger('click')
+    await vi.waitFor(() => expect(wrapper.findAll('.canvas-node')).toHaveLength(4))
+    expect(wrapper.findAll('.canvas-edge-layer > .canvas-edge-layer__path')).toHaveLength(2)
+  })
+
+  it('toggles focus mode and keeps a fit view control in the canvas toolbar', async () => {
+    const wrapper = mountPage([project('focus', 'Focus')])
+    await vi.waitFor(() => expect(wrapper.find('[data-canvas-focus]').exists()).toBe(true))
+    await wrapper.find('[data-canvas-focus]').trigger('click')
+    expect(wrapper.find('.infinite-canvas-view').classes()).toContain('infinite-canvas-view--focus')
+    expect(wrapper.find('[data-canvas-fit-view]').exists()).toBe(true)
+    await wrapper.find('[data-canvas-focus]').trigger('click')
+    expect(wrapper.find('.infinite-canvas-view').classes()).not.toContain('infinite-canvas-view--focus')
+  })
+
   it('loads allowlisted image models into the config select', async () => {
     vi.mocked(listImageModels).mockResolvedValue([{ id: 'gpt-image-1' }, { id: 'other-image' }])
     const configProject = project('models', 'Models')

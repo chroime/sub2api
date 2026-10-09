@@ -6,6 +6,7 @@ export default {
     candyResults: 'Candy logic results',
     candyHint: 'Standard answer: {answer} candies. Results compare rule-following stability.',
     recentCount: 'Last {count}',
+    page: 'Page {page}',
     modelAnswer: 'Model answer',
     items: 'items',
     rulePass: 'Rule passed',

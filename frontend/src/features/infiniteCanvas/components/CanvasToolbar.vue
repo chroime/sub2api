@@ -2,7 +2,7 @@
 import { useI18n } from 'vue-i18n'
 import type { CanvasBackgroundMode, CanvasProject } from '../types'
 
-defineProps<{ project?: CanvasProject | null; canUndo?: boolean; canRedo?: boolean; saveStatus?: string }>()
+defineProps<{ project?: CanvasProject | null; canUndo?: boolean; canRedo?: boolean; saveStatus?: string; focusMode?: boolean }>()
 const emit = defineEmits<{
   (event: 'background-change', mode: CanvasBackgroundMode): void
   (event: 'zoom', factor: number): void
@@ -10,6 +10,8 @@ const emit = defineEmits<{
   (event: 'redo'): void
   (event: 'save'): void
   (event: 'add-nodes'): void
+  (event: 'fit-view'): void
+  (event: 'toggle-focus'): void
 }>()
 const { t } = useI18n()
 </script>
@@ -20,13 +22,15 @@ const { t } = useI18n()
     <button type="button" :title="t('infiniteCanvas.toolbar.redo')" :aria-label="t('infiniteCanvas.toolbar.redo')" :disabled="!canRedo" class="rounded-md border px-2 py-1 text-sm disabled:opacity-40" @click="emit('redo')">&#8631;</button>
     <button type="button" :title="t('infiniteCanvas.toolbar.zoomOut')" :aria-label="t('infiniteCanvas.toolbar.zoomOut')" class="rounded-md border px-2 py-1 text-sm" @click="emit('zoom', 0.9)">-</button>
     <button type="button" :title="t('infiniteCanvas.toolbar.zoomIn')" :aria-label="t('infiniteCanvas.toolbar.zoomIn')" class="rounded-md border px-2 py-1 text-sm" @click="emit('zoom', 1.1)">+</button>
+    <button type="button" data-canvas-fit-view :title="t('infiniteCanvas.toolbar.fitView')" :aria-label="t('infiniteCanvas.toolbar.fitView')" class="rounded-md border px-2 py-1 text-xs" @click="emit('fit-view')">{{ t('infiniteCanvas.toolbar.fitView') }}</button>
     <label class="ml-1 flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300">{{ t('infiniteCanvas.toolbar.background') }}
       <select :value="project?.backgroundMode ?? 'grid'" class="rounded-md border bg-transparent px-2 py-1 text-xs" @change="emit('background-change', ($event.target as HTMLSelectElement).value as CanvasBackgroundMode)">
         <option value="grid">{{ t('infiniteCanvas.toolbar.grid') }}</option><option value="dots">{{ t('infiniteCanvas.toolbar.dots') }}</option><option value="plain">{{ t('infiniteCanvas.toolbar.plain') }}</option>
       </select>
     </label>
     <button type="button" :title="t('infiniteCanvas.toolbar.save')" :aria-label="t('infiniteCanvas.toolbar.save')" class="ml-auto rounded-md border px-2 py-1 text-xs" @click="emit('save')">{{ t('infiniteCanvas.toolbar.save') }}</button>
-    <button type="button" :title="t('infiniteCanvas.toolbar.addNodes')" class="rounded-md border px-2 py-1 text-xs" @click="emit('add-nodes')">{{ t('infiniteCanvas.toolbar.addNodes') }}</button>
+    <button type="button" data-canvas-add-nodes :title="t('infiniteCanvas.toolbar.addNodes')" class="rounded-md border px-2 py-1 text-xs" @click="emit('add-nodes')">{{ t('infiniteCanvas.toolbar.addNodes') }}</button>
+    <button type="button" data-canvas-focus :title="focusMode ? t('infiniteCanvas.toolbar.exitFocus') : t('infiniteCanvas.toolbar.focus')" :aria-label="focusMode ? t('infiniteCanvas.toolbar.exitFocus') : t('infiniteCanvas.toolbar.focus')" class="rounded-md border px-2 py-1 text-xs" @click="emit('toggle-focus')">{{ focusMode ? t('infiniteCanvas.toolbar.exitFocus') : t('infiniteCanvas.toolbar.focus') }}</button>
     <span class="text-xs text-gray-500 dark:text-dark-400">{{ saveStatus }}</span>
   </header>
 </template>

@@ -157,7 +157,7 @@ func (s *sqlStore) DueSites(ctx context.Context, now time.Time, limit int) ([]Si
 	if limit > 20 {
 		limit = 20
 	}
-	return s.querySites(ctx, `SELECT `+siteColumns+` FROM upstream_governance_sites WHERE enabled AND ((session_cipher <> '' AND next_sync_at <= $1) OR EXISTS (SELECT 1 FROM upstream_governance_bindings b WHERE b.site_id=upstream_governance_sites.id AND b.probe_enabled AND b.next_probe_at <= $1) OR (session_cipher <> '' AND EXISTS (SELECT 1 FROM upstream_governance_keys k WHERE k.site_id=upstream_governance_sites.id AND k.key_health->>'next_check_at' IS NOT NULL AND (k.key_health->>'next_check_at')::timestamptz <= $1)))
+	return s.querySites(ctx, `SELECT `+siteColumns+` FROM upstream_governance_sites WHERE enabled AND status <> 'local_model' AND ((session_cipher <> '' AND next_sync_at <= $1) OR EXISTS (SELECT 1 FROM upstream_governance_bindings b WHERE b.site_id=upstream_governance_sites.id AND b.probe_enabled AND b.next_probe_at <= $1) OR (session_cipher <> '' AND EXISTS (SELECT 1 FROM upstream_governance_keys k WHERE k.site_id=upstream_governance_sites.id AND k.key_health->>'next_check_at' IS NOT NULL AND (k.key_health->>'next_check_at')::timestamptz <= $1)))
 ORDER BY LEAST(
  CASE WHEN session_cipher<>'' THEN next_sync_at ELSE 'infinity'::timestamptz END,
  COALESCE((SELECT MIN(b.next_probe_at) FROM upstream_governance_bindings b WHERE b.site_id=upstream_governance_sites.id AND b.probe_enabled), 'infinity'::timestamptz),
@@ -174,7 +174,7 @@ func (s *sqlStore) DueFastObservations(ctx context.Context, now time.Time, limit
 	if limit > 50 {
 		limit = 50
 	}
-	return s.querySites(ctx, `SELECT `+siteColumns+` FROM upstream_governance_sites WHERE enabled AND fast_observe_enabled AND session_cipher<>'' AND next_fast_observe_at <= $1 AND (fast_observe_status <> 'running' OR fast_observe_reserved_at IS NULL OR fast_observe_reserved_at < $1 - INTERVAL '5 minutes') ORDER BY next_fast_observe_at,id LIMIT $2`, now, limit)
+	return s.querySites(ctx, `SELECT `+siteColumns+` FROM upstream_governance_sites WHERE enabled AND status <> 'local_model' AND fast_observe_enabled AND session_cipher<>'' AND next_fast_observe_at <= $1 AND (fast_observe_status <> 'running' OR fast_observe_reserved_at IS NULL OR fast_observe_reserved_at < $1 - INTERVAL '5 minutes') ORDER BY next_fast_observe_at,id LIMIT $2`, now, limit)
 }
 
 func (s *sqlStore) NextFastObservationAt(ctx context.Context) (*time.Time, error) {

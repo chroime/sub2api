@@ -33,9 +33,43 @@ describe('image generation gateway adapter', () => {
     expect(init.headers).not.toHaveProperty('Content-Type')
   })
 
+  it('uploads every reference image to the edits endpoint', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ data: [{ b64_json: 'aGVsbG8=', mime_type: 'image/png' }] }), { status: 200 }))
+    const result = await editImage('secret', {
+      model: 'm',
+      prompt: 'p',
+      referenceImages: [
+        { dataUrl: 'data:image/png;base64,YQ==', mimeType: 'image/png', name: 'one.png' },
+        { dataUrl: 'data:image/jpeg;base64,Yg==', mimeType: 'image/jpeg', name: 'two.jpg' },
+      ],
+    })
+    const init = fetchMock.mock.calls[0][1] as RequestInit
+    expect(fetchMock.mock.calls[0][0]).toContain('/v1/images/edits')
+    expect(result[0].blob).toBeInstanceOf(Blob)
+    const form = init.body as FormData
+    expect(form.get('model')).toBe('m')
+    expect(form.get('prompt')).toBe('p')
+    expect(form.getAll('image')).toHaveLength(1)
+    expect(form.getAll('image[]')).toHaveLength(1)
+  })
+
   it('builds Gemini multimodal image requests', () => {
     expect(buildGeminiRequest({ model: 'gemini-image', prompt: 'draw', size: '1K' })).toEqual({
       contents: [{ parts: [{ text: 'draw' }] }], generationConfig: { responseModalities: ['TEXT', 'IMAGE'], imageConfig: { imageSize: '1K' } }
+    })
+  })
+
+  it('adds inline reference image parts to Gemini requests', () => {
+    expect(buildGeminiRequest({
+      model: 'gemini-image',
+      prompt: 'draw',
+      referenceImages: [{ dataUrl: 'data:image/png;base64,YQ==', mimeType: 'image/png' }],
+    })).toEqual({
+      contents: [{ parts: [
+        { text: 'draw' },
+        { inlineData: { mimeType: 'image/png', data: 'YQ==' } },
+      ] }],
+      generationConfig: { responseModalities: ['TEXT', 'IMAGE'] },
     })
   })
 
