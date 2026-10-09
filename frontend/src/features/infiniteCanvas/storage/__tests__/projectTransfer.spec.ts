@@ -77,6 +77,27 @@ describe('project transfer', () => {
     expect(imported.nodes[0].metadata.referenceImages).toEqual([reference])
   })
 
+  it('deduplicates logically identical edges while importing an archive', async () => {
+    const now = new Date('2026-10-04T00:00:00.000Z')
+    const sourceProject: CanvasProject = {
+      id: 'duplicate-edges', title: 'Duplicate edges', createdAt: now, updatedAt: now,
+      viewport: { x: 0, y: 0, zoom: 1 }, backgroundMode: 'grid',
+      nodes: [
+        { id: 'prompt', type: 'prompt', position: { x: 0, y: 0 }, metadata: {} },
+        { id: 'config', type: 'config', position: { x: 300, y: 0 }, metadata: {} },
+      ],
+      edges: [
+        { id: 'edge-a', sourceNodeId: 'prompt', targetNodeId: 'config', kind: 'prompt' },
+        { id: 'edge-b', sourceNodeId: 'prompt', targetNodeId: 'config', kind: 'prompt' },
+      ],
+    }
+    const archive = await exportProject(sourceProject, repository())
+    const imported = await importProject(archive, repository())
+
+    expect(imported.edges).toHaveLength(1)
+    expect(imported.edges[0].id).toBe('edge-a')
+  })
+
   it('rejects an export when a referenced asset is missing', async () => {
     await expect(exportProject(project(), repository())).rejects.toThrow('Missing asset')
   })

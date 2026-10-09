@@ -3,19 +3,31 @@ import { computed } from 'vue'
 import { getCanvasNodeSize, type CanvasEdge, type CanvasNode } from '../types'
 
 const props = withDefaults(defineProps<{ nodes: CanvasNode[]; edges: CanvasEdge[] }>(), { nodes: () => [], edges: () => [] })
-const pathData = computed(() => props.edges.flatMap((edge) => {
-  const source = props.nodes.find((node) => node.id === edge.sourceNodeId)
-  const target = props.nodes.find((node) => node.id === edge.targetNodeId)
-  if (!source || !target) return []
-  const sourceSize = getCanvasNodeSize(source)
-  const targetSize = getCanvasNodeSize(target)
-  const x1 = source.position.x + sourceSize.width
-  const y1 = source.position.y + sourceSize.height / 2
-  const x2 = target.position.x
-  const y2 = target.position.y + targetSize.height / 2
-  const bend = Math.max(48, Math.abs(x2 - x1) / 2)
-  return [{ ...edge, path: `M ${x1} ${y1} C ${x1 + bend} ${y1}, ${x2 - bend} ${y2}, ${x2} ${y2}` }]
-}))
+
+const BIDIRECTIONAL_LANE_OFFSET = 24
+
+const pathData = computed(() => {
+  const logicalEdges = new Set<string>()
+  return props.edges.flatMap((edge) => {
+    const source = props.nodes.find((node) => node.id === edge.sourceNodeId)
+    const target = props.nodes.find((node) => node.id === edge.targetNodeId)
+    if (!source || !target) return []
+    const logicalKey = `${edge.sourceNodeId}\u0000${edge.targetNodeId}\u0000${edge.kind}`
+    if (logicalEdges.has(logicalKey)) return []
+    logicalEdges.add(logicalKey)
+    const sourceSize = getCanvasNodeSize(source)
+    const targetSize = getCanvasNodeSize(target)
+    const x1 = source.position.x + sourceSize.width
+    const y1 = source.position.y + sourceSize.height / 2
+    const x2 = target.position.x
+    const y2 = target.position.y + targetSize.height / 2
+    const bend = Math.max(48, Math.abs(x2 - x1) / 2)
+    const hasReverse = props.edges.some((candidate) => candidate.id !== edge.id && candidate.sourceNodeId === edge.targetNodeId && candidate.targetNodeId === edge.sourceNodeId)
+    const controlDirection = x2 === x1 ? (source.id < target.id ? 1 : -1) : Math.sign(x2 - x1)
+    const lane = hasReverse ? (controlDirection > 0 ? -BIDIRECTIONAL_LANE_OFFSET : BIDIRECTIONAL_LANE_OFFSET) : 0
+    return [{ ...edge, path: `M ${x1} ${y1} C ${x1 + controlDirection * bend} ${y1 + lane}, ${x2 - controlDirection * bend} ${y2 + lane}, ${x2} ${y2}` }]
+  })
+})
 </script>
 
 <template>

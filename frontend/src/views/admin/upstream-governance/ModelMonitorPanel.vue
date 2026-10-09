@@ -12,6 +12,7 @@ import ModelComparison from './ModelComparison.vue'
 import { errorKey } from './feedback'
 import { formatGovernanceTime } from './format'
 import { intervalValidationKey } from './interval'
+import { isOpenAITextModel } from './import-config'
 
 const props = defineProps<{
   siteId: number
@@ -47,7 +48,7 @@ const modes: ModelAPIMode[] = ['chat_completions', 'responses', 'anthropic', 'ge
 const efforts: ModelEffort[] = ['low', 'medium', 'high']
 const templates: ModelTestTemplate[] = ['candy', 'pelican', 'token_audit', 'context', 'probe']
 const statuses = new Set(['queued', 'running', 'succeeded', 'failed', 'cancelled', 'indeterminate', 'skipped'])
-const initialConfig = (): ModelTestConfig => ({ target_type: props.localOnly ? 'local_group' : 'upstream', managed_key_id: 0, local_group_id: 0, local_api_key_id: 0, platform: 'openai', model: '', api_mode: 'chat_completions', efforts: ['medium'], templates: ['candy', 'token_audit'], samples: 1, concurrency: 1, max_output_tokens: 4096, timeout_seconds: 180, first_content_timeout_seconds: 60, idle_timeout_seconds: 30, input_tokens: 1024, tokenizer: 'auto', token_tolerance_percent: 10 })
+const initialConfig = (): ModelTestConfig => ({ target_type: props.localOnly ? 'local_group' : 'upstream', managed_key_id: 0, local_group_id: 0, local_api_key_id: 0, platform: 'openai', model: '', api_mode: 'chat_completions', efforts: ['low'], templates: ['pelican'], samples: 1, concurrency: 1, max_output_tokens: 4096, timeout_seconds: 180, first_content_timeout_seconds: 60, idle_timeout_seconds: 30, input_tokens: 1024, tokenizer: 'auto', token_tolerance_percent: 10 })
 const config = ref<ModelTestConfig>(initialConfig())
 let generation = 0, refreshGeneration = 0, timer: ReturnType<typeof setTimeout> | undefined
 let localTargetsGeneration = 0
@@ -68,11 +69,11 @@ const usingCandidateModels = computed(() => !!selectedGroup.value && !selectedGr
 const modelOptions = computed(() => {
   if (targetType.value === 'local_group') {
     const platform = selectedLocalTarget.value?.platform
-    const models = platform ? getModelsByPlatform(platform).filter(model => !/(?:image|video|audio|realtime|imagine|cogview)/i.test(model)) : []
+    const models = platform ? getModelsByPlatform(platform).filter(model => !/(?:image|video|audio|realtime|imagine|cogview)/i.test(model)).filter(model => platform !== 'openai' || isOpenAITextModel(model)) : []
     return [...new Set([...models, ...(config.value.model ? [config.value.model] : [])])].map(value => ({ value, label: value }))
   }
   const models = usingCandidateModels.value
-    ? getModelsByPlatform(selectedKey.value!.platform).filter(model => !/(?:image|video|audio|realtime|imagine|cogview)/i.test(model))
+    ? getModelsByPlatform(selectedKey.value!.platform).filter(model => !/(?:image|video|audio|realtime|imagine|cogview)/i.test(model)).filter(model => selectedKey.value!.platform !== 'openai' || isOpenAITextModel(model))
     : selectedGroup.value?.models || []
   return [...new Set([...models, ...(config.value.model ? [config.value.model] : [])])].map(value => ({ value, label: value }))
 })

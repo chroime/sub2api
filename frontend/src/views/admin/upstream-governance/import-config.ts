@@ -10,11 +10,26 @@ export const defaultImportConfig = (): ImportAccountConfig => ({
   priority: 1,
   model_mapping: {},
   upstream_billing_rate_sync_enabled: true,
-  quota_daily_limit: 10000,
+  quota_daily_limit: 100000,
   quota_weekly_limit: 700000,
   quota_limit: 10000000,
   openai_long_context_billing_enabled: true,
 })
+
+/**
+ * OpenAI's text model picker should only advertise GPT 5.5 and newer
+ * numeric releases. Keep aliases and Codex names available because they do
+ * not identify an obsolete numeric release and may be valid routing keys.
+ */
+export function isOpenAITextModel(model: string): boolean {
+  const normalized = model.trim().toLowerCase()
+  if (!normalized || normalized.includes('codex')) return true
+  const version = normalized.match(/^gpt-(\d+)(?:\.(\d+))?(?:-|$)/)
+  if (!version) return true
+  const major = Number(version[1])
+  const minor = Number(version[2] || 0)
+  return major > 5 || (major === 5 && minor >= 5)
+}
 export function importAccountConfig(config: ImportAccountConfig, platform: Transport, models: ModelSelection, quotaEnabled: boolean): ImportAccountConfig {
   return {
     ...config,

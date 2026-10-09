@@ -54,6 +54,31 @@ describe('server-backed model templates', () => {
     expect(wrapper.text()).toContain('governance.emptyWhitelist')
     wrapper.unmount()
   })
+  it('hides old OpenAI GPT versions from the text model options while retaining aliases and Codex models', async () => {
+    const openaiModels = [
+      'gpt-5.2',
+      'gpt-5.4-mini',
+      'gpt-5.5',
+      'gpt-5.6-sol',
+      'gpt-6-astra',
+      'gpt-5.3-codex-spark',
+      'gpt-latest',
+    ]
+    const wrapper = mount(ModelTemplatePanel, {
+      props: {
+        modelValue: defaultModelSelections(),
+        groups: [{ ...groups[0]!, models: openaiModels }, groups[1]!],
+        'onUpdate:modelValue': value => { void wrapper.setProps({ modelValue: value }) },
+      },
+    })
+    await flushPromises()
+
+    const labels = wrapper.findAll('label.governance-checkbox-label').map(label => label.text().trim())
+    expect(labels).not.toContain('gpt-5.2')
+    expect(labels).not.toContain('gpt-5.4-mini')
+    expect(labels).toEqual(expect.arrayContaining(['gpt-5.5', 'gpt-5.6-sol', 'gpt-6-astra', 'gpt-5.3-codex-spark', 'gpt-latest']))
+    wrapper.unmount()
+  })
   it('saves selected models with the current server version and at most one default per protocol', async () => {
     vi.mocked(api.modelTemplates).mockResolvedValue({ version: 7, templates: [{ id: 'old', name: 'Old', platform: 'openai', models: ['saved-gpt'], is_default: true }] })
     const wrapper = setup()

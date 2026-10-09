@@ -70,6 +70,27 @@ describe('useInfiniteCanvasStore', () => {
     expect(store.connectNodes(prompt.id, config.id, 'prompt')).toEqual(valid)
   })
 
+  it('deduplicates logically identical edges when importing a project', async () => {
+    const store = useInfiniteCanvasStore(repository())
+    await store.ready
+    const imported = store.importProject({
+      schemaVersion: CANVAS_SCHEMA_VERSION,
+      id: 'duplicate-edges', title: 'Duplicate edges', createdAt: '2026-01-02T00:00:00.000Z', updatedAt: '2026-01-02T00:00:00.000Z',
+      viewport: { x: 0, y: 0, zoom: 1 }, backgroundMode: 'grid',
+      nodes: [
+        { id: 'prompt', type: 'prompt', position: { x: 0, y: 0 }, metadata: {} },
+        { id: 'config', type: 'config', position: { x: 300, y: 0 }, metadata: {} },
+      ],
+      edges: [
+        { id: 'edge-a', sourceNodeId: 'prompt', targetNodeId: 'config', kind: 'prompt' },
+        { id: 'edge-b', sourceNodeId: 'prompt', targetNodeId: 'config', kind: 'prompt' },
+      ],
+    })
+
+    expect(imported?.edges).toHaveLength(1)
+    expect(imported?.edges[0].id).toBe('edge-a')
+  })
+
   it('supports undo and redo and persists updated timestamps', async () => {
     vi.useFakeTimers()
     const repo = repository([fixture()])

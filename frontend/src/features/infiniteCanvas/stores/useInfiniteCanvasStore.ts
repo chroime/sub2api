@@ -66,10 +66,14 @@ export function validateCanvasProjectImport(input: unknown): CanvasProject | und
     normalizedNodes.push({ id: candidate.id, type: candidate.type as CanvasNode['type'], position: { x: candidate.position.x, y: candidate.position.y }, ...(isRecord(candidate.size) ? { size: { width: candidate.size.width as number, height: candidate.size.height as number } } : {}), metadata: clone(candidate.metadata) })
   }
   const edgeIds = new Set<string>()
+  const logicalEdgeKeys = new Set<string>()
   const normalizedEdges: CanvasEdge[] = []
   for (const candidate of edges) {
     if (!isRecord(candidate) || typeof candidate.id !== 'string' || !candidate.id || edgeIds.has(candidate.id) || typeof candidate.sourceNodeId !== 'string' || typeof candidate.targetNodeId !== 'string' || !nodeIds.has(candidate.sourceNodeId) || !nodeIds.has(candidate.targetNodeId) || !['prompt', 'config', 'reference'].includes(String(candidate.kind)) || (candidate.metadata !== undefined && !isRecord(candidate.metadata))) return undefined
     edgeIds.add(candidate.id)
+    const logicalKey = `${candidate.sourceNodeId}\u0000${candidate.targetNodeId}\u0000${candidate.kind}`
+    if (logicalEdgeKeys.has(logicalKey)) continue
+    logicalEdgeKeys.add(logicalKey)
     normalizedEdges.push({ id: candidate.id, sourceNodeId: candidate.sourceNodeId, targetNodeId: candidate.targetNodeId, kind: candidate.kind as CanvasEdge['kind'], ...(isRecord(candidate.metadata) ? { metadata: clone(candidate.metadata) } : {}) })
   }
   return { schemaVersion: CANVAS_SCHEMA_VERSION, id: idValue, title, createdAt, updatedAt, viewport: { x: viewport.x, y: viewport.y, zoom: viewport.zoom }, backgroundMode: backgroundMode as CanvasProject['backgroundMode'], nodes: normalizedNodes, edges: normalizedEdges, ...(typeof activeKeyId === 'number' ? { activeKeyId } : {}), ...(Array.isArray(assetKeys) ? { assetKeys: [...assetKeys] } : {}) }
@@ -221,7 +225,7 @@ export function useInfiniteCanvasStore(repository: CanvasRepository) {
     const source = project?.nodes.find((node) => node.id === sourceNodeId)
     const destination = project?.nodes.find((node) => node.id === target)
     if (!project || !source || !destination || sourceNodeId === target || !isCanvasEdgeAllowed(source.type, destination.type, edgeKind)) return edge
-    const existing = project.edges.find((item) => item.sourceNodeId === sourceNodeId && item.targetNodeId === target)
+    const existing = project.edges.find((item) => item.sourceNodeId === sourceNodeId && item.targetNodeId === target && item.kind === edgeKind)
     if (existing) return existing
     mutate((current) => { current.edges.push(edge) })
     return edge

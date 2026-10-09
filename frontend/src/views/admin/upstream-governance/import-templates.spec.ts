@@ -6,7 +6,7 @@ const settings = { concurrency: 30, priority: 0, quota_enabled: false, quota_dai
 describe('import template parameter boundaries', () => {
   it('extracts only reusable parameters and supplies the existing default priority', () => {
     const config = { ...defaultImportConfig(), priority: undefined, password: 'private', model_mapping: { 'upstream-model': 'target-model' } }
-    expect(importTemplateSettings(config, false)).toEqual({ concurrency: 5000, priority: 1, quota_enabled: false, quota_daily_limit: 10000, quota_weekly_limit: 700000, quota_limit: 10000000, upstream_billing_rate_sync_enabled: true, openai_long_context_billing_enabled: true })
+    expect(importTemplateSettings(config, false)).toEqual({ concurrency: 5000, priority: 1, quota_enabled: false, quota_daily_limit: 100000, quota_weekly_limit: 700000, quota_limit: 10000000, upstream_billing_rate_sync_enabled: true, openai_long_context_billing_enabled: true })
   })
   it('applies account parameters without replacing models or mutating the source', () => {
     const config = { ...defaultImportConfig(), model_mapping: { 'client-*': 'upstream' } }

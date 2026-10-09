@@ -50,12 +50,17 @@ function normalizeProject(value: unknown): CanvasProject {
     if (typeof node.id !== 'string' || !node.id.trim() || node.id.length > MAX_STRING || nodeIds.has(node.id) || !NODE_TYPES.has(String(node.type)) || !position || typeof position !== 'object' || position === null || !finite((position as Record<string, unknown>).x) || !finite((position as Record<string, unknown>).y) || !metadata || typeof metadata !== 'object' || metadata === null || Array.isArray(metadata) || (size !== undefined && (!size || typeof size !== 'object' || size === null || !finite((size as Record<string, unknown>).width) || !finite((size as Record<string, unknown>).height) || (size as Record<string, number>).width <= 0 || (size as Record<string, number>).height <= 0 || (size as Record<string, number>).width > 100000 || (size as Record<string, number>).height > 100000))) throw new Error('Invalid canvas node')
     nodeIds.add(node.id); nodes.push({ id: node.id, type: node.type as CanvasNode['type'], position: { x: (position as Record<string, number>).x, y: (position as Record<string, number>).y }, ...(size ? { size: { width: (size as Record<string, number>).width, height: (size as Record<string, number>).height } } : {}), metadata: metadata as CanvasNode['metadata'] })
   }
-  const edgeIds = new Set<string>(); const edges = input.edges.map((raw) => {
+  const edgeIds = new Set<string>(); const logicalEdgeKeys = new Set<string>(); const edges: CanvasProject['edges'] = []
+  for (const raw of input.edges) {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('Invalid canvas edge')
     const edge = raw as Record<string, unknown>; const metadata = edge.metadata
     if (typeof edge.id !== 'string' || !edge.id.trim() || edge.id.length > MAX_STRING || edgeIds.has(edge.id) || typeof edge.sourceNodeId !== 'string' || typeof edge.targetNodeId !== 'string' || !nodeIds.has(edge.sourceNodeId) || !nodeIds.has(edge.targetNodeId) || !EDGE_KINDS.has(String(edge.kind)) || (metadata !== undefined && (!metadata || typeof metadata !== 'object' || metadata === null || Array.isArray(metadata)))) throw new Error('Invalid canvas edge')
-    edgeIds.add(edge.id); return { id: edge.id, sourceNodeId: edge.sourceNodeId, targetNodeId: edge.targetNodeId, kind: edge.kind as 'prompt' | 'config' | 'reference', ...(metadata ? { metadata: metadata as Record<string, unknown> } : {}) }
-  })
+    edgeIds.add(edge.id)
+    const logicalKey = `${edge.sourceNodeId}\u0000${edge.targetNodeId}\u0000${edge.kind}`
+    if (logicalEdgeKeys.has(logicalKey)) continue
+    logicalEdgeKeys.add(logicalKey)
+    edges.push({ id: edge.id, sourceNodeId: edge.sourceNodeId, targetNodeId: edge.targetNodeId, kind: edge.kind as 'prompt' | 'config' | 'reference', ...(metadata ? { metadata: metadata as Record<string, unknown> } : {}) })
+  }
   const assetKeys = input.assetKeys
   if (assetKeys !== undefined && (!Array.isArray(assetKeys) || new Set(assetKeys).size !== assetKeys.length || assetKeys.some((key) => !safeKey(key)))) throw new Error('Invalid asset keys')
   if (input.activeKeyId !== undefined && (!finite(input.activeKeyId) || !Number.isInteger(input.activeKeyId) || input.activeKeyId < 0)) throw new Error('Invalid active key id')
