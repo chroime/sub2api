@@ -79,7 +79,7 @@ func TestGovernanceAccountRecoveryChecksCredentialsAndFingerprint(t *testing.T) 
 	defer db.Close()
 	rate := 2.0
 	key := "canary-key"
-	a := &Account{ID: 9, Name: "import", Notes: &key, Concurrency: 5000, Priority: 1, Platform: "openai", Type: "apikey", Status: StatusActive, Credentials: map[string]any{"api_key": "canary-key", "base_url": "https://fixture.example", "custom": "keep"}, Extra: map[string]any{governanceMarkerKey: "marker", "unrelated": "keep", "quota_daily_limit": 10000.0, "quota_weekly_limit": 700000.0, "quota_limit": 10000000.0, openAILongContextBillingEnabledKey: true, UpstreamBillingProbeEnabledExtraKey: true, UpstreamBillingRateSyncEnabledExtraKey: true}, GroupIDs: []int64{3}, RateMultiplier: &rate}
+	a := &Account{ID: 9, Name: "import", Notes: &key, Concurrency: 5000, Priority: 1, Platform: "openai", Type: "apikey", Status: StatusActive, Credentials: map[string]any{"api_key": "canary-key", "base_url": "https://fixture.example", "custom": "keep"}, Extra: map[string]any{governanceMarkerKey: "marker", "unrelated": "keep", "quota_daily_limit": 100000.0, "quota_weekly_limit": 700000.0, "quota_limit": 10000000.0, openAILongContextBillingEnabledKey: true, UpstreamBillingProbeEnabledExtraKey: true, UpstreamBillingRateSyncEnabledExtraKey: true}, GroupIDs: []int64{3}, RateMultiplier: &rate}
 	admin := &governanceAdminStub{account: a, group: &Group{ID: 3, Platform: "openai", Status: StatusActive}}
 	local := &governanceLocalAccounts{db: db, admin: admin}
 	change := gov.AccountChange{Marker: "marker", Name: "import", Platform: "openai", BaseURL: "https://fixture.example", APIKey: "canary-key", GroupID: 3, CostMultiplier: 2}

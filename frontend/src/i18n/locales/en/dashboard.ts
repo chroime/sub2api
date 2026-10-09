@@ -406,6 +406,8 @@ export default {
     latencyDuration: 'Total',
     streamingACK: 'ACK',
     streamingACKTooltip: 'Time to the non-visible SSE acknowledgement, not the first model token',
+    outputTps: 'Output TPS',
+    outputTpsHint: 'Output tokens divided by total duration, including first-token wait, in tok/s. Output tokens may include reasoning tokens.',
     time: 'Time',
     ws: 'WS',
     stream: 'Stream',

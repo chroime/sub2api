@@ -411,6 +411,8 @@ export default {
     latencyDuration: '总耗时',
     streamingACK: 'ACK',
     streamingACKTooltip: '不可见 SSE 确认帧耗时，不代表模型首字时间',
+    outputTps: '输出 TPS',
+    outputTpsHint: '输出 Token ÷ 总耗时（包含首字等待），单位 tok/s。输出 Token 可能包含推理 Token。',
     time: '时间',
     ws: 'WS',
     stream: '流式',
