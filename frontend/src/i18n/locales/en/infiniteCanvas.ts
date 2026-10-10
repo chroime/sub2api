@@ -1,7 +1,7 @@
 export default {
   infiniteCanvas: {
     title: 'Infinite Canvas',
-    description: 'Arrange prompts, settings, and generated images on a visual workspace.',
+    description: 'Arrange prompts and images.',
     emptyState: 'Start with a prompt node to create your first image.',
     project: {
       new: 'New project',

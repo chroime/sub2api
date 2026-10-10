@@ -487,7 +487,7 @@ export default {
     tabs: { usage: 'Usage', errors: 'Error Requests', ranking: 'User Ranking' },
     ranking: {
       title: 'Total Token Usage Ranking',
-      subtitle: 'All-user total token usage for the selected period',
+      subtitle: 'User token usage.',
       periodLabel: 'Ranking time range',
       periods: { today: 'Today', yesterday: 'Yesterday', '7d': 'Last 7 days', '30d': 'Last 30 days' },
       total: 'Total Tokens',

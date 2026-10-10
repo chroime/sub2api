@@ -1,7 +1,7 @@
 export default {
   infiniteCanvas: {
     title: '无限画布',
-    description: '在可视化工作区中编排提示词、设置和生成的图片。',
+    description: '编排提示词与图片。',
     emptyState: '从提示词节点开始，生成你的第一张图片。',
     project: {
       new: '新建项目',

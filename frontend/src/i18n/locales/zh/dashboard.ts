@@ -492,7 +492,7 @@ export default {
     tabs: { usage: '用量明细', errors: '错误请求', ranking: '用户排行' },
     ranking: {
       title: '用量排行榜',
-      subtitle: '按所选时间范围统计全部用户的总 Token 用量',
+      subtitle: '统计用户 Token 用量。',
       periodLabel: '排行时间范围',
       periods: { today: '今天', yesterday: '昨天', '7d': '近 7 天', '30d': '近 30 天' },
       total: '总TOKEN',

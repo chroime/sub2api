@@ -2,7 +2,7 @@ export default {
   iqDetection: {
     eyebrow: 'Model quality lab',
     title: 'IQ Monitoring',
-    description: 'Review candy logic and pelican animation results from model monitoring in one safe, redacted view.',
+    description: 'View candy and pelican results.',
     candyResults: 'Candy logic results',
     candyHint: 'Standard answer: {answer} candies. Results compare rule-following stability.',
     recentCount: 'Last {count}',
