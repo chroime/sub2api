@@ -169,10 +169,10 @@ type Group struct {
 // 注意：普通用户接口不得返回 model_routing/account_count/account_groups 等内部信息。
 type AdminGroup struct {
 	Group
-	BillingInputTokenMultiplier  float64 `json:"billing_input_token_multiplier"`
-	BillingOutputTokenMultiplier float64 `json:"billing_output_token_multiplier"`
-	BillingTokenAdjustmentMinInputTokens int `json:"billing_token_adjustment_min_input_tokens"`
-	StreamingACKEnabled          *bool   `json:"streaming_ack_enabled"`
+	BillingInputTokenMultiplier          float64 `json:"billing_input_token_multiplier"`
+	BillingOutputTokenMultiplier         float64 `json:"billing_output_token_multiplier"`
+	BillingTokenAdjustmentMinInputTokens int     `json:"billing_token_adjustment_min_input_tokens"`
+	StreamingACKEnabled                  *bool   `json:"streaming_ack_enabled"`
 	// ForceOpenAIFast 是管理端请求策略，用户侧分组 DTO 无需暴露。
 	ForceOpenAIFast bool `json:"force_openai_fast"`
 	// FreeOpenAIFast 是管理端计费策略，用户侧分组 DTO 无需暴露。
@@ -680,6 +680,11 @@ type UsageLog struct {
 // AdminUsageLog 是管理员接口使用的 usage log DTO（包含管理员字段）。
 type AdminUsageLog struct {
 	UsageLog
+
+	// UpstreamInputTokens/UpstreamOutputTokens are the raw non-cache counts
+	// returned by the upstream before any customer billing adjustment.
+	UpstreamInputTokens  int `json:"upstream_input_tokens"`
+	UpstreamOutputTokens int `json:"upstream_output_tokens"`
 
 	// UpstreamModel is the actual model sent to the upstream provider after mapping.
 	// Omitted when no mapping was applied (requested model was used as-is).

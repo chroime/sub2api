@@ -140,6 +140,16 @@ func OutputTokens(v int) predicate.UsageLog {
 	return predicate.UsageLog(sql.FieldEQ(FieldOutputTokens, v))
 }
 
+// UpstreamInputTokens applies equality check predicate on the "upstream_input_tokens" field. It's identical to UpstreamInputTokensEQ.
+func UpstreamInputTokens(v int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldEQ(FieldUpstreamInputTokens, v))
+}
+
+// UpstreamOutputTokens applies equality check predicate on the "upstream_output_tokens" field. It's identical to UpstreamOutputTokensEQ.
+func UpstreamOutputTokens(v int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldEQ(FieldUpstreamOutputTokens, v))
+}
+
 // CacheCreationTokens applies equality check predicate on the "cache_creation_tokens" field. It's identical to CacheCreationTokensEQ.
 func CacheCreationTokens(v int) predicate.UsageLog {
 	return predicate.UsageLog(sql.FieldEQ(FieldCacheCreationTokens, v))
@@ -1138,6 +1148,86 @@ func OutputTokensLT(v int) predicate.UsageLog {
 // OutputTokensLTE applies the LTE predicate on the "output_tokens" field.
 func OutputTokensLTE(v int) predicate.UsageLog {
 	return predicate.UsageLog(sql.FieldLTE(FieldOutputTokens, v))
+}
+
+// UpstreamInputTokensEQ applies the EQ predicate on the "upstream_input_tokens" field.
+func UpstreamInputTokensEQ(v int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldEQ(FieldUpstreamInputTokens, v))
+}
+
+// UpstreamInputTokensNEQ applies the NEQ predicate on the "upstream_input_tokens" field.
+func UpstreamInputTokensNEQ(v int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldNEQ(FieldUpstreamInputTokens, v))
+}
+
+// UpstreamInputTokensIn applies the In predicate on the "upstream_input_tokens" field.
+func UpstreamInputTokensIn(vs ...int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldIn(FieldUpstreamInputTokens, vs...))
+}
+
+// UpstreamInputTokensNotIn applies the NotIn predicate on the "upstream_input_tokens" field.
+func UpstreamInputTokensNotIn(vs ...int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldNotIn(FieldUpstreamInputTokens, vs...))
+}
+
+// UpstreamInputTokensGT applies the GT predicate on the "upstream_input_tokens" field.
+func UpstreamInputTokensGT(v int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldGT(FieldUpstreamInputTokens, v))
+}
+
+// UpstreamInputTokensGTE applies the GTE predicate on the "upstream_input_tokens" field.
+func UpstreamInputTokensGTE(v int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldGTE(FieldUpstreamInputTokens, v))
+}
+
+// UpstreamInputTokensLT applies the LT predicate on the "upstream_input_tokens" field.
+func UpstreamInputTokensLT(v int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldLT(FieldUpstreamInputTokens, v))
+}
+
+// UpstreamInputTokensLTE applies the LTE predicate on the "upstream_input_tokens" field.
+func UpstreamInputTokensLTE(v int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldLTE(FieldUpstreamInputTokens, v))
+}
+
+// UpstreamOutputTokensEQ applies the EQ predicate on the "upstream_output_tokens" field.
+func UpstreamOutputTokensEQ(v int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldEQ(FieldUpstreamOutputTokens, v))
+}
+
+// UpstreamOutputTokensNEQ applies the NEQ predicate on the "upstream_output_tokens" field.
+func UpstreamOutputTokensNEQ(v int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldNEQ(FieldUpstreamOutputTokens, v))
+}
+
+// UpstreamOutputTokensIn applies the In predicate on the "upstream_output_tokens" field.
+func UpstreamOutputTokensIn(vs ...int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldIn(FieldUpstreamOutputTokens, vs...))
+}
+
+// UpstreamOutputTokensNotIn applies the NotIn predicate on the "upstream_output_tokens" field.
+func UpstreamOutputTokensNotIn(vs ...int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldNotIn(FieldUpstreamOutputTokens, vs...))
+}
+
+// UpstreamOutputTokensGT applies the GT predicate on the "upstream_output_tokens" field.
+func UpstreamOutputTokensGT(v int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldGT(FieldUpstreamOutputTokens, v))
+}
+
+// UpstreamOutputTokensGTE applies the GTE predicate on the "upstream_output_tokens" field.
+func UpstreamOutputTokensGTE(v int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldGTE(FieldUpstreamOutputTokens, v))
+}
+
+// UpstreamOutputTokensLT applies the LT predicate on the "upstream_output_tokens" field.
+func UpstreamOutputTokensLT(v int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldLT(FieldUpstreamOutputTokens, v))
+}
+
+// UpstreamOutputTokensLTE applies the LTE predicate on the "upstream_output_tokens" field.
+func UpstreamOutputTokensLTE(v int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldLTE(FieldUpstreamOutputTokens, v))
 }
 
 // CacheCreationTokensEQ applies the EQ predicate on the "cache_creation_tokens" field.

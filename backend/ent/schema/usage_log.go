@@ -80,6 +80,12 @@ func (UsageLog) Fields() []ent.Field {
 			Default(0),
 		field.Int("output_tokens").
 			Default(0),
+		// Raw non-cache counts returned by the upstream before customer billing
+		// adjustment. These are administrator-only audit fields.
+		field.Int("upstream_input_tokens").
+			Default(0),
+		field.Int("upstream_output_tokens").
+			Default(0),
 		field.Int("cache_creation_tokens").
 			Default(0),
 		field.Int("cache_read_tokens").

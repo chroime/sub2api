@@ -351,6 +351,48 @@ func (_u *UsageLogUpdate) AddOutputTokens(v int) *UsageLogUpdate {
 	return _u
 }
 
+// SetUpstreamInputTokens sets the "upstream_input_tokens" field.
+func (_u *UsageLogUpdate) SetUpstreamInputTokens(v int) *UsageLogUpdate {
+	_u.mutation.ResetUpstreamInputTokens()
+	_u.mutation.SetUpstreamInputTokens(v)
+	return _u
+}
+
+// SetNillableUpstreamInputTokens sets the "upstream_input_tokens" field if the given value is not nil.
+func (_u *UsageLogUpdate) SetNillableUpstreamInputTokens(v *int) *UsageLogUpdate {
+	if v != nil {
+		_u.SetUpstreamInputTokens(*v)
+	}
+	return _u
+}
+
+// AddUpstreamInputTokens adds value to the "upstream_input_tokens" field.
+func (_u *UsageLogUpdate) AddUpstreamInputTokens(v int) *UsageLogUpdate {
+	_u.mutation.AddUpstreamInputTokens(v)
+	return _u
+}
+
+// SetUpstreamOutputTokens sets the "upstream_output_tokens" field.
+func (_u *UsageLogUpdate) SetUpstreamOutputTokens(v int) *UsageLogUpdate {
+	_u.mutation.ResetUpstreamOutputTokens()
+	_u.mutation.SetUpstreamOutputTokens(v)
+	return _u
+}
+
+// SetNillableUpstreamOutputTokens sets the "upstream_output_tokens" field if the given value is not nil.
+func (_u *UsageLogUpdate) SetNillableUpstreamOutputTokens(v *int) *UsageLogUpdate {
+	if v != nil {
+		_u.SetUpstreamOutputTokens(*v)
+	}
+	return _u
+}
+
+// AddUpstreamOutputTokens adds value to the "upstream_output_tokens" field.
+func (_u *UsageLogUpdate) AddUpstreamOutputTokens(v int) *UsageLogUpdate {
+	_u.mutation.AddUpstreamOutputTokens(v)
+	return _u
+}
+
 // SetCacheCreationTokens sets the "cache_creation_tokens" field.
 func (_u *UsageLogUpdate) SetCacheCreationTokens(v int) *UsageLogUpdate {
 	_u.mutation.ResetCacheCreationTokens()
@@ -1231,6 +1273,18 @@ func (_u *UsageLogUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.AddedOutputTokens(); ok {
 		_spec.AddField(usagelog.FieldOutputTokens, field.TypeInt, value)
 	}
+	if value, ok := _u.mutation.UpstreamInputTokens(); ok {
+		_spec.SetField(usagelog.FieldUpstreamInputTokens, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedUpstreamInputTokens(); ok {
+		_spec.AddField(usagelog.FieldUpstreamInputTokens, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.UpstreamOutputTokens(); ok {
+		_spec.SetField(usagelog.FieldUpstreamOutputTokens, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedUpstreamOutputTokens(); ok {
+		_spec.AddField(usagelog.FieldUpstreamOutputTokens, field.TypeInt, value)
+	}
 	if value, ok := _u.mutation.CacheCreationTokens(); ok {
 		_spec.SetField(usagelog.FieldCacheCreationTokens, field.TypeInt, value)
 	}
@@ -1898,6 +1952,48 @@ func (_u *UsageLogUpdateOne) SetNillableOutputTokens(v *int) *UsageLogUpdateOne 
 // AddOutputTokens adds value to the "output_tokens" field.
 func (_u *UsageLogUpdateOne) AddOutputTokens(v int) *UsageLogUpdateOne {
 	_u.mutation.AddOutputTokens(v)
+	return _u
+}
+
+// SetUpstreamInputTokens sets the "upstream_input_tokens" field.
+func (_u *UsageLogUpdateOne) SetUpstreamInputTokens(v int) *UsageLogUpdateOne {
+	_u.mutation.ResetUpstreamInputTokens()
+	_u.mutation.SetUpstreamInputTokens(v)
+	return _u
+}
+
+// SetNillableUpstreamInputTokens sets the "upstream_input_tokens" field if the given value is not nil.
+func (_u *UsageLogUpdateOne) SetNillableUpstreamInputTokens(v *int) *UsageLogUpdateOne {
+	if v != nil {
+		_u.SetUpstreamInputTokens(*v)
+	}
+	return _u
+}
+
+// AddUpstreamInputTokens adds value to the "upstream_input_tokens" field.
+func (_u *UsageLogUpdateOne) AddUpstreamInputTokens(v int) *UsageLogUpdateOne {
+	_u.mutation.AddUpstreamInputTokens(v)
+	return _u
+}
+
+// SetUpstreamOutputTokens sets the "upstream_output_tokens" field.
+func (_u *UsageLogUpdateOne) SetUpstreamOutputTokens(v int) *UsageLogUpdateOne {
+	_u.mutation.ResetUpstreamOutputTokens()
+	_u.mutation.SetUpstreamOutputTokens(v)
+	return _u
+}
+
+// SetNillableUpstreamOutputTokens sets the "upstream_output_tokens" field if the given value is not nil.
+func (_u *UsageLogUpdateOne) SetNillableUpstreamOutputTokens(v *int) *UsageLogUpdateOne {
+	if v != nil {
+		_u.SetUpstreamOutputTokens(*v)
+	}
+	return _u
+}
+
+// AddUpstreamOutputTokens adds value to the "upstream_output_tokens" field.
+func (_u *UsageLogUpdateOne) AddUpstreamOutputTokens(v int) *UsageLogUpdateOne {
+	_u.mutation.AddUpstreamOutputTokens(v)
 	return _u
 }
 
@@ -2810,6 +2906,18 @@ func (_u *UsageLogUpdateOne) sqlSave(ctx context.Context) (_node *UsageLog, err 
 	}
 	if value, ok := _u.mutation.AddedOutputTokens(); ok {
 		_spec.AddField(usagelog.FieldOutputTokens, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.UpstreamInputTokens(); ok {
+		_spec.SetField(usagelog.FieldUpstreamInputTokens, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedUpstreamInputTokens(); ok {
+		_spec.AddField(usagelog.FieldUpstreamInputTokens, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.UpstreamOutputTokens(); ok {
+		_spec.SetField(usagelog.FieldUpstreamOutputTokens, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedUpstreamOutputTokens(); ok {
+		_spec.AddField(usagelog.FieldUpstreamOutputTokens, field.TypeInt, value)
 	}
 	if value, ok := _u.mutation.CacheCreationTokens(); ok {
 		_spec.SetField(usagelog.FieldCacheCreationTokens, field.TypeInt, value)

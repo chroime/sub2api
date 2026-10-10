@@ -45107,6 +45107,10 @@ type UsageLogMutation struct {
 	addinput_tokens              *int
 	output_tokens                *int
 	addoutput_tokens             *int
+	upstream_input_tokens        *int
+	addupstream_input_tokens     *int
+	upstream_output_tokens       *int
+	addupstream_output_tokens    *int
 	cache_creation_tokens        *int
 	addcache_creation_tokens     *int
 	cache_read_tokens            *int
@@ -46072,6 +46076,118 @@ func (m *UsageLogMutation) AddedOutputTokens() (r int, exists bool) {
 func (m *UsageLogMutation) ResetOutputTokens() {
 	m.output_tokens = nil
 	m.addoutput_tokens = nil
+}
+
+// SetUpstreamInputTokens sets the "upstream_input_tokens" field.
+func (m *UsageLogMutation) SetUpstreamInputTokens(i int) {
+	m.upstream_input_tokens = &i
+	m.addupstream_input_tokens = nil
+}
+
+// UpstreamInputTokens returns the value of the "upstream_input_tokens" field in the mutation.
+func (m *UsageLogMutation) UpstreamInputTokens() (r int, exists bool) {
+	v := m.upstream_input_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpstreamInputTokens returns the old "upstream_input_tokens" field's value of the UsageLog entity.
+// If the UsageLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UsageLogMutation) OldUpstreamInputTokens(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpstreamInputTokens is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpstreamInputTokens requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpstreamInputTokens: %w", err)
+	}
+	return oldValue.UpstreamInputTokens, nil
+}
+
+// AddUpstreamInputTokens adds i to the "upstream_input_tokens" field.
+func (m *UsageLogMutation) AddUpstreamInputTokens(i int) {
+	if m.addupstream_input_tokens != nil {
+		*m.addupstream_input_tokens += i
+	} else {
+		m.addupstream_input_tokens = &i
+	}
+}
+
+// AddedUpstreamInputTokens returns the value that was added to the "upstream_input_tokens" field in this mutation.
+func (m *UsageLogMutation) AddedUpstreamInputTokens() (r int, exists bool) {
+	v := m.addupstream_input_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetUpstreamInputTokens resets all changes to the "upstream_input_tokens" field.
+func (m *UsageLogMutation) ResetUpstreamInputTokens() {
+	m.upstream_input_tokens = nil
+	m.addupstream_input_tokens = nil
+}
+
+// SetUpstreamOutputTokens sets the "upstream_output_tokens" field.
+func (m *UsageLogMutation) SetUpstreamOutputTokens(i int) {
+	m.upstream_output_tokens = &i
+	m.addupstream_output_tokens = nil
+}
+
+// UpstreamOutputTokens returns the value of the "upstream_output_tokens" field in the mutation.
+func (m *UsageLogMutation) UpstreamOutputTokens() (r int, exists bool) {
+	v := m.upstream_output_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpstreamOutputTokens returns the old "upstream_output_tokens" field's value of the UsageLog entity.
+// If the UsageLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UsageLogMutation) OldUpstreamOutputTokens(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpstreamOutputTokens is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpstreamOutputTokens requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpstreamOutputTokens: %w", err)
+	}
+	return oldValue.UpstreamOutputTokens, nil
+}
+
+// AddUpstreamOutputTokens adds i to the "upstream_output_tokens" field.
+func (m *UsageLogMutation) AddUpstreamOutputTokens(i int) {
+	if m.addupstream_output_tokens != nil {
+		*m.addupstream_output_tokens += i
+	} else {
+		m.addupstream_output_tokens = &i
+	}
+}
+
+// AddedUpstreamOutputTokens returns the value that was added to the "upstream_output_tokens" field in this mutation.
+func (m *UsageLogMutation) AddedUpstreamOutputTokens() (r int, exists bool) {
+	v := m.addupstream_output_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetUpstreamOutputTokens resets all changes to the "upstream_output_tokens" field.
+func (m *UsageLogMutation) ResetUpstreamOutputTokens() {
+	m.upstream_output_tokens = nil
+	m.addupstream_output_tokens = nil
 }
 
 // SetCacheCreationTokens sets the "cache_creation_tokens" field.
@@ -47913,7 +48029,7 @@ func (m *UsageLogMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UsageLogMutation) Fields() []string {
-	fields := make([]string, 0, 48)
+	fields := make([]string, 0, 50)
 	if m.user != nil {
 		fields = append(fields, usagelog.FieldUserID)
 	}
@@ -47964,6 +48080,12 @@ func (m *UsageLogMutation) Fields() []string {
 	}
 	if m.output_tokens != nil {
 		fields = append(fields, usagelog.FieldOutputTokens)
+	}
+	if m.upstream_input_tokens != nil {
+		fields = append(fields, usagelog.FieldUpstreamInputTokens)
+	}
+	if m.upstream_output_tokens != nil {
+		fields = append(fields, usagelog.FieldUpstreamOutputTokens)
 	}
 	if m.cache_creation_tokens != nil {
 		fields = append(fields, usagelog.FieldCacheCreationTokens)
@@ -48100,6 +48222,10 @@ func (m *UsageLogMutation) Field(name string) (ent.Value, bool) {
 		return m.InputTokens()
 	case usagelog.FieldOutputTokens:
 		return m.OutputTokens()
+	case usagelog.FieldUpstreamInputTokens:
+		return m.UpstreamInputTokens()
+	case usagelog.FieldUpstreamOutputTokens:
+		return m.UpstreamOutputTokens()
 	case usagelog.FieldCacheCreationTokens:
 		return m.CacheCreationTokens()
 	case usagelog.FieldCacheReadTokens:
@@ -48205,6 +48331,10 @@ func (m *UsageLogMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldInputTokens(ctx)
 	case usagelog.FieldOutputTokens:
 		return m.OldOutputTokens(ctx)
+	case usagelog.FieldUpstreamInputTokens:
+		return m.OldUpstreamInputTokens(ctx)
+	case usagelog.FieldUpstreamOutputTokens:
+		return m.OldUpstreamOutputTokens(ctx)
 	case usagelog.FieldCacheCreationTokens:
 		return m.OldCacheCreationTokens(ctx)
 	case usagelog.FieldCacheReadTokens:
@@ -48394,6 +48524,20 @@ func (m *UsageLogMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetOutputTokens(v)
+		return nil
+	case usagelog.FieldUpstreamInputTokens:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpstreamInputTokens(v)
+		return nil
+	case usagelog.FieldUpstreamOutputTokens:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpstreamOutputTokens(v)
 		return nil
 	case usagelog.FieldCacheCreationTokens:
 		v, ok := value.(int)
@@ -48629,6 +48773,12 @@ func (m *UsageLogMutation) AddedFields() []string {
 	if m.addoutput_tokens != nil {
 		fields = append(fields, usagelog.FieldOutputTokens)
 	}
+	if m.addupstream_input_tokens != nil {
+		fields = append(fields, usagelog.FieldUpstreamInputTokens)
+	}
+	if m.addupstream_output_tokens != nil {
+		fields = append(fields, usagelog.FieldUpstreamOutputTokens)
+	}
 	if m.addcache_creation_tokens != nil {
 		fields = append(fields, usagelog.FieldCacheCreationTokens)
 	}
@@ -48700,6 +48850,10 @@ func (m *UsageLogMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedInputTokens()
 	case usagelog.FieldOutputTokens:
 		return m.AddedOutputTokens()
+	case usagelog.FieldUpstreamInputTokens:
+		return m.AddedUpstreamInputTokens()
+	case usagelog.FieldUpstreamOutputTokens:
+		return m.AddedUpstreamOutputTokens()
 	case usagelog.FieldCacheCreationTokens:
 		return m.AddedCacheCreationTokens()
 	case usagelog.FieldCacheReadTokens:
@@ -48767,6 +48921,20 @@ func (m *UsageLogMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddOutputTokens(v)
+		return nil
+	case usagelog.FieldUpstreamInputTokens:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddUpstreamInputTokens(v)
+		return nil
+	case usagelog.FieldUpstreamOutputTokens:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddUpstreamOutputTokens(v)
 		return nil
 	case usagelog.FieldCacheCreationTokens:
 		v, ok := value.(int)
@@ -49119,6 +49287,12 @@ func (m *UsageLogMutation) ResetField(name string) error {
 		return nil
 	case usagelog.FieldOutputTokens:
 		m.ResetOutputTokens()
+		return nil
+	case usagelog.FieldUpstreamInputTokens:
+		m.ResetUpstreamInputTokens()
+		return nil
+	case usagelog.FieldUpstreamOutputTokens:
+		m.ResetUpstreamOutputTokens()
 		return nil
 	case usagelog.FieldCacheCreationTokens:
 		m.ResetCacheCreationTokens()

@@ -533,6 +533,8 @@ export default {
       cacheReadCost: '缓存读取费用',
       inputTokens: '输入 Token',
       outputTokens: '输出 Token',
+      upstreamInputTokens: '上游实际输入 Token',
+      upstreamOutputTokens: '上游实际输出 Token',
       cacheCreationTokens: '缓存创建 Token',
       cacheCreation5mTokens: '缓存创建',
       cacheCreation1hTokens: '缓存创建',

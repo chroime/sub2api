@@ -1839,6 +1839,9 @@ export interface UsageLogAccountSummary {
 }
 
 export interface AdminUsageLog extends UsageLog {
+  // 上游返回的原始非缓存 Token（仅管理员可见，客户计费用量可能已按分组倍率调整）
+  upstream_input_tokens?: number
+  upstream_output_tokens?: number
   upstream_model?: string | null
   upstream_reasoning_effort?: string | null
   upstream_response_model?: string | null

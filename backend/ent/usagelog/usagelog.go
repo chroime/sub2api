@@ -48,6 +48,10 @@ const (
 	FieldInputTokens = "input_tokens"
 	// FieldOutputTokens holds the string denoting the output_tokens field in the database.
 	FieldOutputTokens = "output_tokens"
+	// FieldUpstreamInputTokens holds the string denoting the upstream_input_tokens field in the database.
+	FieldUpstreamInputTokens = "upstream_input_tokens"
+	// FieldUpstreamOutputTokens holds the string denoting the upstream_output_tokens field in the database.
+	FieldUpstreamOutputTokens = "upstream_output_tokens"
 	// FieldCacheCreationTokens holds the string denoting the cache_creation_tokens field in the database.
 	FieldCacheCreationTokens = "cache_creation_tokens"
 	// FieldCacheReadTokens holds the string denoting the cache_read_tokens field in the database.
@@ -179,6 +183,8 @@ var Columns = []string{
 	FieldSubscriptionID,
 	FieldInputTokens,
 	FieldOutputTokens,
+	FieldUpstreamInputTokens,
+	FieldUpstreamOutputTokens,
 	FieldCacheCreationTokens,
 	FieldCacheReadTokens,
 	FieldCacheCreation5mTokens,
@@ -243,6 +249,10 @@ var (
 	DefaultInputTokens int
 	// DefaultOutputTokens holds the default value on creation for the "output_tokens" field.
 	DefaultOutputTokens int
+	// DefaultUpstreamInputTokens holds the default value on creation for the "upstream_input_tokens" field.
+	DefaultUpstreamInputTokens int
+	// DefaultUpstreamOutputTokens holds the default value on creation for the "upstream_output_tokens" field.
+	DefaultUpstreamOutputTokens int
 	// DefaultCacheCreationTokens holds the default value on creation for the "cache_creation_tokens" field.
 	DefaultCacheCreationTokens int
 	// DefaultCacheReadTokens holds the default value on creation for the "cache_read_tokens" field.
@@ -386,6 +396,16 @@ func ByInputTokens(opts ...sql.OrderTermOption) OrderOption {
 // ByOutputTokens orders the results by the output_tokens field.
 func ByOutputTokens(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldOutputTokens, opts...).ToFunc()
+}
+
+// ByUpstreamInputTokens orders the results by the upstream_input_tokens field.
+func ByUpstreamInputTokens(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldUpstreamInputTokens, opts...).ToFunc()
+}
+
+// ByUpstreamOutputTokens orders the results by the upstream_output_tokens field.
+func ByUpstreamOutputTokens(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldUpstreamOutputTokens, opts...).ToFunc()
 }
 
 // ByCacheCreationTokens orders the results by the cache_creation_tokens field.

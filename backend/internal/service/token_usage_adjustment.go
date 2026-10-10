@@ -3,8 +3,9 @@ package service
 import "math"
 
 // TokenUsageAdjustment controls the customer-facing token quantity used by
-// billing. Cache read/write buckets are deliberately excluded: they remain
-// independently priced and must not be multiplied twice.
+// billing. When a non-1 adjustment is enabled, cache read/write buckets are
+// folded into the logical customer input so cache hits cannot reduce the
+// customer charge; raw cache buckets remain available for upstream accounting.
 type TokenUsageAdjustment struct {
 	InputMultiplier  float64
 	OutputMultiplier float64

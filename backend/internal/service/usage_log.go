@@ -147,10 +147,15 @@ type UsageLog struct {
 	GroupID        *int64
 	SubscriptionID *int64
 
-	InputTokens         int
-	OutputTokens        int
-	CacheCreationTokens int
-	CacheReadTokens     int
+	InputTokens  int
+	OutputTokens int
+	// UpstreamInputTokens and UpstreamOutputTokens preserve the raw non-cache
+	// token counts reported by the upstream before any customer billing
+	// adjustment. They are exposed only through administrator DTOs.
+	UpstreamInputTokens  int
+	UpstreamOutputTokens int
+	CacheCreationTokens  int
+	CacheReadTokens      int
 
 	CacheCreation5mTokens int `gorm:"column:cache_creation_5m_tokens"`
 	CacheCreation1hTokens int `gorm:"column:cache_creation_1h_tokens"`

@@ -815,13 +815,35 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 		cacheTTLOverridden = (result.Usage.CacheCreation5mTokens + result.Usage.CacheCreation1hTokens) > 0
 	}
 
-	// Apply the group-level customer billing adjustment after cache buckets have
-	// been classified. Cache read/write tokens stay in their own buckets so they
-	// are not multiplied a second time.
+	// Keep the upstream usage immutable after cache classification. Customer
+	// billing receives a separate cache-aware view so cache hits and misses do
+	// not change the customer charge when a group adjustment is enabled;
+	// administrator/account-cost paths continue to consume the raw buckets.
+	rawResult := *result
+	billingResult := rawResult
+	displayResult := rawResult
 	if apiKey != nil {
-		adjusted := tokenUsageAdjustmentForGroup(apiKey.Group).ApplyForRequest(result.Usage.InputTokens, result.Usage.OutputTokens)
-		result.Usage.InputTokens = adjusted.InputTokens
-		result.Usage.OutputTokens = adjusted.OutputTokens
+		adjustment := tokenUsageAdjustmentForGroup(apiKey.Group)
+		adjusted := adjustment.ApplyForRequestUsage(
+			rawResult.Usage.InputTokens,
+			rawResult.Usage.CacheReadInputTokens,
+			rawResult.Usage.CacheCreationInputTokens,
+			rawResult.Usage.OutputTokens,
+		)
+		billingResult.Usage.InputTokens = adjusted.Customer.InputTokens
+		billingResult.Usage.OutputTokens = adjusted.Customer.OutputTokens
+		if adjusted.Applied {
+			billingResult.Usage.CacheReadInputTokens = 0
+			billingResult.Usage.CacheCreationInputTokens = 0
+			billingResult.Usage.CacheCreation5mTokens = 0
+			billingResult.Usage.CacheCreation1hTokens = 0
+		}
+
+		// The existing user-facing token fields remain the adjusted non-cache
+		// counts, while raw cache buckets stay visible as ordinary usage data.
+		display := adjustment.ApplyForRequest(rawResult.Usage.InputTokens, rawResult.Usage.OutputTokens)
+		displayResult.Usage.InputTokens = display.InputTokens
+		displayResult.Usage.OutputTokens = display.OutputTokens
 	}
 
 	// 获取费率倍数（优先级：用户专属 > 分组默认 > 系统默认）
@@ -868,7 +890,7 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	}
 
 	// 计算费用
-	cost := s.calculateRecordUsageCost(ctx, result, apiKey, billingModel, multiplier, imageMultiplier, pricingAt)
+	cost := s.calculateRecordUsageCost(ctx, &billingResult, apiKey, billingModel, multiplier, imageMultiplier, pricingAt)
 	// response_model：按上游成功响应自报的模型计费（渠道显式开启才生效）。
 	// 采纳条件见 responseModelBillingDeclaration + hasIdentifiedResponseModelPricing
 	// + responseModelBillingAdoptable。任一条件不满足都静默回落基线，即开启本模式前的
@@ -880,7 +902,7 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 		result.ImageCount > 0 || result.AudioUsage != nil || result.SearchCount > 0,
 	); responseModel != "" && !strings.EqualFold(responseModel, strings.TrimSpace(billingModel)) {
 		if identified, responseChannelPriced := s.hasIdentifiedResponseModelPricing(ctx, responseModel, apiKey); identified {
-			responseCost := s.calculateRecordUsageCost(ctx, result, apiKey, responseModel, multiplier, imageMultiplier, pricingAt)
+			responseCost := s.calculateRecordUsageCost(ctx, &billingResult, apiKey, responseModel, multiplier, imageMultiplier, pricingAt)
 			baselineChannelPriced := s.resolveChannelPricing(ctx, billingModel, apiKey) != nil
 			if responseModelBillingAdoptable(cost, responseCost, baselineChannelPriced, responseChannelPriced) {
 				// billingModel 到此为止只是定价查表的入参，后续流程只消费 cost，
@@ -900,8 +922,15 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 
 	// 创建使用日志
 	accountRateMultiplier := account.BillingRateMultiplier()
-	usageLog := s.buildRecordUsageLog(ctx, input, result, apiKey, user, account, subscription,
+	logResult := &rawResult
+	if cost != nil && (cost.BillingMode == string(BillingModeToken) ||
+		(cost.BillingMode == "" && rawResult.ImageCount == 0 && rawResult.AudioUsage == nil)) {
+		logResult = &displayResult
+	}
+	usageLog := s.buildRecordUsageLog(ctx, input, logResult, apiKey, user, account, subscription,
 		requestedModel, multiplier, imageMultiplier, accountRateMultiplier, billingType, cacheTTLOverridden, cost)
+	usageLog.UpstreamInputTokens = rawResult.Usage.InputTokens
+	usageLog.UpstreamOutputTokens = rawResult.Usage.OutputTokens
 
 	// 计算账号统计定价费用（使用最终上游模型匹配自定义规则）
 	if apiKey.GroupID != nil {
@@ -910,11 +939,11 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 			// Anthropic's input_tokens excludes cache_read and cache_creation (billed separately);
 			// OpenAI gateway uses actualInputTokens which also excludes cache_read for the same reason.
 			UsageTokens{
-				InputTokens:         result.Usage.InputTokens,
-				OutputTokens:        result.Usage.OutputTokens,
-				CacheCreationTokens: result.Usage.CacheCreationInputTokens,
-				CacheReadTokens:     result.Usage.CacheReadInputTokens,
-				ImageOutputTokens:   result.Usage.ImageOutputTokens,
+				InputTokens:         rawResult.Usage.InputTokens,
+				OutputTokens:        rawResult.Usage.OutputTokens,
+				CacheCreationTokens: rawResult.Usage.CacheCreationInputTokens,
+				CacheReadTokens:     rawResult.Usage.CacheReadInputTokens,
+				ImageOutputTokens:   rawResult.Usage.ImageOutputTokens,
 			},
 			cost.TotalCost, pricingAt,
 			accountStatsLongContextPricingEnabled(nil),

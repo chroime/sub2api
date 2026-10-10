@@ -207,22 +207,44 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	if actualInputTokens < 0 {
 		actualInputTokens = 0
 	}
+	rawActualInputTokens := actualInputTokens
+	rawOutputTokens := result.Usage.OutputTokens
+	adjusted := AdjustedTokenUsage{Customer: TokenUsageBuckets{
+		InputTokens:      rawActualInputTokens,
+		CacheReadTokens:  result.Usage.CacheReadInputTokens,
+		CacheWriteTokens: result.Usage.CacheCreationInputTokens,
+		OutputTokens:     rawOutputTokens,
+	}}
+	displayInputTokens := rawActualInputTokens
+	displayOutputTokens := rawOutputTokens
 	if apiKey != nil {
-		adjusted := tokenUsageAdjustmentForGroup(apiKey.Group).ApplyForRequest(actualInputTokens, result.Usage.OutputTokens)
-		actualInputTokens = adjusted.InputTokens
-		result.Usage.OutputTokens = adjusted.OutputTokens
-		// Keep the OpenAI aggregate input field internally consistent with the
-		// separately retained cache buckets after applying the customer billing
-		// adjustment.
-		result.Usage.InputTokens = actualInputTokens + result.Usage.CacheReadInputTokens + result.Usage.CacheCreationInputTokens
+		adjustment := tokenUsageAdjustmentForGroup(apiKey.Group)
+		adjusted = adjustment.ApplyForRequestUsage(
+			rawActualInputTokens,
+			result.Usage.CacheReadInputTokens,
+			result.Usage.CacheCreationInputTokens,
+			rawOutputTokens,
+		)
+		display := adjustment.ApplyForRequest(rawActualInputTokens, rawOutputTokens)
+		displayInputTokens = display.InputTokens
+		displayOutputTokens = display.OutputTokens
 	}
 
 	// Calculate cost
 	tokens := UsageTokens{
-		InputTokens:          actualInputTokens,
+		InputTokens:          adjusted.Customer.InputTokens,
 		ImageInputTokens:     max(result.Usage.ImageInputTokens-result.Usage.ImageCacheReadTokens, 0),
 		ImageCacheReadTokens: result.Usage.ImageCacheReadTokens,
-		OutputTokens:         result.Usage.OutputTokens,
+		OutputTokens:         adjusted.Customer.OutputTokens,
+		CacheCreationTokens:  adjusted.Customer.CacheWriteTokens,
+		CacheReadTokens:      adjusted.Customer.CacheReadTokens,
+		ImageOutputTokens:    result.Usage.ImageOutputTokens,
+	}
+	rawTokens := UsageTokens{
+		InputTokens:          rawActualInputTokens,
+		ImageInputTokens:     max(result.Usage.ImageInputTokens-result.Usage.ImageCacheReadTokens, 0),
+		ImageCacheReadTokens: result.Usage.ImageCacheReadTokens,
+		OutputTokens:         rawOutputTokens,
 		CacheCreationTokens:  result.Usage.CacheCreationInputTokens,
 		CacheReadTokens:      result.Usage.CacheReadInputTokens,
 		ImageOutputTokens:    result.Usage.ImageOutputTokens,
@@ -411,6 +433,13 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		// Keep the image cache split in the existing usage_logs JSONB payload.
 		imageSizeBreakdown["image_cache_read_tokens"] = result.Usage.ImageCacheReadTokens
 	}
+	logInputTokens := rawActualInputTokens
+	logOutputTokens := rawOutputTokens
+	if cost != nil && (cost.BillingMode == string(BillingModeToken) ||
+		(cost.BillingMode == "" && result.ImageCount == 0 && result.VideoCount == 0 && result.AudioUsage == nil)) {
+		logInputTokens = displayInputTokens
+		logOutputTokens = displayOutputTokens
+	}
 	usageLog := &UsageLog{
 		UserID:                   user.ID,
 		APIKeyID:                 apiKey.ID,
@@ -427,8 +456,8 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		RequestedReasoningEffort: coalesceRequestedReasoningEffort(result.RequestedReasoningEffort, result.ReasoningEffort),
 		InboundEndpoint:          optionalTrimmedStringPtr(input.InboundEndpoint),
 		UpstreamEndpoint:         optionalTrimmedStringPtr(input.UpstreamEndpoint),
-		InputTokens:              actualInputTokens,
-		OutputTokens:             result.Usage.OutputTokens,
+		InputTokens:              logInputTokens,
+		OutputTokens:             logOutputTokens,
 		CacheCreationTokens:      result.Usage.CacheCreationInputTokens,
 		CacheReadTokens:          result.Usage.CacheReadInputTokens,
 		ImageInputTokens:         result.Usage.ImageInputTokens,
@@ -441,6 +470,8 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		ImageSizeBreakdown:       imageSizeBreakdown,
 		NativeCompactionV2:       input.NativeCompactionV2,
 	}
+	usageLog.UpstreamInputTokens = rawActualInputTokens
+	usageLog.UpstreamOutputTokens = rawOutputTokens
 	isVideoUsage := isGrokVideoUsageResult(result, billingModels)
 	if isVideoUsage {
 		usageLog.VideoCount = result.VideoCount
@@ -518,7 +549,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	if apiKey.GroupID != nil {
 		applyAccountStatsCost(ctx, usageLog, s.channelService, s.billingService,
 			account.ID, *apiKey.GroupID, result.UpstreamModel, result.Model,
-			tokens, cost.TotalCost, pricingAt,
+			rawTokens, cost.TotalCost, pricingAt,
 			accountStatsLongContextPricingEnabled(longContextBillingGate),
 		)
 	}

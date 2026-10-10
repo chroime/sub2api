@@ -200,6 +200,33 @@ func TestUsageLogFromService_KeepsUserBillingAndIPWithoutAdminCostFields(t *test
 	require.NotContains(t, string(userJSON), "account_cost")
 }
 
+func TestUsageLogFromService_ExposesRawUpstreamTokensOnlyToAdmin(t *testing.T) {
+	t.Parallel()
+
+	log := &service.UsageLog{
+		RequestID:            "req_raw_tokens",
+		Model:                "gpt-5.4",
+		InputTokens:          400,
+		OutputTokens:         150,
+		UpstreamInputTokens:  200,
+		UpstreamOutputTokens: 50,
+	}
+
+	userDTO := UsageLogFromService(log)
+	adminDTO := UsageLogFromServiceAdmin(log)
+	require.NotContains(t, string(mustMarshalJSON(t, userDTO)), "upstream_input_tokens")
+	require.NotContains(t, string(mustMarshalJSON(t, userDTO)), "upstream_output_tokens")
+	require.Contains(t, string(mustMarshalJSON(t, adminDTO)), `"upstream_input_tokens":200`)
+	require.Contains(t, string(mustMarshalJSON(t, adminDTO)), `"upstream_output_tokens":50`)
+}
+
+func mustMarshalJSON(t *testing.T, value any) []byte {
+	t.Helper()
+	b, err := json.Marshal(value)
+	require.NoError(t, err)
+	return b
+}
+
 func TestUsageLogFromService_UsersSeeRequestedReasoningEffortOnly(t *testing.T) {
 	t.Parallel()
 

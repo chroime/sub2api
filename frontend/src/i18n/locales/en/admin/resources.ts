@@ -536,6 +536,8 @@ export default {
       cacheReadCost: 'Cache Read Cost',
       inputTokens: 'Input Tokens',
       outputTokens: 'Output Tokens',
+      upstreamInputTokens: 'Upstream Actual Input Tokens',
+      upstreamOutputTokens: 'Upstream Actual Output Tokens',
       cacheCreationTokens: 'Cache Creation Tokens',
       cacheCreation5mTokens: 'Cache Write',
       cacheCreation1hTokens: 'Cache Write',
