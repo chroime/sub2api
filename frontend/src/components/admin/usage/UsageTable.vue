@@ -471,7 +471,7 @@
             <template v-if="tooltipData && !isImageUsage(tooltipData) && (!tooltipData.billing_mode || tooltipData.billing_mode === BILLING_MODE_TOKEN)">
               <div v-if="tooltipData && textInputTokens(tooltipData) > 0" class="flex items-center justify-between gap-4">
                 <span class="text-gray-400">{{ t('usage.inputTokenPrice') }}</span>
-                <span class="font-medium text-sky-300">{{ formatTokenPricePerMillion(tooltipData.input_cost, textInputTokens(tooltipData)) }} {{ t('usage.perMillionTokens') }}</span>
+                <span class="font-medium text-sky-300">{{ formatTokenPricePerMillion(tooltipData.input_cost, inputTokensForDisplayedPrice(tooltipData)) }} {{ t('usage.perMillionTokens') }}</span>
               </div>
               <div v-if="tooltipData && hasImageInputTokens(tooltipData)" class="flex items-center justify-between gap-4">
                 <span class="text-gray-400">{{ t('usage.imageInputTokenPrice') }}</span>
@@ -619,6 +619,20 @@ function accountBilled(row: { total_cost?: number | null; account_stats_cost?: n
   const base = row.account_stats_cost != null ? row.account_stats_cost : (row.total_cost ?? 0)
   const result = base * (row.account_rate_multiplier ?? 1)
   return Number.isNaN(result) ? 0 : result
+}
+
+// When group token adjustment is active, input_cost is based on the logical
+// input (raw non-cache input plus cache read/write), while input_tokens keeps
+// the customer-facing non-cache count. Use the raw audit field for the unit
+// price denominator so cache-neutral billing does not display an inflated
+// price per token.
+function inputTokensForDisplayedPrice(row: AdminUsageLog): number {
+  const rawInputTokens = row.upstream_input_tokens ?? 0
+  if (rawInputTokens > 0 && rawInputTokens !== row.input_tokens) {
+    const imageInputTokens = hasImageInputTokens(row) ? Math.max(row.image_input_tokens, 0) : 0
+    return Math.max(rawInputTokens - imageInputTokens, 0) + Math.max(row.cache_read_tokens, 0) + Math.max(row.cache_creation_tokens, 0)
+  }
+  return textInputTokens(row)
 }
 
 

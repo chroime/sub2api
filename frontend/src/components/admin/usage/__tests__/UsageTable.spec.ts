@@ -488,6 +488,40 @@ describe('admin UsageTable tooltip', () => {
     expect(text).toContain('$0.069568')
   })
 
+  it('uses logical upstream input for cache-neutral adjusted input price', async () => {
+    const row = {
+      request_id: 'req-cache-neutral-price',
+      model: 'gpt-5.5',
+      billing_mode: 'token',
+      actual_cost: 0.005285,
+      total_cost: 0.1057,
+      account_rate_multiplier: 0.045,
+      rate_multiplier: 0.05,
+      input_cost: 0.10486,
+      output_cost: 0.00084,
+      cache_creation_cost: 0,
+      cache_read_cost: 0,
+      input_tokens: 3778,
+      output_tokens: 28,
+      upstream_input_tokens: 1889,
+      upstream_output_tokens: 14,
+      cache_read_tokens: 8597,
+      cache_creation_tokens: 0,
+    }
+    const wrapper = mount(UsageTable, {
+      props: { data: [row], loading: false, columns: [] },
+      global: { stubs: { DataTable: DataTableStub, EmptyState: true, Icon: true, Teleport: true } },
+    })
+
+    const triggers = wrapper.findAll('.group.relative')
+    await triggers[triggers.length - 1].trigger('mouseenter')
+
+    const text = wrapper.text()
+    expect(text).toContain('$10.0000 / 1M tokens')
+    expect(text).not.toContain('$27.7554 / 1M tokens')
+    wrapper.unmount()
+  })
+
   it.each(['token', 'image', 'per_request'])('keeps eight decimal places in %s cost details', async (billingMode) => {
     const row = {
       ...baseImageRow,
