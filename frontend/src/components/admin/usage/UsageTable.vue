@@ -375,11 +375,11 @@
             <template v-if="tokenTooltipData">
               <div v-if="(tokenTooltipData.upstream_input_tokens || 0) > 0 && tokenTooltipData.upstream_input_tokens !== tokenTooltipData.input_tokens" class="flex items-center justify-between gap-4">
                 <span class="text-gray-400">{{ t('admin.usage.upstreamInputTokens') }}</span>
-                <span class="font-medium text-amber-300">{{ tokenTooltipData.upstream_input_tokens.toLocaleString() }}</span>
+                <span class="font-medium text-amber-300">{{ (tokenTooltipData.upstream_input_tokens ?? 0).toLocaleString() }}</span>
               </div>
               <div v-if="(tokenTooltipData.upstream_output_tokens || 0) > 0 && tokenTooltipData.upstream_output_tokens !== tokenTooltipData.output_tokens" class="flex items-center justify-between gap-4">
                 <span class="text-gray-400">{{ t('admin.usage.upstreamOutputTokens') }}</span>
-                <span class="font-medium text-amber-300">{{ tokenTooltipData.upstream_output_tokens.toLocaleString() }}</span>
+                <span class="font-medium text-amber-300">{{ (tokenTooltipData.upstream_output_tokens ?? 0).toLocaleString() }}</span>
               </div>
             </template>
             <div v-if="tokenTooltipData && hasImageOutputTokens(tokenTooltipData) && textOutputTokens(tokenTooltipData) > 0" class="flex items-center justify-between gap-4">
