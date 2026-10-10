@@ -77,3 +77,37 @@ func TestAPIKeyRepository_GetByKeyForAuth_PreservesMessagesDispatchModelConfig_S
 	require.NotNil(t, got.Group)
 	require.Equal(t, group.MessagesDispatchModelConfig, got.Group.MessagesDispatchModelConfig)
 }
+
+func TestAPIKeyRepository_GetByKeyForAuth_PreservesBillingTokenAdjustment_SQLite(t *testing.T) {
+	repo, client := newAPIKeyRepoSQLite(t)
+	ctx := context.Background()
+	user := mustCreateAPIKeyRepoUser(t, ctx, client, "getbykey-auth-billing-adjustment-unit@test.com")
+
+	group, err := client.Group.Create().
+		SetName("g-auth-billing-adjustment-unit").
+		SetPlatform(service.PlatformOpenAI).
+		SetStatus(service.StatusActive).
+		SetSubscriptionType(service.SubscriptionTypeStandard).
+		SetRateMultiplier(1).
+		SetBillingInputTokenMultiplier(1.25).
+		SetBillingOutputTokenMultiplier(1.75).
+		SetBillingTokenAdjustmentMinInputTokens(123).
+		Save(ctx)
+	require.NoError(t, err)
+
+	key := &service.APIKey{
+		UserID:  user.ID,
+		Key:     "sk-getbykey-auth-billing-adjustment-unit",
+		Name:    "Billing adjustment key unit",
+		GroupID: &group.ID,
+		Status:  service.StatusActive,
+	}
+	require.NoError(t, repo.Create(ctx, key))
+
+	got, err := repo.GetByKeyForAuth(ctx, key.Key)
+	require.NoError(t, err)
+	require.NotNil(t, got.Group)
+	require.InDelta(t, 1.25, got.Group.BillingInputTokenMultiplier, 1e-12)
+	require.InDelta(t, 1.75, got.Group.BillingOutputTokenMultiplier, 1e-12)
+	require.Equal(t, 123, got.Group.BillingTokenAdjustmentMinInputTokens)
+}
