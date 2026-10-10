@@ -494,10 +494,31 @@ func (d inflightEstimateDeps) estimateOne(ctx context.Context, apiKey *APIKey, m
 	}
 
 	inputTokens, outputTokens := tokenCounts(cfg, req.BodyBytes, req.MaxTokens)
-	tokenCost := func() float64 {
+	// Preflight has no upstream cache breakdown yet, so the request body is the
+	// non-cache input bucket. Applying the same pure helper as final billing
+	// keeps reservations aligned with configured customer token multipliers and
+	// the minimum-input threshold. Media branches below intentionally continue to
+	// use raw token estimates (when they need a token fallback).
+	var group *Group
+	if apiKey != nil {
+		group = apiKey.Group
+	}
+	adjustedTokens := tokenUsageAdjustmentForGroup(group).ApplyToUsage(TokenUsageBuckets{
+		InputTokens:  inputTokens,
+		OutputTokens: outputTokens,
+	})
+	adjustedInputTokens := adjustedTokens.Customer.InputTokens
+	adjustedOutputTokens := adjustedTokens.Customer.OutputTokens
+	tokenCost := func(adjusted bool) float64 {
+		billingInputTokens, billingOutputTokens := inputTokens, outputTokens
+		pricingContext := inputTokens
+		if adjusted {
+			billingInputTokens, billingOutputTokens = adjustedInputTokens, adjustedOutputTokens
+			pricingContext = adjustedInputTokens
+		}
 		var pricing *ModelPricing
 		if resolved != nil && (resolved.Mode == BillingModeToken || resolved.Mode == "") && d.resolver != nil {
-			pricing = d.resolver.GetIntervalPricing(resolved, inputTokens)
+			pricing = d.resolver.GetIntervalPricing(resolved, pricingContext)
 		}
 		if pricing == nil && d.billing != nil {
 			pricing, _ = d.billing.GetModelPricing(model)
@@ -505,7 +526,7 @@ func (d inflightEstimateDeps) estimateOne(ctx context.Context, apiKey *APIKey, m
 		if pricing == nil {
 			return 0
 		}
-		return (float64(inputTokens)*pricing.InputPricePerToken + float64(outputTokens)*pricing.OutputPricePerToken) * textRate
+		return (float64(billingInputTokens)*pricing.InputPricePerToken + float64(billingOutputTokens)*pricing.OutputPricePerToken) * textRate
 	}
 
 	var cost float64
@@ -524,7 +545,7 @@ func (d inflightEstimateDeps) estimateOne(ctx context.Context, apiKey *APIKey, m
 			}
 		}
 		if cost <= 0 {
-			cost = tokenCost()
+			cost = tokenCost(false)
 		}
 	case InflightEstimateVideo:
 		if perRequestMode {
@@ -556,7 +577,7 @@ func (d inflightEstimateDeps) estimateOne(ctx context.Context, apiKey *APIKey, m
 			}
 			cost = maxPerRequestPrice(resolved) * float64(units) * rate
 		} else if req.Kind != InflightEstimatePerRequest {
-			cost = tokenCost()
+			cost = tokenCost(true)
 		}
 	}
 	if req.SearchCalls > 0 {
