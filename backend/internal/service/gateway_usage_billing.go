@@ -832,18 +832,35 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 		)
 		billingResult.Usage.InputTokens = adjusted.Customer.InputTokens
 		billingResult.Usage.OutputTokens = adjusted.Customer.OutputTokens
+		displayResult.Usage.InputTokens = adjusted.Customer.InputTokens
+		displayResult.Usage.OutputTokens = adjusted.Customer.OutputTokens
 		if adjusted.Applied {
-			billingResult.Usage.CacheReadInputTokens = 0
-			billingResult.Usage.CacheCreationInputTokens = 0
-			billingResult.Usage.CacheCreation5mTokens = 0
-			billingResult.Usage.CacheCreation1hTokens = 0
+			if adjustment.unifiedEnabled() {
+				billingResult.Usage.CacheReadInputTokens = adjusted.Customer.CacheReadTokens
+				billingResult.Usage.CacheCreationInputTokens = adjusted.Customer.CacheWriteTokens
+				five, one := scaleCacheTTLBuckets(
+					rawResult.Usage.CacheCreation5mTokens,
+					rawResult.Usage.CacheCreation1hTokens,
+					adjustment.normalized().UnifiedMultiplier,
+					adjusted.Customer.CacheWriteTokens,
+				)
+				billingResult.Usage.CacheCreation5mTokens = five
+				billingResult.Usage.CacheCreation1hTokens = one
+				displayResult.Usage.CacheReadInputTokens = adjusted.Customer.CacheReadTokens
+				displayResult.Usage.CacheCreationInputTokens = adjusted.Customer.CacheWriteTokens
+				displayResult.Usage.CacheCreation5mTokens = five
+				displayResult.Usage.CacheCreation1hTokens = one
+			} else {
+				billingResult.Usage.CacheReadInputTokens = 0
+				billingResult.Usage.CacheCreationInputTokens = 0
+				billingResult.Usage.CacheCreation5mTokens = 0
+				billingResult.Usage.CacheCreation1hTokens = 0
+				displayResult.Usage.CacheReadInputTokens = 0
+				displayResult.Usage.CacheCreationInputTokens = 0
+				displayResult.Usage.CacheCreation5mTokens = 0
+				displayResult.Usage.CacheCreation1hTokens = 0
+			}
 		}
-
-		// The existing user-facing token fields remain the adjusted non-cache
-		// counts, while raw cache buckets stay visible as ordinary usage data.
-		display := adjustment.ApplyForRequest(rawResult.Usage.InputTokens, rawResult.Usage.OutputTokens)
-		displayResult.Usage.InputTokens = display.InputTokens
-		displayResult.Usage.OutputTokens = display.OutputTokens
 	}
 
 	// 获取费率倍数（优先级：用户专属 > 分组默认 > 系统默认）

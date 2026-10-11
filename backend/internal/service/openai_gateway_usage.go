@@ -225,9 +225,8 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 			result.Usage.CacheCreationInputTokens,
 			rawOutputTokens,
 		)
-		display := adjustment.ApplyForRequest(rawActualInputTokens, rawOutputTokens)
-		displayInputTokens = display.InputTokens
-		displayOutputTokens = display.OutputTokens
+		displayInputTokens = adjusted.Customer.InputTokens
+		displayOutputTokens = adjusted.Customer.OutputTokens
 	}
 
 	// Calculate cost
@@ -458,8 +457,8 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		UpstreamEndpoint:         optionalTrimmedStringPtr(input.UpstreamEndpoint),
 		InputTokens:              logInputTokens,
 		OutputTokens:             logOutputTokens,
-		CacheCreationTokens:      result.Usage.CacheCreationInputTokens,
-		CacheReadTokens:          result.Usage.CacheReadInputTokens,
+		CacheCreationTokens:      adjusted.Customer.CacheWriteTokens,
+		CacheReadTokens:          adjusted.Customer.CacheReadTokens,
 		ImageInputTokens:         result.Usage.ImageInputTokens,
 		ImageOutputTokens:        result.Usage.ImageOutputTokens,
 		ImageCount:               result.ImageCount,

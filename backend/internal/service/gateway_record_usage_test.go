@@ -490,6 +490,44 @@ func TestGatewayServiceRecordUsage_GroupTokenAdjustmentDoesNotChangeCacheCharge(
 	require.InDelta(t, withoutCacheRepo.lastLog.ActualCost, withCacheRepo.lastLog.ActualCost, 1e-12)
 }
 
+func TestGatewayServiceRecordUsage_UnifiedMultiplierScalesCacheBuckets(t *testing.T) {
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	userRepo := &openAIRecordUsageUserRepoStub{}
+	prices := &PricingService{pricingData: map[string]*LiteLLMModelPricing{
+		"claude-sonnet-4": {InputCostPerToken: 1e-6, OutputCostPerToken: 2e-6, CacheReadInputTokenCost: 0.1e-6, CacheCreationInputTokenCost: 1.25e-6},
+	}}
+	svc := newGatewayRecordUsageServiceForTest(usageRepo, userRepo, &openAIRecordUsageSubRepoStub{})
+	svc.billingService = NewBillingService(svc.cfg, prices)
+	groupID := int64(931)
+	group := &Group{
+		ID:                                   groupID,
+		RateMultiplier:                       1,
+		BillingUnifiedTokenMultiplier:        2,
+		BillingTokenAdjustmentMinInputTokens: 0,
+	}
+	require.NoError(t, svc.RecordUsage(context.Background(), &RecordUsageInput{
+		Result: &ForwardResult{
+			RequestID: "gateway_unified_cache",
+			Model:     "claude-sonnet-4",
+			Usage: ClaudeUsage{
+				InputTokens: 200, OutputTokens: 50,
+				CacheReadInputTokens: 600, CacheCreationInputTokens: 200,
+			},
+		},
+		APIKey:  &APIKey{ID: 831, GroupID: &groupID, Group: group},
+		User:    &User{ID: 631},
+		Account: &Account{ID: 731},
+	}))
+	require.Equal(t, 400, usageRepo.lastLog.InputTokens)
+	require.Equal(t, 100, usageRepo.lastLog.OutputTokens)
+	require.Equal(t, 1200, usageRepo.lastLog.CacheReadTokens)
+	require.Equal(t, 400, usageRepo.lastLog.CacheCreationTokens)
+	require.Equal(t, 200, usageRepo.lastLog.UpstreamInputTokens)
+	require.Equal(t, 50, usageRepo.lastLog.UpstreamOutputTokens)
+	want := 400*1e-6 + 100*2e-6 + 1200*0.1e-6 + 400*1.25e-6
+	require.InDelta(t, want, usageRepo.lastLog.ActualCost, 1e-12)
+}
+
 func TestGatewayServiceRecordUsage_GroupTokenAdjustmentDoesNotRewritePerRequestImageUsage(t *testing.T) {
 	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
 	userRepo := &openAIRecordUsageUserRepoStub{}
