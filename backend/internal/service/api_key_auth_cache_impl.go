@@ -14,7 +14,7 @@ import (
 	"github.com/dgraph-io/ristretto"
 )
 
-const apiKeyAuthSnapshotVersion = 28 // v28: preserve group billing token adjustment policy
+const apiKeyAuthSnapshotVersion = 29 // v29: preserve group unified token multiplier
 
 type apiKeyAuthCacheConfig struct {
 	l1Size        int
@@ -389,6 +389,7 @@ func (s *APIKeyService) snapshotFromAPIKey(ctx context.Context, apiKey *APIKey) 
 			RateMultiplier:                       apiKey.Group.RateMultiplier,
 			BillingInputTokenMultiplier:          apiKey.Group.BillingInputTokenMultiplier,
 			BillingOutputTokenMultiplier:         apiKey.Group.BillingOutputTokenMultiplier,
+			BillingUnifiedTokenMultiplier:        apiKey.Group.BillingUnifiedTokenMultiplier,
 			BillingTokenAdjustmentMinInputTokens: apiKey.Group.BillingTokenAdjustmentMinInputTokens,
 			DailyLimitUSD:                        apiKey.Group.DailyLimitUSD,
 			WeeklyLimitUSD:                       apiKey.Group.WeeklyLimitUSD,
@@ -499,6 +500,7 @@ func (s *APIKeyService) snapshotToAPIKey(key string, snapshot *APIKeyAuthSnapsho
 			RateMultiplier:                       snapshot.Group.RateMultiplier,
 			BillingInputTokenMultiplier:          snapshot.Group.BillingInputTokenMultiplier,
 			BillingOutputTokenMultiplier:         snapshot.Group.BillingOutputTokenMultiplier,
+			BillingUnifiedTokenMultiplier:        snapshot.Group.BillingUnifiedTokenMultiplier,
 			BillingTokenAdjustmentMinInputTokens: snapshot.Group.BillingTokenAdjustmentMinInputTokens,
 			DailyLimitUSD:                        snapshot.Group.DailyLimitUSD,
 			WeeklyLimitUSD:                       snapshot.Group.WeeklyLimitUSD,

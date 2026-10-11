@@ -68,6 +68,7 @@ type APIKeyAuthGroupSnapshot struct {
 	RateMultiplier                       float64                       `json:"rate_multiplier"`
 	BillingInputTokenMultiplier          float64                       `json:"billing_input_token_multiplier"`
 	BillingOutputTokenMultiplier         float64                       `json:"billing_output_token_multiplier"`
+	BillingUnifiedTokenMultiplier        float64                       `json:"billing_unified_token_multiplier"`
 	BillingTokenAdjustmentMinInputTokens int                           `json:"billing_token_adjustment_min_input_tokens"`
 	DailyLimitUSD                        *float64                      `json:"daily_limit_usd,omitempty"`
 	WeeklyLimitUSD                       *float64                      `json:"weekly_limit_usd,omitempty"`
