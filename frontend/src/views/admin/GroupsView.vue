@@ -639,22 +639,29 @@
           />
           <p class="input-hint">{{ t("admin.groups.rateMultiplierHint") }}</p>
         </div>
-        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div>
-            <label class="input-label">下游输入 Token 计费倍率</label>
-            <input v-model.number="createForm.billing_input_token_multiplier" type="number" min="0.1" max="10" step="0.01" class="input" />
-          </div>
-          <div>
-            <label class="input-label">下游输出 Token 计费倍率</label>
-            <input v-model.number="createForm.billing_output_token_multiplier" type="number" min="0.1" max="10" step="0.01" class="input" />
-          </div>
+        <div>
+          <label class="input-label">{{ t('admin.groups.form.unifiedTokenMultiplier') }}</label>
+          <input
+            v-model.number="createForm.billing_unified_token_multiplier"
+            type="number"
+            min="0.1"
+            max="10"
+            step="0.01"
+            class="input"
+          />
+          <p class="input-hint">{{ t('admin.groups.form.unifiedTokenMultiplierHint') }}</p>
+          <p
+            v-if="createForm.billing_unified_token_multiplier === 1 && (createForm.billing_input_token_multiplier !== 1 || createForm.billing_output_token_multiplier !== 1)"
+            class="input-hint"
+          >
+            {{ t('admin.groups.form.unifiedTokenMultiplierSplitHint') }}
+          </p>
         </div>
         <div>
-          <label class="input-label">Token 倍率生效的最小输入量</label>
+          <label class="input-label">{{ t('admin.groups.form.tokenAdjustmentMinInput') }}</label>
           <input v-model.number="createForm.billing_token_adjustment_min_input_tokens" type="number" min="0" max="1000000" step="1" class="input" />
-          <p class="input-hint">原始输入 Token 少于此值时不应用输入/输出倍率；设置为 0 表示所有正常请求都应用。探针不使用自定义倍率，实际用量仅管理员可见，不进入普通用户记录。</p>
+          <p class="input-hint">{{ t('admin.groups.form.tokenAdjustmentMinInputHint') }}</p>
         </div>
-        <p class="input-hint">仅影响下游扣费、配额和用量排行；普通用户不会看到修正痕迹。默认 1.00。</p>
         <div>
           <label class="input-label">{{ t("admin.groups.form.rpmLimit") }}</label>
           <input
@@ -2295,22 +2302,29 @@
             data-tour="group-form-multiplier"
           />
         </div>
-        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div>
-            <label class="input-label">下游输入 Token 计费倍率</label>
-            <input v-model.number="editForm.billing_input_token_multiplier" type="number" min="0.1" max="10" step="0.01" class="input" />
-          </div>
-          <div>
-            <label class="input-label">下游输出 Token 计费倍率</label>
-            <input v-model.number="editForm.billing_output_token_multiplier" type="number" min="0.1" max="10" step="0.01" class="input" />
-          </div>
+        <div>
+          <label class="input-label">{{ t('admin.groups.form.unifiedTokenMultiplier') }}</label>
+          <input
+            v-model.number="editForm.billing_unified_token_multiplier"
+            type="number"
+            min="0.1"
+            max="10"
+            step="0.01"
+            class="input"
+          />
+          <p class="input-hint">{{ t('admin.groups.form.unifiedTokenMultiplierHint') }}</p>
+          <p
+            v-if="editForm.billing_unified_token_multiplier === 1 && (editForm.billing_input_token_multiplier !== 1 || editForm.billing_output_token_multiplier !== 1)"
+            class="input-hint"
+          >
+            {{ t('admin.groups.form.unifiedTokenMultiplierSplitHint') }}
+          </p>
         </div>
         <div>
-          <label class="input-label">Token 倍率生效的最小输入量</label>
+          <label class="input-label">{{ t('admin.groups.form.tokenAdjustmentMinInput') }}</label>
           <input v-model.number="editForm.billing_token_adjustment_min_input_tokens" type="number" min="0" max="1000000" step="1" class="input" />
-          <p class="input-hint">原始输入 Token 少于此值时不应用输入/输出倍率；设置为 0 表示所有正常请求都应用。探针不使用自定义倍率，实际用量仅管理员可见，不进入普通用户记录。</p>
+          <p class="input-hint">{{ t('admin.groups.form.tokenAdjustmentMinInputHint') }}</p>
         </div>
-        <p class="input-hint">仅影响下游扣费、配额和用量排行；普通用户不会看到修正痕迹。默认 1.00。</p>
         <div>
           <label class="input-label">{{ t("admin.groups.form.rpmLimit") }}</label>
           <input
@@ -4995,6 +5009,7 @@ const createForm = reactive({
   description: "",
   platform: "anthropic" as GroupPlatform,
   rate_multiplier: 1.0,
+  billing_unified_token_multiplier: 1.0,
   billing_input_token_multiplier: 1.0,
   billing_output_token_multiplier: 1.0,
   billing_token_adjustment_min_input_tokens: 100,
@@ -5363,6 +5378,7 @@ const editForm = reactive({
   description: "",
   platform: "anthropic" as GroupPlatform,
   rate_multiplier: 1.0,
+  billing_unified_token_multiplier: 1.0,
   billing_input_token_multiplier: 1.0,
   billing_output_token_multiplier: 1.0,
   billing_token_adjustment_min_input_tokens: 100,
@@ -5829,6 +5845,7 @@ const closeCreateModal = () => {
   createForm.description = "";
   createForm.platform = "anthropic";
   createForm.rate_multiplier = 1.0;
+  createForm.billing_unified_token_multiplier = 1.0;
   createForm.billing_input_token_multiplier = 1.0;
   createForm.billing_output_token_multiplier = 1.0;
   createForm.billing_token_adjustment_min_input_tokens = 100;
@@ -5967,6 +5984,10 @@ const handleCreateGroup = async () => {
   }
   submitting.value = true;
   try {
+    if (createForm.billing_unified_token_multiplier !== 1) {
+      createForm.billing_input_token_multiplier = 1.0;
+      createForm.billing_output_token_multiplier = 1.0;
+    }
     const {
       video_model_prices: _createFormVideoModelPrices,
       ...createGroupForm
@@ -6115,6 +6136,7 @@ const handleEdit = async (group: AdminGroup) => {
   editForm.description = group.description || "";
   editForm.platform = group.platform;
   editForm.rate_multiplier = group.rate_multiplier;
+  editForm.billing_unified_token_multiplier = group.billing_unified_token_multiplier ?? 1.0;
   editForm.billing_input_token_multiplier = group.billing_input_token_multiplier ?? 1.0;
   editForm.billing_output_token_multiplier = group.billing_output_token_multiplier ?? 1.0;
   editForm.billing_token_adjustment_min_input_tokens = group.billing_token_adjustment_min_input_tokens ?? 100;
@@ -6316,6 +6338,10 @@ const handleUpdateGroup = async () => {
 
   submitting.value = true;
   try {
+    if (editForm.billing_unified_token_multiplier !== 1) {
+      editForm.billing_input_token_multiplier = 1.0;
+      editForm.billing_output_token_multiplier = 1.0;
+    }
     // 转换 fallback_group_id: null -> 0 (后端使用 0 表示清除)
     const { streaming_ack_enabled: ackPolicy, ...groupEditFields } = editForm;
     const payload = {
