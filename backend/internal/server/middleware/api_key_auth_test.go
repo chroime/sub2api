@@ -274,11 +274,14 @@ func TestAPIKeyAuthSetsGroupContext(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	group := &service.Group{
-		ID:       101,
-		Name:     "g1",
-		Status:   service.StatusActive,
-		Platform: service.PlatformAnthropic,
-		Hydrated: true,
+		ID:                            101,
+		Name:                          "g1",
+		Status:                        service.StatusActive,
+		Platform:                      service.PlatformAnthropic,
+		BillingUnifiedTokenMultiplier: 2.25,
+		BillingInputTokenMultiplier:   2,
+		BillingOutputTokenMultiplier:  3,
+		Hydrated:                      true,
 	}
 	user := &service.User{
 		ID:          7,
@@ -319,6 +322,11 @@ func TestAPIKeyAuthSetsGroupContext(t *testing.T) {
 		}
 		userIDFromCtx, ok := c.Request.Context().Value(ctxkey.UserID).(int64)
 		if !ok || userIDFromCtx != user.ID {
+			c.JSON(http.StatusInternalServerError, gin.H{"ok": false})
+			return
+		}
+		adjustment, ok := service.DownstreamUsageAdjustmentFromContext(c.Request.Context())
+		if !ok || adjustment.UnifiedMultiplier != 2.25 || adjustment.InputMultiplier != 2 || adjustment.OutputMultiplier != 3 {
 			c.JSON(http.StatusInternalServerError, gin.H{"ok": false})
 			return
 		}

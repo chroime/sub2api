@@ -61,7 +61,7 @@ func ProjectDownstreamUsageJSONWithEligibility(raw []byte, adjustment TokenUsage
 }
 
 func projectDownstreamUsageJSON(raw []byte, adjustment TokenUsageAdjustment, eligible *bool) ([]byte, bool) {
-	if len(raw) == 0 || !downstreamUsageAdjustmentEnabled(adjustment) {
+	if len(raw) == 0 || !DownstreamUsageAdjustmentEnabled(adjustment) {
 		return raw, false
 	}
 	// Most streaming frames carry deltas only. Avoid JSON decoding and map
@@ -86,7 +86,10 @@ func projectDownstreamUsageJSON(raw []byte, adjustment TokenUsageAdjustment, eli
 	return projected, true
 }
 
-func downstreamUsageAdjustmentEnabled(adjustment TokenUsageAdjustment) bool {
+// DownstreamUsageAdjustmentEnabled reports whether customer-facing usage should
+// be rewritten. Unified and split multipliers are both considered; a unified
+// value other than 1 is enough even when split multipliers normalize to 1.
+func DownstreamUsageAdjustmentEnabled(adjustment TokenUsageAdjustment) bool {
 	adjustment = adjustment.normalized()
 	return adjustment.UnifiedMultiplier != 1 || adjustment.InputMultiplier != 1 || adjustment.OutputMultiplier != 1
 }
