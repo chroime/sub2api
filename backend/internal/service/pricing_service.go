@@ -202,6 +202,10 @@ var (
 // LiteLLMModelPricing LiteLLM价格数据结构
 // 只保留我们需要的字段，使用指针来处理可能缺失的值
 type LiteLLMModelPricing struct {
+	// Token ceilings are optional catalog metadata, independent of token prices.
+	// LiteLLM max_tokens is ambiguous and must not be used as a context window.
+	MaxInputTokens                      *int64  `json:"max_input_tokens,omitempty"`
+	MaxOutputTokens                     *int64  `json:"max_output_tokens,omitempty"`
 	CacheCreationInputTokenCostExplicit bool    `json:"-"`
 	InputCostPerToken                   float64 `json:"input_cost_per_token"`
 	InputCostPerTokenPriority           float64 `json:"input_cost_per_token_priority"`
@@ -238,6 +242,11 @@ type PricingRemoteClient interface {
 
 // LiteLLMRawEntry 用于解析原始JSON数据
 type LiteLLMRawEntry struct {
+	// Keep limit parsing separate so malformed optional metadata cannot discard
+	// otherwise valid prices and change billing behavior.
+	MaxInputTokens  json.RawMessage `json:"max_input_tokens"`
+	MaxOutputTokens json.RawMessage `json:"max_output_tokens"`
+
 	InputCostPerToken                   *float64 `json:"input_cost_per_token"`
 	InputCostPerTokenPriority           *float64 `json:"input_cost_per_token_priority"`
 	OutputCostPerToken                  *float64 `json:"output_cost_per_token"`
@@ -674,6 +683,8 @@ func (s *PricingService) parsePricingData(body []byte) (map[string]*LiteLLMModel
 		}
 
 		pricing := &LiteLLMModelPricing{
+			MaxInputTokens:        parsePricingTokenLimit(entry.MaxInputTokens),
+			MaxOutputTokens:       parsePricingTokenLimit(entry.MaxOutputTokens),
 			LiteLLMProvider:       entry.LiteLLMProvider,
 			Mode:                  entry.Mode,
 			SupportsPromptCaching: entry.SupportsPromptCaching,

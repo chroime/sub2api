@@ -21,10 +21,12 @@ import (
 
 // UsageHandler handles admin usage-related requests
 type UsageHandler struct {
-	usageService   *service.UsageService
-	apiKeyService  *service.APIKeyService
-	adminService   service.AdminService
-	cleanupService *service.UsageCleanupService
+	usageService     *service.UsageService
+	apiKeyService    *service.APIKeyService
+	adminService     service.AdminService
+	cleanupService   *service.UsageCleanupService
+	costAuditService *service.UsageCostAuditService
+	pricingService   *service.PricingService
 }
 
 // NewUsageHandler creates a new admin usage handler
@@ -33,12 +35,16 @@ func NewUsageHandler(
 	apiKeyService *service.APIKeyService,
 	adminService service.AdminService,
 	cleanupService *service.UsageCleanupService,
+	costAuditService *service.UsageCostAuditService,
+	pricingService *service.PricingService,
 ) *UsageHandler {
 	return &UsageHandler{
-		usageService:   usageService,
-		apiKeyService:  apiKeyService,
-		adminService:   adminService,
-		cleanupService: cleanupService,
+		usageService:     usageService,
+		apiKeyService:    apiKeyService,
+		adminService:     adminService,
+		cleanupService:   cleanupService,
+		costAuditService: costAuditService,
+		pricingService:   pricingService,
 	}
 }
 
@@ -213,9 +219,17 @@ func (h *UsageHandler) List(c *gin.Context) {
 		return
 	}
 
+	costAudits := h.costAuditService.EstimateBatch(c.Request.Context(), records)
 	out := make([]dto.AdminUsageLog, 0, len(records))
 	for i := range records {
-		out = append(out, *dto.UsageLogFromServiceAdmin(&records[i]))
+		record := dto.UsageLogFromServiceAdmin(&records[i])
+		cost := costAudits[records[i].ID]
+		record.RawCostAudit = &dto.UsageCostAudit{
+			Amount: cost.Amount, TotalCost: cost.TotalCost,
+			Status: cost.Status, Reason: cost.Reason, Model: cost.Model,
+		}
+		record.UsageLimitAudit = h.pricingService.AuditUsageLimits(&records[i])
+		out = append(out, *record)
 	}
 	response.Paginated(c, out, result.Total, page, pageSize)
 }

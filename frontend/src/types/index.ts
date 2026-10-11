@@ -1838,6 +1838,26 @@ export interface UsageLogAccountSummary {
   name: string
 }
 
+export interface UsageCostAudit {
+  amount: number | null
+  total_cost: number | null
+  status: 'recorded' | 'estimated' | 'unavailable'
+  reason: string
+  model?: string
+}
+
+export interface UsageLimitAudit {
+  status: 'valid' | 'invalid' | 'unknown'
+  model: string
+  input_limit: number | null
+  output_limit: number | null
+  context_limit: number | null
+  total_input_tokens: number | null
+  total_output_tokens: number | null
+  total_context_tokens: number | null
+  issues: string[]
+}
+
 export interface AdminUsageLog extends UsageLog {
   // 上游返回的原始非缓存 Token（仅管理员可见，客户计费用量可能已按分组倍率调整）
   upstream_input_tokens?: number
@@ -1848,6 +1868,10 @@ export interface AdminUsageLog extends UsageLog {
   upstream_model_mismatch?: boolean | null
   model_mapping_chain?: string | null
   upstream_request_id?: string | null
+
+  // Read-only audit of raw usage; estimates do not change recorded charges.
+  raw_cost_audit?: UsageCostAudit | null
+  usage_limit_audit?: UsageLimitAudit | null
 
   // 账号计费倍率（仅管理员可见）
   account_rate_multiplier?: number | null

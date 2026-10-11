@@ -40,6 +40,15 @@ const messages: Record<string, string> = {
 	'usage.sentUpstreamModel': 'Sent upstream model',
 	'usage.upstreamResponseModel': 'Upstream response model',
 	'usage.upstreamModelMismatch': 'Upstream model mismatch',
+  'usage.tokens': 'Tokens',
+  'admin.usage.actualTokens': 'Actual Tokens',
+  'admin.usage.cacheHitRate': 'Cache hit rate',
+  'admin.usage.rawCost': 'Raw usage cost',
+  'admin.usage.rawCostStatus': 'Raw cost status',
+  'admin.usage.rawCostNote': 'Raw cost explanation',
+  'admin.usage.rawCostEstimated': 'Estimated',
+  'admin.usage.rawCostRecorded': 'Recorded',
+  'admin.usage.rawCostUnknown': 'Unavailable',
 	'common.yes': 'Yes',
 	'common.no': 'No',
 }
@@ -509,6 +518,72 @@ describe('admin UsageView column visibility', () => {
     wrapper.unmount()
   })
 
+  it('places actual tokens and cache hit rate directly after the billed token column', async () => {
+    const wrapper = mountColumnVisibilityView()
+    await flushPromises()
+
+    const columns = wrapper.findComponent(UsageTableStub).props('columns') as { key: string; label: string; sortable: boolean }[]
+    const tokensIndex = columns.findIndex(column => column.key === 'tokens')
+    expect(tokensIndex).toBeGreaterThanOrEqual(0)
+    expect(columns.slice(tokensIndex, tokensIndex + 3)).toEqual([
+      { key: 'tokens', label: 'Tokens', sortable: false },
+      { key: 'upstream_tokens', label: 'Actual Tokens', sortable: false },
+      { key: 'cache_hit_rate', label: 'Cache hit rate', sortable: false },
+    ])
+    wrapper.unmount()
+  })
+
+  it('places raw usage cost directly after cost and allows hiding it independently', async () => {
+    const wrapper = mountColumnVisibilityView()
+    await flushPromises()
+    const table = wrapper.findComponent(UsageTableStub)
+    const columns = table.props('columns') as { key: string; label: string; sortable: boolean }[]
+    const costIndex = columns.findIndex(column => column.key === 'cost')
+    expect(costIndex).toBeGreaterThanOrEqual(0)
+    expect(columns[costIndex + 1]).toEqual({ key: 'raw_cost', label: 'Raw usage cost', sortable: false })
+
+    await wrapper.get('button[title="admin.users.columnSettings"]').trigger('click')
+    await wrapper.findAll('button').find(button => button.text() === 'Raw usage cost')!.trigger('click')
+    const keys = (table.props('columns') as { key: string }[]).map(column => column.key)
+    expect(keys).not.toContain('raw_cost')
+    expect(keys).toContain('cost')
+    const savedHidden = JSON.parse(vi.mocked(localStorage.setItem).mock.calls
+      .filter(([key]) => key === 'usage-hidden-columns').at(-1)![1]) as string[]
+    expect(savedHidden).toContain('raw_cost')
+    expect(savedHidden).not.toContain('cost')
+    wrapper.unmount()
+  })
+
+  it('persists cache hit rate visibility independently of actual tokens', async () => {
+    const wrapper = mountColumnVisibilityView()
+    await flushPromises()
+    const table = wrapper.findComponent(UsageTableStub)
+    const columnKeys = () => (table.props('columns') as { key: string }[]).map(column => column.key)
+
+    await wrapper.get('button[title="admin.users.columnSettings"]').trigger('click')
+    const toggle = wrapper.findAll('button').find(button => button.text() === 'Cache hit rate')!
+    await toggle.trigger('click')
+    expect(columnKeys()).not.toContain('cache_hit_rate')
+    expect(columnKeys()).toContain('upstream_tokens')
+    const savedHidden = JSON.parse(vi.mocked(localStorage.setItem).mock.calls
+      .filter(([key]) => key === 'usage-hidden-columns').at(-1)![1]) as string[]
+    expect(savedHidden).toContain('cache_hit_rate')
+    expect(savedHidden).not.toContain('upstream_tokens')
+    wrapper.unmount()
+
+    vi.mocked(localStorage.getItem).mockImplementation((key) => {
+      if (key === 'usage-hidden-columns') return JSON.stringify(savedHidden)
+      if (key === 'usage-hidden-columns-version') return 'upstream-request-id-hidden-by-default'
+      return null
+    })
+    const restored = mountColumnVisibilityView()
+    await flushPromises()
+    const restoredKeys = (restored.findComponent(UsageTableStub).props('columns') as { key: string }[]).map(column => column.key)
+    expect(restoredKeys).not.toContain('cache_hit_rate')
+    expect(restoredKeys).toContain('upstream_tokens')
+    restored.unmount()
+  })
+
   it.each([null, 'request-id-hidden-by-default', 'upstream-request-id-hidden-by-default'])(
     'preserves saved hidden columns while showing real latency for preferences version %s',
     async (version) => {
@@ -854,6 +929,56 @@ describe('admin UsageView model audit export', () => {
 
 	afterEach(() => {
 		vi.useRealTimers()
+	})
+
+	it('exports cache hit rate from actual upstream input and preserves unavailable values', async () => {
+		exportList.mockResolvedValue({
+			items: [
+				{ created_at: '2026-08-04T00:00:00Z', model: 'gpt-5.5', input_tokens: 99999, output_tokens: 20000, upstream_input_tokens: 100, cache_read_tokens: 600, cache_creation_tokens: 0, cache_creation_5m_tokens: 60, cache_creation_1h_tokens: 140 },
+				{ created_at: '2026-08-04T00:00:01Z', model: 'gpt-5.5', input_tokens: 99999, cache_read_tokens: 600, cache_creation_tokens: 0 },
+				{ created_at: '2026-08-04T00:00:02Z', model: 'gpt-5.5', upstream_input_tokens: 100, cache_read_tokens: -1, cache_creation_tokens: 0 },
+			],
+			total: 3,
+			pages: 1,
+		})
+		const wrapper = mountRouteFilteredUsageView()
+		await flushPromises()
+		await (wrapper.vm as any).exportToExcel()
+
+		const headers = aoaToSheet.mock.calls[0][0][0]
+		const cacheHitRateIndex = headers.indexOf('Cache hit rate')
+		expect(cacheHitRateIndex).toBeGreaterThan(-1)
+		const rows = sheetAddAoa.mock.calls[0][1]
+		expect(rows.map((row: unknown[]) => row[cacheHitRateIndex])).toEqual(['66.67%', '—', '—'])
+		expect(saveAs).toHaveBeenCalledTimes(1)
+		wrapper.unmount()
+	})
+
+	it('exports raw usage costs with estimate status and explanation', async () => {
+		exportList.mockResolvedValue({
+			items: [
+				{ created_at: '2026-08-04T00:00:00Z', model: 'gpt-5.5', actual_cost: 8.5, raw_cost_audit: { amount: 0.00519227, status: 'estimated', reason: 'current_pricing_estimate' } },
+				{ created_at: '2026-08-04T00:00:01Z', model: 'gpt-5.5', actual_cost: 0.1, raw_cost_audit: { amount: 0.1, status: 'recorded', reason: 'original_usage_unadjusted' } },
+				{ created_at: '2026-08-04T00:00:02Z', model: 'gpt-5.5', actual_cost: 8.5, raw_cost_audit: { amount: null, status: 'unavailable', reason: 'missing_upstream_usage' } },
+			],
+			total: 3,
+			pages: 1,
+		})
+		const wrapper = mountRouteFilteredUsageView()
+		await flushPromises()
+		await (wrapper.vm as any).exportToExcel()
+
+		const headers = aoaToSheet.mock.calls[0][0][0]
+		const rawCostIndex = headers.indexOf('Raw usage cost')
+		expect(rawCostIndex).toBeGreaterThan(-1)
+		expect(headers.slice(rawCostIndex, rawCostIndex + 3)).toEqual(['Raw usage cost', 'Raw cost status', 'Raw cost explanation'])
+		const rows = sheetAddAoa.mock.calls[0][1]
+		expect(rows.map((row: unknown[]) => row.slice(rawCostIndex, rawCostIndex + 3))).toEqual([
+			['0.00519227', 'Estimated', 'admin.usage.rawCostEstimatedTooltip'],
+			['0.10000000', 'Recorded', 'admin.usage.rawCostRecordedTooltip'],
+			['—', 'Unavailable', 'admin.usage.rawCostMissingUpstreamUsage'],
+		])
+		wrapper.unmount()
 	})
 
 	it('exports requested, sent, response, and mismatch as separate admin columns', async () => {

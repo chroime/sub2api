@@ -677,9 +677,22 @@ type UsageLog struct {
 	Subscription *UserSubscription `json:"subscription,omitempty"`
 }
 
+// UsageCostAudit is a read-only comparison using original upstream usage.
+// An estimate is never a replacement for the charge recorded on the request.
+type UsageCostAudit struct {
+	Amount    *float64 `json:"amount"`
+	TotalCost *float64 `json:"total_cost"`
+	Status    string   `json:"status"`
+	Reason    string   `json:"reason"`
+	Model     string   `json:"model,omitempty"`
+}
+
 // AdminUsageLog 是管理员接口使用的 usage log DTO（包含管理员字段）。
 type AdminUsageLog struct {
 	UsageLog
+
+	RawCostAudit    *UsageCostAudit          `json:"raw_cost_audit,omitempty"`
+	UsageLimitAudit *service.UsageLimitAudit `json:"usage_limit_audit,omitempty"`
 
 	// UpstreamInputTokens/UpstreamOutputTokens are the raw non-cache counts
 	// returned by the upstream before any customer billing adjustment.

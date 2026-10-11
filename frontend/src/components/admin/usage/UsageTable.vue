@@ -155,7 +155,7 @@
             <span class="text-gray-400">({{ formatImageBillingSize(row, t) }})</span>
           </div>
           <!-- Token 请求 -->
-          <div v-else class="flex items-center gap-1.5">
+          <div v-else data-testid="billed-token-cell" class="flex items-center gap-1.5">
             <div class="space-y-1 text-sm">
               <div class="flex items-center gap-2">
                 <div class="inline-flex items-center gap-1">
@@ -205,6 +205,99 @@
           </div>
         </template>
 
+        <template #cell-upstream_tokens="{ row }">
+          <div
+            v-if="!isImageUsage(row)"
+            data-testid="upstream-token-cell"
+            class="flex items-center gap-1.5"
+          >
+            <div class="space-y-1 text-sm">
+              <div class="flex items-center gap-2">
+                <div class="inline-flex items-center gap-1">
+                  <Icon name="arrowDown" size="sm" class="h-3.5 w-3.5 text-emerald-500" />
+                  <span
+                    class="font-medium text-orange-600 dark:text-orange-400"
+                    :title="t('admin.usage.upstreamInputTokens')"
+                    data-testid="upstream-input-tokens"
+                  >{{ upstreamInputTokens(row)?.toLocaleString() ?? '—' }}</span>
+                </div>
+                <div class="inline-flex items-center gap-1">
+                  <Icon name="arrowUp" size="sm" class="h-3.5 w-3.5 text-violet-500" />
+                  <span
+                    class="font-medium text-orange-600 dark:text-orange-400"
+                    :title="t('admin.usage.upstreamOutputTokens')"
+                    data-testid="upstream-output-tokens"
+                  >{{ upstreamOutputTokens(row)?.toLocaleString() ?? '—' }}</span>
+                </div>
+              </div>
+              <div v-if="hasActualCacheTokens(row)" class="flex items-center gap-2">
+                <div v-if="row.cache_read_tokens > 0" class="inline-flex items-center gap-1">
+                  <svg class="h-3.5 w-3.5 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" /></svg>
+                  <span
+                    class="font-medium text-orange-600 dark:text-orange-400"
+                    :title="t('admin.usage.cacheReadTokens')"
+                    data-testid="upstream-cache-read-tokens"
+                  >{{ formatCacheTokens(row.cache_read_tokens) }}</span>
+                </div>
+                <div v-if="row.cache_creation_tokens > 0" class="inline-flex items-center gap-1">
+                  <svg class="h-3.5 w-3.5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                  <span
+                    class="font-medium text-orange-600 dark:text-orange-400"
+                    :title="t('admin.usage.cacheCreationTokens')"
+                    data-testid="upstream-cache-creation-tokens"
+                  >{{ formatCacheTokens(row.cache_creation_tokens) }}</span>
+                  <span v-if="row.cache_creation_1h_tokens > 0" class="inline-flex items-center rounded px-1 py-px text-[10px] font-medium leading-tight bg-orange-100 text-orange-600 ring-1 ring-inset ring-orange-200 dark:bg-orange-500/20 dark:text-orange-400 dark:ring-orange-500/30">1h</span>
+                  <span
+                    v-if="row.cache_ttl_overridden"
+                    class="inline-flex items-center rounded px-1 py-px text-[10px] font-medium leading-tight bg-rose-100 text-rose-600 ring-1 ring-inset ring-rose-200 dark:bg-rose-500/20 dark:text-rose-400 dark:ring-rose-500/30 cursor-help"
+                    :title="t('usage.cacheTtlOverriddenHint')"
+                    data-testid="upstream-cache-ttl-overridden"
+                  >R</span>
+                </div>
+              </div>
+              <div v-if="hasImageInputTokens(row)" class="flex items-center gap-2">
+                <div class="inline-flex items-center gap-1">
+                  <svg class="h-3.5 w-3.5 text-fuchsia-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 002 2z" /></svg>
+                  <span class="font-medium text-orange-600 dark:text-orange-400">{{ row.image_input_tokens.toLocaleString() }}</span>
+                </div>
+              </div>
+              <div v-if="hasImageOutputTokens(row)" class="flex items-center gap-2">
+                <div class="inline-flex items-center gap-1">
+                  <svg class="h-3.5 w-3.5 text-pink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 002 2z" /></svg>
+                  <span class="font-medium text-orange-600 dark:text-orange-400">{{ row.image_output_tokens.toLocaleString() }}</span>
+                </div>
+              </div>
+            </div>
+            <div class="group relative" data-testid="upstream-token-details" :title="upstreamTokenDetails(row)">
+              <div class="flex h-4 w-4 cursor-help items-center justify-center rounded-full bg-gray-100 transition-colors group-hover:bg-blue-100 dark:bg-gray-700 dark:group-hover:bg-blue-900/50">
+                <span
+                  v-if="row.usage_limit_audit?.status === 'invalid' || row.usage_limit_audit?.status === 'unknown'"
+                  data-testid="usage-limit-audit-marker"
+                  role="img"
+                  class="inline-flex items-center"
+                  :class="row.usage_limit_audit.status === 'invalid'
+                    ? 'text-rose-600 dark:text-rose-400'
+                    : 'text-gray-400 group-hover:text-blue-500 dark:text-gray-500 dark:group-hover:text-blue-400'"
+                  :title="upstreamTokenDetails(row)"
+                  :aria-label="row.usage_limit_audit.status === 'invalid' ? t('admin.usage.usageAuditInvalid') : t('admin.usage.usageAuditUnknown')"
+                >
+                  <Icon name="infoCircle" size="xs" aria-hidden="true" />
+                </span>
+                <Icon v-else name="infoCircle" size="xs" class="text-gray-400 group-hover:text-blue-500 dark:text-gray-500 dark:group-hover:text-blue-400" />
+              </div>
+            </div>
+          </div>
+          <span v-else data-testid="upstream-token-cell" class="text-sm text-gray-400 dark:text-gray-500">-</span>
+        </template>
+
+        <template #cell-cache_hit_rate="{ row }">
+          <span
+            data-testid="cache-hit-rate-cell"
+            class="cursor-help whitespace-nowrap text-sm text-gray-900 dark:text-white"
+            :title="cacheHitRateTooltip(row)"
+          >{{ formatActualCacheHitRate(row) }}</span>
+        </template>
+
         <template #cell-cost="{ row }">
           <div class="text-sm">
             <div class="flex items-center gap-1.5">
@@ -229,6 +322,21 @@
             <div v-if="showAccountBilling && row.account_rate_multiplier != null" class="mt-0.5 text-[11px] text-orange-500 dark:text-orange-400">
               A ${{ accountBilled(row).toFixed(6) }}
             </div>
+          </div>
+        </template>
+
+        <template #cell-raw_cost="{ row }">
+          <div
+            data-testid="raw-cost-cell"
+            class="flex cursor-help items-center gap-1.5 whitespace-nowrap text-sm"
+            :title="getRawUsageCostTooltip(row, t)"
+          >
+            <span data-testid="raw-cost-amount" class="font-medium tabular-nums text-gray-900 dark:text-white">{{ getRawUsageCostAmount(row) === null ? '—' : `$${formatRawUsageCost(row)}` }}</span>
+            <span
+              v-if="getRawUsageCostAmount(row) !== null && row.raw_cost_audit?.status === 'estimated'"
+              data-testid="raw-cost-estimated"
+              class="rounded bg-amber-50 px-1 py-px text-[10px] font-medium text-amber-700 ring-1 ring-inset ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/30"
+            >{{ t('admin.usage.rawCostEstimated') }}</span>
           </div>
         </template>
 
@@ -372,16 +480,6 @@
               <span class="text-gray-400">{{ t('admin.usage.outputTokens') }}</span>
               <span class="font-medium text-white">{{ tokenTooltipData.output_tokens.toLocaleString() }}</span>
             </div>
-            <template v-if="tokenTooltipData">
-              <div v-if="(tokenTooltipData.upstream_input_tokens || 0) > 0 && tokenTooltipData.upstream_input_tokens !== tokenTooltipData.input_tokens" class="flex items-center justify-between gap-4">
-                <span class="text-gray-400">{{ t('admin.usage.upstreamInputTokens') }}</span>
-                <span class="font-medium text-amber-300">{{ (tokenTooltipData.upstream_input_tokens ?? 0).toLocaleString() }}</span>
-              </div>
-              <div v-if="(tokenTooltipData.upstream_output_tokens || 0) > 0 && tokenTooltipData.upstream_output_tokens !== tokenTooltipData.output_tokens" class="flex items-center justify-between gap-4">
-                <span class="text-gray-400">{{ t('admin.usage.upstreamOutputTokens') }}</span>
-                <span class="font-medium text-amber-300">{{ (tokenTooltipData.upstream_output_tokens ?? 0).toLocaleString() }}</span>
-              </div>
-            </template>
             <div v-if="tokenTooltipData && hasImageOutputTokens(tokenTooltipData) && textOutputTokens(tokenTooltipData) > 0" class="flex items-center justify-between gap-4">
               <span class="text-gray-400">{{ t('admin.usage.outputTokens') }}</span>
               <span class="font-medium text-white">{{ textOutputTokens(tokenTooltipData).toLocaleString() }}</span>
@@ -636,6 +734,42 @@ function inputTokensForDisplayedPrice(row: AdminUsageLog): number {
 }
 
 
+import { formatActualCacheHitRate, getActualCacheHitRate } from '@/utils/usageCacheHitRate'
+import { formatRawUsageCost, getRawUsageCostAmount, getRawUsageCostTooltip } from '@/utils/usageRawCost'
+import { getUsageLimitAuditTooltip } from '@/utils/usageLimitAudit'
+/** A missing raw measurement must never be replaced with customer-adjusted usage. */
+const validActualTokenCount = (value: number | null | undefined): number | null =>
+  typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null
+const upstreamInputTokens = (row: AdminUsageLog): number | null => {
+  if ((row.upstream_input_tokens === 0 && row.input_tokens > 0)
+    || row.usage_limit_audit?.issues.includes('upstream_input_unavailable')) return null
+  return validActualTokenCount(row.upstream_input_tokens)
+}
+const upstreamOutputTokens = (row: AdminUsageLog): number | null => {
+  if ((row.upstream_output_tokens === 0 && row.output_tokens > 0)
+    || row.usage_limit_audit?.issues.includes('upstream_output_unavailable')) return null
+  return validActualTokenCount(row.upstream_output_tokens)
+}
+const actualCacheCreationTokens = (row: AdminUsageLog): number => Math.max(
+  row.cache_creation_tokens ?? 0,
+  (row.cache_creation_5m_tokens ?? 0) + (row.cache_creation_1h_tokens ?? 0),
+)
+const hasActualCacheTokens = (row: AdminUsageLog): boolean =>
+  (row.cache_read_tokens ?? 0) > 0 || actualCacheCreationTokens(row) > 0
+const actualTokenTotal = (row: AdminUsageLog): number | null => {
+  const input = upstreamInputTokens(row)
+  const output = upstreamOutputTokens(row)
+  const buckets = [input, output, row.cache_read_tokens ?? 0, row.cache_creation_tokens ?? 0, row.cache_creation_5m_tokens ?? 0, row.cache_creation_1h_tokens ?? 0]
+  if (buckets.some(value => value === null || !Number.isSafeInteger(value) || value < 0)) return null
+  if (row.usage_limit_audit) return validActualTokenCount(row.usage_limit_audit.total_context_tokens)
+  const creation = row.cache_creation_tokens ?? 0
+  const creationDetails = (row.cache_creation_5m_tokens ?? 0) + (row.cache_creation_1h_tokens ?? 0)
+  if (creation > 0 && creationDetails > 0 && creation !== creationDetails) return null
+  const total = input! + output! + (row.cache_read_tokens ?? 0) + actualCacheCreationTokens(row)
+  return Number.isSafeInteger(total) ? total : null
+}
+
+
 import DataTable from '@/components/common/DataTable.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import IpGeoCell from '@/components/common/IpGeoCell.vue'
@@ -675,6 +809,29 @@ const emit = defineEmits<{
   ipGeoBatchFailed: []
 }>()
 const { t } = useI18n()
+const upstreamTokenDetails = (row: AdminUsageLog): string => {
+  const formatRawCount = (value: number | null | undefined): string =>
+    validActualTokenCount(value)?.toLocaleString() ?? '—'
+  const details = [
+    `${t('admin.usage.upstreamInputTokens')}: ${formatRawCount(upstreamInputTokens(row))}`,
+    `${t('admin.usage.upstreamOutputTokens')}: ${formatRawCount(upstreamOutputTokens(row))}`,
+    `${t('admin.usage.cacheReadTokens')}: ${formatRawCount(row.cache_read_tokens)}`,
+    `${t('admin.usage.cacheCreationTokens')}: ${formatRawCount(row.cache_creation_tokens)}`,
+    `${t('admin.usage.cacheCreation5mTokens')} 5m: ${formatRawCount(row.cache_creation_5m_tokens)}`,
+    `${t('admin.usage.cacheCreation1hTokens')} 1h: ${formatRawCount(row.cache_creation_1h_tokens)}`,
+    `${t('admin.usage.actualTotalTokens')}: ${formatRawCount(actualTokenTotal(row))}`,
+  ]
+  if (row.usage_limit_audit) details.push(getUsageLimitAuditTooltip(row, t))
+  return details.join('\n')
+}
+const cacheHitRateTooltip = (row: AdminUsageLog): string => {
+  const { reason } = getActualCacheHitRate(row)
+  const formula = t('admin.usage.cacheHitRateTooltip')
+  if (reason === 'missing_input') return `${formula}\n${t('admin.usage.cacheHitRateMissingInput')}`
+  if (reason === 'empty_input') return `${formula}\n${t('admin.usage.cacheHitRateEmptyInput')}`
+  if (reason === 'invalid_tokens') return `${formula}\n${t('admin.usage.cacheHitRateInvalidTokens')}`
+  return formula
+}
 const appStore = useAppStore()
 const copiedRequestId = ref<string | null>(null)
 const showAccountBilling = props.showAccountBilling

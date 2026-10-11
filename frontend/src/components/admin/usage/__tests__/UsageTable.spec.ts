@@ -89,6 +89,40 @@ const messages: Record<string, string> = {
 	'usage.upstreamResponseModel': 'Upstream response',
 	'usage.modelVariant': 'Possible version variant',
 	'usage.modelMismatch': 'Different model',
+  'admin.usage.actualTokens': 'Actual Tokens',
+  'admin.usage.upstreamInputTokens': 'Actual input tokens',
+  'admin.usage.upstreamOutputTokens': 'Actual output tokens',
+  'admin.usage.actualTotalTokens': 'Total',
+  'admin.usage.cacheHitRateTooltip': en.usage.cacheHitRateTooltip,
+  'admin.usage.cacheHitRateMissingInput': 'Actual upstream input was not recorded.',
+  'admin.usage.cacheHitRateEmptyInput': 'Actual total input is zero.',
+  'admin.usage.cacheHitRateInvalidTokens': 'Invalid token counts; a cache hit rate cannot be calculated.',
+  'admin.usage.rawCostEstimated': 'Estimated',
+  'admin.usage.rawCostEstimatedTooltip': 'Recalculated from actual upstream usage, current effective pricing and the rate on this record. Historical price snapshots are unavailable. This is not a historical settlement or a supplier invoice.',
+  'admin.usage.rawCostRecordedTooltip': 'The original recorded charge for unadjusted usage.',
+  'admin.usage.rawCostUnavailable': 'The raw usage cost is unavailable.',
+  'admin.usage.rawCostMissingUpstreamUsage': 'Actual upstream usage was not recorded.',
+  'admin.usage.rawCostInvalidUsage': 'The upstream usage is invalid.',
+  'admin.usage.usageAuditInvalid': 'Anomaly',
+  'admin.usage.usageAuditUnknown': 'Unverified',
+  'admin.usage.usageAuditModel': 'Model',
+  'admin.usage.usageAuditInput': 'Actual input / model limit',
+  'admin.usage.usageAuditOutput': 'Actual output / model limit',
+  'admin.usage.usageAuditContext': 'Actual context / model limit',
+  'admin.usage.usageAuditInputExceeded': 'Actual input exceeds the model limit.',
+  'admin.usage.usageAuditMissingInputLimit': 'The model input limit is unavailable.',
+  'admin.usage.usageAuditUpstreamInputUnavailable': 'Actual upstream input was not recorded.',
+  'admin.usage.cacheReadTokens': 'Cache Read Tokens',
+  'admin.usage.cacheCreationTokens': 'Cache Creation Tokens',
+  'admin.usage.cacheCreation5mTokens': 'Cache Write',
+  'admin.usage.cacheCreation1hTokens': 'Cache Write',
+  'usage.cacheTtlOverriddenHint': 'TTL overridden',
+  'usage.cacheTtlOverriddenLabel': 'TTL overridden',
+  'usage.cacheTtlOverridden1h': '1h',
+  'usage.cacheTtlOverridden5m': '5m',
+  'usage.tokenDetails': 'Token details',
+  'usage.totalTokens': 'Total tokens',
+  'usage.tokens': 'Tokens',
 }
 
 vi.mock('vue-i18n', async () => {
@@ -101,6 +135,274 @@ vi.mock('vue-i18n', async () => {
   }
 })
 
+describe('admin UsageTable actual cache hit rate', () => {
+  const baseRow = {
+    request_id: 'req-cache-hit-rate',
+    billing_mode: 'token',
+    input_tokens: 99999,
+    output_tokens: 50000,
+    upstream_input_tokens: 100,
+    upstream_output_tokens: 20000,
+    cache_read_tokens: 600,
+    cache_creation_tokens: 200,
+    cache_creation_5m_tokens: 60,
+    cache_creation_1h_tokens: 140,
+  }
+
+  const mountCacheHitRate = (overrides: Record<string, unknown> = {}) => mount(UsageTable, {
+    props: {
+      data: [{ ...baseRow, ...overrides }],
+      columns: [{ key: 'cache_hit_rate', label: 'Cache hit rate', sortable: false }],
+    },
+    global: { stubs: {
+      DataTable: { props: ['data'], template: '<div><slot v-for="row in data" name="cell-cache_hit_rate" :row="row" /></div>' },
+      EmptyState: true, Icon: true, Teleport: true,
+    } },
+  })
+
+  it.each([
+    ['aggregate cache writes', {}, '66.67%'],
+    ['TTL write buckets without an aggregate', { cache_creation_tokens: 0 }, '66.67%'],
+    ['zero reads', { cache_read_tokens: 0 }, '0%'],
+    ['a rate above ninety percent', { upstream_input_tokens: 5, cache_read_tokens: 95, cache_creation_tokens: 0, cache_creation_5m_tokens: 0, cache_creation_1h_tokens: 0 }, '95%'],
+    ['entirely cached input', { input_tokens: 0, upstream_input_tokens: 0, cache_creation_tokens: 0, cache_creation_5m_tokens: 0, cache_creation_1h_tokens: 0 }, '100%'],
+    ['omitted zero write buckets', { upstream_input_tokens: 600, cache_creation_tokens: undefined, cache_creation_5m_tokens: undefined, cache_creation_1h_tokens: undefined }, '50%'],
+  ])('uses actual upstream input for %s', (_name, overrides, expected) => {
+    const wrapper = mountCacheHitRate(overrides)
+    const cell = wrapper.get('[data-testid="cache-hit-rate-cell"]')
+    expect(cell.text()).toBe(expected)
+    expect(cell.attributes('title')).toBe(messages['admin.usage.cacheHitRateTooltip'])
+    wrapper.unmount()
+  })
+
+  it.each([undefined, null])('does not substitute billed input when actual input is %s', (upstreamInput) => {
+    const wrapper = mountCacheHitRate({ upstream_input_tokens: upstreamInput })
+    const cell = wrapper.get('[data-testid="cache-hit-rate-cell"]')
+    expect(cell.text()).toBe('—')
+    expect(cell.attributes('title')).toContain(messages['admin.usage.cacheHitRateMissingInput'])
+    wrapper.unmount()
+  })
+
+  it('shows an unavailable rate when total actual input is zero', () => {
+    const wrapper = mountCacheHitRate({ input_tokens: 0, upstream_input_tokens: 0, cache_read_tokens: 0, cache_creation_tokens: 0, cache_creation_5m_tokens: 0, cache_creation_1h_tokens: 0 })
+    const cell = wrapper.get('[data-testid="cache-hit-rate-cell"]')
+    expect(cell.text()).toBe('—')
+    expect(cell.attributes('title')).toContain(messages['admin.usage.cacheHitRateEmptyInput'])
+    wrapper.unmount()
+  })
+
+  it.each([50, 300])('rejects conflicting cache-write totals instead of silently choosing the larger count: %s', (creation) => {
+    const wrapper = mountCacheHitRate({ cache_creation_tokens: creation })
+    const cell = wrapper.get('[data-testid="cache-hit-rate-cell"]')
+    expect(cell.text()).toBe('—')
+    expect(cell.attributes('title')).toContain(messages['admin.usage.cacheHitRateInvalidTokens'])
+    wrapper.unmount()
+  })
+
+  it.each([
+    { upstream_input_tokens: 0 },
+    { usage_limit_audit: { status: 'unknown', issues: ['upstream_input_unavailable'] } },
+  ])('does not mistake unrecorded historical input for a fully cached request', (overrides) => {
+    const wrapper = mountCacheHitRate(overrides)
+    const cell = wrapper.get('[data-testid="cache-hit-rate-cell"]')
+    expect(cell.text()).toBe('—')
+    expect(cell.attributes('title')).toContain(messages['admin.usage.cacheHitRateMissingInput'])
+    wrapper.unmount()
+  })
+
+  it.each([
+    'upstream_input_tokens', 'cache_read_tokens', 'cache_creation_tokens', 'cache_creation_5m_tokens', 'cache_creation_1h_tokens',
+  ])('rejects invalid values in %s without clamping', (field) => {
+    for (const value of [-1, 0.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1, '10']) {
+      const wrapper = mountCacheHitRate({ [field]: value })
+      const cell = wrapper.get('[data-testid="cache-hit-rate-cell"]')
+      expect(cell.text(), `${field}: ${value}`).toBe('—')
+      expect(cell.attributes('title')).toContain(messages['admin.usage.cacheHitRateInvalidTokens'])
+      wrapper.unmount()
+    }
+  })
+
+  it.each([
+    { upstream_input_tokens: Number.MAX_SAFE_INTEGER },
+    { cache_creation_5m_tokens: Number.MAX_SAFE_INTEGER },
+  ])('rejects unsafe token sums even when every bucket is a safe integer', (overrides) => {
+    const wrapper = mountCacheHitRate(overrides)
+    const cell = wrapper.get('[data-testid="cache-hit-rate-cell"]')
+    expect(cell.text()).toBe('—')
+    expect(cell.attributes('title')).toContain(messages['admin.usage.cacheHitRateInvalidTokens'])
+    wrapper.unmount()
+  })
+})
+
+describe('admin UsageTable actual token audit', () => {
+  const baseAudit = {
+    status: 'invalid', model: 'gpt-5.5', input_limit: 1000, output_limit: 500, context_limit: 1500,
+    total_input_tokens: 1200, total_output_tokens: 100, total_context_tokens: 1300, issues: ['input_limit_exceeded'],
+  }
+  const mountActualTokens = (overrides: Record<string, unknown> = {}) => mount(UsageTable, {
+    props: {
+      data: [{
+        request_id: 'req-audit', input_tokens: 99999, output_tokens: 999,
+        upstream_input_tokens: 200, upstream_output_tokens: 100, cache_read_tokens: 1000,
+        cache_creation_tokens: 0, cache_creation_5m_tokens: 0, cache_creation_1h_tokens: 0,
+        usage_limit_audit: baseAudit, ...overrides,
+      }],
+      columns: [{ key: 'upstream_tokens', label: 'Actual Tokens', sortable: false }],
+    },
+    global: { stubs: {
+      DataTable: { props: ['data'], template: '<div><slot v-for="row in data" name="cell-upstream_tokens" :row="row" /></div>' },
+      EmptyState: true, Icon: true, Teleport: true,
+    } },
+  })
+
+  it('marks model-limit violations while retaining actual upstream token counts', () => {
+    const wrapper = mountActualTokens()
+    expect(wrapper.get('[data-testid="upstream-input-tokens"]').text()).toBe('200')
+    expect(wrapper.get('[data-testid="upstream-output-tokens"]').text()).toBe('100')
+    expect(wrapper.get('[data-testid="upstream-cache-read-tokens"]').text()).toBe('1.0K')
+    const details = wrapper.get('[data-testid="upstream-token-details"]').attributes('title')
+    expect(details).toContain('Actual input tokens: 200')
+    expect(details).toContain('Actual output tokens: 100')
+    expect(details).toContain('Total: 1,300')
+    const marker = wrapper.get('[data-testid="usage-limit-audit-marker"]')
+    expect(marker.text()).toBe('')
+    expect(marker.attributes('aria-label')).toBe('Anomaly')
+    expect(marker.attributes('title')).toContain('gpt-5.5')
+    expect(marker.attributes('title')).toContain('1,200 / 1,000')
+    expect(marker.attributes('title')).toContain('Actual input exceeds the model limit.')
+    wrapper.unmount()
+  })
+
+  it('marks partial model-limit checks as unverified with an unavailable limit', () => {
+    const wrapper = mountActualTokens({ usage_limit_audit: { ...baseAudit, status: 'unknown', input_limit: null, issues: ['missing_input_limit'] } })
+    const marker = wrapper.get('[data-testid="usage-limit-audit-marker"]')
+    expect(marker.text()).toBe('')
+    expect(marker.attributes('aria-label')).toBe('Unverified')
+    expect(marker.attributes('title')).toContain('1,200 / —')
+    expect(marker.attributes('title')).toContain('The model input limit is unavailable.')
+    wrapper.unmount()
+  })
+
+  it('does not add an anomaly marker to valid token counts', () => {
+    const wrapper = mountActualTokens({ usage_limit_audit: { ...baseAudit, status: 'valid', input_limit: 1500, issues: [] } })
+    expect(wrapper.find('[data-testid="usage-limit-audit-marker"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="upstream-input-tokens"]').text()).toBe('200')
+    wrapper.unmount()
+  })
+
+  it('keeps the displayed total consistent with the audited aggregate for contradictory cache-write records', () => {
+    const wrapper = mountActualTokens({
+      cache_creation_tokens: 50, cache_creation_5m_tokens: 60, cache_creation_1h_tokens: 140,
+      usage_limit_audit: { ...baseAudit, total_input_tokens: 1250, total_context_tokens: 1350, issues: ['cache_creation_total_mismatch'] },
+    })
+    const details = wrapper.get('[data-testid="upstream-token-details"]').attributes('title')
+    expect(details).toContain('Total: 1,350')
+    expect(wrapper.get('[data-testid="upstream-cache-creation-tokens"]').text()).toBe('50')
+    expect(details).toContain('Cache Write 5m: 60')
+    expect(details).toContain('Cache Write 1h: 140')
+    expect(wrapper.get('[data-testid="usage-limit-audit-marker"]').attributes('aria-label')).toBe('Anomaly')
+    wrapper.unmount()
+  })
+
+  it('keeps an unavailable audited context total unavailable', () => {
+    const wrapper = mountActualTokens({ usage_limit_audit: { ...baseAudit, total_context_tokens: null } })
+    expect(wrapper.get('[data-testid="upstream-token-details"]').attributes('title')).toContain('Total: —')
+    wrapper.unmount()
+  })
+
+  it('keeps missing actual input and total unavailable instead of substituting billed tokens', () => {
+    const wrapper = mountActualTokens({
+      upstream_input_tokens: undefined,
+      usage_limit_audit: { ...baseAudit, status: 'unknown', total_input_tokens: null, total_context_tokens: null, issues: ['upstream_input_unavailable'] },
+    })
+    expect(wrapper.get('[data-testid="upstream-input-tokens"]').text()).toBe('—')
+    expect(wrapper.get('[data-testid="upstream-output-tokens"]').text()).toBe('100')
+    const details = wrapper.get('[data-testid="upstream-token-details"]').attributes('title')
+    expect(details).toContain('Actual input tokens: —')
+    expect(details).toContain('Total: —')
+    expect(wrapper.get('[data-testid="usage-limit-audit-marker"]').attributes('title')).toContain('Actual upstream input was not recorded.')
+    wrapper.unmount()
+  })
+
+  it.each([-1, 0.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1])('does not display invalid raw measurements as usable token counts: %s', (input) => {
+    const wrapper = mountActualTokens({ upstream_input_tokens: input })
+    expect(wrapper.get('[data-testid="upstream-input-tokens"]').text()).toBe('—')
+    const details = wrapper.get('[data-testid="upstream-token-details"]').attributes('title')
+    expect(details).toContain('Actual input tokens: —')
+    expect(details).toContain('Total: —')
+    expect(wrapper.get('[data-testid="usage-limit-audit-marker"]').attributes('aria-label')).toBe('Anomaly')
+    wrapper.unmount()
+  })
+
+  it.each([
+    [{ upstream_input_tokens: 0 }, 'upstream-input-tokens'],
+    [{ upstream_output_tokens: 0 }, 'upstream-output-tokens'],
+    [{ usage_limit_audit: { ...baseAudit, status: 'unknown', issues: ['upstream_input_unavailable'] } }, 'upstream-input-tokens'],
+    [{ usage_limit_audit: { ...baseAudit, status: 'unknown', issues: ['upstream_output_unavailable'] } }, 'upstream-output-tokens'],
+  ])('keeps historical or explicitly unavailable raw measurements unknown', (overrides, selector) => {
+    const wrapper = mountActualTokens(overrides)
+    expect(wrapper.get(`[data-testid="${selector}"]`).text()).toBe('—')
+    expect(wrapper.get('[data-testid="upstream-token-details"]').attributes('title')).toContain('Total: —')
+    wrapper.unmount()
+  })
+})
+
+describe('admin UsageTable raw usage cost', () => {
+  const mountRawCost = (audit?: Record<string, unknown>) => mount(UsageTable, {
+    props: {
+      data: [{ request_id: 'req-raw-cost', actual_cost: 8.5, raw_cost_audit: audit }],
+      columns: [{ key: 'raw_cost', label: 'Raw usage cost', sortable: false }],
+    },
+    global: { stubs: {
+      DataTable: { props: ['data'], template: '<div><slot v-for="row in data" name="cell-raw_cost" :row="row" /></div>' },
+      EmptyState: true, Icon: true, Teleport: true,
+    } },
+  })
+
+  it('shows an eight-decimal estimate with its current-pricing explanation', () => {
+    const wrapper = mountRawCost({ status: 'estimated', amount: 0.00519227, total_cost: 0.1038454, reason: 'current_pricing_estimate', model: 'gpt-5.5' })
+    const cell = wrapper.get('[data-testid="raw-cost-cell"]')
+    expect(cell.get('[data-testid="raw-cost-amount"]').text()).toBe('$0.00519227')
+    expect(cell.get('[data-testid="raw-cost-estimated"]').text()).toBe('Estimated')
+    expect(cell.attributes('title')).toBe(messages['admin.usage.rawCostEstimatedTooltip'])
+    expect(cell.text()).not.toContain('8.5')
+    wrapper.unmount()
+  })
+
+  it.each([
+    [0.000727075, '$0.00072708'],
+    [0.000234265, '$0.00023427'],
+  ])('rounds the estimated amount %s at the decimal half boundary', (amount, expected) => {
+    const wrapper = mountRawCost({ status: 'estimated', amount, total_cost: amount, reason: 'current_pricing_estimate' })
+    expect(wrapper.get('[data-testid="raw-cost-amount"]').text()).toBe(expected)
+    wrapper.unmount()
+  })
+
+  it.each([0, 0.12345678])('preserves the recorded unadjusted amount %s without an estimate badge', (amount) => {
+    const wrapper = mountRawCost({ status: 'recorded', amount, total_cost: amount, reason: 'original_usage_unadjusted' })
+    const cell = wrapper.get('[data-testid="raw-cost-cell"]')
+    expect(cell.get('[data-testid="raw-cost-amount"]').text()).toBe(`$${amount.toFixed(8)}`)
+    expect(cell.find('[data-testid="raw-cost-estimated"]').exists()).toBe(false)
+    expect(cell.attributes('title')).toBe(messages['admin.usage.rawCostRecordedTooltip'])
+    wrapper.unmount()
+  })
+
+  it.each([
+    [undefined, 'admin.usage.rawCostUnavailable'],
+    [{ status: 'unavailable', amount: null, total_cost: null, reason: 'missing_upstream_usage' }, 'admin.usage.rawCostMissingUpstreamUsage'],
+    [{ status: 'unavailable', amount: 99, reason: 'invalid_usage' }, 'admin.usage.rawCostInvalidUsage'],
+    [{ status: 'estimated', amount: NaN }, 'admin.usage.rawCostUnavailable'],
+    [{ status: 'estimated', amount: Infinity }, 'admin.usage.rawCostUnavailable'],
+    [{ status: 'recorded', amount: -1 }, 'admin.usage.rawCostUnavailable'],
+  ])('shows unavailable raw cost without falling back to the billed amount', (audit, reasonKey) => {
+    const wrapper = mountRawCost(audit)
+    const cell = wrapper.get('[data-testid="raw-cost-cell"]')
+    expect(cell.text()).toBe('—')
+    expect(cell.attributes('title')).toBe(messages[reasonKey])
+    wrapper.unmount()
+  })
+})
+
 const DataTableStub = {
   props: ['data'],
   template: `
@@ -110,6 +412,7 @@ const DataTableStub = {
         <slot name="cell-reasoning_effort" :row="row" :value="row.reasoning_effort" />
         <slot name="cell-billing_mode" :row="row" />
         <slot name="cell-tokens" :row="row" />
+        <slot name="cell-upstream_tokens" :row="row" />
         <slot name="cell-latency" :row="row" />
         <slot name="cell-cost" :row="row" />
         <slot name="cell-request_id" :row="row" />
@@ -519,6 +822,49 @@ describe('admin UsageTable tooltip', () => {
     const text = wrapper.text()
     expect(text).toContain('$10.0000 / 1M tokens')
     expect(text).not.toContain('$27.7554 / 1M tokens')
+    wrapper.unmount()
+  })
+
+  it('shows raw upstream tokens beside billed tokens without changing billed values', () => {
+    const row = {
+      request_id: 'req-real-token-column',
+      model: 'gpt-5.5',
+      billing_mode: 'token',
+      input_tokens: 3778,
+      output_tokens: 28,
+      upstream_input_tokens: 1889,
+      upstream_output_tokens: 14,
+      cache_read_tokens: 8597,
+      cache_creation_tokens: 900,
+      cache_creation_5m_tokens: 600,
+      cache_creation_1h_tokens: 300,
+    }
+    const wrapper = mount(UsageTable, {
+      props: {
+        data: [row],
+        loading: false,
+        columns: [
+          { key: 'tokens', label: 'Tokens', sortable: false },
+          { key: 'upstream_tokens', label: 'Actual Tokens', sortable: false },
+        ],
+      },
+      global: { stubs: { DataTable: DataTableStub, EmptyState: true, Icon: true, Teleport: true } },
+    })
+
+    const billed = wrapper.get('[data-testid="billed-token-cell"]')
+    const upstream = wrapper.get('[data-testid="upstream-token-cell"]')
+    expect(billed.text()).toContain('3,778')
+    expect(billed.text()).toContain('28')
+    expect(billed.text()).toContain('8.6K')
+    expect(billed.text()).toContain('900')
+    expect(upstream.text()).toContain('1,889')
+    expect(upstream.text()).toContain('14')
+    expect(upstream.text()).toContain('8.6K')
+    expect(upstream.get('[data-testid="upstream-cache-creation-tokens"]').text()).toContain('900')
+    const details = upstream.get('[data-testid="upstream-token-details"]').attributes('title')
+    expect(details).toContain('Cache Write 5m: 600')
+    expect(details).toContain('Cache Write 1h: 300')
+    expect(details).toContain('Total: 11,400')
     wrapper.unmount()
   })
 
