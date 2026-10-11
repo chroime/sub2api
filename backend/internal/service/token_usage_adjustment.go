@@ -3,13 +3,16 @@ package service
 import "math"
 
 // TokenUsageAdjustment controls the customer-facing token quantity used by
-// billing. When a non-1 adjustment is enabled, cache read/write buckets are
-// folded into the logical customer input so cache hits cannot reduce the
-// customer charge; raw cache buckets remain available for upstream accounting.
+// billing. UnifiedMultiplier, when not 1, scales every bucket independently so
+// the cache hit rate is preserved. Split input/output multipliers remain the
+// fallback when unified is 1: they fold cache into logical input and zero
+// customer cache buckets. Raw cache buckets remain available for upstream
+// accounting.
 type TokenUsageAdjustment struct {
-	InputMultiplier  float64
-	OutputMultiplier float64
-	MinInputTokens   int
+	UnifiedMultiplier float64
+	InputMultiplier   float64
+	OutputMultiplier  float64
+	MinInputTokens    int
 }
 
 // TokenUsageBuckets contains the raw usage buckets reported by an upstream.
@@ -28,9 +31,9 @@ type AdjustedTokenUsage struct {
 	// Raw is the clamped upstream usage. It is never changed by an
 	// adjustment and is suitable for administrator/account cost reporting.
 	Raw TokenUsageBuckets
-	// Customer is the usage to pass to customer billing. When an adjustment
-	// is active, cache buckets are folded into Customer.InputTokens and set to
-	// zero so cache hits and misses have the same customer charge.
+	// Customer is the usage to pass to customer billing. Split mode folds cache
+	// buckets into Customer.InputTokens and zeros them. Unified mode scales
+	// every bucket independently and retains customer cache buckets.
 	Customer TokenUsageBuckets
 	// Applied reports whether the configured input/output adjustment was
 	// applied. It is false for default multipliers and requests below the
@@ -45,6 +48,9 @@ type AdjustedTokenUsage struct {
 }
 
 func (a TokenUsageAdjustment) normalized() TokenUsageAdjustment {
+	if a.UnifiedMultiplier <= 0 || math.IsNaN(a.UnifiedMultiplier) || math.IsInf(a.UnifiedMultiplier, 0) {
+		a.UnifiedMultiplier = 1
+	}
 	if a.InputMultiplier <= 0 || math.IsNaN(a.InputMultiplier) || math.IsInf(a.InputMultiplier, 0) {
 		a.InputMultiplier = 1
 	}
@@ -55,6 +61,10 @@ func (a TokenUsageAdjustment) normalized() TokenUsageAdjustment {
 		a.MinInputTokens = 0
 	}
 	return a
+}
+
+func (a TokenUsageAdjustment) unifiedEnabled() bool {
+	return a.normalized().UnifiedMultiplier != 1
 }
 
 func (a TokenUsageAdjustment) Apply(inputTokens, outputTokens int) AdjustedTokenUsage {
@@ -76,15 +86,15 @@ func (a TokenUsageAdjustment) ApplyForRequest(inputTokens, outputTokens int) Adj
 
 // ApplyToUsage produces both the raw upstream buckets and the customer-facing
 // buckets used for billing. The raw counts are clamped but otherwise remain
-// unchanged. For an enabled non-1 adjustment, the customer input is defined
-// as the logical input (non-cache input + cache reads + cache writes), then
-// multiplied by the configured input multiplier; customer output is multiplied
-// independently. Cache buckets are zeroed in that adjusted customer view so
-// the cache's discounted upstream prices cannot reduce the customer's charge.
+// unchanged. Unified mode (UnifiedMultiplier != 1) scales input, output,
+// cache_read, and cache_write by the same coefficient. Split mode (unified is
+// 1) defines customer input as the logical input (non-cache input + cache
+// reads + cache writes), multiplies it by the input multiplier, multiplies
+// output independently, and zeros customer cache buckets.
 //
 // The minimum threshold is evaluated against the raw non-cache input only. A
 // request below the threshold retains its original cache buckets and is not
-// adjusted. A zero threshold makes all requests eligible. A group with both
+// adjusted. A zero threshold makes all requests eligible. A group with all
 // multipliers equal to one also retains the original buckets to preserve the
 // existing cache pricing semantics.
 func (a TokenUsageAdjustment) ApplyToUsage(raw TokenUsageBuckets) AdjustedTokenUsage {
@@ -95,8 +105,21 @@ func (a TokenUsageAdjustment) ApplyToUsage(raw TokenUsageBuckets) AdjustedTokenU
 		Raw:      raw,
 		Customer: raw,
 	}
-	adjustmentEnabled := a.InputMultiplier != 1 || a.OutputMultiplier != 1
+	adjustmentEnabled := a.unifiedEnabled() || a.InputMultiplier != 1 || a.OutputMultiplier != 1
 	if !adjustmentEnabled || (a.MinInputTokens > 0 && raw.InputTokens < a.MinInputTokens) {
+		result.InputTokens = result.Customer.InputTokens
+		result.OutputTokens = result.Customer.OutputTokens
+		return result
+	}
+
+	if a.unifiedEnabled() {
+		result.Customer = TokenUsageBuckets{
+			InputTokens:      adjustedTokenCount(raw.InputTokens, a.UnifiedMultiplier),
+			CacheReadTokens:  adjustedTokenCount(raw.CacheReadTokens, a.UnifiedMultiplier),
+			CacheWriteTokens: adjustedTokenCount(raw.CacheWriteTokens, a.UnifiedMultiplier),
+			OutputTokens:     adjustedTokenCount(raw.OutputTokens, a.UnifiedMultiplier),
+		}
+		result.Applied = true
 		result.InputTokens = result.Customer.InputTokens
 		result.OutputTokens = result.Customer.OutputTokens
 		return result
@@ -156,6 +179,26 @@ func adjustedTokenCount(tokens int, multiplier float64) int {
 		return maxInt
 	}
 	return int(value)
+}
+
+func scaleCacheTTLBuckets(fiveMinute, oneHour int, multiplier float64, scaledWrite int) (int, int) {
+	fiveMinute = adjustedTokenCount(fiveMinute, multiplier)
+	oneHour = adjustedTokenCount(oneHour, multiplier)
+	return fitCacheBuckets(scaledWrite, fiveMinute, oneHour)
+}
+
+func fitCacheBuckets(totalInput, cacheRead, cacheWrite int) (int, int) {
+	totalInput = max(totalInput, 0)
+	cacheRead = max(cacheRead, 0)
+	cacheWrite = max(cacheWrite, 0)
+	if cacheRead > totalInput {
+		cacheRead = totalInput
+	}
+	remaining := totalInput - cacheRead
+	if cacheWrite > remaining {
+		cacheWrite = remaining
+	}
+	return cacheRead, cacheWrite
 }
 
 func tokenUsageAdjustmentForGroup(group *Group) TokenUsageAdjustment {

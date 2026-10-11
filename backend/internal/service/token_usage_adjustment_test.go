@@ -151,3 +151,69 @@ func TestNormalizeBillingTokenAdjustmentMinInputTokens(t *testing.T) {
 		t.Fatal("expected an upper-bound validation error")
 	}
 }
+
+func TestTokenUsageAdjustmentUnifiedScalesAllBuckets(t *testing.T) {
+	adjustment := TokenUsageAdjustment{UnifiedMultiplier: 2, MinInputTokens: 100}
+	raw := TokenUsageBuckets{InputTokens: 200, CacheReadTokens: 600, CacheWriteTokens: 200, OutputTokens: 50}
+	got := adjustment.ApplyToUsage(raw)
+	if got.Raw != raw {
+		t.Fatalf("raw usage changed: %+v", got.Raw)
+	}
+	want := TokenUsageBuckets{InputTokens: 400, CacheReadTokens: 1200, CacheWriteTokens: 400, OutputTokens: 100}
+	if got.Customer != want {
+		t.Fatalf("customer usage = %+v, want %+v", got.Customer, want)
+	}
+	if !got.Applied || got.InputTokens != 400 || got.OutputTokens != 100 {
+		t.Fatalf("aliases = %+v", got)
+	}
+}
+
+func TestTokenUsageAdjustmentUnifiedPreservesCacheHitRate(t *testing.T) {
+	adjustment := TokenUsageAdjustment{UnifiedMultiplier: 2, MinInputTokens: 0}
+	raw := TokenUsageBuckets{InputTokens: 200, CacheReadTokens: 600, CacheWriteTokens: 200, OutputTokens: 50}
+	got := adjustment.ApplyToUsage(raw)
+	rawTotal := raw.InputTokens + raw.CacheReadTokens + raw.CacheWriteTokens
+	gotTotal := got.Customer.InputTokens + got.Customer.CacheReadTokens + got.Customer.CacheWriteTokens
+	if rawTotal == 0 || gotTotal == 0 {
+		t.Fatal("empty totals")
+	}
+	rawRate := float64(raw.CacheReadTokens) / float64(rawTotal)
+	gotRate := float64(got.Customer.CacheReadTokens) / float64(gotTotal)
+	if absFloat(rawRate-gotRate) > 0.0001 {
+		t.Fatalf("hit rate %v -> %v", rawRate, gotRate)
+	}
+}
+
+func TestTokenUsageAdjustmentUnifiedWinsOverSplitMultipliers(t *testing.T) {
+	adjustment := TokenUsageAdjustment{
+		UnifiedMultiplier: 2,
+		InputMultiplier:   5,
+		OutputMultiplier:  7,
+		MinInputTokens:    0,
+	}
+	got := adjustment.ApplyToUsage(TokenUsageBuckets{InputTokens: 100, CacheReadTokens: 50, OutputTokens: 10})
+	if got.Customer.InputTokens != 200 || got.Customer.CacheReadTokens != 100 || got.Customer.OutputTokens != 20 {
+		t.Fatalf("unified did not win: %+v", got.Customer)
+	}
+	if got.Customer.CacheReadTokens == 0 {
+		t.Fatal("unified must retain scaled cache buckets")
+	}
+}
+
+func TestTokenUsageAdjustmentSplitStillFoldsCacheWhenUnifiedIsOne(t *testing.T) {
+	adjustment := TokenUsageAdjustment{UnifiedMultiplier: 1, InputMultiplier: 2, OutputMultiplier: 3, MinInputTokens: 0}
+	got := adjustment.ApplyToUsage(TokenUsageBuckets{InputTokens: 200, CacheReadTokens: 600, CacheWriteTokens: 200, OutputTokens: 50})
+	if got.Customer.InputTokens != 2000 || got.Customer.OutputTokens != 150 {
+		t.Fatalf("split customer = %+v", got.Customer)
+	}
+	if got.Customer.CacheReadTokens != 0 || got.Customer.CacheWriteTokens != 0 {
+		t.Fatalf("split must zero cache: %+v", got.Customer)
+	}
+}
+
+func absFloat(v float64) float64 {
+	if v < 0 {
+		return -v
+	}
+	return v
+}
