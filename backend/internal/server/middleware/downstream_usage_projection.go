@@ -94,6 +94,26 @@ func (w *downstreamUsageResponseWriter) WriteString(value string) (int, error) {
 	return w.Write([]byte(value))
 }
 
+func (w *downstreamUsageResponseWriter) bufferedLen() int {
+	return w.buffer.Len() + w.pending.Len()
+}
+
+func (w *downstreamUsageResponseWriter) Size() int {
+	extra := w.bufferedLen()
+	size := w.ResponseWriter.Size()
+	if size < 0 {
+		if extra == 0 {
+			return -1
+		}
+		return extra
+	}
+	return size + extra
+}
+
+func (w *downstreamUsageResponseWriter) Written() bool {
+	return w.ResponseWriter.Written() || w.bufferedLen() > 0
+}
+
 func (w *downstreamUsageResponseWriter) Flush() {
 	w.ensureMode(nil)
 	if w.mode == downstreamModeJSON {
