@@ -211,6 +211,19 @@ func TestTokenUsageAdjustmentSplitStillFoldsCacheWhenUnifiedIsOne(t *testing.T) 
 	}
 }
 
+func TestTokenUsageAdjustmentForGroupPrefersUnifiedMultiplier(t *testing.T) {
+	group := &Group{
+		BillingUnifiedTokenMultiplier:        2,
+		BillingInputTokenMultiplier:          5,
+		BillingOutputTokenMultiplier:         7,
+		BillingTokenAdjustmentMinInputTokens: 0,
+	}
+	got := tokenUsageAdjustmentForGroup(group).ApplyToUsage(TokenUsageBuckets{InputTokens: 10, OutputTokens: 4})
+	if got.Customer.InputTokens != 20 || got.Customer.OutputTokens != 8 {
+		t.Fatalf("group unified = %+v", got.Customer)
+	}
+}
+
 func absFloat(v float64) float64 {
 	if v < 0 {
 		return -v

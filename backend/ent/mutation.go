@@ -22179,6 +22179,8 @@ type GroupMutation struct {
 	addbilling_input_token_multiplier            *float64
 	billing_output_token_multiplier              *float64
 	addbilling_output_token_multiplier           *float64
+	billing_unified_token_multiplier             *float64
+	addbilling_unified_token_multiplier          *float64
 	billing_token_adjustment_min_input_tokens    *int
 	addbilling_token_adjustment_min_input_tokens *int
 	peak_rate_enabled                            *bool
@@ -22765,6 +22767,62 @@ func (m *GroupMutation) AddedBillingOutputTokenMultiplier() (r float64, exists b
 func (m *GroupMutation) ResetBillingOutputTokenMultiplier() {
 	m.billing_output_token_multiplier = nil
 	m.addbilling_output_token_multiplier = nil
+}
+
+// SetBillingUnifiedTokenMultiplier sets the "billing_unified_token_multiplier" field.
+func (m *GroupMutation) SetBillingUnifiedTokenMultiplier(f float64) {
+	m.billing_unified_token_multiplier = &f
+	m.addbilling_unified_token_multiplier = nil
+}
+
+// BillingUnifiedTokenMultiplier returns the value of the "billing_unified_token_multiplier" field in the mutation.
+func (m *GroupMutation) BillingUnifiedTokenMultiplier() (r float64, exists bool) {
+	v := m.billing_unified_token_multiplier
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBillingUnifiedTokenMultiplier returns the old "billing_unified_token_multiplier" field's value of the Group entity.
+// If the Group object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupMutation) OldBillingUnifiedTokenMultiplier(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBillingUnifiedTokenMultiplier is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBillingUnifiedTokenMultiplier requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBillingUnifiedTokenMultiplier: %w", err)
+	}
+	return oldValue.BillingUnifiedTokenMultiplier, nil
+}
+
+// AddBillingUnifiedTokenMultiplier adds f to the "billing_unified_token_multiplier" field.
+func (m *GroupMutation) AddBillingUnifiedTokenMultiplier(f float64) {
+	if m.addbilling_unified_token_multiplier != nil {
+		*m.addbilling_unified_token_multiplier += f
+	} else {
+		m.addbilling_unified_token_multiplier = &f
+	}
+}
+
+// AddedBillingUnifiedTokenMultiplier returns the value that was added to the "billing_unified_token_multiplier" field in this mutation.
+func (m *GroupMutation) AddedBillingUnifiedTokenMultiplier() (r float64, exists bool) {
+	v := m.addbilling_unified_token_multiplier
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetBillingUnifiedTokenMultiplier resets all changes to the "billing_unified_token_multiplier" field.
+func (m *GroupMutation) ResetBillingUnifiedTokenMultiplier() {
+	m.billing_unified_token_multiplier = nil
+	m.addbilling_unified_token_multiplier = nil
 }
 
 // SetBillingTokenAdjustmentMinInputTokens sets the "billing_token_adjustment_min_input_tokens" field.
@@ -26232,7 +26290,7 @@ func (m *GroupMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *GroupMutation) Fields() []string {
-	fields := make([]string, 0, 70)
+	fields := make([]string, 0, 71)
 	if m.created_at != nil {
 		fields = append(fields, group.FieldCreatedAt)
 	}
@@ -26256,6 +26314,9 @@ func (m *GroupMutation) Fields() []string {
 	}
 	if m.billing_output_token_multiplier != nil {
 		fields = append(fields, group.FieldBillingOutputTokenMultiplier)
+	}
+	if m.billing_unified_token_multiplier != nil {
+		fields = append(fields, group.FieldBillingUnifiedTokenMultiplier)
 	}
 	if m.billing_token_adjustment_min_input_tokens != nil {
 		fields = append(fields, group.FieldBillingTokenAdjustmentMinInputTokens)
@@ -26467,6 +26528,8 @@ func (m *GroupMutation) Field(name string) (ent.Value, bool) {
 		return m.BillingInputTokenMultiplier()
 	case group.FieldBillingOutputTokenMultiplier:
 		return m.BillingOutputTokenMultiplier()
+	case group.FieldBillingUnifiedTokenMultiplier:
+		return m.BillingUnifiedTokenMultiplier()
 	case group.FieldBillingTokenAdjustmentMinInputTokens:
 		return m.BillingTokenAdjustmentMinInputTokens()
 	case group.FieldPeakRateEnabled:
@@ -26616,6 +26679,8 @@ func (m *GroupMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldBillingInputTokenMultiplier(ctx)
 	case group.FieldBillingOutputTokenMultiplier:
 		return m.OldBillingOutputTokenMultiplier(ctx)
+	case group.FieldBillingUnifiedTokenMultiplier:
+		return m.OldBillingUnifiedTokenMultiplier(ctx)
 	case group.FieldBillingTokenAdjustmentMinInputTokens:
 		return m.OldBillingTokenAdjustmentMinInputTokens(ctx)
 	case group.FieldPeakRateEnabled:
@@ -26804,6 +26869,13 @@ func (m *GroupMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetBillingOutputTokenMultiplier(v)
+		return nil
+	case group.FieldBillingUnifiedTokenMultiplier:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBillingUnifiedTokenMultiplier(v)
 		return nil
 	case group.FieldBillingTokenAdjustmentMinInputTokens:
 		v, ok := value.(int)
@@ -27256,6 +27328,9 @@ func (m *GroupMutation) AddedFields() []string {
 	if m.addbilling_output_token_multiplier != nil {
 		fields = append(fields, group.FieldBillingOutputTokenMultiplier)
 	}
+	if m.addbilling_unified_token_multiplier != nil {
+		fields = append(fields, group.FieldBillingUnifiedTokenMultiplier)
+	}
 	if m.addbilling_token_adjustment_min_input_tokens != nil {
 		fields = append(fields, group.FieldBillingTokenAdjustmentMinInputTokens)
 	}
@@ -27351,6 +27426,8 @@ func (m *GroupMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedBillingInputTokenMultiplier()
 	case group.FieldBillingOutputTokenMultiplier:
 		return m.AddedBillingOutputTokenMultiplier()
+	case group.FieldBillingUnifiedTokenMultiplier:
+		return m.AddedBillingUnifiedTokenMultiplier()
 	case group.FieldBillingTokenAdjustmentMinInputTokens:
 		return m.AddedBillingTokenAdjustmentMinInputTokens()
 	case group.FieldPeakRateMultiplier:
@@ -27434,6 +27511,13 @@ func (m *GroupMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddBillingOutputTokenMultiplier(v)
+		return nil
+	case group.FieldBillingUnifiedTokenMultiplier:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddBillingUnifiedTokenMultiplier(v)
 		return nil
 	case group.FieldBillingTokenAdjustmentMinInputTokens:
 		v, ok := value.(int)
@@ -27815,6 +27899,9 @@ func (m *GroupMutation) ResetField(name string) error {
 		return nil
 	case group.FieldBillingOutputTokenMultiplier:
 		m.ResetBillingOutputTokenMultiplier()
+		return nil
+	case group.FieldBillingUnifiedTokenMultiplier:
+		m.ResetBillingUnifiedTokenMultiplier()
 		return nil
 	case group.FieldBillingTokenAdjustmentMinInputTokens:
 		m.ResetBillingTokenAdjustmentMinInputTokens()

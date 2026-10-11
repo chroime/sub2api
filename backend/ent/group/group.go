@@ -32,6 +32,8 @@ const (
 	FieldBillingInputTokenMultiplier = "billing_input_token_multiplier"
 	// FieldBillingOutputTokenMultiplier holds the string denoting the billing_output_token_multiplier field in the database.
 	FieldBillingOutputTokenMultiplier = "billing_output_token_multiplier"
+	// FieldBillingUnifiedTokenMultiplier holds the string denoting the billing_unified_token_multiplier field in the database.
+	FieldBillingUnifiedTokenMultiplier = "billing_unified_token_multiplier"
 	// FieldBillingTokenAdjustmentMinInputTokens holds the string denoting the billing_token_adjustment_min_input_tokens field in the database.
 	FieldBillingTokenAdjustmentMinInputTokens = "billing_token_adjustment_min_input_tokens"
 	// FieldPeakRateEnabled holds the string denoting the peak_rate_enabled field in the database.
@@ -239,6 +241,7 @@ var Columns = []string{
 	FieldRateMultiplier,
 	FieldBillingInputTokenMultiplier,
 	FieldBillingOutputTokenMultiplier,
+	FieldBillingUnifiedTokenMultiplier,
 	FieldBillingTokenAdjustmentMinInputTokens,
 	FieldPeakRateEnabled,
 	FieldPeakStart,
@@ -344,6 +347,8 @@ var (
 	DefaultBillingInputTokenMultiplier float64
 	// DefaultBillingOutputTokenMultiplier holds the default value on creation for the "billing_output_token_multiplier" field.
 	DefaultBillingOutputTokenMultiplier float64
+	// DefaultBillingUnifiedTokenMultiplier holds the default value on creation for the "billing_unified_token_multiplier" field.
+	DefaultBillingUnifiedTokenMultiplier float64
 	// DefaultBillingTokenAdjustmentMinInputTokens holds the default value on creation for the "billing_token_adjustment_min_input_tokens" field.
 	DefaultBillingTokenAdjustmentMinInputTokens int
 	// DefaultPeakRateEnabled holds the default value on creation for the "peak_rate_enabled" field.
@@ -500,6 +505,11 @@ func ByBillingInputTokenMultiplier(opts ...sql.OrderTermOption) OrderOption {
 // ByBillingOutputTokenMultiplier orders the results by the billing_output_token_multiplier field.
 func ByBillingOutputTokenMultiplier(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldBillingOutputTokenMultiplier, opts...).ToFunc()
+}
+
+// ByBillingUnifiedTokenMultiplier orders the results by the billing_unified_token_multiplier field.
+func ByBillingUnifiedTokenMultiplier(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBillingUnifiedTokenMultiplier, opts...).ToFunc()
 }
 
 // ByBillingTokenAdjustmentMinInputTokens orders the results by the billing_token_adjustment_min_input_tokens field.

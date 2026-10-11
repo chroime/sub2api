@@ -55,6 +55,10 @@ func (Group) Fields() []ent.Field {
 			SchemaType(map[string]string{dialect.Postgres: "decimal(10,4)"}).
 			Default(1.0).
 			Comment("下游计费输出 Token 修正倍率；1.0 表示沿用上游计量"),
+		field.Float("billing_unified_token_multiplier").
+			SchemaType(map[string]string{dialect.Postgres: "decimal(10,4)"}).
+			Default(1.0).
+			Comment("下游计费对 input/output/cache_read/cache_write 的统一 Token 倍率；1.0 表示沿用上游计量"),
 		field.Int("billing_token_adjustment_min_input_tokens").
 			Default(100).
 			Comment("仅当原始输入 Token 达到此阈值时应用下游 Token 修正倍率；0 表示不设阈值"),

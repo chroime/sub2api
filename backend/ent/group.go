@@ -36,6 +36,8 @@ type Group struct {
 	BillingInputTokenMultiplier float64 `json:"billing_input_token_multiplier,omitempty"`
 	// 下游计费输出 Token 修正倍率；1.0 表示沿用上游计量
 	BillingOutputTokenMultiplier float64 `json:"billing_output_token_multiplier,omitempty"`
+	// 下游计费对 input/output/cache_read/cache_write 的统一 Token 倍率；1.0 表示沿用上游计量
+	BillingUnifiedTokenMultiplier float64 `json:"billing_unified_token_multiplier,omitempty"`
 	// 仅当原始输入 Token 达到此阈值时应用下游 Token 修正倍率；0 表示不设阈值
 	BillingTokenAdjustmentMinInputTokens int `json:"billing_token_adjustment_min_input_tokens,omitempty"`
 	// 是否启用高峰时段倍率
@@ -270,7 +272,7 @@ func (*Group) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case group.FieldPeakRateEnabled, group.FieldIsExclusive, group.FieldStreamingAckEnabled, group.FieldAllowImageGeneration, group.FieldAllowBatchImageGeneration, group.FieldImageRateIndependent, group.FieldVideoRateIndependent, group.FieldLongContextPricingEnabled, group.FieldClaudeCodeOnly, group.FieldModelRoutingEnabled, group.FieldMcpXMLInject, group.FieldAllowMessagesDispatch, group.FieldAllowLive, group.FieldForceOpenaiFast, group.FieldFreeOpenaiFast, group.FieldRequireOauthOnly, group.FieldRequirePrivacySet, group.FieldProfitControlEnabled:
 			values[i] = new(sql.NullBool)
-		case group.FieldRateMultiplier, group.FieldBillingInputTokenMultiplier, group.FieldBillingOutputTokenMultiplier, group.FieldPeakRateMultiplier, group.FieldDailyLimitUsd, group.FieldWeeklyLimitUsd, group.FieldMonthlyLimitUsd, group.FieldImageRateMultiplier, group.FieldImagePrice1k, group.FieldImagePrice2k, group.FieldImagePrice4k, group.FieldBatchImageDiscountMultiplier, group.FieldBatchImageHoldMultiplier, group.FieldVideoRateMultiplier, group.FieldVideoPrice480p, group.FieldVideoPrice720p, group.FieldVideoPrice1080p, group.FieldWebSearchPricePerCall, group.FieldSearchPricePer1k, group.FieldAudioRealtimePricePerMin, group.FieldAudioTtsPricePerMillionChars, group.FieldAudioSttPricePerHour, group.FieldProfitMinMargin, group.FieldProfitSafetyBuffer:
+		case group.FieldRateMultiplier, group.FieldBillingInputTokenMultiplier, group.FieldBillingOutputTokenMultiplier, group.FieldBillingUnifiedTokenMultiplier, group.FieldPeakRateMultiplier, group.FieldDailyLimitUsd, group.FieldWeeklyLimitUsd, group.FieldMonthlyLimitUsd, group.FieldImageRateMultiplier, group.FieldImagePrice1k, group.FieldImagePrice2k, group.FieldImagePrice4k, group.FieldBatchImageDiscountMultiplier, group.FieldBatchImageHoldMultiplier, group.FieldVideoRateMultiplier, group.FieldVideoPrice480p, group.FieldVideoPrice720p, group.FieldVideoPrice1080p, group.FieldWebSearchPricePerCall, group.FieldSearchPricePer1k, group.FieldAudioRealtimePricePerMin, group.FieldAudioTtsPricePerMillionChars, group.FieldAudioSttPricePerHour, group.FieldProfitMinMargin, group.FieldProfitSafetyBuffer:
 			values[i] = new(sql.NullFloat64)
 		case group.FieldID, group.FieldBillingTokenAdjustmentMinInputTokens, group.FieldDefaultValidityDays, group.FieldFallbackGroupID, group.FieldFallbackGroupIDOnInvalidRequest, group.FieldSortOrder, group.FieldRpmLimit:
 			values[i] = new(sql.NullInt64)
@@ -348,6 +350,12 @@ func (_m *Group) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field billing_output_token_multiplier", values[i])
 			} else if value.Valid {
 				_m.BillingOutputTokenMultiplier = value.Float64
+			}
+		case group.FieldBillingUnifiedTokenMultiplier:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field billing_unified_token_multiplier", values[i])
+			} else if value.Valid {
+				_m.BillingUnifiedTokenMultiplier = value.Float64
 			}
 		case group.FieldBillingTokenAdjustmentMinInputTokens:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -858,6 +866,9 @@ func (_m *Group) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("billing_output_token_multiplier=")
 	builder.WriteString(fmt.Sprintf("%v", _m.BillingOutputTokenMultiplier))
+	builder.WriteString(", ")
+	builder.WriteString("billing_unified_token_multiplier=")
+	builder.WriteString(fmt.Sprintf("%v", _m.BillingUnifiedTokenMultiplier))
 	builder.WriteString(", ")
 	builder.WriteString("billing_token_adjustment_min_input_tokens=")
 	builder.WriteString(fmt.Sprintf("%v", _m.BillingTokenAdjustmentMinInputTokens))

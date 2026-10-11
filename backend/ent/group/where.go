@@ -95,6 +95,11 @@ func BillingOutputTokenMultiplier(v float64) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldBillingOutputTokenMultiplier, v))
 }
 
+// BillingUnifiedTokenMultiplier applies equality check predicate on the "billing_unified_token_multiplier" field. It's identical to BillingUnifiedTokenMultiplierEQ.
+func BillingUnifiedTokenMultiplier(v float64) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldBillingUnifiedTokenMultiplier, v))
+}
+
 // BillingTokenAdjustmentMinInputTokens applies equality check predicate on the "billing_token_adjustment_min_input_tokens" field. It's identical to BillingTokenAdjustmentMinInputTokensEQ.
 func BillingTokenAdjustmentMinInputTokens(v int) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldBillingTokenAdjustmentMinInputTokens, v))
@@ -753,6 +758,46 @@ func BillingOutputTokenMultiplierLT(v float64) predicate.Group {
 // BillingOutputTokenMultiplierLTE applies the LTE predicate on the "billing_output_token_multiplier" field.
 func BillingOutputTokenMultiplierLTE(v float64) predicate.Group {
 	return predicate.Group(sql.FieldLTE(FieldBillingOutputTokenMultiplier, v))
+}
+
+// BillingUnifiedTokenMultiplierEQ applies the EQ predicate on the "billing_unified_token_multiplier" field.
+func BillingUnifiedTokenMultiplierEQ(v float64) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldBillingUnifiedTokenMultiplier, v))
+}
+
+// BillingUnifiedTokenMultiplierNEQ applies the NEQ predicate on the "billing_unified_token_multiplier" field.
+func BillingUnifiedTokenMultiplierNEQ(v float64) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldBillingUnifiedTokenMultiplier, v))
+}
+
+// BillingUnifiedTokenMultiplierIn applies the In predicate on the "billing_unified_token_multiplier" field.
+func BillingUnifiedTokenMultiplierIn(vs ...float64) predicate.Group {
+	return predicate.Group(sql.FieldIn(FieldBillingUnifiedTokenMultiplier, vs...))
+}
+
+// BillingUnifiedTokenMultiplierNotIn applies the NotIn predicate on the "billing_unified_token_multiplier" field.
+func BillingUnifiedTokenMultiplierNotIn(vs ...float64) predicate.Group {
+	return predicate.Group(sql.FieldNotIn(FieldBillingUnifiedTokenMultiplier, vs...))
+}
+
+// BillingUnifiedTokenMultiplierGT applies the GT predicate on the "billing_unified_token_multiplier" field.
+func BillingUnifiedTokenMultiplierGT(v float64) predicate.Group {
+	return predicate.Group(sql.FieldGT(FieldBillingUnifiedTokenMultiplier, v))
+}
+
+// BillingUnifiedTokenMultiplierGTE applies the GTE predicate on the "billing_unified_token_multiplier" field.
+func BillingUnifiedTokenMultiplierGTE(v float64) predicate.Group {
+	return predicate.Group(sql.FieldGTE(FieldBillingUnifiedTokenMultiplier, v))
+}
+
+// BillingUnifiedTokenMultiplierLT applies the LT predicate on the "billing_unified_token_multiplier" field.
+func BillingUnifiedTokenMultiplierLT(v float64) predicate.Group {
+	return predicate.Group(sql.FieldLT(FieldBillingUnifiedTokenMultiplier, v))
+}
+
+// BillingUnifiedTokenMultiplierLTE applies the LTE predicate on the "billing_unified_token_multiplier" field.
+func BillingUnifiedTokenMultiplierLTE(v float64) predicate.Group {
+	return predicate.Group(sql.FieldLTE(FieldBillingUnifiedTokenMultiplier, v))
 }
 
 // BillingTokenAdjustmentMinInputTokensEQ applies the EQ predicate on the "billing_token_adjustment_min_input_tokens" field.

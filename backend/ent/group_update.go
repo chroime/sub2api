@@ -160,6 +160,27 @@ func (_u *GroupUpdate) AddBillingOutputTokenMultiplier(v float64) *GroupUpdate {
 	return _u
 }
 
+// SetBillingUnifiedTokenMultiplier sets the "billing_unified_token_multiplier" field.
+func (_u *GroupUpdate) SetBillingUnifiedTokenMultiplier(v float64) *GroupUpdate {
+	_u.mutation.ResetBillingUnifiedTokenMultiplier()
+	_u.mutation.SetBillingUnifiedTokenMultiplier(v)
+	return _u
+}
+
+// SetNillableBillingUnifiedTokenMultiplier sets the "billing_unified_token_multiplier" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableBillingUnifiedTokenMultiplier(v *float64) *GroupUpdate {
+	if v != nil {
+		_u.SetBillingUnifiedTokenMultiplier(*v)
+	}
+	return _u
+}
+
+// AddBillingUnifiedTokenMultiplier adds value to the "billing_unified_token_multiplier" field.
+func (_u *GroupUpdate) AddBillingUnifiedTokenMultiplier(v float64) *GroupUpdate {
+	_u.mutation.AddBillingUnifiedTokenMultiplier(v)
+	return _u
+}
+
 // SetBillingTokenAdjustmentMinInputTokens sets the "billing_token_adjustment_min_input_tokens" field.
 func (_u *GroupUpdate) SetBillingTokenAdjustmentMinInputTokens(v int) *GroupUpdate {
 	_u.mutation.ResetBillingTokenAdjustmentMinInputTokens()
@@ -1682,6 +1703,12 @@ func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.AddedBillingOutputTokenMultiplier(); ok {
 		_spec.AddField(group.FieldBillingOutputTokenMultiplier, field.TypeFloat64, value)
 	}
+	if value, ok := _u.mutation.BillingUnifiedTokenMultiplier(); ok {
+		_spec.SetField(group.FieldBillingUnifiedTokenMultiplier, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedBillingUnifiedTokenMultiplier(); ok {
+		_spec.AddField(group.FieldBillingUnifiedTokenMultiplier, field.TypeFloat64, value)
+	}
 	if value, ok := _u.mutation.BillingTokenAdjustmentMinInputTokens(); ok {
 		_spec.SetField(group.FieldBillingTokenAdjustmentMinInputTokens, field.TypeInt, value)
 	}
@@ -2458,6 +2485,27 @@ func (_u *GroupUpdateOne) SetNillableBillingOutputTokenMultiplier(v *float64) *G
 // AddBillingOutputTokenMultiplier adds value to the "billing_output_token_multiplier" field.
 func (_u *GroupUpdateOne) AddBillingOutputTokenMultiplier(v float64) *GroupUpdateOne {
 	_u.mutation.AddBillingOutputTokenMultiplier(v)
+	return _u
+}
+
+// SetBillingUnifiedTokenMultiplier sets the "billing_unified_token_multiplier" field.
+func (_u *GroupUpdateOne) SetBillingUnifiedTokenMultiplier(v float64) *GroupUpdateOne {
+	_u.mutation.ResetBillingUnifiedTokenMultiplier()
+	_u.mutation.SetBillingUnifiedTokenMultiplier(v)
+	return _u
+}
+
+// SetNillableBillingUnifiedTokenMultiplier sets the "billing_unified_token_multiplier" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableBillingUnifiedTokenMultiplier(v *float64) *GroupUpdateOne {
+	if v != nil {
+		_u.SetBillingUnifiedTokenMultiplier(*v)
+	}
+	return _u
+}
+
+// AddBillingUnifiedTokenMultiplier adds value to the "billing_unified_token_multiplier" field.
+func (_u *GroupUpdateOne) AddBillingUnifiedTokenMultiplier(v float64) *GroupUpdateOne {
+	_u.mutation.AddBillingUnifiedTokenMultiplier(v)
 	return _u
 }
 
@@ -4012,6 +4060,12 @@ func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error)
 	}
 	if value, ok := _u.mutation.AddedBillingOutputTokenMultiplier(); ok {
 		_spec.AddField(group.FieldBillingOutputTokenMultiplier, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.BillingUnifiedTokenMultiplier(); ok {
+		_spec.SetField(group.FieldBillingUnifiedTokenMultiplier, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedBillingUnifiedTokenMultiplier(); ok {
+		_spec.AddField(group.FieldBillingUnifiedTokenMultiplier, field.TypeFloat64, value)
 	}
 	if value, ok := _u.mutation.BillingTokenAdjustmentMinInputTokens(); ok {
 		_spec.SetField(group.FieldBillingTokenAdjustmentMinInputTokens, field.TypeInt, value)

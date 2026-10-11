@@ -206,8 +206,9 @@ func tokenUsageAdjustmentForGroup(group *Group) TokenUsageAdjustment {
 		return TokenUsageAdjustment{InputMultiplier: 1, OutputMultiplier: 1}
 	}
 	return TokenUsageAdjustment{
-		InputMultiplier:  group.BillingInputTokenMultiplier,
-		OutputMultiplier: group.BillingOutputTokenMultiplier,
-		MinInputTokens:   group.BillingTokenAdjustmentMinInputTokens,
+		UnifiedMultiplier: group.BillingUnifiedTokenMultiplier,
+		InputMultiplier:   group.BillingInputTokenMultiplier,
+		OutputMultiplier:  group.BillingOutputTokenMultiplier,
+		MinInputTokens:    group.BillingTokenAdjustmentMinInputTokens,
 	}.normalized()
 }

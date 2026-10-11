@@ -91,6 +91,7 @@ func TestAPIKeyRepository_GetByKeyForAuth_PreservesBillingTokenAdjustment_SQLite
 		SetRateMultiplier(1).
 		SetBillingInputTokenMultiplier(1.25).
 		SetBillingOutputTokenMultiplier(1.75).
+		SetBillingUnifiedTokenMultiplier(2.5).
 		SetBillingTokenAdjustmentMinInputTokens(123).
 		Save(ctx)
 	require.NoError(t, err)
@@ -109,5 +110,6 @@ func TestAPIKeyRepository_GetByKeyForAuth_PreservesBillingTokenAdjustment_SQLite
 	require.NotNil(t, got.Group)
 	require.InDelta(t, 1.25, got.Group.BillingInputTokenMultiplier, 1e-12)
 	require.InDelta(t, 1.75, got.Group.BillingOutputTokenMultiplier, 1e-12)
+	require.InDelta(t, 2.5, got.Group.BillingUnifiedTokenMultiplier, 1e-12)
 	require.Equal(t, 123, got.Group.BillingTokenAdjustmentMinInputTokens)
 }

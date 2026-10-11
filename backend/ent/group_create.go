@@ -134,6 +134,20 @@ func (_c *GroupCreate) SetNillableBillingOutputTokenMultiplier(v *float64) *Grou
 	return _c
 }
 
+// SetBillingUnifiedTokenMultiplier sets the "billing_unified_token_multiplier" field.
+func (_c *GroupCreate) SetBillingUnifiedTokenMultiplier(v float64) *GroupCreate {
+	_c.mutation.SetBillingUnifiedTokenMultiplier(v)
+	return _c
+}
+
+// SetNillableBillingUnifiedTokenMultiplier sets the "billing_unified_token_multiplier" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableBillingUnifiedTokenMultiplier(v *float64) *GroupCreate {
+	if v != nil {
+		_c.SetBillingUnifiedTokenMultiplier(*v)
+	}
+	return _c
+}
+
 // SetBillingTokenAdjustmentMinInputTokens sets the "billing_token_adjustment_min_input_tokens" field.
 func (_c *GroupCreate) SetBillingTokenAdjustmentMinInputTokens(v int) *GroupCreate {
 	_c.mutation.SetBillingTokenAdjustmentMinInputTokens(v)
@@ -1115,6 +1129,10 @@ func (_c *GroupCreate) defaults() error {
 		v := group.DefaultBillingOutputTokenMultiplier
 		_c.mutation.SetBillingOutputTokenMultiplier(v)
 	}
+	if _, ok := _c.mutation.BillingUnifiedTokenMultiplier(); !ok {
+		v := group.DefaultBillingUnifiedTokenMultiplier
+		_c.mutation.SetBillingUnifiedTokenMultiplier(v)
+	}
 	if _, ok := _c.mutation.BillingTokenAdjustmentMinInputTokens(); !ok {
 		v := group.DefaultBillingTokenAdjustmentMinInputTokens
 		_c.mutation.SetBillingTokenAdjustmentMinInputTokens(v)
@@ -1306,6 +1324,9 @@ func (_c *GroupCreate) check() error {
 	}
 	if _, ok := _c.mutation.BillingOutputTokenMultiplier(); !ok {
 		return &ValidationError{Name: "billing_output_token_multiplier", err: errors.New(`ent: missing required field "Group.billing_output_token_multiplier"`)}
+	}
+	if _, ok := _c.mutation.BillingUnifiedTokenMultiplier(); !ok {
+		return &ValidationError{Name: "billing_unified_token_multiplier", err: errors.New(`ent: missing required field "Group.billing_unified_token_multiplier"`)}
 	}
 	if _, ok := _c.mutation.BillingTokenAdjustmentMinInputTokens(); !ok {
 		return &ValidationError{Name: "billing_token_adjustment_min_input_tokens", err: errors.New(`ent: missing required field "Group.billing_token_adjustment_min_input_tokens"`)}
@@ -1553,6 +1574,10 @@ func (_c *GroupCreate) createSpec() (*Group, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.BillingOutputTokenMultiplier(); ok {
 		_spec.SetField(group.FieldBillingOutputTokenMultiplier, field.TypeFloat64, value)
 		_node.BillingOutputTokenMultiplier = value
+	}
+	if value, ok := _c.mutation.BillingUnifiedTokenMultiplier(); ok {
+		_spec.SetField(group.FieldBillingUnifiedTokenMultiplier, field.TypeFloat64, value)
+		_node.BillingUnifiedTokenMultiplier = value
 	}
 	if value, ok := _c.mutation.BillingTokenAdjustmentMinInputTokens(); ok {
 		_spec.SetField(group.FieldBillingTokenAdjustmentMinInputTokens, field.TypeInt, value)
@@ -2069,6 +2094,24 @@ func (u *GroupUpsert) UpdateBillingOutputTokenMultiplier() *GroupUpsert {
 // AddBillingOutputTokenMultiplier adds v to the "billing_output_token_multiplier" field.
 func (u *GroupUpsert) AddBillingOutputTokenMultiplier(v float64) *GroupUpsert {
 	u.Add(group.FieldBillingOutputTokenMultiplier, v)
+	return u
+}
+
+// SetBillingUnifiedTokenMultiplier sets the "billing_unified_token_multiplier" field.
+func (u *GroupUpsert) SetBillingUnifiedTokenMultiplier(v float64) *GroupUpsert {
+	u.Set(group.FieldBillingUnifiedTokenMultiplier, v)
+	return u
+}
+
+// UpdateBillingUnifiedTokenMultiplier sets the "billing_unified_token_multiplier" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateBillingUnifiedTokenMultiplier() *GroupUpsert {
+	u.SetExcluded(group.FieldBillingUnifiedTokenMultiplier)
+	return u
+}
+
+// AddBillingUnifiedTokenMultiplier adds v to the "billing_unified_token_multiplier" field.
+func (u *GroupUpsert) AddBillingUnifiedTokenMultiplier(v float64) *GroupUpsert {
+	u.Add(group.FieldBillingUnifiedTokenMultiplier, v)
 	return u
 }
 
@@ -3264,6 +3307,27 @@ func (u *GroupUpsertOne) AddBillingOutputTokenMultiplier(v float64) *GroupUpsert
 func (u *GroupUpsertOne) UpdateBillingOutputTokenMultiplier() *GroupUpsertOne {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateBillingOutputTokenMultiplier()
+	})
+}
+
+// SetBillingUnifiedTokenMultiplier sets the "billing_unified_token_multiplier" field.
+func (u *GroupUpsertOne) SetBillingUnifiedTokenMultiplier(v float64) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetBillingUnifiedTokenMultiplier(v)
+	})
+}
+
+// AddBillingUnifiedTokenMultiplier adds v to the "billing_unified_token_multiplier" field.
+func (u *GroupUpsertOne) AddBillingUnifiedTokenMultiplier(v float64) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.AddBillingUnifiedTokenMultiplier(v)
+	})
+}
+
+// UpdateBillingUnifiedTokenMultiplier sets the "billing_unified_token_multiplier" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateBillingUnifiedTokenMultiplier() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateBillingUnifiedTokenMultiplier()
 	})
 }
 
@@ -4794,6 +4858,27 @@ func (u *GroupUpsertBulk) AddBillingOutputTokenMultiplier(v float64) *GroupUpser
 func (u *GroupUpsertBulk) UpdateBillingOutputTokenMultiplier() *GroupUpsertBulk {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateBillingOutputTokenMultiplier()
+	})
+}
+
+// SetBillingUnifiedTokenMultiplier sets the "billing_unified_token_multiplier" field.
+func (u *GroupUpsertBulk) SetBillingUnifiedTokenMultiplier(v float64) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetBillingUnifiedTokenMultiplier(v)
+	})
+}
+
+// AddBillingUnifiedTokenMultiplier adds v to the "billing_unified_token_multiplier" field.
+func (u *GroupUpsertBulk) AddBillingUnifiedTokenMultiplier(v float64) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.AddBillingUnifiedTokenMultiplier(v)
+	})
+}
+
+// UpdateBillingUnifiedTokenMultiplier sets the "billing_unified_token_multiplier" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateBillingUnifiedTokenMultiplier() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateBillingUnifiedTokenMultiplier()
 	})
 }
 
