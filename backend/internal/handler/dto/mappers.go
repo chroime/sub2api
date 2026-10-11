@@ -150,6 +150,7 @@ func GroupFromServiceAdmin(g *service.Group) *AdminGroup {
 		Group:                        groupFromServiceBase(g),
 		BillingInputTokenMultiplier:  g.BillingInputTokenMultiplier,
 		BillingOutputTokenMultiplier: g.BillingOutputTokenMultiplier,
+		BillingUnifiedTokenMultiplier:        g.BillingUnifiedTokenMultiplier,
 		BillingTokenAdjustmentMinInputTokens: g.BillingTokenAdjustmentMinInputTokens,
 		StreamingACKEnabled:          g.StreamingACKEnabled,
 		ForceOpenAIFast:              g.ForceOpenAIFast,

@@ -171,6 +171,7 @@ type AdminGroup struct {
 	Group
 	BillingInputTokenMultiplier          float64 `json:"billing_input_token_multiplier"`
 	BillingOutputTokenMultiplier         float64 `json:"billing_output_token_multiplier"`
+	BillingUnifiedTokenMultiplier        float64 `json:"billing_unified_token_multiplier"`
 	BillingTokenAdjustmentMinInputTokens int     `json:"billing_token_adjustment_min_input_tokens"`
 	StreamingACKEnabled                  *bool   `json:"streaming_ack_enabled"`
 	// ForceOpenAIFast 是管理端请求策略，用户侧分组 DTO 无需暴露。

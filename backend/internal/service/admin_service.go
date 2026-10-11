@@ -237,9 +237,10 @@ type CreateGroupInput struct {
 	Name                         string
 	Description                  string
 	Platform                     string
-	RateMultiplier               float64
-	BillingInputTokenMultiplier  float64
-	BillingOutputTokenMultiplier float64
+	RateMultiplier                float64
+	BillingInputTokenMultiplier   float64
+	BillingOutputTokenMultiplier  float64
+	BillingUnifiedTokenMultiplier float64
 	BillingTokenAdjustmentMinInputTokens *int
 	IsExclusive                  bool
 	SubscriptionType             string   // standard/subscription
@@ -321,9 +322,10 @@ type UpdateGroupInput struct {
 	Name                         string
 	Description                  *string
 	Platform                     string
-	RateMultiplier               *float64 // 使用指针以支持设置为0
-	BillingInputTokenMultiplier  *float64
-	BillingOutputTokenMultiplier *float64
+	RateMultiplier                *float64 // 使用指针以支持设置为0
+	BillingInputTokenMultiplier   *float64
+	BillingOutputTokenMultiplier  *float64
+	BillingUnifiedTokenMultiplier *float64
 	BillingTokenAdjustmentMinInputTokens *int
 	IsExclusive                  *bool
 	Status                       string

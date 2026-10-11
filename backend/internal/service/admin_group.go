@@ -403,6 +403,14 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 	if err != nil {
 		return nil, err
 	}
+	billingUnified, err := normalizeBillingTokenMultiplier(input.BillingUnifiedTokenMultiplier)
+	if err != nil {
+		return nil, err
+	}
+	if billingUnified != 1 {
+		billingInputMultiplier = 1
+		billingOutputMultiplier = 1
+	}
 	billingMinInputTokens := 100
 	if input.BillingTokenAdjustmentMinInputTokens != nil {
 		billingMinInputTokens, err = normalizeBillingTokenAdjustmentMinInputTokens(*input.BillingTokenAdjustmentMinInputTokens)
@@ -584,9 +592,10 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 		Name:                            input.Name,
 		Description:                     input.Description,
 		Platform:                        platform,
-		RateMultiplier:                  input.RateMultiplier,
-		BillingInputTokenMultiplier:     billingInputMultiplier,
-		BillingOutputTokenMultiplier:    billingOutputMultiplier,
+		RateMultiplier:                       input.RateMultiplier,
+		BillingInputTokenMultiplier:          billingInputMultiplier,
+		BillingOutputTokenMultiplier:         billingOutputMultiplier,
+		BillingUnifiedTokenMultiplier:        billingUnified,
 		BillingTokenAdjustmentMinInputTokens: billingMinInputTokens,
 		IsExclusive:                     input.IsExclusive,
 		Status:                          StatusActive,
@@ -839,6 +848,17 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 			return nil, normalizeErr
 		}
 		group.BillingOutputTokenMultiplier = value
+	}
+	if input.BillingUnifiedTokenMultiplier != nil {
+		value, normalizeErr := normalizeBillingTokenMultiplier(*input.BillingUnifiedTokenMultiplier)
+		if normalizeErr != nil {
+			return nil, normalizeErr
+		}
+		group.BillingUnifiedTokenMultiplier = value
+		if value != 1 {
+			group.BillingInputTokenMultiplier = 1
+			group.BillingOutputTokenMultiplier = 1
+		}
 	}
 	if input.BillingTokenAdjustmentMinInputTokens != nil {
 		value, normalizeErr := normalizeBillingTokenAdjustmentMinInputTokens(*input.BillingTokenAdjustmentMinInputTokens)

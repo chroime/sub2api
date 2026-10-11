@@ -191,6 +191,7 @@ type CreateGroupRequest struct {
 	RateMultiplier                       float64                       `json:"rate_multiplier"`
 	BillingInputTokenMultiplier          float64                       `json:"billing_input_token_multiplier"`
 	BillingOutputTokenMultiplier         float64                       `json:"billing_output_token_multiplier"`
+	BillingUnifiedTokenMultiplier        float64                       `json:"billing_unified_token_multiplier"`
 	BillingTokenAdjustmentMinInputTokens *int                          `json:"billing_token_adjustment_min_input_tokens"`
 	IsExclusive                          bool                          `json:"is_exclusive"`
 	SubscriptionType                     string                        `json:"subscription_type" binding:"omitempty,oneof=standard subscription"`
@@ -269,6 +270,7 @@ type UpdateGroupRequest struct {
 	RateMultiplier                       *float64                       `json:"rate_multiplier"`
 	BillingInputTokenMultiplier          *float64                       `json:"billing_input_token_multiplier"`
 	BillingOutputTokenMultiplier         *float64                       `json:"billing_output_token_multiplier"`
+	BillingUnifiedTokenMultiplier        *float64                       `json:"billing_unified_token_multiplier"`
 	BillingTokenAdjustmentMinInputTokens *int                           `json:"billing_token_adjustment_min_input_tokens"`
 	IsExclusive                          *bool                          `json:"is_exclusive"`
 	Status                               string                         `json:"status" binding:"omitempty,oneof=active inactive"`
@@ -679,6 +681,7 @@ func (h *GroupHandler) Create(c *gin.Context) {
 		RateMultiplier:                       req.RateMultiplier,
 		BillingInputTokenMultiplier:          req.BillingInputTokenMultiplier,
 		BillingOutputTokenMultiplier:         req.BillingOutputTokenMultiplier,
+		BillingUnifiedTokenMultiplier:        req.BillingUnifiedTokenMultiplier,
 		BillingTokenAdjustmentMinInputTokens: req.BillingTokenAdjustmentMinInputTokens,
 		IsExclusive:                          req.IsExclusive,
 		SubscriptionType:                     req.SubscriptionType,
@@ -828,6 +831,7 @@ func (h *GroupHandler) Update(c *gin.Context) {
 		RateMultiplier:                       req.RateMultiplier,
 		BillingInputTokenMultiplier:          req.BillingInputTokenMultiplier,
 		BillingOutputTokenMultiplier:         req.BillingOutputTokenMultiplier,
+		BillingUnifiedTokenMultiplier:        req.BillingUnifiedTokenMultiplier,
 		BillingTokenAdjustmentMinInputTokens: req.BillingTokenAdjustmentMinInputTokens,
 		IsExclusive:                          req.IsExclusive,
 		Status:                               req.Status,
