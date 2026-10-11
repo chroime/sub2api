@@ -192,6 +192,30 @@ func TestInflightEstimate_BillingAdjustmentMatchesCustomerTokenCharge(t *testing
 	}
 }
 
+func TestInflightEstimate_UnifiedMultiplierScalesInputAndOutput(t *testing.T) {
+	groupID := int64(22)
+	group := &Group{
+		ID:                                   groupID,
+		Platform:                             PlatformAnthropic,
+		RateMultiplier:                       1,
+		BillingUnifiedTokenMultiplier:        2,
+		BillingInputTokenMultiplier:          5,
+		BillingOutputTokenMultiplier:         7,
+		BillingTokenAdjustmentMinInputTokens: 100,
+	}
+	svc := newInflightEstimateGateway(t, nil)
+	apiKey := &APIKey{User: &User{ID: 1}, GroupID: &groupID, Group: group}
+	pricing, err := svc.billingService.GetModelPricing("claude-sonnet-4-5")
+	require.NoError(t, err)
+	estimate, priced := svc.EstimateInflightReservation(context.Background(), apiKey, InflightEstimateRequest{
+		Model:     "claude-sonnet-4-5",
+		BodyBytes: 800,
+		MaxTokens: 50,
+	})
+	require.True(t, priced)
+	require.InDelta(t, 400*pricing.InputPricePerToken+100*pricing.OutputPricePerToken, estimate, 1e-12)
+}
+
 func TestInflightEstimate_UnpricedIsReportedAndNonMeteredIsNot(t *testing.T) {
 	svc := newInflightEstimateGateway(t, nil)
 	apiKey := &APIKey{User: &User{ID: 1}}
