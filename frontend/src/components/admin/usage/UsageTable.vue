@@ -167,7 +167,21 @@
                   <span class="font-medium text-gray-900 dark:text-white">{{ row.output_tokens?.toLocaleString() || 0 }}</span>
                 </div>
               </div>
-              <div v-if="row.cache_read_tokens > 0 || row.cache_creation_tokens > 0" class="flex items-center gap-2">
+              <div v-if="showAdjustedCacheDetails && hasBilledCacheTokens(row)" class="flex flex-wrap items-center gap-2">
+                <span
+                  v-if="billedCacheReadTokens(row) > 0"
+                  class="font-medium text-sky-600 dark:text-sky-400"
+                  :title="t('admin.usage.billedCacheReadTokens')"
+                  data-testid="billed-cache-read-tokens"
+                >{{ t('admin.usage.cacheReadShort') }} {{ formatCacheTokens(billedCacheReadTokens(row)) }}</span>
+                <span
+                  v-if="billedCacheCreationTokens(row) > 0"
+                  class="font-medium text-amber-600 dark:text-amber-400"
+                  :title="t('admin.usage.billedCacheCreationTokens')"
+                  data-testid="billed-cache-creation-tokens"
+                >{{ t('admin.usage.cacheCreationShort') }} {{ formatCacheTokens(billedCacheCreationTokens(row)) }}</span>
+              </div>
+              <div v-else-if="!showAdjustedCacheDetails && hasOriginalCacheTokens(row)" class="flex items-center gap-2">
                 <div v-if="row.cache_read_tokens > 0" class="inline-flex items-center gap-1">
                   <svg class="h-3.5 w-3.5 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" /></svg>
                   <span class="font-medium text-sky-600 dark:text-sky-400">{{ formatCacheTokens(row.cache_read_tokens) }}</span>
@@ -231,22 +245,22 @@
                 </div>
               </div>
               <div v-if="hasActualCacheTokens(row)" class="flex items-center gap-2">
-                <div v-if="row.cache_read_tokens > 0" class="inline-flex items-center gap-1">
+                <div v-if="actualCacheReadTokens(row) > 0" class="inline-flex items-center gap-1">
                   <svg class="h-3.5 w-3.5 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" /></svg>
                   <span
                     class="font-medium text-orange-600 dark:text-orange-400"
                     :title="t('admin.usage.cacheReadTokens')"
                     data-testid="upstream-cache-read-tokens"
-                  >{{ formatCacheTokens(row.cache_read_tokens) }}</span>
+                  >{{ formatCacheTokens(actualCacheReadTokens(row)) }}</span>
                 </div>
-                <div v-if="row.cache_creation_tokens > 0" class="inline-flex items-center gap-1">
+                <div v-if="actualCacheCreationAggregate(row) > 0" class="inline-flex items-center gap-1">
                   <svg class="h-3.5 w-3.5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                   <span
                     class="font-medium text-orange-600 dark:text-orange-400"
                     :title="t('admin.usage.cacheCreationTokens')"
                     data-testid="upstream-cache-creation-tokens"
-                  >{{ formatCacheTokens(row.cache_creation_tokens) }}</span>
-                  <span v-if="row.cache_creation_1h_tokens > 0" class="inline-flex items-center rounded px-1 py-px text-[10px] font-medium leading-tight bg-orange-100 text-orange-600 ring-1 ring-inset ring-orange-200 dark:bg-orange-500/20 dark:text-orange-400 dark:ring-orange-500/30">1h</span>
+                  >{{ formatCacheTokens(actualCacheCreationAggregate(row)) }}</span>
+                  <span v-if="actualCacheCreation1hTokens(row) > 0" class="inline-flex items-center rounded px-1 py-px text-[10px] font-medium leading-tight bg-orange-100 text-orange-600 ring-1 ring-inset ring-orange-200 dark:bg-orange-500/20 dark:text-orange-400 dark:ring-orange-500/30">1h</span>
                   <span
                     v-if="row.cache_ttl_overridden"
                     class="inline-flex items-center rounded px-1 py-px text-[10px] font-medium leading-tight bg-rose-100 text-rose-600 ring-1 ring-inset ring-rose-200 dark:bg-rose-500/20 dark:text-rose-400 dark:ring-rose-500/30 cursor-help"
@@ -333,10 +347,10 @@
           >
             <span data-testid="raw-cost-amount" class="font-medium tabular-nums text-gray-900 dark:text-white">{{ getRawUsageCostAmount(row) === null ? '—' : `$${formatRawUsageCost(row)}` }}</span>
             <span
-              v-if="getRawUsageCostAmount(row) !== null && row.raw_cost_audit?.status === 'estimated'"
-              data-testid="raw-cost-estimated"
-              class="rounded bg-amber-50 px-1 py-px text-[10px] font-medium text-amber-700 ring-1 ring-inset ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/30"
-            >{{ t('admin.usage.rawCostEstimated') }}</span>
+              v-if="getRawUsageCostAmount(row) !== null && getRawUsageCostDifference(row) !== null"
+              data-testid="raw-cost-difference"
+              class="text-xs font-medium tabular-nums text-amber-700 dark:text-amber-300"
+            >{{ t('admin.usage.rawCostDifference') }} {{ formatRawUsageCostDifference(row) }}</span>
           </div>
         </template>
 
@@ -488,45 +502,57 @@
               <span class="text-gray-400">{{ t('usage.imageOutputTokens') }}</span>
               <span class="font-medium text-pink-300">{{ tokenTooltipData.image_output_tokens.toLocaleString() }}</span>
             </div>
-            <div v-if="tokenTooltipData && tokenTooltipData.cache_creation_tokens > 0">
-              <!-- 有 5m/1h 明细时，展开显示 -->
-              <template v-if="tokenTooltipData.cache_creation_5m_tokens > 0 || tokenTooltipData.cache_creation_1h_tokens > 0">
-                <div v-if="tokenTooltipData.cache_creation_5m_tokens > 0" class="flex items-center justify-between gap-4">
-                  <span class="text-gray-400 flex items-center gap-1.5">
-                    {{ t('admin.usage.cacheCreation5mTokens') }}
-                    <span class="inline-flex items-center rounded px-1 py-px text-[10px] font-medium leading-tight bg-amber-500/20 text-amber-400 ring-1 ring-inset ring-amber-500/30">5m</span>
-                  </span>
-                  <span class="font-medium text-white">{{ tokenTooltipData.cache_creation_5m_tokens.toLocaleString() }}</span>
-                </div>
-                <div v-if="tokenTooltipData.cache_creation_1h_tokens > 0" class="flex items-center justify-between gap-4">
-                  <span class="text-gray-400 flex items-center gap-1.5">
-                    {{ t('admin.usage.cacheCreation1hTokens') }}
-                    <span class="inline-flex items-center rounded px-1 py-px text-[10px] font-medium leading-tight bg-orange-500/20 text-orange-400 ring-1 ring-inset ring-orange-500/30">1h</span>
-                  </span>
-                  <span class="font-medium text-white">{{ tokenTooltipData.cache_creation_1h_tokens.toLocaleString() }}</span>
-                </div>
-              </template>
-              <!-- 无明细时，只显示聚合值 -->
-              <div v-else class="flex items-center justify-between gap-4">
-                <span class="text-gray-400">{{ t('admin.usage.cacheCreationTokens') }}</span>
-                <span class="font-medium text-white">{{ tokenTooltipData.cache_creation_tokens.toLocaleString() }}</span>
+            <template v-if="showAdjustedCacheDetails">
+              <div v-if="tokenTooltipData && billedCacheReadTokens(tokenTooltipData) > 0" class="flex items-center justify-between gap-4">
+                <span class="text-gray-400">{{ t('admin.usage.billedCacheReadTokens') }}</span>
+                <span class="font-medium text-sky-300">{{ formatCacheTokens(billedCacheReadTokens(tokenTooltipData)) }}</span>
               </div>
-            </div>
-            <div v-if="tokenTooltipData && tokenTooltipData.cache_ttl_overridden" class="flex items-center justify-between gap-4">
-              <span class="text-gray-400 flex items-center gap-1.5">
-                {{ t('usage.cacheTtlOverriddenLabel') }}
-                <span class="inline-flex items-center rounded px-1 py-px text-[10px] font-medium leading-tight bg-rose-500/20 text-rose-400 ring-1 ring-inset ring-rose-500/30">R-{{ tokenTooltipData.cache_creation_1h_tokens > 0 ? '5m' : '1H' }}</span>
-              </span>
-              <span class="font-medium text-rose-400">{{ tokenTooltipData.cache_creation_1h_tokens > 0 ? t('usage.cacheTtlOverridden1h') : t('usage.cacheTtlOverridden5m') }}</span>
-            </div>
-            <div v-if="tokenTooltipData && tokenTooltipData.cache_read_tokens > 0" class="flex items-center justify-between gap-4">
-              <span class="text-gray-400">{{ t('admin.usage.cacheReadTokens') }}</span>
-              <span class="font-medium text-white">{{ tokenTooltipData.cache_read_tokens.toLocaleString() }}</span>
-            </div>
+              <div v-if="tokenTooltipData && billedCacheCreationTokens(tokenTooltipData) > 0" class="flex items-center justify-between gap-4">
+                <span class="text-gray-400">{{ t('admin.usage.billedCacheCreationTokens') }}</span>
+                <span class="font-medium text-amber-300">{{ formatCacheTokens(billedCacheCreationTokens(tokenTooltipData)) }}</span>
+              </div>
+            </template>
+            <template v-else-if="tokenTooltipData">
+              <div v-if="tokenTooltipData.cache_creation_tokens > 0">
+                <!-- 有 5m/1h 明细时，展开显示 -->
+                <template v-if="tokenTooltipData.cache_creation_5m_tokens > 0 || tokenTooltipData.cache_creation_1h_tokens > 0">
+                  <div v-if="tokenTooltipData.cache_creation_5m_tokens > 0" class="flex items-center justify-between gap-4">
+                    <span class="text-gray-400 flex items-center gap-1.5">
+                      {{ t('admin.usage.cacheCreation5mTokens') }}
+                      <span class="inline-flex items-center rounded px-1 py-px text-[10px] font-medium leading-tight bg-amber-500/20 text-amber-400 ring-1 ring-inset ring-amber-500/30">5m</span>
+                    </span>
+                    <span class="font-medium text-white">{{ tokenTooltipData.cache_creation_5m_tokens.toLocaleString() }}</span>
+                  </div>
+                  <div v-if="tokenTooltipData.cache_creation_1h_tokens > 0" class="flex items-center justify-between gap-4">
+                    <span class="text-gray-400 flex items-center gap-1.5">
+                      {{ t('admin.usage.cacheCreation1hTokens') }}
+                      <span class="inline-flex items-center rounded px-1 py-px text-[10px] font-medium leading-tight bg-orange-500/20 text-orange-400 ring-1 ring-inset ring-orange-500/30">1h</span>
+                    </span>
+                    <span class="font-medium text-white">{{ tokenTooltipData.cache_creation_1h_tokens.toLocaleString() }}</span>
+                  </div>
+                </template>
+                <!-- 无明细时，只显示聚合值 -->
+                <div v-else class="flex items-center justify-between gap-4">
+                  <span class="text-gray-400">{{ t('admin.usage.cacheCreationTokens') }}</span>
+                  <span class="font-medium text-white">{{ tokenTooltipData.cache_creation_tokens.toLocaleString() }}</span>
+                </div>
+              </div>
+              <div v-if="tokenTooltipData.cache_ttl_overridden" class="flex items-center justify-between gap-4">
+                <span class="text-gray-400 flex items-center gap-1.5">
+                  {{ t('usage.cacheTtlOverriddenLabel') }}
+                  <span class="inline-flex items-center rounded px-1 py-px text-[10px] font-medium leading-tight bg-rose-500/20 text-rose-400 ring-1 ring-inset ring-rose-500/30">R-{{ tokenTooltipData.cache_creation_1h_tokens > 0 ? '5m' : '1H' }}</span>
+                </span>
+                <span class="font-medium text-rose-400">{{ tokenTooltipData.cache_creation_1h_tokens > 0 ? t('usage.cacheTtlOverridden1h') : t('usage.cacheTtlOverridden5m') }}</span>
+              </div>
+              <div v-if="tokenTooltipData.cache_read_tokens > 0" class="flex items-center justify-between gap-4">
+                <span class="text-gray-400">{{ t('admin.usage.cacheReadTokens') }}</span>
+                <span class="font-medium text-white">{{ tokenTooltipData.cache_read_tokens.toLocaleString() }}</span>
+              </div>
+            </template>
           </div>
           <div class="flex items-center justify-between gap-6 border-t border-gray-700 pt-1.5">
             <span class="text-gray-400">{{ t('usage.totalTokens') }}</span>
-            <span class="font-semibold text-blue-400">{{ ((tokenTooltipData?.input_tokens || 0) + (tokenTooltipData?.output_tokens || 0) + (tokenTooltipData?.cache_creation_tokens || 0) + (tokenTooltipData?.cache_read_tokens || 0)).toLocaleString() }}</span>
+            <span class="font-semibold text-blue-400">{{ (showAdjustedCacheDetails ? billedTokenTotal(tokenTooltipData) : originalTokenTotal(tokenTooltipData)).toLocaleString() }}</span>
           </div>
         </div>
         <div class="absolute right-full top-1/2 h-0 w-0 -translate-y-1/2 border-b-[6px] border-r-[6px] border-t-[6px] border-b-transparent border-r-gray-900 border-t-transparent dark:border-r-gray-800"></div>
@@ -569,7 +595,7 @@
             <template v-if="tooltipData && !isImageUsage(tooltipData) && (!tooltipData.billing_mode || tooltipData.billing_mode === BILLING_MODE_TOKEN)">
               <div v-if="tooltipData && textInputTokens(tooltipData) > 0" class="flex items-center justify-between gap-4">
                 <span class="text-gray-400">{{ t('usage.inputTokenPrice') }}</span>
-                <span class="font-medium text-sky-300">{{ formatTokenPricePerMillion(tooltipData.input_cost, inputTokensForDisplayedPrice(tooltipData)) }} {{ t('usage.perMillionTokens') }}</span>
+                <span class="font-medium text-sky-300">{{ formatTokenPricePerMillion(tooltipData.input_cost, textInputTokens(tooltipData)) }} {{ t('usage.perMillionTokens') }}</span>
               </div>
               <div v-if="tooltipData && hasImageInputTokens(tooltipData)" class="flex items-center justify-between gap-4">
                 <span class="text-gray-400">{{ t('usage.imageInputTokenPrice') }}</span>
@@ -681,6 +707,9 @@ import { formatCacheTokens, formatMultiplier } from '@/utils/formatters'
 import { formatTokenPricePerMillion } from '@/utils/usagePricing'
 import { getUsageServiceTierLabel } from '@/utils/usageServiceTier'
 import { resolveUsageRequestType } from '@/utils/usageRequestType'
+import { formatActualCacheHitRate, getActualCacheHitRate } from '@/utils/usageCacheHitRate'
+import { formatRawUsageCost, formatRawUsageCostDifference, getRawUsageCostAmount, getRawUsageCostDifference, getRawUsageCostTooltip } from '@/utils/usageRawCost'
+import { getUsageLimitAuditTooltip } from '@/utils/usageLimitAudit'
 import {
   LATENCY_BAR_CLASSES,
   LATENCY_BAR_FROM_CLASSES,
@@ -719,24 +748,29 @@ function accountBilled(row: { total_cost?: number | null; account_stats_cost?: n
   return Number.isNaN(result) ? 0 : result
 }
 
-// When group token adjustment is active, input_cost is based on the logical
-// input (raw non-cache input plus cache read/write), while input_tokens keeps
-// the customer-facing non-cache count. Use the raw audit field for the unit
-// price denominator so cache-neutral billing does not display an inflated
-// price per token.
-function inputTokensForDisplayedPrice(row: AdminUsageLog): number {
-  const rawInputTokens = row.upstream_input_tokens ?? 0
-  if (rawInputTokens > 0 && rawInputTokens !== row.input_tokens) {
-    const imageInputTokens = hasImageInputTokens(row) ? Math.max(row.image_input_tokens, 0) : 0
-    return Math.max(rawInputTokens - imageInputTokens, 0) + Math.max(row.cache_read_tokens, 0) + Math.max(row.cache_creation_tokens, 0)
-  }
-  return textInputTokens(row)
+function hasPersistedUpstreamCache(row: AdminUsageLog): boolean {
+  return (row.upstream_cache_read_tokens ?? 0) !== 0
+    || (row.upstream_cache_creation_tokens ?? 0) !== 0
+    || (row.upstream_cache_creation_5m_tokens ?? 0) !== 0
+    || (row.upstream_cache_creation_1h_tokens ?? 0) !== 0
 }
 
+/** Cache buckets in the customer-facing usage view are already persisted as billed counts. */
+const billedCacheReadTokens = (row: AdminUsageLog): number => Math.max(row.cache_read_tokens ?? 0, 0)
+const billedCacheCreationTokens = (row: AdminUsageLog): number => billedCacheCreationAggregate(row)
+const hasBilledCacheTokens = (row: AdminUsageLog): boolean =>
+  billedCacheReadTokens(row) > 0 || billedCacheCreationTokens(row) > 0
+const billedTokenTotal = (row: AdminUsageLog | null | undefined): number => {
+  if (!row) return 0
+  return (row.input_tokens ?? 0) + (row.output_tokens ?? 0) + billedCacheReadTokens(row) + billedCacheCreationTokens(row)
+}
+const originalTokenTotal = (row: AdminUsageLog | null | undefined): number => {
+  if (!row) return 0
+  return (row.input_tokens ?? 0) + (row.output_tokens ?? 0) + Math.max(row.cache_read_tokens ?? 0, 0) + billedCacheCreationAggregate(row)
+}
+const hasOriginalCacheTokens = (row: AdminUsageLog): boolean =>
+  (row.cache_read_tokens ?? 0) > 0 || billedCacheCreationAggregate(row) > 0
 
-import { formatActualCacheHitRate, getActualCacheHitRate } from '@/utils/usageCacheHitRate'
-import { formatRawUsageCost, getRawUsageCostAmount, getRawUsageCostTooltip } from '@/utils/usageRawCost'
-import { getUsageLimitAuditTooltip } from '@/utils/usageLimitAudit'
 /** A missing raw measurement must never be replaced with customer-adjusted usage. */
 const validActualTokenCount = (value: number | null | undefined): number | null =>
   typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null
@@ -750,22 +784,36 @@ const upstreamOutputTokens = (row: AdminUsageLog): number | null => {
     || row.usage_limit_audit?.issues.includes('upstream_output_unavailable')) return null
   return validActualTokenCount(row.upstream_output_tokens)
 }
-const actualCacheCreationTokens = (row: AdminUsageLog): number => Math.max(
+const billedCacheCreationAggregate = (row: AdminUsageLog): number => Math.max(
   row.cache_creation_tokens ?? 0,
   (row.cache_creation_5m_tokens ?? 0) + (row.cache_creation_1h_tokens ?? 0),
 )
+const actualCacheReadTokens = (row: AdminUsageLog): number =>
+  hasPersistedUpstreamCache(row) ? Math.max(row.upstream_cache_read_tokens ?? 0, 0) : Math.max(row.cache_read_tokens ?? 0, 0)
+const actualCacheCreationAggregate = (row: AdminUsageLog): number =>
+  hasPersistedUpstreamCache(row) ? Math.max(row.upstream_cache_creation_tokens ?? 0, 0) : Math.max(row.cache_creation_tokens ?? 0, 0)
+const actualCacheCreation5mTokens = (row: AdminUsageLog): number =>
+  hasPersistedUpstreamCache(row) ? Math.max(row.upstream_cache_creation_5m_tokens ?? 0, 0) : Math.max(row.cache_creation_5m_tokens ?? 0, 0)
+const actualCacheCreation1hTokens = (row: AdminUsageLog): number =>
+  hasPersistedUpstreamCache(row) ? Math.max(row.upstream_cache_creation_1h_tokens ?? 0, 0) : Math.max(row.cache_creation_1h_tokens ?? 0, 0)
+const actualCacheCreationTokens = (row: AdminUsageLog): number => Math.max(
+  actualCacheCreationAggregate(row),
+  actualCacheCreation5mTokens(row) + actualCacheCreation1hTokens(row),
+)
 const hasActualCacheTokens = (row: AdminUsageLog): boolean =>
-  (row.cache_read_tokens ?? 0) > 0 || actualCacheCreationTokens(row) > 0
+  actualCacheReadTokens(row) > 0 || actualCacheCreationTokens(row) > 0
 const actualTokenTotal = (row: AdminUsageLog): number | null => {
   const input = upstreamInputTokens(row)
   const output = upstreamOutputTokens(row)
-  const buckets = [input, output, row.cache_read_tokens ?? 0, row.cache_creation_tokens ?? 0, row.cache_creation_5m_tokens ?? 0, row.cache_creation_1h_tokens ?? 0]
+  const read = actualCacheReadTokens(row)
+  const creation = actualCacheCreationTokens(row)
+  const creation5m = actualCacheCreation5mTokens(row)
+  const creation1h = actualCacheCreation1hTokens(row)
+  const buckets = [input, output, read, creation, creation5m, creation1h]
   if (buckets.some(value => value === null || !Number.isSafeInteger(value) || value < 0)) return null
   if (row.usage_limit_audit) return validActualTokenCount(row.usage_limit_audit.total_context_tokens)
-  const creation = row.cache_creation_tokens ?? 0
-  const creationDetails = (row.cache_creation_5m_tokens ?? 0) + (row.cache_creation_1h_tokens ?? 0)
-  if (creation > 0 && creationDetails > 0 && creation !== creationDetails) return null
-  const total = input! + output! + (row.cache_read_tokens ?? 0) + actualCacheCreationTokens(row)
+  if (creation > 0 && (creation5m + creation1h) > 0 && creation !== creation5m + creation1h) return null
+  const total = input! + output! + read + creation
   return Number.isSafeInteger(total) ? total : null
 }
 
@@ -787,6 +835,8 @@ interface Props {
   defaultSortOrder?: 'asc' | 'desc'
   showAccountBilling?: boolean
   showUpstreamEndpoint?: boolean
+  /** Show administrator-only customer-adjusted cache labels and buckets. */
+  showAdjustedCacheDetails?: boolean
   /** First-response mode uses ACK when present; model mode preserves the real token timing. */
   firstTokenMode?: 'model' | 'response'
   /** 嵌入统一卡片内使用：去掉自身卡片外观 */
@@ -800,6 +850,7 @@ const props = withDefaults(defineProps<Props>(), {
   defaultSortOrder: 'asc',
   showAccountBilling: true,
   showUpstreamEndpoint: true,
+  showAdjustedCacheDetails: true,
   firstTokenMode: 'model',
   flat: false
 })
@@ -815,10 +866,10 @@ const upstreamTokenDetails = (row: AdminUsageLog): string => {
   const details = [
     `${t('admin.usage.upstreamInputTokens')}: ${formatRawCount(upstreamInputTokens(row))}`,
     `${t('admin.usage.upstreamOutputTokens')}: ${formatRawCount(upstreamOutputTokens(row))}`,
-    `${t('admin.usage.cacheReadTokens')}: ${formatRawCount(row.cache_read_tokens)}`,
-    `${t('admin.usage.cacheCreationTokens')}: ${formatRawCount(row.cache_creation_tokens)}`,
-    `${t('admin.usage.cacheCreation5mTokens')} 5m: ${formatRawCount(row.cache_creation_5m_tokens)}`,
-    `${t('admin.usage.cacheCreation1hTokens')} 1h: ${formatRawCount(row.cache_creation_1h_tokens)}`,
+    `${t('admin.usage.cacheReadTokens')}: ${formatRawCount(actualCacheReadTokens(row))}`,
+    `${t('admin.usage.cacheCreationTokens')}: ${formatRawCount(actualCacheCreationAggregate(row))}`,
+    `${t('admin.usage.cacheCreation5mTokens')} 5m: ${formatRawCount(actualCacheCreation5mTokens(row))}`,
+    `${t('admin.usage.cacheCreation1hTokens')} 1h: ${formatRawCount(actualCacheCreation1hTokens(row))}`,
     `${t('admin.usage.actualTotalTokens')}: ${formatRawCount(actualTokenTotal(row))}`,
   ]
   if (row.usage_limit_audit) details.push(getUsageLimitAuditTooltip(row, t))
@@ -836,6 +887,7 @@ const appStore = useAppStore()
 const copiedRequestId = ref<string | null>(null)
 const showAccountBilling = props.showAccountBilling
 const showUpstreamEndpoint = props.showUpstreamEndpoint
+const showAdjustedCacheDetails = props.showAdjustedCacheDetails
 const ipGeoBatchLoading = ref(false)
 
 const showIpGeoToolbar = computed(() => props.columns.some((col) => col.key === 'ip_address'))

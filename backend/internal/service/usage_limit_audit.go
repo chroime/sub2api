@@ -73,10 +73,10 @@ func (s *PricingService) AuditUsageLimits(log *UsageLog) *UsageLimitAudit {
 	}{
 		{log.UpstreamInputTokens, "negative_upstream_input_tokens"},
 		{log.UpstreamOutputTokens, "negative_upstream_output_tokens"},
-		{log.CacheReadTokens, "negative_cache_read_tokens"},
-		{log.CacheCreationTokens, "negative_cache_creation_tokens"},
-		{log.CacheCreation5mTokens, "negative_cache_creation_5m_tokens"},
-		{log.CacheCreation1hTokens, "negative_cache_creation_1h_tokens"},
+		{log.AuditCacheReadTokens(), "negative_cache_read_tokens"},
+		{log.AuditCacheCreationTokens(), "negative_cache_creation_tokens"},
+		{log.AuditCacheCreation5mTokens(), "negative_cache_creation_5m_tokens"},
+		{log.AuditCacheCreation1hTokens(), "negative_cache_creation_1h_tokens"},
 	} {
 		if count.value < 0 {
 			audit.invalid(count.code)
@@ -87,9 +87,13 @@ func (s *PricingService) AuditUsageLimits(log *UsageLog) *UsageLimitAudit {
 		audit.invalid("token_count_unsafe_integer")
 	}
 
+	cacheRead := log.AuditCacheReadTokens()
+	cacheCreation := log.AuditCacheCreationTokens()
+	cacheCreation5m := log.AuditCacheCreation5mTokens()
+	cacheCreation1h := log.AuditCacheCreation1hTokens()
 	var cacheDetails *int64
-	if log.CacheCreation5mTokens >= 0 && log.CacheCreation1hTokens >= 0 {
-		if total, ok := sumUsageAuditTokens(int64(log.CacheCreation5mTokens), int64(log.CacheCreation1hTokens)); ok {
+	if cacheCreation5m >= 0 && cacheCreation1h >= 0 {
+		if total, ok := sumUsageAuditTokens(int64(cacheCreation5m), int64(cacheCreation1h)); ok {
 			cacheDetails = &total
 			if total > usageAuditMaxSafeInteger {
 				audit.invalid("cache_creation_sum_unsafe_integer")
@@ -99,15 +103,15 @@ func (s *PricingService) AuditUsageLimits(log *UsageLog) *UsageLimitAudit {
 		}
 	}
 	var cacheWrite *int64
-	if log.CacheCreationTokens > 0 {
-		total := int64(log.CacheCreationTokens)
+	if cacheCreation > 0 {
+		total := int64(cacheCreation)
 		cacheWrite = &total
 		// Zero details mean no TTL breakdown was reported. A nonzero breakdown
 		// must agree with the aggregate; report contradictions without repair.
 		if cacheDetails != nil && *cacheDetails > 0 && *cacheDetails != total {
 			audit.invalid("cache_creation_total_mismatch")
 		}
-	} else if log.CacheCreationTokens == 0 {
+	} else if cacheCreation == 0 {
 		cacheWrite = cacheDetails
 	}
 
@@ -127,8 +131,8 @@ func (s *PricingService) AuditUsageLimits(log *UsageLog) *UsageLimitAudit {
 	// Even if a historical raw count is missing, the known cache/input counts
 	// are a lower bound. They can prove a violation without fabricating a total.
 	var knownInput, knownOutput, knownContext *int64
-	if log.UpstreamInputTokens >= 0 && log.CacheReadTokens >= 0 && cacheWrite != nil {
-		if total, ok := sumUsageAuditTokens(int64(log.UpstreamInputTokens), int64(log.CacheReadTokens), *cacheWrite); ok {
+	if log.UpstreamInputTokens >= 0 && cacheRead >= 0 && cacheWrite != nil {
+		if total, ok := sumUsageAuditTokens(int64(log.UpstreamInputTokens), int64(cacheRead), *cacheWrite); ok {
 			knownInput = &total
 			if total > usageAuditMaxSafeInteger {
 				audit.invalid("input_sum_unsafe_integer")

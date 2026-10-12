@@ -226,6 +226,7 @@ func (h *UsageHandler) List(c *gin.Context) {
 		cost := costAudits[records[i].ID]
 		record.RawCostAudit = &dto.UsageCostAudit{
 			Amount: cost.Amount, TotalCost: cost.TotalCost,
+			BilledAmount: cost.BilledAmount, Difference: cost.Difference,
 			Status: cost.Status, Reason: cost.Reason, Model: cost.Model,
 		}
 		record.UsageLimitAudit = h.pricingService.AuditUsageLimits(&records[i])

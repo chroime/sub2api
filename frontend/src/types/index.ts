@@ -1844,7 +1844,9 @@ export interface UsageLogAccountSummary {
 export interface UsageCostAudit {
   amount: number | null
   total_cost: number | null
-  status: 'recorded' | 'estimated' | 'unavailable'
+  billed_amount?: number | null
+  difference?: number | null
+  status: 'recorded' | 'calculated' | 'estimated' | 'unavailable'
   reason: string
   model?: string
 }
@@ -1865,6 +1867,11 @@ export interface AdminUsageLog extends UsageLog {
   // 上游返回的原始非缓存 Token（仅管理员可见，客户计费用量可能已按分组倍率调整）
   upstream_input_tokens?: number
   upstream_output_tokens?: number
+  // 上游返回的原始缓存桶（仅管理员可见；客户 cache_* 可能已按统一倍率放大）
+  upstream_cache_read_tokens?: number
+  upstream_cache_creation_tokens?: number
+  upstream_cache_creation_5m_tokens?: number
+  upstream_cache_creation_1h_tokens?: number
   upstream_model?: string | null
   upstream_reasoning_effort?: string | null
   upstream_response_model?: string | null

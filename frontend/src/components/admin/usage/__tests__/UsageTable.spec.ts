@@ -97,11 +97,13 @@ const messages: Record<string, string> = {
   'admin.usage.cacheHitRateMissingInput': 'Actual upstream input was not recorded.',
   'admin.usage.cacheHitRateEmptyInput': 'Actual total input is zero.',
   'admin.usage.cacheHitRateInvalidTokens': 'Invalid token counts; a cache hit rate cannot be calculated.',
-  'admin.usage.rawCostEstimated': 'Estimated',
-  'admin.usage.rawCostEstimatedTooltip': 'Recalculated from actual upstream usage, current effective pricing and the rate on this record. Historical price snapshots are unavailable. This is not a historical settlement or a supplier invoice.',
+  'admin.usage.rawCostCalculated': 'Calculated from actual tokens',
+  'admin.usage.rawCostDifference': 'Difference',
+  'admin.usage.rawCostCalculatedTooltip': 'Calculated from the actual upstream token usage and the current effective model or channel pricing. Difference = billed cost minus actual-token cost.',
   'admin.usage.rawCostRecordedTooltip': 'The original recorded charge for unadjusted usage.',
   'admin.usage.rawCostUnavailable': 'The raw usage cost is unavailable.',
   'admin.usage.rawCostMissingUpstreamUsage': 'Actual upstream usage was not recorded.',
+  'admin.usage.rawCostMissingUpstreamCacheUsage': 'Actual upstream cache usage was not recorded.',
   'admin.usage.rawCostInvalidUsage': 'The upstream usage is invalid.',
   'admin.usage.usageAuditInvalid': 'Anomaly',
   'admin.usage.usageAuditUnknown': 'Unverified',
@@ -112,6 +114,10 @@ const messages: Record<string, string> = {
   'admin.usage.usageAuditInputExceeded': 'Actual input exceeds the model limit.',
   'admin.usage.usageAuditMissingInputLimit': 'The model input limit is unavailable.',
   'admin.usage.usageAuditUpstreamInputUnavailable': 'Actual upstream input was not recorded.',
+  'admin.usage.billedCacheReadTokens': 'Billed cache read tokens',
+  'admin.usage.billedCacheCreationTokens': 'Billed cache creation tokens',
+  'admin.usage.cacheReadShort': 'R',
+  'admin.usage.cacheCreationShort': 'W',
   'admin.usage.cacheReadTokens': 'Cache Read Tokens',
   'admin.usage.cacheCreationTokens': 'Cache Creation Tokens',
   'admin.usage.cacheCreation5mTokens': 'Cache Write',
@@ -165,6 +171,7 @@ describe('admin UsageTable actual cache hit rate', () => {
     ['TTL write buckets without an aggregate', { cache_creation_tokens: 0 }, '66.67%'],
     ['zero reads', { cache_read_tokens: 0 }, '0%'],
     ['a rate above ninety percent', { upstream_input_tokens: 5, cache_read_tokens: 95, cache_creation_tokens: 0, cache_creation_5m_tokens: 0, cache_creation_1h_tokens: 0 }, '95%'],
+    ['unified multiplier billed cache', { cache_read_tokens: 1200, cache_creation_tokens: 400, cache_creation_5m_tokens: 120, cache_creation_1h_tokens: 280, upstream_cache_read_tokens: 600, upstream_cache_creation_tokens: 200, upstream_cache_creation_5m_tokens: 60, upstream_cache_creation_1h_tokens: 140 }, '66.67%'],
     ['entirely cached input', { input_tokens: 0, upstream_input_tokens: 0, cache_creation_tokens: 0, cache_creation_5m_tokens: 0, cache_creation_1h_tokens: 0 }, '100%'],
     ['omitted zero write buckets', { upstream_input_tokens: 600, cache_creation_tokens: undefined, cache_creation_5m_tokens: undefined, cache_creation_1h_tokens: undefined }, '50%'],
   ])('uses actual upstream input for %s', (_name, overrides, expected) => {
@@ -359,12 +366,13 @@ describe('admin UsageTable raw usage cost', () => {
     } },
   })
 
-  it('shows an eight-decimal estimate with its current-pricing explanation', () => {
-    const wrapper = mountRawCost({ status: 'estimated', amount: 0.00519227, total_cost: 0.1038454, reason: 'current_pricing_estimate', model: 'gpt-5.5' })
+  it('shows the unamplified actual-token cost and its billing difference', () => {
+    const wrapper = mountRawCost({ status: 'calculated', amount: 0.01038454, total_cost: 0.00519227, billed_amount: 0.01038454, difference: 0.00519227, reason: 'current_pricing_calculation', model: 'gpt-5.5' })
     const cell = wrapper.get('[data-testid="raw-cost-cell"]')
     expect(cell.get('[data-testid="raw-cost-amount"]').text()).toBe('$0.00519227')
-    expect(cell.get('[data-testid="raw-cost-estimated"]').text()).toBe('Estimated')
-    expect(cell.attributes('title')).toBe(messages['admin.usage.rawCostEstimatedTooltip'])
+    expect(cell.get('[data-testid="raw-cost-difference"]').text()).toBe('Difference +$0.00519227')
+    expect(cell.text()).not.toContain('Estimated')
+    expect(cell.attributes('title')).toBe(messages['admin.usage.rawCostCalculatedTooltip'])
     expect(cell.text()).not.toContain('8.5')
     wrapper.unmount()
   })
@@ -372,17 +380,17 @@ describe('admin UsageTable raw usage cost', () => {
   it.each([
     [0.000727075, '$0.00072708'],
     [0.000234265, '$0.00023427'],
-  ])('rounds the estimated amount %s at the decimal half boundary', (amount, expected) => {
-    const wrapper = mountRawCost({ status: 'estimated', amount, total_cost: amount, reason: 'current_pricing_estimate' })
+  ])('rounds the calculated actual-token cost %s at the decimal half boundary', (amount, expected) => {
+    const wrapper = mountRawCost({ status: 'calculated', amount: amount * 2, total_cost: amount, reason: 'current_pricing_calculation' })
     expect(wrapper.get('[data-testid="raw-cost-amount"]').text()).toBe(expected)
     wrapper.unmount()
   })
 
   it.each([0, 0.12345678])('preserves the recorded unadjusted amount %s without an estimate badge', (amount) => {
-    const wrapper = mountRawCost({ status: 'recorded', amount, total_cost: amount, reason: 'original_usage_unadjusted' })
+    const wrapper = mountRawCost({ status: 'recorded', amount, total_cost: amount, billed_amount: amount, difference: 0, reason: 'original_usage_unadjusted' })
     const cell = wrapper.get('[data-testid="raw-cost-cell"]')
     expect(cell.get('[data-testid="raw-cost-amount"]').text()).toBe(`$${amount.toFixed(8)}`)
-    expect(cell.find('[data-testid="raw-cost-estimated"]').exists()).toBe(false)
+    expect(cell.text()).not.toContain('Estimated')
     expect(cell.attributes('title')).toBe(messages['admin.usage.rawCostRecordedTooltip'])
     wrapper.unmount()
   })
@@ -390,9 +398,10 @@ describe('admin UsageTable raw usage cost', () => {
   it.each([
     [undefined, 'admin.usage.rawCostUnavailable'],
     [{ status: 'unavailable', amount: null, total_cost: null, reason: 'missing_upstream_usage' }, 'admin.usage.rawCostMissingUpstreamUsage'],
+    [{ status: 'unavailable', amount: null, total_cost: null, reason: 'missing_upstream_cache_usage' }, 'admin.usage.rawCostMissingUpstreamCacheUsage'],
     [{ status: 'unavailable', amount: 99, reason: 'invalid_usage' }, 'admin.usage.rawCostInvalidUsage'],
-    [{ status: 'estimated', amount: NaN }, 'admin.usage.rawCostUnavailable'],
-    [{ status: 'estimated', amount: Infinity }, 'admin.usage.rawCostUnavailable'],
+    [{ status: 'calculated', amount: NaN, total_cost: NaN }, 'admin.usage.rawCostUnavailable'],
+    [{ status: 'calculated', amount: Infinity, total_cost: Infinity }, 'admin.usage.rawCostUnavailable'],
     [{ status: 'recorded', amount: -1 }, 'admin.usage.rawCostUnavailable'],
   ])('shows unavailable raw cost without falling back to the billed amount', (audit, reasonKey) => {
     const wrapper = mountRawCost(audit)
@@ -791,7 +800,7 @@ describe('admin UsageTable tooltip', () => {
     expect(text).toContain('$0.069568')
   })
 
-  it('uses logical upstream input for cache-neutral adjusted input price', async () => {
+  it('uses the official billed input token denominator for input price', async () => {
     const row = {
       request_id: 'req-cache-neutral-price',
       model: 'gpt-5.5',
@@ -820,8 +829,11 @@ describe('admin UsageTable tooltip', () => {
     await triggers[triggers.length - 1].trigger('mouseenter')
 
     const text = wrapper.text()
-    expect(text).toContain('$10.0000 / 1M tokens')
-    expect(text).not.toContain('$27.7554 / 1M tokens')
+    // Sub2API's official usage detail derives the displayed token price from
+    // the recorded input cost and billed text input token count.
+    expect(text).toContain('$27.7554 / 1M tokens')
+    expect(text).not.toContain('$5.0000 / 1M tokens')
+    expect(text).not.toContain('$10.0000 / 1M tokens')
     wrapper.unmount()
   })
 
@@ -834,10 +846,14 @@ describe('admin UsageTable tooltip', () => {
       output_tokens: 28,
       upstream_input_tokens: 1889,
       upstream_output_tokens: 14,
-      cache_read_tokens: 8597,
-      cache_creation_tokens: 900,
-      cache_creation_5m_tokens: 600,
-      cache_creation_1h_tokens: 300,
+      cache_read_tokens: 17194,
+      cache_creation_tokens: 1800,
+      cache_creation_5m_tokens: 1200,
+      cache_creation_1h_tokens: 600,
+      upstream_cache_read_tokens: 8597,
+      upstream_cache_creation_tokens: 900,
+      upstream_cache_creation_5m_tokens: 600,
+      upstream_cache_creation_1h_tokens: 300,
     }
     const wrapper = mount(UsageTable, {
       props: {
@@ -855,16 +871,103 @@ describe('admin UsageTable tooltip', () => {
     const upstream = wrapper.get('[data-testid="upstream-token-cell"]')
     expect(billed.text()).toContain('3,778')
     expect(billed.text()).toContain('28')
-    expect(billed.text()).toContain('8.6K')
-    expect(billed.text()).toContain('900')
+    expect(billed.text()).toContain('17.2K')
+    expect(billed.text()).toContain('1.8K')
+    expect(billed.text()).not.toContain('8.6K')
+    expect(billed.text()).not.toContain('900')
     expect(upstream.text()).toContain('1,889')
     expect(upstream.text()).toContain('14')
     expect(upstream.text()).toContain('8.6K')
+    expect(upstream.get('[data-testid="upstream-cache-read-tokens"]').text()).toContain('8.6K')
     expect(upstream.get('[data-testid="upstream-cache-creation-tokens"]').text()).toContain('900')
     const details = upstream.get('[data-testid="upstream-token-details"]').attributes('title')
     expect(details).toContain('Cache Write 5m: 600')
     expect(details).toContain('Cache Write 1h: 300')
     expect(details).toContain('Total: 11,400')
+    wrapper.unmount()
+  })
+
+  it('shows adjusted cache buckets and total in the billed token tooltip', async () => {
+    const row = {
+      request_id: 'req-billed-cache-tooltip',
+      model: 'gpt-5.5',
+      billing_mode: 'token',
+      input_tokens: 3778,
+      output_tokens: 28,
+      upstream_input_tokens: 1889,
+      upstream_output_tokens: 14,
+      cache_read_tokens: 17194,
+      cache_creation_tokens: 1800,
+      upstream_cache_read_tokens: 8597,
+      upstream_cache_creation_tokens: 900,
+    }
+    const wrapper = mount(UsageTable, {
+      props: { data: [row], loading: false, columns: [] },
+      global: { stubs: { DataTable: DataTableStub, EmptyState: true, Icon: true, Teleport: true } },
+    })
+
+    await wrapper.get('[data-testid="billed-token-cell"] .group.relative').trigger('mouseenter')
+    const tooltip = wrapper.get('[data-testid="billed-token-cell"]')
+    // The tooltip is teleported to body, so assert against the full wrapper text.
+    const text = wrapper.text()
+    expect(text).toContain('17.2K')
+    expect(text).toContain('1.8K')
+    expect(text).toContain('22,800')
+    expect(tooltip.text()).toContain('17.2K')
+    wrapper.unmount()
+  })
+
+  it('keeps raw cache buckets in the billed view when no input multiplier is inferred', () => {
+    const row = {
+      request_id: 'req-unadjusted-cache',
+      model: 'gpt-5.5',
+      billing_mode: 'token',
+      input_tokens: 100,
+      output_tokens: 10,
+      upstream_input_tokens: 100,
+      upstream_output_tokens: 10,
+      cache_read_tokens: 20,
+      cache_creation_tokens: 5,
+    }
+    const wrapper = mount(UsageTable, {
+      props: { data: [row], loading: false, columns: [] },
+      global: { stubs: { DataTable: DataTableStub, EmptyState: true, Icon: true, Teleport: true } },
+    })
+
+    const billed = wrapper.get('[data-testid="billed-token-cell"]')
+    expect(billed.get('[data-testid="billed-cache-read-tokens"]').text()).toContain('20')
+    expect(billed.get('[data-testid="billed-cache-creation-tokens"]').text()).toContain('5')
+    wrapper.unmount()
+  })
+
+  it('keeps the original cache icon and labels for the user-facing view', async () => {
+    const row = {
+      request_id: 'req-user-cache-display',
+      model: 'gpt-5.5',
+      billing_mode: 'token',
+      input_tokens: 3778,
+      output_tokens: 28,
+      cache_read_tokens: 8597,
+      cache_creation_tokens: 0,
+      cache_creation_5m_tokens: 0,
+      cache_creation_1h_tokens: 0,
+    }
+    const wrapper = mount(UsageTable, {
+      props: { data: [row], loading: false, columns: [], showAdjustedCacheDetails: false },
+      global: { stubs: { DataTable: DataTableStub, EmptyState: true, Icon: true, Teleport: true } },
+    })
+
+    const billed = wrapper.get('[data-testid="billed-token-cell"]')
+    expect(billed.text()).toContain('8.6K')
+    expect(billed.text()).not.toContain('R 8.6K')
+    expect(billed.findAll('svg')).toHaveLength(1)
+
+    await billed.find('.group.relative').trigger('mouseenter')
+    const text = wrapper.text()
+    expect(text).toContain('Cache Read Tokens')
+    expect(text).not.toContain('Billed cache read tokens')
+    expect(text).not.toContain('Adjusted cache read tokens')
+    expect(text).toContain('12,403')
     wrapper.unmount()
   })
 

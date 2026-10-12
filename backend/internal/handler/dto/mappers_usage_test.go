@@ -204,20 +204,34 @@ func TestUsageLogFromService_ExposesRawUpstreamTokensOnlyToAdmin(t *testing.T) {
 	t.Parallel()
 
 	log := &service.UsageLog{
-		RequestID:            "req_raw_tokens",
-		Model:                "gpt-5.4",
-		InputTokens:          400,
-		OutputTokens:         150,
-		UpstreamInputTokens:  200,
-		UpstreamOutputTokens: 50,
+		RequestID:                     "req_raw_tokens",
+		Model:                         "gpt-5.4",
+		InputTokens:                   400,
+		OutputTokens:                  150,
+		CacheReadTokens:               1200,
+		CacheCreationTokens:           80,
+		UpstreamInputTokens:           200,
+		UpstreamOutputTokens:          50,
+		UpstreamCacheReadTokens:       600,
+		UpstreamCacheCreationTokens:   40,
+		UpstreamCacheCreation5mTokens: 10,
+		UpstreamCacheCreation1hTokens: 30,
 	}
 
 	userDTO := UsageLogFromService(log)
 	adminDTO := UsageLogFromServiceAdmin(log)
-	require.NotContains(t, string(mustMarshalJSON(t, userDTO)), "upstream_input_tokens")
-	require.NotContains(t, string(mustMarshalJSON(t, userDTO)), "upstream_output_tokens")
-	require.Contains(t, string(mustMarshalJSON(t, adminDTO)), `"upstream_input_tokens":200`)
-	require.Contains(t, string(mustMarshalJSON(t, adminDTO)), `"upstream_output_tokens":50`)
+	userJSON := string(mustMarshalJSON(t, userDTO))
+	adminJSON := string(mustMarshalJSON(t, adminDTO))
+	require.NotContains(t, userJSON, "upstream_input_tokens")
+	require.NotContains(t, userJSON, "upstream_output_tokens")
+	require.NotContains(t, userJSON, "upstream_cache_read_tokens")
+	require.NotContains(t, userJSON, "upstream_cache_creation_tokens")
+	require.Contains(t, adminJSON, `"upstream_input_tokens":200`)
+	require.Contains(t, adminJSON, `"upstream_output_tokens":50`)
+	require.Contains(t, adminJSON, `"upstream_cache_read_tokens":600`)
+	require.Contains(t, adminJSON, `"upstream_cache_creation_tokens":40`)
+	require.Contains(t, adminJSON, `"upstream_cache_creation_5m_tokens":10`)
+	require.Contains(t, adminJSON, `"upstream_cache_creation_1h_tokens":30`)
 }
 
 func mustMarshalJSON(t *testing.T, value any) []byte {

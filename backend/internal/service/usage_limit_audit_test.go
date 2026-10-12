@@ -32,6 +32,20 @@ func usageAuditFixture(t *testing.T) (*PricingService, *UsageLog) {
 	}
 }
 
+func TestAuditUsageLimitsUsesPersistedUpstreamCacheNotBilledCache(t *testing.T) {
+	log := &UsageLog{
+		Model:               "gpt-5.5",
+		UpstreamInputTokens: 100, UpstreamOutputTokens: 20,
+		CacheReadTokens: 1800, CacheCreationTokens: 200,
+		UpstreamCacheReadTokens: 900, UpstreamCacheCreationTokens: 100,
+	}
+	before := *log
+	audit := AuditUsageLimits(log)
+	require.Equal(t, before, *log)
+	require.EqualValues(t, 1100, *audit.TotalInputTokens)
+	require.EqualValues(t, 1120, *audit.TotalContextTokens)
+}
+
 func TestAuditUsageLimitsUsesRawBucketsWithoutChangingUsage(t *testing.T) {
 	pricing, log := usageAuditFixture(t)
 	log.InputTokens, log.OutputTokens = 900000, 800000

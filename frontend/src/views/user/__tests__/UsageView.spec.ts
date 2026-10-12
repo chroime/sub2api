@@ -116,7 +116,7 @@ vi.mock('vue-i18n', async () => {
 
 const simpleStub = { template: '<div><slot /></div>' }
 const chartStub = { template: '<div />' }
-const usageTableStub = { props: ['firstTokenMode', 'data', 'columns'], template: '<div />' }
+const usageTableStub = { props: ['firstTokenMode', 'data', 'columns', 'showAdjustedCacheDetails'], template: '<div />' }
 
 const usageLog = {
   id: 1,
@@ -222,6 +222,7 @@ describe('user UsageView', () => {
     await flushPromises()
 
     expect(wrapper.findComponent(UsageTable).props('columns').map((column: { key: string }) => column.key)).toContain('latency')
+    expect(wrapper.findComponent(UsageTable).props('showAdjustedCacheDetails')).toBe(false)
     expect(query).toHaveBeenCalled()
     expect(getStats).toHaveBeenCalled()
     expect(getDashboardModels).toHaveBeenCalled()
@@ -380,6 +381,25 @@ describe('user UsageView', () => {
     ]))
   })
 
+  it('does not expose administrator cache hit rate or upstream token columns in the table or column settings', async () => {
+    const wrapper = mountUsageView()
+    await flushPromises()
+
+    const columnKeys = wrapper.findComponent(UsageTable).props('columns').map((column: { key: string }) => column.key)
+    expect(columnKeys).toContain('tokens')
+    expect(columnKeys).not.toContain('cache_hit_rate')
+    expect(columnKeys).not.toContain('upstream_tokens')
+    expect(columnKeys).not.toContain('raw_cost')
+
+    await wrapper.get('[data-testid="usage-column-settings"]').trigger('click')
+
+    expect(wrapper.find('[data-testid="usage-column-toggle-tokens"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="usage-column-toggle-cache_hit_rate"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="usage-column-toggle-upstream_tokens"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="usage-column-toggle-raw_cost"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
   it.each([720, 0, null, undefined])('exports csv with separate ACK %s and without admin-only fields', async (ack) => {
     query.mockResolvedValue({ items: [{ ...usageLog, streaming_ack_ms: ack }], total: 1, pages: 1 })
     const wrapper = mountUsageView()
@@ -425,6 +445,10 @@ describe('user UsageView', () => {
     expect(csvContent).not.toContain('Upstream Endpoint')
     expect(csvContent).not.toContain('account_cost')
     expect(csvContent).not.toContain('account_rate_multiplier')
+    expect(csvContent).not.toContain('Cache hit rate')
+    expect(csvContent).not.toContain('Raw usage cost')
+    expect(csvContent).not.toContain('raw_cost_audit')
+    expect(csvContent).not.toContain('usage_limit_audit')
 
     window.URL.createObjectURL = originalCreateObjectURL
     window.URL.revokeObjectURL = originalRevokeObjectURL

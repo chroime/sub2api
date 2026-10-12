@@ -44,11 +44,14 @@ const messages: Record<string, string> = {
   'admin.usage.actualTokens': 'Actual Tokens',
   'admin.usage.cacheHitRate': 'Cache hit rate',
   'admin.usage.rawCost': 'Raw usage cost',
+  'admin.usage.rawCostDifference': 'Difference',
   'admin.usage.rawCostStatus': 'Raw cost status',
   'admin.usage.rawCostNote': 'Raw cost explanation',
+  'admin.usage.rawCostCalculated': 'Calculated from actual tokens',
   'admin.usage.rawCostEstimated': 'Estimated',
   'admin.usage.rawCostRecorded': 'Recorded',
   'admin.usage.rawCostUnknown': 'Unavailable',
+  'admin.usage.rawCostCalculatedTooltip': 'Calculated from the actual upstream token usage and the current effective model or channel pricing. Difference = billed cost minus actual-token cost.',
 	'common.yes': 'Yes',
 	'common.no': 'No',
 }
@@ -146,7 +149,7 @@ const UsageFiltersStub = defineComponent({
   template: '<div><span data-test="user-filter-label">{{ userKeyword }}</span><slot name="after-reset" /></div>',
 })
 const UsageTableStub = {
-  props: ['columns', 'firstTokenMode'],
+  props: ['columns', 'firstTokenMode', 'showAdjustedCacheDetails'],
   emits: ['userClick'],
   template: '<div data-test="usage-table"><button class="user-click" @click="$emit(\'userClick\', 2)">user</button></div>',
 }
@@ -530,6 +533,14 @@ describe('admin UsageView column visibility', () => {
       { key: 'upstream_tokens', label: 'Actual Tokens', sortable: false },
       { key: 'cache_hit_rate', label: 'Cache hit rate', sortable: false },
     ])
+    wrapper.unmount()
+  })
+
+  it('uses the original cache presentation in the billed token column', async () => {
+    const wrapper = mountColumnVisibilityView()
+    await flushPromises()
+
+    expect(wrapper.findComponent(UsageTableStub).props('showAdjustedCacheDetails')).toBe(false)
     wrapper.unmount()
   })
 
@@ -954,11 +965,11 @@ describe('admin UsageView model audit export', () => {
 		wrapper.unmount()
 	})
 
-	it('exports raw usage costs with estimate status and explanation', async () => {
+  it('exports actual-token costs, billing differences, and explanation', async () => {
 		exportList.mockResolvedValue({
 			items: [
-				{ created_at: '2026-08-04T00:00:00Z', model: 'gpt-5.5', actual_cost: 8.5, raw_cost_audit: { amount: 0.00519227, status: 'estimated', reason: 'current_pricing_estimate' } },
-				{ created_at: '2026-08-04T00:00:01Z', model: 'gpt-5.5', actual_cost: 0.1, raw_cost_audit: { amount: 0.1, status: 'recorded', reason: 'original_usage_unadjusted' } },
+        { created_at: '2026-08-04T00:00:00Z', model: 'gpt-5.5', actual_cost: 8.5, raw_cost_audit: { amount: 17, total_cost: 0.00519227, billed_amount: 8.5, difference: 8.49480773, status: 'calculated', reason: 'current_pricing_calculation' } },
+        { created_at: '2026-08-04T00:00:01Z', model: 'gpt-5.5', actual_cost: 0.1, raw_cost_audit: { amount: 0.1, total_cost: 0.1, billed_amount: 0.1, difference: 0, status: 'recorded', reason: 'original_usage_unadjusted' } },
 				{ created_at: '2026-08-04T00:00:02Z', model: 'gpt-5.5', actual_cost: 8.5, raw_cost_audit: { amount: null, status: 'unavailable', reason: 'missing_upstream_usage' } },
 			],
 			total: 3,
@@ -971,12 +982,12 @@ describe('admin UsageView model audit export', () => {
 		const headers = aoaToSheet.mock.calls[0][0][0]
 		const rawCostIndex = headers.indexOf('Raw usage cost')
 		expect(rawCostIndex).toBeGreaterThan(-1)
-		expect(headers.slice(rawCostIndex, rawCostIndex + 3)).toEqual(['Raw usage cost', 'Raw cost status', 'Raw cost explanation'])
+    expect(headers.slice(rawCostIndex, rawCostIndex + 4)).toEqual(['Raw usage cost', 'Difference', 'Raw cost status', 'Raw cost explanation'])
 		const rows = sheetAddAoa.mock.calls[0][1]
-		expect(rows.map((row: unknown[]) => row.slice(rawCostIndex, rawCostIndex + 3))).toEqual([
-			['0.00519227', 'Estimated', 'admin.usage.rawCostEstimatedTooltip'],
-			['0.10000000', 'Recorded', 'admin.usage.rawCostRecordedTooltip'],
-			['—', 'Unavailable', 'admin.usage.rawCostMissingUpstreamUsage'],
+    expect(rows.map((row: unknown[]) => row.slice(rawCostIndex, rawCostIndex + 4))).toEqual([
+      ['0.00519227', '+$8.49480773', 'Calculated from actual tokens', 'Calculated from the actual upstream token usage and the current effective model or channel pricing. Difference = billed cost minus actual-token cost.'],
+      ['0.10000000', '$0.00000000', 'Recorded', 'admin.usage.rawCostRecordedTooltip'],
+      ['—', '—', 'Unavailable', 'admin.usage.rawCostMissingUpstreamUsage'],
 		])
 		wrapper.unmount()
 	})

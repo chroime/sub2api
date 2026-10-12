@@ -31,6 +31,25 @@ func auditAdjustedLog() UsageLog {
 	}
 }
 
+func TestUsageCostAudit_UnifiedMultiplierUsesOriginalCacheBuckets(t *testing.T) {
+	bs := auditTestBillingService()
+	svc := NewUsageCostAuditService(bs, nil, nil, nil)
+	row := auditAdjustedLog()
+	row.CacheReadTokens = 800
+	row.CacheCreationTokens = 200
+	row.CacheCreation5mTokens = 40
+	row.CacheCreation1hTokens = 160
+	row.UpstreamCacheReadTokens = 400
+	row.UpstreamCacheCreationTokens = 100
+	row.UpstreamCacheCreation5mTokens = 20
+	row.UpstreamCacheCreation1hTokens = 80
+	result := svc.EstimateBatch(context.Background(), []UsageLog{row})[row.ID]
+
+	require.Equal(t, "calculated", result.Status)
+	// Original buckets: 100*2e-6 + 20*8e-6 + 400*.2e-6 + 20*3e-6 + 80*4e-6.
+	require.InDelta(t, .00082, *result.TotalCost, 1e-12)
+}
+
 func TestUsageCostAudit_RawCacheBucketsAndTTLUseIndependentPrices(t *testing.T) {
 	bs := auditTestBillingService()
 	svc := NewUsageCostAuditService(bs, nil, nil, nil)
@@ -39,17 +58,38 @@ func TestUsageCostAudit_RawCacheBucketsAndTTLUseIndependentPrices(t *testing.T) 
 	row.CacheCreationTokens = 100
 	row.CacheCreation5mTokens = 20
 	row.CacheCreation1hTokens = 80
+	row.UpstreamCacheReadTokens = 400
+	row.UpstreamCacheCreationTokens = 100
+	row.UpstreamCacheCreation5mTokens = 20
+	row.UpstreamCacheCreation1hTokens = 80
 	before := row
 	result := svc.EstimateBatch(context.Background(), []UsageLog{row})[row.ID]
 
-	require.Equal(t, "estimated", result.Status)
-	require.Equal(t, "current_pricing_estimate", result.Reason)
+	require.Equal(t, "calculated", result.Status)
+	require.Equal(t, "current_pricing_calculation", result.Reason)
 	require.NotNil(t, result.Amount)
 	require.NotNil(t, result.TotalCost)
+	require.NotNil(t, result.BilledAmount)
+	require.NotNil(t, result.Difference)
 	// 100*2e-6 + 20*8e-6 + 400*.2e-6 + 20*3e-6 + 80*4e-6.
 	require.InDelta(t, .00082, *result.TotalCost, 1e-12)
 	require.InDelta(t, .001066, *result.Amount, 1e-12)
+	require.InDelta(t, 13, *result.BilledAmount, 1e-12)
+	require.InDelta(t, 12.99918, *result.Difference, 1e-12)
 	require.Equal(t, before, row)
+}
+
+func TestUsageCostAudit_DoesNotUseBilledCacheWhenRawCacheBucketsAreMissing(t *testing.T) {
+	row := auditAdjustedLog()
+	row.CacheReadTokens = 400
+	row.CacheCreationTokens = 100
+
+	result := NewUsageCostAuditService(auditTestBillingService(), nil, nil, nil).
+		EstimateBatch(context.Background(), []UsageLog{row})[row.ID]
+
+	require.Equal(t, "unavailable", result.Status)
+	require.Equal(t, "missing_upstream_cache_usage", result.Reason)
+	require.Nil(t, result.Amount)
 }
 
 func TestUsageCostAudit_RecordedOnlyWhenOriginalBillIsUnadjusted(t *testing.T) {
@@ -130,7 +170,7 @@ func TestUsageCostAudit_FreeRateRemainsZero(t *testing.T) {
 		}
 		result := NewUsageCostAuditService(auditTestBillingService(), nil, nil, nil).
 			EstimateBatch(context.Background(), []UsageLog{row})[row.ID]
-		wantStatus := "estimated"
+		wantStatus := "calculated"
 		if unchanged {
 			wantStatus = "recorded"
 		}
@@ -144,12 +184,12 @@ func TestUsageCostAudit_FreeRateRemainsZero(t *testing.T) {
 func TestUsageCostAudit_CacheFoldingCannotBeInferredFromMatchingDisplayedTokens(t *testing.T) {
 	row := auditAdjustedLog()
 	row.InputTokens, row.OutputTokens = row.UpstreamInputTokens, row.UpstreamOutputTokens
-	row.CacheReadTokens = 100
+	row.CacheReadTokens, row.UpstreamCacheReadTokens = 100, 100
 	// A tiny output-only adjustment can round back to the original output
 	// count, yet still fold cache reads into the customer input charge.
 	result := NewUsageCostAuditService(auditTestBillingService(), nil, nil, nil).
 		EstimateBatch(context.Background(), []UsageLog{row})[row.ID]
-	require.Equal(t, "estimated", result.Status)
+	require.Equal(t, "calculated", result.Status)
 	require.InDelta(t, .000494, *result.Amount, 1e-12)
 }
 
@@ -159,7 +199,7 @@ func TestUsageCostAudit_InconsistentOriginalBillIsNotClaimedAsRecorded(t *testin
 	row.ActualCost = 99
 	result := NewUsageCostAuditService(auditTestBillingService(), nil, nil, nil).
 		EstimateBatch(context.Background(), []UsageLog{row})[row.ID]
-	require.Equal(t, "estimated", result.Status)
+	require.Equal(t, "calculated", result.Status)
 	require.InDelta(t, .000468, *result.Amount, 1e-12)
 }
 
@@ -188,10 +228,10 @@ func TestUsageCostAudit_ExplicitCodexAutoReviewPricingRemainsUsable(t *testing.T
 		"codex-auto-review": {"input_cost_per_token": 0.0000002, "output_cost_per_token": 0.0000012, "cache_read_input_token_cost": 0.00000002}
 	}`)
 	row := auditAdjustedLog()
-	row.Model, row.CacheReadTokens = "codex-auto-review", 100
+	row.Model, row.CacheReadTokens, row.UpstreamCacheReadTokens = "codex-auto-review", 100, 100
 	result := NewUsageCostAuditService(bs, nil, nil, nil).
 		EstimateBatch(context.Background(), []UsageLog{row})[row.ID]
-	require.Equal(t, "estimated", result.Status)
+	require.Equal(t, "calculated", result.Status)
 	require.Equal(t, "codex-auto-review", result.Model)
 	// (100*.2e-6 + 20*1.2e-6 + 100*.02e-6)*1.3.
 	require.InDelta(t, .0000598, *result.Amount, 1e-12)
@@ -229,7 +269,7 @@ func TestUsageCostAudit_GroupPricingTierEffortAndBatchCaching(t *testing.T) {
 	svc := NewUsageCostAuditService(auditTestBillingService(), nil, repo, nil)
 	results := svc.EstimateBatch(context.Background(), []UsageLog{first, second})
 	for _, id := range []int64{1, 2} {
-		require.Equal(t, "estimated", results[id].Status)
+		require.Equal(t, "calculated", results[id].Status)
 		// (100*5e-6 + 20*10e-6)*3*2*1.3; ignore today's group rate of 99.
 		require.InDelta(t, .00546, *results[id].Amount, 1e-12)
 	}
@@ -269,7 +309,7 @@ func TestUsageCostAudit_HydratedGroupSkipsRepositoryAndMismatchedGroupDoesNot(t 
 		result := NewUsageCostAuditService(auditTestBillingService(), nil, repo, nil).
 			EstimateBatch(context.Background(), []UsageLog{row})[row.ID]
 		if matchingID {
-			require.Equal(t, "estimated", result.Status)
+			require.Equal(t, "calculated", result.Status)
 			require.InDelta(t, .00182, *result.Amount, 1e-12)
 			require.Zero(t, repo.calls[groupID])
 		} else {
@@ -291,10 +331,10 @@ func TestUsageCostAudit_RawLongContextUsesGroupPolicy(t *testing.T) {
 			groupID: {ID: groupID, LongContextPricingEnabled: enabled},
 		}}
 		row := auditAdjustedLog()
-		row.GroupID, row.CacheReadTokens = &groupID, 100
+		row.GroupID, row.CacheReadTokens, row.UpstreamCacheReadTokens = &groupID, 100, 100
 		result := NewUsageCostAuditService(bs, nil, repo, nil).
 			EstimateBatch(context.Background(), []UsageLog{row})[row.ID]
-		require.Equal(t, "estimated", result.Status)
+		require.Equal(t, "calculated", result.Status)
 		want := .000494 // (100*2e-6 + 20*8e-6 + 100*.2e-6)*1.3.
 		if enabled {
 			want = .000884 // (100*4e-6 + 20*12e-6 + 100*.4e-6)*1.3.
@@ -326,11 +366,11 @@ func TestUsageCostAudit_OpenAIAccountCanEnableLongContextWithoutGroupGate(t *tes
 				groupID: {ID: groupID, LongContextPricingEnabled: tt.groupGate},
 			}}
 			row := auditAdjustedLog()
-			row.GroupID, row.CacheReadTokens = &groupID, 100
+			row.GroupID, row.CacheReadTokens, row.UpstreamCacheReadTokens = &groupID, 100, 100
 			row.Account = &Account{Platform: tt.platform, Extra: map[string]any{openAILongContextBillingEnabledKey: tt.accountGate}}
 			result := NewUsageCostAuditService(bs, nil, repo, nil).
 				EstimateBatch(context.Background(), []UsageLog{row})[row.ID]
-			require.Equal(t, "estimated", result.Status)
+			require.Equal(t, "calculated", result.Status)
 			require.InDelta(t, tt.want, *result.Amount, 1e-12)
 		})
 	}
@@ -348,11 +388,11 @@ func TestUsageCostAudit_AccountLongContextSelectsSameIntervalForPriceValidationA
 	})
 	repo := &auditGroupRepository{calls: map[int64]int{}, groups: map[int64]*Group{groupID: {ID: groupID}}}
 	row := auditAdjustedLog()
-	row.Model, row.GroupID, row.CacheReadTokens = "custom-model", &groupID, 100
+	row.Model, row.GroupID, row.CacheReadTokens, row.UpstreamCacheReadTokens = "custom-model", &groupID, 100, 100
 	row.Account = &Account{Platform: PlatformOpenAI, Extra: map[string]any{openAILongContextBillingEnabledKey: true}}
 	result := NewUsageCostAuditService(auditTestBillingService(), nil, repo, cs).
 		EstimateBatch(context.Background(), []UsageLog{row})[row.ID]
-	require.Equal(t, "estimated", result.Status, result.Reason)
+	require.Equal(t, "calculated", result.Status, result.Reason)
 	require.InDelta(t, .000884, *result.Amount, 1e-12)
 }
 
@@ -370,8 +410,8 @@ func TestUsageCostAudit_ChannelSourceAndRecordedMapping(t *testing.T) {
 	tests := []struct {
 		name, source, model, chain, wantModel, wantStatus string
 	}{
-		{"requested", BillingModelSourceRequested, "claude-sonnet-4", "public→mapped→claude-sonnet-4", "public", "estimated"},
-		{"channel mapped", BillingModelSourceChannelMapped, "claude-sonnet-4", "public→mapped→claude-sonnet-4", "mapped", "estimated"},
+		{"requested", BillingModelSourceRequested, "claude-sonnet-4", "public→mapped→claude-sonnet-4", "public", "calculated"},
+		{"channel mapped", BillingModelSourceChannelMapped, "claude-sonnet-4", "public→mapped→claude-sonnet-4", "mapped", "calculated"},
 		{"ambiguous two step mapping", BillingModelSourceChannelMapped, "claude-sonnet-4", "public→mapped", "", "unavailable"},
 		{"ambiguous upstream", BillingModelSourceUpstream, "public", "public→claude-sonnet-4", "", "unavailable"},
 		{"unknown response adoption", BillingModelSourceResponse, "public", "public→claude-sonnet-4", "", "unavailable"},
@@ -396,7 +436,7 @@ func TestUsageCostAudit_ChannelSourceAndRecordedMapping(t *testing.T) {
 			result := NewUsageCostAuditService(auditTestBillingService(), nil, repo, cs).
 				EstimateBatch(context.Background(), []UsageLog{row})[row.ID]
 			require.Equal(t, tt.wantStatus, result.Status, result.Reason)
-			if tt.wantStatus == "estimated" {
+			if tt.wantStatus == "calculated" {
 				require.Equal(t, tt.wantModel, result.Model)
 				require.InDelta(t, .00182, *result.Amount, 1e-12)
 			} else {
@@ -422,7 +462,7 @@ func TestUsageCostAudit_CustomModelNeedsExplicitPricesForUsedBuckets(t *testing.
 		result := NewUsageCostAuditService(auditTestBillingService(), nil, repo, nil).
 			EstimateBatch(context.Background(), []UsageLog{row})[row.ID]
 		if explicit {
-			require.Equal(t, "estimated", result.Status)
+			require.Equal(t, "calculated", result.Status)
 			require.Zero(t, *result.Amount)
 		} else {
 			require.Equal(t, "unavailable", result.Status)

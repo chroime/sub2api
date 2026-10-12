@@ -29,7 +29,7 @@ func TestAdminUsageListIncludesReadOnlyRawAudits(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	row := service.UsageLog{
 		ID: 1, Model: "gpt-5.5", InputTokens: 2000, OutputTokens: 200,
-		UpstreamInputTokens: 1000, UpstreamOutputTokens: 100, CacheReadTokens: 9000,
+		UpstreamInputTokens: 1000, UpstreamOutputTokens: 100, CacheReadTokens: 9000, UpstreamCacheReadTokens: 9000,
 		InputCost: .1, OutputCost: .03, TotalCost: .13, ActualCost: .0065, RateMultiplier: .05,
 	}
 	missing := service.UsageLog{
@@ -55,9 +55,17 @@ func TestAdminUsageListIncludesReadOnlyRawAudits(t *testing.T) {
 	require.Len(t, body.Data.Items, 2)
 	got := body.Data.Items[0]
 	require.NotNil(t, got.RawCostAudit)
-	require.Equal(t, "estimated", got.RawCostAudit.Status)
+	require.Equal(t, "calculated", got.RawCostAudit.Status)
 	require.InDelta(t, .000625, *got.RawCostAudit.Amount, 1e-12)
 	require.InDelta(t, .0125, *got.RawCostAudit.TotalCost, 1e-12)
+	require.InDelta(t, row.ActualCost, *got.RawCostAudit.BilledAmount, 1e-12)
+	require.InDelta(t, -0.006, *got.RawCostAudit.Difference, 1e-12)
+	var rawBody map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &rawBody))
+	data := rawBody["data"].(map[string]any)
+	items := data["items"].([]any)
+	firstAudit := items[0].(map[string]any)["raw_cost_audit"].(map[string]any)
+	require.InDelta(t, -0.006, firstAudit["difference"], 1e-12)
 	require.Equal(t, row.ActualCost, got.ActualCost, "audit must not replace the recorded debit")
 	require.Equal(t, row.InputTokens, got.InputTokens)
 	require.Equal(t, row.UpstreamInputTokens, got.UpstreamInputTokens)

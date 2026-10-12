@@ -524,6 +524,8 @@ func TestGatewayServiceRecordUsage_UnifiedMultiplierScalesCacheBuckets(t *testin
 	require.Equal(t, 400, usageRepo.lastLog.CacheCreationTokens)
 	require.Equal(t, 200, usageRepo.lastLog.UpstreamInputTokens)
 	require.Equal(t, 50, usageRepo.lastLog.UpstreamOutputTokens)
+	require.Equal(t, 600, usageRepo.lastLog.UpstreamCacheReadTokens)
+	require.Equal(t, 200, usageRepo.lastLog.UpstreamCacheCreationTokens)
 	want := 400*1e-6 + 100*2e-6 + 1200*0.1e-6 + 400*1.25e-6
 	require.InDelta(t, want, usageRepo.lastLog.ActualCost, 1e-12)
 }

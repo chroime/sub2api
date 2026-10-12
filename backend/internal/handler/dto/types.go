@@ -679,13 +679,16 @@ type UsageLog struct {
 }
 
 // UsageCostAudit is a read-only comparison using original upstream usage.
-// An estimate is never a replacement for the charge recorded on the request.
+// TotalCost is the unamplified actual-token cost; BilledAmount is the recorded
+// user charge and Difference is BilledAmount - TotalCost.
 type UsageCostAudit struct {
-	Amount    *float64 `json:"amount"`
-	TotalCost *float64 `json:"total_cost"`
-	Status    string   `json:"status"`
-	Reason    string   `json:"reason"`
-	Model     string   `json:"model,omitempty"`
+	Amount       *float64 `json:"amount"`
+	TotalCost    *float64 `json:"total_cost"`
+	BilledAmount *float64 `json:"billed_amount"`
+	Difference   *float64 `json:"difference"`
+	Status       string   `json:"status"`
+	Reason       string   `json:"reason"`
+	Model        string   `json:"model,omitempty"`
 }
 
 // AdminUsageLog 是管理员接口使用的 usage log DTO（包含管理员字段）。
@@ -699,6 +702,12 @@ type AdminUsageLog struct {
 	// returned by the upstream before any customer billing adjustment.
 	UpstreamInputTokens  int `json:"upstream_input_tokens"`
 	UpstreamOutputTokens int `json:"upstream_output_tokens"`
+	// UpstreamCache* are the raw cache buckets before any customer billing
+	// adjustment. Omitted from the user DTO.
+	UpstreamCacheReadTokens       int `json:"upstream_cache_read_tokens"`
+	UpstreamCacheCreationTokens   int `json:"upstream_cache_creation_tokens"`
+	UpstreamCacheCreation5mTokens int `json:"upstream_cache_creation_5m_tokens"`
+	UpstreamCacheCreation1hTokens int `json:"upstream_cache_creation_1h_tokens"`
 
 	// UpstreamModel is the actual model sent to the upstream provider after mapping.
 	// Omitted when no mapping was applied (requested model was used as-is).

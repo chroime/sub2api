@@ -154,8 +154,15 @@ type UsageLog struct {
 	// adjustment. They are exposed only through administrator DTOs.
 	UpstreamInputTokens  int
 	UpstreamOutputTokens int
-	CacheCreationTokens  int
-	CacheReadTokens      int
+	// UpstreamCacheReadTokens and UpstreamCacheCreation* preserve the raw
+	// cache buckets. Customer CacheReadTokens may be scaled by a unified
+	// multiplier; administrators compare against these original counts.
+	UpstreamCacheReadTokens       int
+	UpstreamCacheCreationTokens   int
+	UpstreamCacheCreation5mTokens int
+	UpstreamCacheCreation1hTokens int
+	CacheCreationTokens           int
+	CacheReadTokens               int
 
 	CacheCreation5mTokens int `gorm:"column:cache_creation_5m_tokens"`
 	CacheCreation1hTokens int `gorm:"column:cache_creation_1h_tokens"`
@@ -244,4 +251,59 @@ func (u *UsageLog) SyncRequestTypeAndLegacyFields() {
 	requestType := u.EffectiveRequestType()
 	u.RequestType = requestType
 	u.Stream, u.OpenAIWSMode = ApplyLegacyRequestFields(requestType, u.Stream, u.OpenAIWSMode)
+}
+
+// hasPersistedUpstreamCache is true when RecordUsage stored the original
+// cache buckets. A zero default on historical rows means "not populated"
+// rather than "the upstream reported no cache".
+func (u *UsageLog) hasPersistedUpstreamCache() bool {
+	if u == nil {
+		return false
+	}
+	return u.UpstreamCacheReadTokens != 0 || u.UpstreamCacheCreationTokens != 0 ||
+		u.UpstreamCacheCreation5mTokens != 0 || u.UpstreamCacheCreation1hTokens != 0
+}
+
+// AuditCacheReadTokens returns the original upstream cache-read count when
+// it was stored; otherwise the billed cache-read count for historical rows.
+func (u *UsageLog) AuditCacheReadTokens() int {
+	if u == nil {
+		return 0
+	}
+	if u.hasPersistedUpstreamCache() {
+		return u.UpstreamCacheReadTokens
+	}
+	return u.CacheReadTokens
+}
+
+// AuditCacheCreationTokens returns the original upstream cache-write count
+// when it was stored; otherwise the billed cache-write count.
+func (u *UsageLog) AuditCacheCreationTokens() int {
+	if u == nil {
+		return 0
+	}
+	if u.hasPersistedUpstreamCache() {
+		return u.UpstreamCacheCreationTokens
+	}
+	return u.CacheCreationTokens
+}
+
+func (u *UsageLog) AuditCacheCreation5mTokens() int {
+	if u == nil {
+		return 0
+	}
+	if u.hasPersistedUpstreamCache() {
+		return u.UpstreamCacheCreation5mTokens
+	}
+	return u.CacheCreation5mTokens
+}
+
+func (u *UsageLog) AuditCacheCreation1hTokens() int {
+	if u == nil {
+		return 0
+	}
+	if u.hasPersistedUpstreamCache() {
+		return u.UpstreamCacheCreation1hTokens
+	}
+	return u.CacheCreation1hTokens
 }

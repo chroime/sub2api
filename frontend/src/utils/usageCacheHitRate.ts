@@ -1,8 +1,15 @@
 import type { AdminUsageLog } from '@/types'
 
 type CacheHitRateUsage = Partial<Pick<AdminUsageLog,
-  'input_tokens' | 'upstream_input_tokens' | 'cache_read_tokens' | 'cache_creation_tokens' | 'cache_creation_5m_tokens' | 'cache_creation_1h_tokens' | 'usage_limit_audit'
+  'input_tokens' | 'upstream_input_tokens' | 'cache_read_tokens' | 'cache_creation_tokens' | 'cache_creation_5m_tokens' | 'cache_creation_1h_tokens' | 'upstream_cache_read_tokens' | 'upstream_cache_creation_tokens' | 'upstream_cache_creation_5m_tokens' | 'upstream_cache_creation_1h_tokens' | 'usage_limit_audit'
 >>
+
+function hasPersistedUpstreamCache(row: CacheHitRateUsage): boolean {
+  return (row.upstream_cache_read_tokens ?? 0) !== 0
+    || (row.upstream_cache_creation_tokens ?? 0) !== 0
+    || (row.upstream_cache_creation_5m_tokens ?? 0) !== 0
+    || (row.upstream_cache_creation_1h_tokens ?? 0) !== 0
+}
 
 type CacheHitRateResult =
   | { rate: number; reason: null }
@@ -19,10 +26,19 @@ export function getActualCacheHitRate(row: CacheHitRateUsage): CacheHitRateResul
   }
 
   const input = row.upstream_input_tokens
-  const read = row.cache_read_tokens === undefined ? 0 : row.cache_read_tokens
-  const creation = row.cache_creation_tokens === undefined ? 0 : row.cache_creation_tokens
-  const creation5m = row.cache_creation_5m_tokens === undefined ? 0 : row.cache_creation_5m_tokens
-  const creation1h = row.cache_creation_1h_tokens === undefined ? 0 : row.cache_creation_1h_tokens
+  const useUpstreamCache = hasPersistedUpstreamCache(row)
+  const read = useUpstreamCache
+    ? (row.upstream_cache_read_tokens ?? 0)
+    : (row.cache_read_tokens === undefined ? 0 : row.cache_read_tokens)
+  const creation = useUpstreamCache
+    ? (row.upstream_cache_creation_tokens ?? 0)
+    : (row.cache_creation_tokens === undefined ? 0 : row.cache_creation_tokens)
+  const creation5m = useUpstreamCache
+    ? (row.upstream_cache_creation_5m_tokens ?? 0)
+    : (row.cache_creation_5m_tokens === undefined ? 0 : row.cache_creation_5m_tokens)
+  const creation1h = useUpstreamCache
+    ? (row.upstream_cache_creation_1h_tokens ?? 0)
+    : (row.cache_creation_1h_tokens === undefined ? 0 : row.cache_creation_1h_tokens)
   if (![input, read, creation, creation5m, creation1h].every(isTokenCount)) {
     return { rate: null, reason: 'invalid_tokens' }
   }

@@ -132,6 +132,7 @@
             :server-side-sort="true"
             :default-sort-key="'created_at'"
             :default-sort-order="'desc'"
+            :show-adjusted-cache-details="false"
             @sort="handleSort"
             @userClick="handleUserClick"
             @ipGeoBatchFailed="handleIpGeoBatchFailed"
@@ -194,7 +195,7 @@ import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
 import { formatReasoningEffort } from '@/utils/format'
 import { resolveUsageRequestType, requestTypeToLegacyStream } from '@/utils/usageRequestType'
 import { formatActualCacheHitRate } from '@/utils/usageCacheHitRate'
-import { formatRawUsageCost, getRawUsageCostStatus, getRawUsageCostTooltip } from '@/utils/usageRawCost'
+import { formatRawUsageCost, formatRawUsageCostDifference, getRawUsageCostStatus, getRawUsageCostTooltip } from '@/utils/usageRawCost'
 import AppLayout from '@/components/layout/AppLayout.vue'; import Pagination from '@/components/common/Pagination.vue'; import Select from '@/components/common/Select.vue'; import DateRangePicker from '@/components/common/DateRangePicker.vue'
 import UsageStatsCards from '@/components/admin/usage/UsageStatsCards.vue'; import UsageFilters from '@/components/admin/usage/UsageFilters.vue'
 import UsageTable from '@/components/admin/usage/UsageTable.vue'; import UsageExportProgress from '@/components/admin/usage/UsageExportProgress.vue'
@@ -591,7 +592,7 @@ const exportToExcel = async () => {
       t('admin.usage.inputCost'), t('admin.usage.outputCost'),
       t('admin.usage.cacheReadCost'), t('admin.usage.cacheCreationCost'),
       t('usage.rate'), t('usage.accountMultiplier'), t('usage.original'), t('usage.userBilled'),
-      t('admin.usage.rawCost'), t('admin.usage.rawCostStatus'), t('admin.usage.rawCostNote'), t('usage.accountBilled'),
+      t('admin.usage.rawCost'), t('admin.usage.rawCostDifference'), t('admin.usage.rawCostStatus'), t('admin.usage.rawCostNote'), t('usage.accountBilled'),
       t('usage.firstToken'), t('usage.duration'),
       t('admin.usage.requestId'), t('admin.usage.upstreamRequestId'), t('usage.userAgent'), t('admin.usage.ipAddress')
     ]
@@ -611,7 +612,7 @@ const exportToExcel = async () => {
         log.cache_read_cost?.toFixed(6) || '0.000000', log.cache_creation_cost?.toFixed(6) || '0.000000',
         log.rate_multiplier?.toPrecision(4) || '1.00', (log.account_rate_multiplier ?? 1).toPrecision(4),
         log.total_cost?.toFixed(6) || '0.000000', log.actual_cost?.toFixed(6) || '0.000000',
-        formatRawUsageCost(log), getRawUsageCostStatus(log, t), getRawUsageCostTooltip(log, t),
+        formatRawUsageCost(log), formatRawUsageCostDifference(log), getRawUsageCostStatus(log, t), getRawUsageCostTooltip(log, t),
         ((log.account_stats_cost ?? log.total_cost) * (log.account_rate_multiplier ?? 1)).toFixed(6), log.first_token_ms ?? '', log.duration_ms,
         log.request_id || '', log.upstream_request_id || '', log.user_agent || '', log.ip_address || ''
       ])

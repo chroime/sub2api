@@ -471,6 +471,8 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	}
 	usageLog.UpstreamInputTokens = rawActualInputTokens
 	usageLog.UpstreamOutputTokens = rawOutputTokens
+	usageLog.UpstreamCacheReadTokens = result.Usage.CacheReadInputTokens
+	usageLog.UpstreamCacheCreationTokens = result.Usage.CacheCreationInputTokens
 	isVideoUsage := isGrokVideoUsageResult(result, billingModels)
 	if isVideoUsage {
 		usageLog.VideoCount = result.VideoCount

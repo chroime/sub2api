@@ -9,16 +9,19 @@ import (
 
 // UsageCostAudit describes the charge for the stored upstream token buckets
 // with customer token adjustments removed. It is neither an upstream invoice
-// nor AccountStatsCost. Amount still includes the record's RateMultiplier.
-// Historical price cards are not snapshotted, so recalculation is always an
-// estimate using current pricing configuration.
+// nor AccountStatsCost. TotalCost is the unamplified charge for the recorded
+// upstream token buckets; Amount is retained as the rate-adjusted value for
+// compatibility with existing audit consumers. BilledAmount is the charge
+// recorded for the user and Difference is BilledAmount - TotalCost.
 type UsageCostAudit struct {
-	Amount    *float64       `json:"amount"`
-	TotalCost *float64       `json:"total_cost"`
-	Status    string         `json:"status"`
-	Reason    string         `json:"reason"`
-	Model     string         `json:"model,omitempty"`
-	Breakdown *CostBreakdown `json:"-"`
+	Amount       *float64       `json:"amount"`
+	TotalCost    *float64       `json:"total_cost"`
+	BilledAmount *float64       `json:"billed_amount"`
+	Difference   *float64       `json:"difference"`
+	Status       string         `json:"status"`
+	Reason       string         `json:"reason"`
+	Model        string         `json:"model,omitempty"`
+	Breakdown    *CostBreakdown `json:"-"`
 }
 
 // UsageCostAuditService is a read-only calculator. It does not alter usage
@@ -90,8 +93,15 @@ func (s *UsageCostAuditService) estimate(ctx context.Context, row *UsageLog, gro
 		return unavailableUsageCostAudit("incomplete_cost_breakdown")
 	}
 	if usageCostAuditOriginalBillUsable(row) {
-		amount, total := row.ActualCost, row.TotalCost
-		return UsageCostAudit{Amount: &amount, TotalCost: &total, Status: "recorded", Reason: "original_usage_unadjusted"}
+		amount, total, billed := row.ActualCost, row.TotalCost, row.ActualCost
+		difference := billed - total
+		return UsageCostAudit{
+			Amount: &amount, TotalCost: &total, BilledAmount: &billed, Difference: &difference,
+			Status: "recorded", Reason: "original_usage_unadjusted",
+		}
+	}
+	if !usageCostAuditRawCacheAvailable(row) {
+		return unavailableUsageCostAudit("missing_upstream_cache_usage")
 	}
 	if s == nil || s.billing == nil || s.resolver == nil || s.resolver.billingService == nil {
 		return unavailableUsageCostAudit("pricing_unavailable")
@@ -112,8 +122,8 @@ func (s *UsageCostAuditService) estimate(ctx context.Context, row *UsageLog, gro
 	longContextBillingGate := openAILongContextBillingGate(row.Account)
 	tokens := UsageTokens{
 		InputTokens: row.UpstreamInputTokens, OutputTokens: row.UpstreamOutputTokens,
-		CacheReadTokens: row.CacheReadTokens, CacheCreationTokens: row.CacheCreationTokens,
-		CacheCreation5mTokens: row.CacheCreation5mTokens, CacheCreation1hTokens: row.CacheCreation1hTokens,
+		CacheReadTokens: row.AuditCacheReadTokens(), CacheCreationTokens: row.AuditCacheCreationTokens(),
+		CacheCreation5mTokens: row.AuditCacheCreation5mTokens(), CacheCreation1hTokens: row.AuditCacheCreation1hTokens(),
 	}
 	pricingAt := row.CreatedAt
 	if pricingAt.IsZero() {
@@ -152,9 +162,11 @@ func (s *UsageCostAuditService) estimate(ctx context.Context, row *UsageLog, gro
 				return unavailableUsageCostAudit("pricing_unavailable")
 			}
 		}
-		amount, total := cost.ActualCost, cost.TotalCost
+		amount, total, billed := cost.ActualCost, cost.TotalCost, row.ActualCost
+		difference := billed - total
 		return UsageCostAudit{
-			Amount: &amount, TotalCost: &total, Status: "estimated", Reason: "current_pricing_estimate", Model: model, Breakdown: cost,
+			Amount: &amount, TotalCost: &total, BilledAmount: &billed, Difference: &difference,
+			Status: "calculated", Reason: "current_pricing_calculation", Model: model, Breakdown: cost,
 		}
 	}
 	return unavailableUsageCostAudit("pricing_unavailable")
@@ -314,7 +326,11 @@ func (s *UsageCostAuditService) usablePricing(model string, resolved *ResolvedPr
 
 func usageCostAuditValidTokens(row *UsageLog) bool {
 	const maxSafeInteger = uint64(1<<53 - 1)
-	for _, tokens := range []int{row.InputTokens, row.OutputTokens, row.UpstreamInputTokens, row.UpstreamOutputTokens, row.CacheCreationTokens, row.CacheReadTokens, row.CacheCreation5mTokens, row.CacheCreation1hTokens} {
+	cacheRead := row.AuditCacheReadTokens()
+	cacheCreation := row.AuditCacheCreationTokens()
+	cacheCreation5m := row.AuditCacheCreation5mTokens()
+	cacheCreation1h := row.AuditCacheCreation1hTokens()
+	for _, tokens := range []int{row.InputTokens, row.OutputTokens, row.UpstreamInputTokens, row.UpstreamOutputTokens, cacheCreation, cacheRead, cacheCreation5m, cacheCreation1h} {
 		if tokens < 0 || uint64(tokens) > maxSafeInteger {
 			return false
 		}
@@ -322,16 +338,16 @@ func usageCostAuditValidTokens(row *UsageLog) bool {
 	// Check before adding: both the pricing engine's int context sum and JSON
 	// consumers' exact integer range must remain safe.
 	var total uint64
-	for _, count := range []int{row.UpstreamInputTokens, row.UpstreamOutputTokens, row.CacheCreationTokens, row.CacheReadTokens} {
+	for _, count := range []int{row.UpstreamInputTokens, row.UpstreamOutputTokens, cacheCreation, cacheRead} {
 		total += uint64(count)
 		if total > maxSafeInteger || total > uint64(maxIntValue()) {
 			return false
 		}
 	}
-	detail := uint64(row.CacheCreation5mTokens) + uint64(row.CacheCreation1hTokens)
+	detail := uint64(cacheCreation5m) + uint64(cacheCreation1h)
 	// Partial or contradictory TTL breakdowns cannot safely be repaired into
 	// original usage. An absent breakdown is the established aggregate path.
-	return detail == 0 || detail == uint64(row.CacheCreationTokens)
+	return detail == 0 || detail == uint64(cacheCreation)
 }
 
 func usageCostAuditUnsupported(row *UsageLog) bool {
@@ -361,6 +377,10 @@ func usageCostAuditOriginalBillUsable(row *UsageLog) bool {
 		!usageCostAuditAmountsEqual(row.ActualCost, row.TotalCost*row.RateMultiplier) {
 		return false
 	}
+	if row.hasPersistedUpstreamCache() &&
+		(row.CacheReadTokens != row.UpstreamCacheReadTokens || row.CacheCreationTokens != row.UpstreamCacheCreationTokens) {
+		return false
+	}
 	if row.InputTokens == 0 && row.InputCost != 0 || row.OutputTokens == 0 && row.OutputCost != 0 ||
 		row.CacheReadTokens == 0 && row.CacheReadCost != 0 || row.CacheCreationTokens == 0 && row.CacheCreationCost != 0 {
 		return false
@@ -370,6 +390,18 @@ func usageCostAuditOriginalBillUsable(row *UsageLog) bool {
 	// Positive separate cache charges establish that folding did not happen.
 	return (row.CacheReadTokens == 0 || row.CacheReadCost > 0) &&
 		(row.CacheCreationTokens == 0 || row.CacheCreationCost > 0)
+}
+
+// usageCostAuditRawCacheAvailable prevents adjusted cache counts from being
+// mistaken for upstream counts. A non-zero billed cache bucket without any
+// persisted upstream bucket is ambiguous, so the audit must remain unavailable
+// instead of producing a misleading price.
+func usageCostAuditRawCacheAvailable(row *UsageLog) bool {
+	if row == nil || row.hasPersistedUpstreamCache() {
+		return true
+	}
+	return row.CacheReadTokens == 0 && row.CacheCreationTokens == 0 &&
+		row.CacheCreation5mTokens == 0 && row.CacheCreation1hTokens == 0
 }
 
 func usageCostAuditFinite(value float64) bool {

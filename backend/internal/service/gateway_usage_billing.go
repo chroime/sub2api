@@ -948,6 +948,10 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 		requestedModel, multiplier, imageMultiplier, accountRateMultiplier, billingType, cacheTTLOverridden, cost)
 	usageLog.UpstreamInputTokens = rawResult.Usage.InputTokens
 	usageLog.UpstreamOutputTokens = rawResult.Usage.OutputTokens
+	usageLog.UpstreamCacheReadTokens = rawResult.Usage.CacheReadInputTokens
+	usageLog.UpstreamCacheCreationTokens = rawResult.Usage.CacheCreationInputTokens
+	usageLog.UpstreamCacheCreation5mTokens = rawResult.Usage.CacheCreation5mTokens
+	usageLog.UpstreamCacheCreation1hTokens = rawResult.Usage.CacheCreation1hTokens
 
 	// 计算账号统计定价费用（使用最终上游模型匹配自定义规则）
 	if apiKey.GroupID != nil {
