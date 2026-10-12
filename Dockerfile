@@ -23,6 +23,11 @@ ARG NPM_CONFIG_REGISTRY=
 FROM --platform=${BUILDPLATFORM} ${NODE_IMAGE} AS frontend-builder
 ARG NPM_CONFIG_REGISTRY
 
+# vue-tsc and Vite can exceed Node's default ~2 GiB heap on the full frontend.
+# Keep the build within the server's available memory instead of aborting with
+# exit code 134 while the currently running container remains untouched.
+ENV NODE_OPTIONS=--max-old-space-size=4096
+
 WORKDIR /app/frontend
 
 # Install pnpm (pinned to v9 to match CI and keep builds reproducible)
