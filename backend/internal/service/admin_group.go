@@ -372,7 +372,7 @@ func normalizeCreateGroupInputForSimpleMode(input *CreateGroupInput) {
 		return
 	}
 	*input = CreateGroupInput{
-		Name: input.Name, Description: input.Description, Platform: input.Platform,
+		Name: input.Name, Description: input.Description, I18n: input.I18n, Platform: input.Platform,
 		RateMultiplier: 1, SubscriptionType: SubscriptionTypeStandard,
 		StreamingACKEnabled: input.StreamingACKEnabled,
 	}
@@ -382,7 +382,7 @@ func normalizeUpdateGroupInputForSimpleMode(input *UpdateGroupInput) {
 	if input == nil {
 		return
 	}
-	*input = UpdateGroupInput{Name: input.Name, Description: input.Description, StreamingACKEnabled: input.StreamingACKEnabled}
+	*input = UpdateGroupInput{Name: input.Name, Description: input.Description, I18n: input.I18n, StreamingACKEnabled: input.StreamingACKEnabled}
 }
 
 func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupInput) (*Group, error) {
@@ -410,6 +410,10 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 	if billingUnified != 1 {
 		billingInputMultiplier = 1
 		billingOutputMultiplier = 1
+	}
+	i18n, err := normalizeGroupI18n(input.I18n)
+	if err != nil {
+		return nil, err
 	}
 	billingMinInputTokens := 100
 	if input.BillingTokenAdjustmentMinInputTokens != nil {
@@ -588,65 +592,66 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 
 	streamingACKEnabled := input.StreamingACKEnabled
 	group := &Group{
-		StreamingACKEnabled:             &streamingACKEnabled,
-		Name:                            input.Name,
-		Description:                     input.Description,
-		Platform:                        platform,
+		StreamingACKEnabled:                  &streamingACKEnabled,
+		Name:                                 input.Name,
+		Description:                          input.Description,
+		I18n:                                 i18n,
+		Platform:                             platform,
 		RateMultiplier:                       input.RateMultiplier,
 		BillingInputTokenMultiplier:          billingInputMultiplier,
 		BillingOutputTokenMultiplier:         billingOutputMultiplier,
 		BillingUnifiedTokenMultiplier:        billingUnified,
 		BillingTokenAdjustmentMinInputTokens: billingMinInputTokens,
-		IsExclusive:                     input.IsExclusive,
-		Status:                          StatusActive,
-		SubscriptionType:                subscriptionType,
-		DailyLimitUSD:                   dailyLimit,
-		WeeklyLimitUSD:                  weeklyLimit,
-		MonthlyLimitUSD:                 monthlyLimit,
-		LongContextPricingEnabled:       input.LongContextPricingEnabled,
-		ModelPricing:                    modelPricing,
-		AllowImageGeneration:            allowImageGeneration,
-		AllowBatchImageGeneration:       allowBatchImageGeneration,
-		ImageRateIndependent:            input.ImageRateIndependent,
-		ImageRateMultiplier:             imageRateMultiplier,
-		BatchImageDiscountMultiplier:    batchImageDiscountMultiplier,
-		BatchImageHoldMultiplier:        batchImageHoldMultiplier,
-		VideoRateIndependent:            input.VideoRateIndependent,
-		VideoRateMultiplier:             videoRateMultiplier,
-		PeakRateEnabled:                 peakRateEnabled,
-		PeakStart:                       peakStart,
-		PeakEnd:                         peakEnd,
-		PeakRateMultiplier:              peakRateMultiplier,
-		ProfitControlEnabled:            profitControlEnabled,
-		ProfitMinMargin:                 profitMinMargin,
-		ProfitSafetyBuffer:              profitSafetyBuffer,
-		ImagePrice1K:                    imagePrice1K,
-		ImagePrice2K:                    imagePrice2K,
-		ImagePrice4K:                    imagePrice4K,
-		VideoPrice480P:                  videoPrice480P,
-		VideoPrice720P:                  videoPrice720P,
-		VideoPrice1080P:                 videoPrice1080P,
-		VideoModelPrices:                NormalizeVideoModelPrices(input.VideoModelPrices),
-		WebSearchPricePerCall:           webSearchPricePerCall,
-		SearchPricePer1k:                searchPricePer1k,
-		AudioRealtimePricePerMin:        audioRealtimePricePerMin,
-		AudioTTSPricePerMillionChars:    audioTTSPricePerMillionChars,
-		AudioSTTPricePerHour:            audioSTTPricePerHour,
-		ClaudeCodeOnly:                  input.ClaudeCodeOnly,
-		FallbackGroupID:                 input.FallbackGroupID,
-		FallbackGroupIDOnInvalidRequest: fallbackOnInvalidRequest,
-		ModelRouting:                    input.ModelRouting,
-		MCPXMLInject:                    mcpXMLInject,
-		SupportedModelScopes:            input.SupportedModelScopes,
-		AllowMessagesDispatch:           input.AllowMessagesDispatch,
-		AllowLive:                       input.AllowLive,
-		ForceOpenAIFast:                 input.ForceOpenAIFast,
-		FreeOpenAIFast:                  input.FreeOpenAIFast,
-		RequireOAuthOnly:                input.RequireOAuthOnly,
-		RequirePrivacySet:               input.RequirePrivacySet,
-		DefaultMappedModel:              input.DefaultMappedModel,
-		MessagesDispatchModelConfig:     normalizeOpenAIMessagesDispatchModelConfig(input.MessagesDispatchModelConfig),
-		ModelAllowlist:                  modelAllowlist,
+		IsExclusive:                          input.IsExclusive,
+		Status:                               StatusActive,
+		SubscriptionType:                     subscriptionType,
+		DailyLimitUSD:                        dailyLimit,
+		WeeklyLimitUSD:                       weeklyLimit,
+		MonthlyLimitUSD:                      monthlyLimit,
+		LongContextPricingEnabled:            input.LongContextPricingEnabled,
+		ModelPricing:                         modelPricing,
+		AllowImageGeneration:                 allowImageGeneration,
+		AllowBatchImageGeneration:            allowBatchImageGeneration,
+		ImageRateIndependent:                 input.ImageRateIndependent,
+		ImageRateMultiplier:                  imageRateMultiplier,
+		BatchImageDiscountMultiplier:         batchImageDiscountMultiplier,
+		BatchImageHoldMultiplier:             batchImageHoldMultiplier,
+		VideoRateIndependent:                 input.VideoRateIndependent,
+		VideoRateMultiplier:                  videoRateMultiplier,
+		PeakRateEnabled:                      peakRateEnabled,
+		PeakStart:                            peakStart,
+		PeakEnd:                              peakEnd,
+		PeakRateMultiplier:                   peakRateMultiplier,
+		ProfitControlEnabled:                 profitControlEnabled,
+		ProfitMinMargin:                      profitMinMargin,
+		ProfitSafetyBuffer:                   profitSafetyBuffer,
+		ImagePrice1K:                         imagePrice1K,
+		ImagePrice2K:                         imagePrice2K,
+		ImagePrice4K:                         imagePrice4K,
+		VideoPrice480P:                       videoPrice480P,
+		VideoPrice720P:                       videoPrice720P,
+		VideoPrice1080P:                      videoPrice1080P,
+		VideoModelPrices:                     NormalizeVideoModelPrices(input.VideoModelPrices),
+		WebSearchPricePerCall:                webSearchPricePerCall,
+		SearchPricePer1k:                     searchPricePer1k,
+		AudioRealtimePricePerMin:             audioRealtimePricePerMin,
+		AudioTTSPricePerMillionChars:         audioTTSPricePerMillionChars,
+		AudioSTTPricePerHour:                 audioSTTPricePerHour,
+		ClaudeCodeOnly:                       input.ClaudeCodeOnly,
+		FallbackGroupID:                      input.FallbackGroupID,
+		FallbackGroupIDOnInvalidRequest:      fallbackOnInvalidRequest,
+		ModelRouting:                         input.ModelRouting,
+		MCPXMLInject:                         mcpXMLInject,
+		SupportedModelScopes:                 input.SupportedModelScopes,
+		AllowMessagesDispatch:                input.AllowMessagesDispatch,
+		AllowLive:                            input.AllowLive,
+		ForceOpenAIFast:                      input.ForceOpenAIFast,
+		FreeOpenAIFast:                       input.FreeOpenAIFast,
+		RequireOAuthOnly:                     input.RequireOAuthOnly,
+		RequirePrivacySet:                    input.RequirePrivacySet,
+		DefaultMappedModel:                   input.DefaultMappedModel,
+		MessagesDispatchModelConfig:          normalizeOpenAIMessagesDispatchModelConfig(input.MessagesDispatchModelConfig),
+		ModelAllowlist:                       modelAllowlist,
 		// 固定账号 manifest 配置：账号绑定发生在分组创建之后，创建路径禁止开启，
 		// 成员关系无从校验（前端创建对话框也不展示）。
 		CodexModelsManifestConfig:   normalizeCodexModelsManifestConfig(platform, input.CodexModelsManifestConfig),
@@ -825,6 +830,13 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 	}
 	if input.Description != nil {
 		group.Description = *input.Description
+	}
+	if input.I18n != nil {
+		i18n, normalizeErr := normalizeGroupI18n(*input.I18n)
+		if normalizeErr != nil {
+			return nil, normalizeErr
+		}
+		group.I18n = i18n
 	}
 	if input.Platform != "" {
 		group.Platform = input.Platform

@@ -3087,6 +3087,40 @@ func (m *AccountMutation) ResetPriority() {
 	m.addpriority = nil
 }
 
+// SetI18n sets the "i18n" field.
+func (m *GroupMutation) SetI18n(di domain.GroupI18n) {
+	m.i18n = &di
+}
+
+// I18n returns the value of the "i18n" field in the mutation.
+func (m *GroupMutation) I18n() (r domain.GroupI18n, exists bool) {
+	v := m.i18n
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldI18n returns the old "i18n" field's value of the Group entity.
+func (m *GroupMutation) OldI18n(ctx context.Context) (v domain.GroupI18n, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldI18n is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldI18n requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldI18n: %w", err)
+	}
+	return oldValue.I18n, nil
+}
+
+// ResetI18n resets all changes to the "i18n" field.
+func (m *GroupMutation) ResetI18n() {
+	m.i18n = nil
+}
+
 // SetRateMultiplier sets the "rate_multiplier" field.
 func (m *AccountMutation) SetRateMultiplier(f float64) {
 	m.rate_multiplier = &f
@@ -22173,6 +22207,7 @@ type GroupMutation struct {
 	deleted_at                                   *time.Time
 	name                                         *string
 	description                                  *string
+	i18n                                         *domain.GroupI18n
 	rate_multiplier                              *float64
 	addrate_multiplier                           *float64
 	billing_input_token_multiplier               *float64

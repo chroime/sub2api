@@ -136,12 +136,13 @@ func (h *GroupHandler) rejectUnsupportedSimpleModeOperation(c *gin.Context, oper
 }
 
 type simpleModeGroupResponse struct {
-	StreamingACKEnabled *bool  `json:"streaming_ack_enabled"`
-	ID                  int64  `json:"id"`
-	Name                string `json:"name"`
-	Description         string `json:"description"`
-	Platform            string `json:"platform"`
-	Status              string `json:"status"`
+	StreamingACKEnabled *bool             `json:"streaming_ack_enabled"`
+	ID                  int64             `json:"id"`
+	Name                string            `json:"name"`
+	Description         string            `json:"description"`
+	I18n                service.GroupI18n `json:"i18n,omitempty"`
+	Platform            string            `json:"platform"`
+	Status              string            `json:"status"`
 
 	AccountCount            int64     `json:"account_count,omitempty"`
 	ActiveAccountCount      int64     `json:"active_account_count,omitempty"`
@@ -158,6 +159,7 @@ func groupForSimpleMode(group *service.Group) *simpleModeGroupResponse {
 	return &simpleModeGroupResponse{
 		StreamingACKEnabled: group.StreamingACKEnabled,
 		ID:                  group.ID, Name: group.Name, Description: group.Description, Platform: group.Platform,
+		I18n:               group.I18n,
 		Status:             group.Status,
 		AccountCount:       group.AccountCount,
 		ActiveAccountCount: group.ActiveAccountCount, RateLimitedAccountCount: group.RateLimitedAccountCount,
@@ -169,7 +171,7 @@ func sanitizeCreateGroupRequestForSimpleMode(req *CreateGroupRequest) {
 	if req == nil {
 		return
 	}
-	allowed := CreateGroupRequest{Name: req.Name, Description: req.Description, Platform: req.Platform, StreamingACKEnabled: req.StreamingACKEnabled}
+	allowed := CreateGroupRequest{Name: req.Name, Description: req.Description, I18n: req.I18n, Platform: req.Platform, StreamingACKEnabled: req.StreamingACKEnabled}
 	allowed.RateMultiplier = 1
 	allowed.SubscriptionType = service.SubscriptionTypeStandard
 	*req = allowed
@@ -179,7 +181,7 @@ func sanitizeUpdateGroupRequestForSimpleMode(req *UpdateGroupRequest) {
 	if req == nil {
 		return
 	}
-	*req = UpdateGroupRequest{Name: req.Name, Description: req.Description, StreamingACKEnabled: req.StreamingACKEnabled}
+	*req = UpdateGroupRequest{Name: req.Name, Description: req.Description, I18n: req.I18n, StreamingACKEnabled: req.StreamingACKEnabled}
 }
 
 // CreateGroupRequest represents create group request
@@ -187,6 +189,7 @@ type CreateGroupRequest struct {
 	StreamingACKEnabled                  bool                          `json:"streaming_ack_enabled"`
 	Name                                 string                        `json:"name" binding:"required"`
 	Description                          string                        `json:"description"`
+	I18n                                 service.GroupI18n             `json:"i18n"`
 	Platform                             string                        `json:"platform" binding:"omitempty,group_platform"`
 	RateMultiplier                       float64                       `json:"rate_multiplier"`
 	BillingInputTokenMultiplier          float64                       `json:"billing_input_token_multiplier"`
@@ -266,6 +269,7 @@ type UpdateGroupRequest struct {
 	StreamingACKEnabled                  *bool                          `json:"streaming_ack_enabled"`
 	Name                                 string                         `json:"name"`
 	Description                          *string                        `json:"description"`
+	I18n                                 *service.GroupI18n             `json:"i18n"`
 	Platform                             string                         `json:"platform" binding:"omitempty,group_platform"`
 	RateMultiplier                       *float64                       `json:"rate_multiplier"`
 	BillingInputTokenMultiplier          *float64                       `json:"billing_input_token_multiplier"`
@@ -677,6 +681,7 @@ func (h *GroupHandler) Create(c *gin.Context) {
 		StreamingACKEnabled:                  req.StreamingACKEnabled,
 		Name:                                 req.Name,
 		Description:                          req.Description,
+		I18n:                                 req.I18n,
 		Platform:                             req.Platform,
 		RateMultiplier:                       req.RateMultiplier,
 		BillingInputTokenMultiplier:          req.BillingInputTokenMultiplier,
@@ -827,6 +832,7 @@ func (h *GroupHandler) Update(c *gin.Context) {
 		StreamingACKEnabled:                  req.StreamingACKEnabled,
 		Name:                                 req.Name,
 		Description:                          req.Description,
+		I18n:                                 req.I18n,
 		Platform:                             req.Platform,
 		RateMultiplier:                       req.RateMultiplier,
 		BillingInputTokenMultiplier:          req.BillingInputTokenMultiplier,
