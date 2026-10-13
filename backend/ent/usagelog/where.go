@@ -300,6 +300,26 @@ func CreatedAt(v time.Time) predicate.UsageLog {
 	return predicate.UsageLog(sql.FieldEQ(FieldCreatedAt, v))
 }
 
+// UpstreamCacheReadTokens applies equality check predicate on the "upstream_cache_read_tokens" field. It's identical to UpstreamCacheReadTokensEQ.
+func UpstreamCacheReadTokens(v int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldEQ(FieldUpstreamCacheReadTokens, v))
+}
+
+// UpstreamCacheCreationTokens applies equality check predicate on the "upstream_cache_creation_tokens" field. It's identical to UpstreamCacheCreationTokensEQ.
+func UpstreamCacheCreationTokens(v int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldEQ(FieldUpstreamCacheCreationTokens, v))
+}
+
+// UpstreamCacheCreation5mTokens applies equality check predicate on the "upstream_cache_creation_5m_tokens" field. It's identical to UpstreamCacheCreation5mTokensEQ.
+func UpstreamCacheCreation5mTokens(v int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldEQ(FieldUpstreamCacheCreation5mTokens, v))
+}
+
+// UpstreamCacheCreation1hTokens applies equality check predicate on the "upstream_cache_creation_1h_tokens" field. It's identical to UpstreamCacheCreation1hTokensEQ.
+func UpstreamCacheCreation1hTokens(v int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldEQ(FieldUpstreamCacheCreation1hTokens, v))
+}
+
 // UserIDEQ applies the EQ predicate on the "user_id" field.
 func UserIDEQ(v int64) predicate.UsageLog {
 	return predicate.UsageLog(sql.FieldEQ(FieldUserID, v))
@@ -2643,6 +2663,166 @@ func CreatedAtLT(v time.Time) predicate.UsageLog {
 // CreatedAtLTE applies the LTE predicate on the "created_at" field.
 func CreatedAtLTE(v time.Time) predicate.UsageLog {
 	return predicate.UsageLog(sql.FieldLTE(FieldCreatedAt, v))
+}
+
+// UpstreamCacheReadTokensEQ applies the EQ predicate on the "upstream_cache_read_tokens" field.
+func UpstreamCacheReadTokensEQ(v int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldEQ(FieldUpstreamCacheReadTokens, v))
+}
+
+// UpstreamCacheReadTokensNEQ applies the NEQ predicate on the "upstream_cache_read_tokens" field.
+func UpstreamCacheReadTokensNEQ(v int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldNEQ(FieldUpstreamCacheReadTokens, v))
+}
+
+// UpstreamCacheReadTokensIn applies the In predicate on the "upstream_cache_read_tokens" field.
+func UpstreamCacheReadTokensIn(vs ...int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldIn(FieldUpstreamCacheReadTokens, vs...))
+}
+
+// UpstreamCacheReadTokensNotIn applies the NotIn predicate on the "upstream_cache_read_tokens" field.
+func UpstreamCacheReadTokensNotIn(vs ...int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldNotIn(FieldUpstreamCacheReadTokens, vs...))
+}
+
+// UpstreamCacheReadTokensGT applies the GT predicate on the "upstream_cache_read_tokens" field.
+func UpstreamCacheReadTokensGT(v int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldGT(FieldUpstreamCacheReadTokens, v))
+}
+
+// UpstreamCacheReadTokensGTE applies the GTE predicate on the "upstream_cache_read_tokens" field.
+func UpstreamCacheReadTokensGTE(v int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldGTE(FieldUpstreamCacheReadTokens, v))
+}
+
+// UpstreamCacheReadTokensLT applies the LT predicate on the "upstream_cache_read_tokens" field.
+func UpstreamCacheReadTokensLT(v int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldLT(FieldUpstreamCacheReadTokens, v))
+}
+
+// UpstreamCacheReadTokensLTE applies the LTE predicate on the "upstream_cache_read_tokens" field.
+func UpstreamCacheReadTokensLTE(v int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldLTE(FieldUpstreamCacheReadTokens, v))
+}
+
+// UpstreamCacheCreationTokensEQ applies the EQ predicate on the "upstream_cache_creation_tokens" field.
+func UpstreamCacheCreationTokensEQ(v int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldEQ(FieldUpstreamCacheCreationTokens, v))
+}
+
+// UpstreamCacheCreationTokensNEQ applies the NEQ predicate on the "upstream_cache_creation_tokens" field.
+func UpstreamCacheCreationTokensNEQ(v int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldNEQ(FieldUpstreamCacheCreationTokens, v))
+}
+
+// UpstreamCacheCreationTokensIn applies the In predicate on the "upstream_cache_creation_tokens" field.
+func UpstreamCacheCreationTokensIn(vs ...int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldIn(FieldUpstreamCacheCreationTokens, vs...))
+}
+
+// UpstreamCacheCreationTokensNotIn applies the NotIn predicate on the "upstream_cache_creation_tokens" field.
+func UpstreamCacheCreationTokensNotIn(vs ...int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldNotIn(FieldUpstreamCacheCreationTokens, vs...))
+}
+
+// UpstreamCacheCreationTokensGT applies the GT predicate on the "upstream_cache_creation_tokens" field.
+func UpstreamCacheCreationTokensGT(v int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldGT(FieldUpstreamCacheCreationTokens, v))
+}
+
+// UpstreamCacheCreationTokensGTE applies the GTE predicate on the "upstream_cache_creation_tokens" field.
+func UpstreamCacheCreationTokensGTE(v int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldGTE(FieldUpstreamCacheCreationTokens, v))
+}
+
+// UpstreamCacheCreationTokensLT applies the LT predicate on the "upstream_cache_creation_tokens" field.
+func UpstreamCacheCreationTokensLT(v int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldLT(FieldUpstreamCacheCreationTokens, v))
+}
+
+// UpstreamCacheCreationTokensLTE applies the LTE predicate on the "upstream_cache_creation_tokens" field.
+func UpstreamCacheCreationTokensLTE(v int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldLTE(FieldUpstreamCacheCreationTokens, v))
+}
+
+// UpstreamCacheCreation5mTokensEQ applies the EQ predicate on the "upstream_cache_creation_5m_tokens" field.
+func UpstreamCacheCreation5mTokensEQ(v int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldEQ(FieldUpstreamCacheCreation5mTokens, v))
+}
+
+// UpstreamCacheCreation5mTokensNEQ applies the NEQ predicate on the "upstream_cache_creation_5m_tokens" field.
+func UpstreamCacheCreation5mTokensNEQ(v int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldNEQ(FieldUpstreamCacheCreation5mTokens, v))
+}
+
+// UpstreamCacheCreation5mTokensIn applies the In predicate on the "upstream_cache_creation_5m_tokens" field.
+func UpstreamCacheCreation5mTokensIn(vs ...int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldIn(FieldUpstreamCacheCreation5mTokens, vs...))
+}
+
+// UpstreamCacheCreation5mTokensNotIn applies the NotIn predicate on the "upstream_cache_creation_5m_tokens" field.
+func UpstreamCacheCreation5mTokensNotIn(vs ...int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldNotIn(FieldUpstreamCacheCreation5mTokens, vs...))
+}
+
+// UpstreamCacheCreation5mTokensGT applies the GT predicate on the "upstream_cache_creation_5m_tokens" field.
+func UpstreamCacheCreation5mTokensGT(v int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldGT(FieldUpstreamCacheCreation5mTokens, v))
+}
+
+// UpstreamCacheCreation5mTokensGTE applies the GTE predicate on the "upstream_cache_creation_5m_tokens" field.
+func UpstreamCacheCreation5mTokensGTE(v int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldGTE(FieldUpstreamCacheCreation5mTokens, v))
+}
+
+// UpstreamCacheCreation5mTokensLT applies the LT predicate on the "upstream_cache_creation_5m_tokens" field.
+func UpstreamCacheCreation5mTokensLT(v int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldLT(FieldUpstreamCacheCreation5mTokens, v))
+}
+
+// UpstreamCacheCreation5mTokensLTE applies the LTE predicate on the "upstream_cache_creation_5m_tokens" field.
+func UpstreamCacheCreation5mTokensLTE(v int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldLTE(FieldUpstreamCacheCreation5mTokens, v))
+}
+
+// UpstreamCacheCreation1hTokensEQ applies the EQ predicate on the "upstream_cache_creation_1h_tokens" field.
+func UpstreamCacheCreation1hTokensEQ(v int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldEQ(FieldUpstreamCacheCreation1hTokens, v))
+}
+
+// UpstreamCacheCreation1hTokensNEQ applies the NEQ predicate on the "upstream_cache_creation_1h_tokens" field.
+func UpstreamCacheCreation1hTokensNEQ(v int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldNEQ(FieldUpstreamCacheCreation1hTokens, v))
+}
+
+// UpstreamCacheCreation1hTokensIn applies the In predicate on the "upstream_cache_creation_1h_tokens" field.
+func UpstreamCacheCreation1hTokensIn(vs ...int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldIn(FieldUpstreamCacheCreation1hTokens, vs...))
+}
+
+// UpstreamCacheCreation1hTokensNotIn applies the NotIn predicate on the "upstream_cache_creation_1h_tokens" field.
+func UpstreamCacheCreation1hTokensNotIn(vs ...int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldNotIn(FieldUpstreamCacheCreation1hTokens, vs...))
+}
+
+// UpstreamCacheCreation1hTokensGT applies the GT predicate on the "upstream_cache_creation_1h_tokens" field.
+func UpstreamCacheCreation1hTokensGT(v int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldGT(FieldUpstreamCacheCreation1hTokens, v))
+}
+
+// UpstreamCacheCreation1hTokensGTE applies the GTE predicate on the "upstream_cache_creation_1h_tokens" field.
+func UpstreamCacheCreation1hTokensGTE(v int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldGTE(FieldUpstreamCacheCreation1hTokens, v))
+}
+
+// UpstreamCacheCreation1hTokensLT applies the LT predicate on the "upstream_cache_creation_1h_tokens" field.
+func UpstreamCacheCreation1hTokensLT(v int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldLT(FieldUpstreamCacheCreation1hTokens, v))
+}
+
+// UpstreamCacheCreation1hTokensLTE applies the LTE predicate on the "upstream_cache_creation_1h_tokens" field.
+func UpstreamCacheCreation1hTokensLTE(v int) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldLTE(FieldUpstreamCacheCreation1hTokens, v))
 }
 
 // HasUser applies the HasEdge predicate on the "user" edge.

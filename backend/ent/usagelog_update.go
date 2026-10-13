@@ -1016,6 +1016,90 @@ func (_u *UsageLogUpdate) SetNillableCacheTTLOverridden(v *bool) *UsageLogUpdate
 	return _u
 }
 
+// SetUpstreamCacheReadTokens sets the "upstream_cache_read_tokens" field.
+func (_u *UsageLogUpdate) SetUpstreamCacheReadTokens(v int) *UsageLogUpdate {
+	_u.mutation.ResetUpstreamCacheReadTokens()
+	_u.mutation.SetUpstreamCacheReadTokens(v)
+	return _u
+}
+
+// SetNillableUpstreamCacheReadTokens sets the "upstream_cache_read_tokens" field if the given value is not nil.
+func (_u *UsageLogUpdate) SetNillableUpstreamCacheReadTokens(v *int) *UsageLogUpdate {
+	if v != nil {
+		_u.SetUpstreamCacheReadTokens(*v)
+	}
+	return _u
+}
+
+// AddUpstreamCacheReadTokens adds value to the "upstream_cache_read_tokens" field.
+func (_u *UsageLogUpdate) AddUpstreamCacheReadTokens(v int) *UsageLogUpdate {
+	_u.mutation.AddUpstreamCacheReadTokens(v)
+	return _u
+}
+
+// SetUpstreamCacheCreationTokens sets the "upstream_cache_creation_tokens" field.
+func (_u *UsageLogUpdate) SetUpstreamCacheCreationTokens(v int) *UsageLogUpdate {
+	_u.mutation.ResetUpstreamCacheCreationTokens()
+	_u.mutation.SetUpstreamCacheCreationTokens(v)
+	return _u
+}
+
+// SetNillableUpstreamCacheCreationTokens sets the "upstream_cache_creation_tokens" field if the given value is not nil.
+func (_u *UsageLogUpdate) SetNillableUpstreamCacheCreationTokens(v *int) *UsageLogUpdate {
+	if v != nil {
+		_u.SetUpstreamCacheCreationTokens(*v)
+	}
+	return _u
+}
+
+// AddUpstreamCacheCreationTokens adds value to the "upstream_cache_creation_tokens" field.
+func (_u *UsageLogUpdate) AddUpstreamCacheCreationTokens(v int) *UsageLogUpdate {
+	_u.mutation.AddUpstreamCacheCreationTokens(v)
+	return _u
+}
+
+// SetUpstreamCacheCreation5mTokens sets the "upstream_cache_creation_5m_tokens" field.
+func (_u *UsageLogUpdate) SetUpstreamCacheCreation5mTokens(v int) *UsageLogUpdate {
+	_u.mutation.ResetUpstreamCacheCreation5mTokens()
+	_u.mutation.SetUpstreamCacheCreation5mTokens(v)
+	return _u
+}
+
+// SetNillableUpstreamCacheCreation5mTokens sets the "upstream_cache_creation_5m_tokens" field if the given value is not nil.
+func (_u *UsageLogUpdate) SetNillableUpstreamCacheCreation5mTokens(v *int) *UsageLogUpdate {
+	if v != nil {
+		_u.SetUpstreamCacheCreation5mTokens(*v)
+	}
+	return _u
+}
+
+// AddUpstreamCacheCreation5mTokens adds value to the "upstream_cache_creation_5m_tokens" field.
+func (_u *UsageLogUpdate) AddUpstreamCacheCreation5mTokens(v int) *UsageLogUpdate {
+	_u.mutation.AddUpstreamCacheCreation5mTokens(v)
+	return _u
+}
+
+// SetUpstreamCacheCreation1hTokens sets the "upstream_cache_creation_1h_tokens" field.
+func (_u *UsageLogUpdate) SetUpstreamCacheCreation1hTokens(v int) *UsageLogUpdate {
+	_u.mutation.ResetUpstreamCacheCreation1hTokens()
+	_u.mutation.SetUpstreamCacheCreation1hTokens(v)
+	return _u
+}
+
+// SetNillableUpstreamCacheCreation1hTokens sets the "upstream_cache_creation_1h_tokens" field if the given value is not nil.
+func (_u *UsageLogUpdate) SetNillableUpstreamCacheCreation1hTokens(v *int) *UsageLogUpdate {
+	if v != nil {
+		_u.SetUpstreamCacheCreation1hTokens(*v)
+	}
+	return _u
+}
+
+// AddUpstreamCacheCreation1hTokens adds value to the "upstream_cache_creation_1h_tokens" field.
+func (_u *UsageLogUpdate) AddUpstreamCacheCreation1hTokens(v int) *UsageLogUpdate {
+	_u.mutation.AddUpstreamCacheCreation1hTokens(v)
+	return _u
+}
+
 // SetUser sets the "user" edge to the User entity.
 func (_u *UsageLogUpdate) SetUser(v *User) *UsageLogUpdate {
 	return _u.SetUserID(v.ID)
@@ -1470,6 +1554,30 @@ func (_u *UsageLogUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.CacheTTLOverridden(); ok {
 		_spec.SetField(usagelog.FieldCacheTTLOverridden, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.UpstreamCacheReadTokens(); ok {
+		_spec.SetField(usagelog.FieldUpstreamCacheReadTokens, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedUpstreamCacheReadTokens(); ok {
+		_spec.AddField(usagelog.FieldUpstreamCacheReadTokens, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.UpstreamCacheCreationTokens(); ok {
+		_spec.SetField(usagelog.FieldUpstreamCacheCreationTokens, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedUpstreamCacheCreationTokens(); ok {
+		_spec.AddField(usagelog.FieldUpstreamCacheCreationTokens, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.UpstreamCacheCreation5mTokens(); ok {
+		_spec.SetField(usagelog.FieldUpstreamCacheCreation5mTokens, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedUpstreamCacheCreation5mTokens(); ok {
+		_spec.AddField(usagelog.FieldUpstreamCacheCreation5mTokens, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.UpstreamCacheCreation1hTokens(); ok {
+		_spec.SetField(usagelog.FieldUpstreamCacheCreation1hTokens, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedUpstreamCacheCreation1hTokens(); ok {
+		_spec.AddField(usagelog.FieldUpstreamCacheCreation1hTokens, field.TypeInt, value)
 	}
 	if _u.mutation.UserCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -2620,6 +2728,90 @@ func (_u *UsageLogUpdateOne) SetNillableCacheTTLOverridden(v *bool) *UsageLogUpd
 	return _u
 }
 
+// SetUpstreamCacheReadTokens sets the "upstream_cache_read_tokens" field.
+func (_u *UsageLogUpdateOne) SetUpstreamCacheReadTokens(v int) *UsageLogUpdateOne {
+	_u.mutation.ResetUpstreamCacheReadTokens()
+	_u.mutation.SetUpstreamCacheReadTokens(v)
+	return _u
+}
+
+// SetNillableUpstreamCacheReadTokens sets the "upstream_cache_read_tokens" field if the given value is not nil.
+func (_u *UsageLogUpdateOne) SetNillableUpstreamCacheReadTokens(v *int) *UsageLogUpdateOne {
+	if v != nil {
+		_u.SetUpstreamCacheReadTokens(*v)
+	}
+	return _u
+}
+
+// AddUpstreamCacheReadTokens adds value to the "upstream_cache_read_tokens" field.
+func (_u *UsageLogUpdateOne) AddUpstreamCacheReadTokens(v int) *UsageLogUpdateOne {
+	_u.mutation.AddUpstreamCacheReadTokens(v)
+	return _u
+}
+
+// SetUpstreamCacheCreationTokens sets the "upstream_cache_creation_tokens" field.
+func (_u *UsageLogUpdateOne) SetUpstreamCacheCreationTokens(v int) *UsageLogUpdateOne {
+	_u.mutation.ResetUpstreamCacheCreationTokens()
+	_u.mutation.SetUpstreamCacheCreationTokens(v)
+	return _u
+}
+
+// SetNillableUpstreamCacheCreationTokens sets the "upstream_cache_creation_tokens" field if the given value is not nil.
+func (_u *UsageLogUpdateOne) SetNillableUpstreamCacheCreationTokens(v *int) *UsageLogUpdateOne {
+	if v != nil {
+		_u.SetUpstreamCacheCreationTokens(*v)
+	}
+	return _u
+}
+
+// AddUpstreamCacheCreationTokens adds value to the "upstream_cache_creation_tokens" field.
+func (_u *UsageLogUpdateOne) AddUpstreamCacheCreationTokens(v int) *UsageLogUpdateOne {
+	_u.mutation.AddUpstreamCacheCreationTokens(v)
+	return _u
+}
+
+// SetUpstreamCacheCreation5mTokens sets the "upstream_cache_creation_5m_tokens" field.
+func (_u *UsageLogUpdateOne) SetUpstreamCacheCreation5mTokens(v int) *UsageLogUpdateOne {
+	_u.mutation.ResetUpstreamCacheCreation5mTokens()
+	_u.mutation.SetUpstreamCacheCreation5mTokens(v)
+	return _u
+}
+
+// SetNillableUpstreamCacheCreation5mTokens sets the "upstream_cache_creation_5m_tokens" field if the given value is not nil.
+func (_u *UsageLogUpdateOne) SetNillableUpstreamCacheCreation5mTokens(v *int) *UsageLogUpdateOne {
+	if v != nil {
+		_u.SetUpstreamCacheCreation5mTokens(*v)
+	}
+	return _u
+}
+
+// AddUpstreamCacheCreation5mTokens adds value to the "upstream_cache_creation_5m_tokens" field.
+func (_u *UsageLogUpdateOne) AddUpstreamCacheCreation5mTokens(v int) *UsageLogUpdateOne {
+	_u.mutation.AddUpstreamCacheCreation5mTokens(v)
+	return _u
+}
+
+// SetUpstreamCacheCreation1hTokens sets the "upstream_cache_creation_1h_tokens" field.
+func (_u *UsageLogUpdateOne) SetUpstreamCacheCreation1hTokens(v int) *UsageLogUpdateOne {
+	_u.mutation.ResetUpstreamCacheCreation1hTokens()
+	_u.mutation.SetUpstreamCacheCreation1hTokens(v)
+	return _u
+}
+
+// SetNillableUpstreamCacheCreation1hTokens sets the "upstream_cache_creation_1h_tokens" field if the given value is not nil.
+func (_u *UsageLogUpdateOne) SetNillableUpstreamCacheCreation1hTokens(v *int) *UsageLogUpdateOne {
+	if v != nil {
+		_u.SetUpstreamCacheCreation1hTokens(*v)
+	}
+	return _u
+}
+
+// AddUpstreamCacheCreation1hTokens adds value to the "upstream_cache_creation_1h_tokens" field.
+func (_u *UsageLogUpdateOne) AddUpstreamCacheCreation1hTokens(v int) *UsageLogUpdateOne {
+	_u.mutation.AddUpstreamCacheCreation1hTokens(v)
+	return _u
+}
+
 // SetUser sets the "user" edge to the User entity.
 func (_u *UsageLogUpdateOne) SetUser(v *User) *UsageLogUpdateOne {
 	return _u.SetUserID(v.ID)
@@ -3104,6 +3296,30 @@ func (_u *UsageLogUpdateOne) sqlSave(ctx context.Context) (_node *UsageLog, err 
 	}
 	if value, ok := _u.mutation.CacheTTLOverridden(); ok {
 		_spec.SetField(usagelog.FieldCacheTTLOverridden, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.UpstreamCacheReadTokens(); ok {
+		_spec.SetField(usagelog.FieldUpstreamCacheReadTokens, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedUpstreamCacheReadTokens(); ok {
+		_spec.AddField(usagelog.FieldUpstreamCacheReadTokens, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.UpstreamCacheCreationTokens(); ok {
+		_spec.SetField(usagelog.FieldUpstreamCacheCreationTokens, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedUpstreamCacheCreationTokens(); ok {
+		_spec.AddField(usagelog.FieldUpstreamCacheCreationTokens, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.UpstreamCacheCreation5mTokens(); ok {
+		_spec.SetField(usagelog.FieldUpstreamCacheCreation5mTokens, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedUpstreamCacheCreation5mTokens(); ok {
+		_spec.AddField(usagelog.FieldUpstreamCacheCreation5mTokens, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.UpstreamCacheCreation1hTokens(); ok {
+		_spec.SetField(usagelog.FieldUpstreamCacheCreation1hTokens, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedUpstreamCacheCreation1hTokens(); ok {
+		_spec.AddField(usagelog.FieldUpstreamCacheCreation1hTokens, field.TypeInt, value)
 	}
 	if _u.mutation.UserCleared() {
 		edge := &sqlgraph.EdgeSpec{

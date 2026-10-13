@@ -114,6 +114,14 @@ const (
 	FieldCacheTTLOverridden = "cache_ttl_overridden"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
+	// FieldUpstreamCacheReadTokens holds the string denoting the upstream_cache_read_tokens field in the database.
+	FieldUpstreamCacheReadTokens = "upstream_cache_read_tokens"
+	// FieldUpstreamCacheCreationTokens holds the string denoting the upstream_cache_creation_tokens field in the database.
+	FieldUpstreamCacheCreationTokens = "upstream_cache_creation_tokens"
+	// FieldUpstreamCacheCreation5mTokens holds the string denoting the upstream_cache_creation_5m_tokens field in the database.
+	FieldUpstreamCacheCreation5mTokens = "upstream_cache_creation_5m_tokens"
+	// FieldUpstreamCacheCreation1hTokens holds the string denoting the upstream_cache_creation_1h_tokens field in the database.
+	FieldUpstreamCacheCreation1hTokens = "upstream_cache_creation_1h_tokens"
 	// EdgeUser holds the string denoting the user edge name in mutations.
 	EdgeUser = "user"
 	// EdgeAPIKey holds the string denoting the api_key edge name in mutations.
@@ -216,6 +224,10 @@ var Columns = []string{
 	FieldVideoDurationSeconds,
 	FieldCacheTTLOverridden,
 	FieldCreatedAt,
+	FieldUpstreamCacheReadTokens,
+	FieldUpstreamCacheCreationTokens,
+	FieldUpstreamCacheCreation5mTokens,
+	FieldUpstreamCacheCreation1hTokens,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -303,6 +315,14 @@ var (
 	DefaultCacheTTLOverridden bool
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
+	// DefaultUpstreamCacheReadTokens holds the default value on creation for the "upstream_cache_read_tokens" field.
+	DefaultUpstreamCacheReadTokens int
+	// DefaultUpstreamCacheCreationTokens holds the default value on creation for the "upstream_cache_creation_tokens" field.
+	DefaultUpstreamCacheCreationTokens int
+	// DefaultUpstreamCacheCreation5mTokens holds the default value on creation for the "upstream_cache_creation_5m_tokens" field.
+	DefaultUpstreamCacheCreation5mTokens int
+	// DefaultUpstreamCacheCreation1hTokens holds the default value on creation for the "upstream_cache_creation_1h_tokens" field.
+	DefaultUpstreamCacheCreation1hTokens int
 )
 
 // OrderOption defines the ordering options for the UsageLog queries.
@@ -556,6 +576,26 @@ func ByCacheTTLOverridden(opts ...sql.OrderTermOption) OrderOption {
 // ByCreatedAt orders the results by the created_at field.
 func ByCreatedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCreatedAt, opts...).ToFunc()
+}
+
+// ByUpstreamCacheReadTokens orders the results by the upstream_cache_read_tokens field.
+func ByUpstreamCacheReadTokens(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldUpstreamCacheReadTokens, opts...).ToFunc()
+}
+
+// ByUpstreamCacheCreationTokens orders the results by the upstream_cache_creation_tokens field.
+func ByUpstreamCacheCreationTokens(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldUpstreamCacheCreationTokens, opts...).ToFunc()
+}
+
+// ByUpstreamCacheCreation5mTokens orders the results by the upstream_cache_creation_5m_tokens field.
+func ByUpstreamCacheCreation5mTokens(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldUpstreamCacheCreation5mTokens, opts...).ToFunc()
+}
+
+// ByUpstreamCacheCreation1hTokens orders the results by the upstream_cache_creation_1h_tokens field.
+func ByUpstreamCacheCreation1hTokens(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldUpstreamCacheCreation1hTokens, opts...).ToFunc()
 }
 
 // ByUserField orders the results by user field.
