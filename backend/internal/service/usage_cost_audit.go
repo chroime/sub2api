@@ -9,10 +9,10 @@ import (
 
 // UsageCostAudit describes the charge for the stored upstream token buckets
 // with customer token adjustments removed. It is neither an upstream invoice
-// nor AccountStatsCost. TotalCost is the unamplified charge for the recorded
-// upstream token buckets; Amount is retained as the rate-adjusted value for
-// compatibility with existing audit consumers. BilledAmount is the charge
-// recorded for the user and Difference is BilledAmount - TotalCost.
+// nor AccountStatsCost. TotalCost is the baseline charge for the recorded
+// upstream token buckets before the record's effective rate multiplier;
+// Amount is the real-token charge after that multiplier. BilledAmount is the
+// charge recorded for the user and Difference is BilledAmount - Amount.
 type UsageCostAudit struct {
 	Amount       *float64       `json:"amount"`
 	TotalCost    *float64       `json:"total_cost"`
@@ -94,7 +94,7 @@ func (s *UsageCostAuditService) estimate(ctx context.Context, row *UsageLog, gro
 	}
 	if usageCostAuditOriginalBillUsable(row) {
 		amount, total, billed := row.ActualCost, row.TotalCost, row.ActualCost
-		difference := billed - total
+		difference := billed - amount
 		return UsageCostAudit{
 			Amount: &amount, TotalCost: &total, BilledAmount: &billed, Difference: &difference,
 			Status: "recorded", Reason: "original_usage_unadjusted",
@@ -163,7 +163,7 @@ func (s *UsageCostAuditService) estimate(ctx context.Context, row *UsageLog, gro
 			}
 		}
 		amount, total, billed := cost.ActualCost, cost.TotalCost, row.ActualCost
-		difference := billed - total
+		difference := billed - amount
 		return UsageCostAudit{
 			Amount: &amount, TotalCost: &total, BilledAmount: &billed, Difference: &difference,
 			Status: "calculated", Reason: "current_pricing_calculation", Model: model, Breakdown: cost,

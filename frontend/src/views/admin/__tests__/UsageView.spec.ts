@@ -47,11 +47,11 @@ const messages: Record<string, string> = {
   'admin.usage.rawCostDifference': 'Difference',
   'admin.usage.rawCostStatus': 'Raw cost status',
   'admin.usage.rawCostNote': 'Raw cost explanation',
-  'admin.usage.rawCostCalculated': 'Calculated from actual tokens',
+  'admin.usage.rawCostCalculated': 'Calculated from actual tokens × rate',
   'admin.usage.rawCostEstimated': 'Estimated',
   'admin.usage.rawCostRecorded': 'Recorded',
   'admin.usage.rawCostUnknown': 'Unavailable',
-  'admin.usage.rawCostCalculatedTooltip': 'Calculated from the actual upstream token usage and the current effective model or channel pricing. Difference = billed cost minus actual-token cost.',
+  'admin.usage.rawCostCalculatedTooltip': 'Calculated from actual upstream tokens, current effective pricing, and this record’s rate. Difference = billed cost minus actual-token × rate cost.',
 	'common.yes': 'Yes',
 	'common.no': 'No',
 }
@@ -968,7 +968,7 @@ describe('admin UsageView model audit export', () => {
   it('exports actual-token costs, billing differences, and explanation', async () => {
 		exportList.mockResolvedValue({
 			items: [
-        { created_at: '2026-08-04T00:00:00Z', model: 'gpt-5.5', actual_cost: 8.5, raw_cost_audit: { amount: 17, total_cost: 0.00519227, billed_amount: 8.5, difference: 8.49480773, status: 'calculated', reason: 'current_pricing_calculation' } },
+        { created_at: '2026-08-04T00:00:00Z', model: 'gpt-5.5', actual_cost: 8.5, raw_cost_audit: { amount: 17, total_cost: 0.00519227, billed_amount: 8.5, difference: -8.5, status: 'calculated', reason: 'current_pricing_calculation' } },
         { created_at: '2026-08-04T00:00:01Z', model: 'gpt-5.5', actual_cost: 0.1, raw_cost_audit: { amount: 0.1, total_cost: 0.1, billed_amount: 0.1, difference: 0, status: 'recorded', reason: 'original_usage_unadjusted' } },
 				{ created_at: '2026-08-04T00:00:02Z', model: 'gpt-5.5', actual_cost: 8.5, raw_cost_audit: { amount: null, status: 'unavailable', reason: 'missing_upstream_usage' } },
 			],
@@ -985,7 +985,7 @@ describe('admin UsageView model audit export', () => {
     expect(headers.slice(rawCostIndex, rawCostIndex + 4)).toEqual(['Raw usage cost', 'Difference', 'Raw cost status', 'Raw cost explanation'])
 		const rows = sheetAddAoa.mock.calls[0][1]
     expect(rows.map((row: unknown[]) => row.slice(rawCostIndex, rawCostIndex + 4))).toEqual([
-      ['0.00519227', '+$8.49480773', 'Calculated from actual tokens', 'Calculated from the actual upstream token usage and the current effective model or channel pricing. Difference = billed cost minus actual-token cost.'],
+      ['17.00000000', '-$8.50000000', 'Calculated from actual tokens × rate', 'Calculated from actual upstream tokens, current effective pricing, and this record’s rate. Difference = billed cost minus actual-token × rate cost.'],
       ['0.10000000', '$0.00000000', 'Recorded', 'admin.usage.rawCostRecordedTooltip'],
       ['—', '—', 'Unavailable', 'admin.usage.rawCostMissingUpstreamUsage'],
 		])

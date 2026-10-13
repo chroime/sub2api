@@ -679,8 +679,10 @@ type UsageLog struct {
 }
 
 // UsageCostAudit is a read-only comparison using original upstream usage.
-// TotalCost is the unamplified actual-token cost; BilledAmount is the recorded
-// user charge and Difference is BilledAmount - TotalCost.
+// TotalCost is the baseline actual-token cost before the record's effective
+// rate multiplier. Amount is the real-token cost after that multiplier;
+// BilledAmount is the recorded user charge and Difference is
+// BilledAmount - Amount.
 type UsageCostAudit struct {
 	Amount       *float64 `json:"amount"`
 	TotalCost    *float64 `json:"total_cost"`

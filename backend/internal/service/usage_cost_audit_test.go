@@ -75,7 +75,7 @@ func TestUsageCostAudit_RawCacheBucketsAndTTLUseIndependentPrices(t *testing.T) 
 	require.InDelta(t, .00082, *result.TotalCost, 1e-12)
 	require.InDelta(t, .001066, *result.Amount, 1e-12)
 	require.InDelta(t, 13, *result.BilledAmount, 1e-12)
-	require.InDelta(t, 12.99918, *result.Difference, 1e-12)
+	require.InDelta(t, 12.998934, *result.Difference, 1e-12)
 	require.Equal(t, before, row)
 }
 
@@ -104,6 +104,7 @@ func TestUsageCostAudit_RecordedOnlyWhenOriginalBillIsUnadjusted(t *testing.T) {
 	require.Equal(t, "original_usage_unadjusted", result.Reason)
 	require.Equal(t, .091, *result.Amount)
 	require.Equal(t, .07, *result.TotalCost)
+	require.Zero(t, *result.Difference)
 }
 
 func TestUsageCostAudit_MissingRawTokensAreNotTreatedAsZero(t *testing.T) {

@@ -97,9 +97,9 @@ const messages: Record<string, string> = {
   'admin.usage.cacheHitRateMissingInput': 'Actual upstream input was not recorded.',
   'admin.usage.cacheHitRateEmptyInput': 'Actual total input is zero.',
   'admin.usage.cacheHitRateInvalidTokens': 'Invalid token counts; a cache hit rate cannot be calculated.',
-  'admin.usage.rawCostCalculated': 'Calculated from actual tokens',
+  'admin.usage.rawCostCalculated': 'Calculated from actual tokens × rate',
   'admin.usage.rawCostDifference': 'Difference',
-  'admin.usage.rawCostCalculatedTooltip': 'Calculated from the actual upstream token usage and the current effective model or channel pricing. Difference = billed cost minus actual-token cost.',
+  'admin.usage.rawCostCalculatedTooltip': 'Calculated from actual upstream tokens, current effective pricing, and this record’s rate. Difference = billed cost minus actual-token × rate cost.',
   'admin.usage.rawCostRecordedTooltip': 'The original recorded charge for unadjusted usage.',
   'admin.usage.rawCostUnavailable': 'The raw usage cost is unavailable.',
   'admin.usage.rawCostMissingUpstreamUsage': 'Actual upstream usage was not recorded.',
@@ -357,7 +357,7 @@ describe('admin UsageTable actual token audit', () => {
 describe('admin UsageTable raw usage cost', () => {
   const mountRawCost = (audit?: Record<string, unknown>) => mount(UsageTable, {
     props: {
-      data: [{ request_id: 'req-raw-cost', actual_cost: 8.5, raw_cost_audit: audit }],
+      data: [{ request_id: 'req-raw-cost', actual_cost: 0.012, raw_cost_audit: audit }],
       columns: [{ key: 'raw_cost', label: 'Raw usage cost', sortable: false }],
     },
     global: { stubs: {
@@ -366,14 +366,14 @@ describe('admin UsageTable raw usage cost', () => {
     } },
   })
 
-  it('shows the unamplified actual-token cost and its billing difference', () => {
-    const wrapper = mountRawCost({ status: 'calculated', amount: 0.01038454, total_cost: 0.00519227, billed_amount: 0.01038454, difference: 0.00519227, reason: 'current_pricing_calculation', model: 'gpt-5.5' })
+  it('shows the real-token cost after the current multiplier and compares it with the billed cost', () => {
+    const wrapper = mountRawCost({ status: 'calculated', amount: 0.01038454, total_cost: 0.00519227, billed_amount: 0.012, difference: 999, reason: 'current_pricing_calculation', model: 'gpt-5.5' })
     const cell = wrapper.get('[data-testid="raw-cost-cell"]')
-    expect(cell.get('[data-testid="raw-cost-amount"]').text()).toBe('$0.00519227')
-    expect(cell.get('[data-testid="raw-cost-difference"]').text()).toBe('Difference +$0.00519227')
+    expect(cell.get('[data-testid="raw-cost-amount"]').text()).toBe('$0.01038454')
+    expect(cell.get('[data-testid="raw-cost-difference"]').text()).toBe('Difference +$0.00161546')
     expect(cell.text()).not.toContain('Estimated')
     expect(cell.attributes('title')).toBe(messages['admin.usage.rawCostCalculatedTooltip'])
-    expect(cell.text()).not.toContain('8.5')
+    expect(cell.text()).not.toContain('0.012')
     wrapper.unmount()
   })
 
@@ -381,7 +381,7 @@ describe('admin UsageTable raw usage cost', () => {
     [0.000727075, '$0.00072708'],
     [0.000234265, '$0.00023427'],
   ])('rounds the calculated actual-token cost %s at the decimal half boundary', (amount, expected) => {
-    const wrapper = mountRawCost({ status: 'calculated', amount: amount * 2, total_cost: amount, reason: 'current_pricing_calculation' })
+    const wrapper = mountRawCost({ status: 'calculated', amount, total_cost: amount / 2, reason: 'current_pricing_calculation' })
     expect(wrapper.get('[data-testid="raw-cost-amount"]').text()).toBe(expected)
     wrapper.unmount()
   })

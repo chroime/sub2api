@@ -12,9 +12,10 @@ const rawCostFormatter = new Intl.NumberFormat('en-US', {
 export function getRawUsageCostAmount(row: RawCostUsage): number | null {
   const audit = row.raw_cost_audit
   if (!audit || !['recorded', 'calculated', 'estimated'].includes(audit.status)) return null
-  // total_cost is the unamplified price of the upstream token buckets. Keep
-  // amount as a compatibility fallback for older API responses.
-  const value = audit.total_cost ?? audit.amount
+  // amount is the real upstream-token price after this record's effective
+  // rate multiplier. Keep total_cost as a compatibility fallback for older
+  // API responses that did not expose the multiplier-adjusted amount.
+  const value = audit.amount ?? audit.total_cost
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null
 }
 
@@ -26,10 +27,16 @@ export function formatRawUsageCost(row: RawCostUsage): string {
 export function getRawUsageCostDifference(row: RawCostUsage): number | null {
   const amount = getRawUsageCostAmount(row)
   if (amount === null) return null
+  // Compare against the same recorded charge shown in the admin "费用"
+  // column. This also repairs older audit payloads whose stored difference
+  // used the pre-multiplier total_cost.
+  if (typeof row.actual_cost === 'number' && Number.isFinite(row.actual_cost)) {
+    return row.actual_cost - amount
+  }
+  const billed = row.raw_cost_audit?.billed_amount
+  if (typeof billed === 'number' && Number.isFinite(billed)) return billed - amount
   const auditDifference = row.raw_cost_audit?.difference
-  if (typeof auditDifference === 'number' && Number.isFinite(auditDifference)) return auditDifference
-  const billed = row.raw_cost_audit?.billed_amount ?? row.actual_cost
-  return typeof billed === 'number' && Number.isFinite(billed) ? billed - amount : null
+  return typeof auditDifference === 'number' && Number.isFinite(auditDifference) ? auditDifference : null
 }
 
 export function formatRawUsageCostDifference(row: RawCostUsage): string {
