@@ -2,6 +2,14 @@ export default {
   infiniteCanvas: {
     title: 'Infinite Canvas',
     description: 'Arrange prompts and images.',
+    embed: {
+      description: 'Arrange prompts, settings, and generated images in the standalone canvas.',
+      openNewTab: 'Open in new tab',
+      reload: 'Reload',
+      loading: 'Loading canvas...',
+      loadFailed: 'The canvas failed to load. Try again or open it in a new tab.',
+      retry: 'Retry',
+    },
     emptyState: 'Start with a prompt node to create your first image.',
     project: {
       new: 'New project',

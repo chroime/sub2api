@@ -265,7 +265,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/infinite-canvas',
     name: 'InfiniteCanvas',
-    component: () => import('@/views/user/InfiniteCanvasView.vue'),
+    component: () => import('@/views/user/CanvasEmbedView.vue'),
     meta: {
       requiresAuth: true,
       requiresAdmin: false,

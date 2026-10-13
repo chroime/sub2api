@@ -2,6 +2,14 @@ export default {
   infiniteCanvas: {
     title: '无限画布',
     description: '编排提示词与图片。',
+    embed: {
+      description: '在独立画布中编排提示词、设置和生成的图片。',
+      openNewTab: '新标签页打开',
+      reload: '重新加载',
+      loading: '正在加载画布...',
+      loadFailed: '画布加载失败，请重试或在新标签页打开。',
+      retry: '重试',
+    },
     emptyState: '从提示词节点开始，生成你的第一张图片。',
     project: {
       new: '新建项目',
