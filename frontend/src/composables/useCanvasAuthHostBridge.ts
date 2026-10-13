@@ -5,7 +5,7 @@ import {
   DEFAULT_CANVAS_ORIGIN,
   isCanvasReadyMessage,
   normalizeCanvasOrigin,
-  type CanvasHostMessage,
+  type CanvasAuthClearMessage,
 } from '@/features/canvasHost/protocol'
 
 function configuredCanvasOrigin(): string {
@@ -37,7 +37,7 @@ export function useCanvasAuthHostBridge() {
   const origin = configuredCanvasOrigin()
   const trustedTargets = new Set<Window>()
 
-  const sendState = (target: Window, reason: CanvasHostMessage['reason'] = 'logout') => {
+  const sendState = (target: Window, reason: CanvasAuthClearMessage['reason'] = 'logout') => {
     if (isClosed(target)) {
       trustedTargets.delete(target)
       return
