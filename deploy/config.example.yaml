@@ -145,6 +145,10 @@ simple_mode_key_rate_limit_enabled: false
 cors:
   # Allowed origins list. Leave empty to disable cross-origin requests.
   # 允许的来源列表。留空则禁用跨域请求。
+  # For the Oreniva standalone canvas, add both exact HTTPS origins:
+  # 对 Oreniva 独立画布，填写以下两个完整 HTTPS 来源：
+  # - "https://oreniva.com"
+  # - "https://canvas.oreniva.com"
   allowed_origins: []
   # Allow credentials (cookies/authorization headers). Cannot be used with "*".
   # 允许携带凭证（cookies/授权头）。不能与 "*" 通配符同时使用。
