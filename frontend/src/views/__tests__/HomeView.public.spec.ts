@@ -183,6 +183,7 @@ describe('HomeView public home', () => {
 
     expect(wrapper.find('.public-home-b2').exists()).toBe(true)
     expect(wrapper.find('[data-testid="home-story"]').exists()).toBe(true)
+    expect(wrapper.get('.hero-actions .primary-link').attributes('href')).toBe('/keys')
     expect(wrapper.findComponent(PublicHomeHero).exists()).toBe(false)
     expect(wrapper.get('#mascot-svg').attributes('viewBox')).toBe('-24 -24 304 304')
     expect(wrapper.find('#mascot-svg image').exists()).toBe(false)

@@ -34,7 +34,7 @@
     <PublicHomeB2Header :site-name="siteName" :site-logo="siteLogo" :subtitle="siteSubtitle" :destination="isAuthenticated ? dashboardPath : '/login'" :authenticated="isAuthenticated" :docs-href="integrationHref" :model-plaza-href="showModelPlazaEntry ? '/model-plaza' : ''" />
 
     <main id="top" class="shell">
-      <PublicHomeStoryB2 :site-name="siteName" primary-href="/register" :primary-label="t('home.public.hero.createApiKey')" :secondary-href="integrationHref" :secondary-label="t('home.public.nav.docs')" :details-href="showModelPlazaEntry ? '/model-plaza' : ''" />
+      <PublicHomeStoryB2 :site-name="siteName" primary-href="/keys" :primary-label="t('home.public.hero.createApiKey')" :secondary-href="integrationHref" :secondary-label="t('home.public.nav.docs')" :details-href="showModelPlazaEntry ? '/model-plaza' : ''" />
 
       <PublicHomeB2Integration :base-url="gatewayBaseUrl" :model="featuredModel" :docs-href="integrationHref" />
     </main>

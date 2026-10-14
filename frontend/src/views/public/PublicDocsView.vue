@@ -1,6 +1,6 @@
 <template>
   <div class="public-theme public-docs-page min-h-screen">
-    <PublicSiteHeader :site-name="siteName" :site-logo="siteLogo" :subtitle="t('publicDocs.title')" :destination="destination" :authenticated="authStore.isAuthenticated">
+    <PublicSiteHeader :site-name="siteName" :site-logo="siteLogo" :subtitle="t('publicDocs.title')" :destination="destination" :authenticated="authStore.isAuthenticated" variant="story">
       <RouterLink to="/home" class="public-nav-link">{{ t('publicDocs.home') }}</RouterLink>
       <RouterLink to="/model-plaza" class="public-nav-link">{{ t('publicDocs.modelPlaza') }}</RouterLink>
     </PublicSiteHeader>
