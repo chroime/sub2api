@@ -107,6 +107,25 @@ func TestUsageCostAudit_RecordedOnlyWhenOriginalBillIsUnadjusted(t *testing.T) {
 	require.Zero(t, *result.Difference)
 }
 
+func TestUsageCostAudit_RepricesUnadjustedUsageWithCurrentModelPriceAndRate(t *testing.T) {
+	row := auditAdjustedLog()
+	row.InputTokens = row.UpstreamInputTokens
+	row.OutputTokens = row.UpstreamOutputTokens
+	// These are the historical stored costs. The current model card in
+	// auditTestBillingService has a different price, so the audit must use the
+	// raw token counts and current card rather than returning ActualCost.
+	row.InputCost, row.OutputCost, row.TotalCost, row.ActualCost = .03, .04, .07, .091
+
+	result := NewUsageCostAuditService(auditTestBillingService(), nil, nil, nil).
+		EstimateBatch(context.Background(), []UsageLog{row})[row.ID]
+
+	require.Equal(t, "calculated", result.Status)
+	// (100*2e-6 + 20*8e-6) * 1.3.
+	require.InDelta(t, .000468, *result.Amount, 1e-12)
+	require.InDelta(t, .091, *result.BilledAmount, 1e-12)
+	require.InDelta(t, .090532, *result.Difference, 1e-12)
+}
+
 func TestUsageCostAudit_MissingRawTokensAreNotTreatedAsZero(t *testing.T) {
 	for _, change := range []func(*UsageLog){
 		func(row *UsageLog) { row.UpstreamInputTokens, row.UpstreamOutputTokens = 0, 0 },
@@ -171,11 +190,7 @@ func TestUsageCostAudit_FreeRateRemainsZero(t *testing.T) {
 		}
 		result := NewUsageCostAuditService(auditTestBillingService(), nil, nil, nil).
 			EstimateBatch(context.Background(), []UsageLog{row})[row.ID]
-		wantStatus := "calculated"
-		if unchanged {
-			wantStatus = "recorded"
-		}
-		require.Equal(t, wantStatus, result.Status)
+		require.Equal(t, "calculated", result.Status)
 		require.NotNil(t, result.Amount)
 		require.Zero(t, *result.Amount)
 		require.Positive(t, *result.TotalCost)

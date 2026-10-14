@@ -192,7 +192,7 @@ func (Group) Fields() []ent.Field {
 			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
 			Comment("搜索工具价格 per 1000 calls（web_search 等）"),
 
-		// Grok Voice 显式定价（realtime / TTS / STT），不按文本 RateMultiplier。
+		// Grok Voice 显式定价（realtime / TTS / STT）；可选使用独立语音倍率。
 		field.Float("audio_realtime_price_per_min").
 			Optional().
 			Nillable().
@@ -211,6 +211,14 @@ func (Group) Fields() []ent.Field {
 			Min(0).
 			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
 			Comment("STT 每小时价格（USD）"),
+		field.Bool("audio_rate_independent").
+			Default(false).
+			Comment("是否使用独立语音计费倍率；关闭时沿用分组生效倍率"),
+		field.Float("audio_rate_multiplier").
+			Default(1.0).
+			Min(0).
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
+			Comment("语音独立计费倍率，仅 audio_rate_independent=true 时生效"),
 		field.Bool("long_context_pricing_enabled").
 			Default(true).
 			Comment("是否按上下文长度应用模型阶梯价格；默认开启以保持官方/渠道长上下文价"),

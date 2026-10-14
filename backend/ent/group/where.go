@@ -270,6 +270,16 @@ func AudioSttPricePerHour(v float64) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldAudioSttPricePerHour, v))
 }
 
+// AudioRateIndependent applies equality check predicate on the "audio_rate_independent" field. It's identical to AudioRateIndependentEQ.
+func AudioRateIndependent(v bool) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldAudioRateIndependent, v))
+}
+
+// AudioRateMultiplier applies equality check predicate on the "audio_rate_multiplier" field. It's identical to AudioRateMultiplierEQ.
+func AudioRateMultiplier(v float64) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldAudioRateMultiplier, v))
+}
+
 // LongContextPricingEnabled applies equality check predicate on the "long_context_pricing_enabled" field. It's identical to LongContextPricingEnabledEQ.
 func LongContextPricingEnabled(v bool) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldLongContextPricingEnabled, v))
@@ -2268,6 +2278,56 @@ func AudioSttPricePerHourIsNil() predicate.Group {
 // AudioSttPricePerHourNotNil applies the NotNil predicate on the "audio_stt_price_per_hour" field.
 func AudioSttPricePerHourNotNil() predicate.Group {
 	return predicate.Group(sql.FieldNotNull(FieldAudioSttPricePerHour))
+}
+
+// AudioRateIndependentEQ applies the EQ predicate on the "audio_rate_independent" field.
+func AudioRateIndependentEQ(v bool) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldAudioRateIndependent, v))
+}
+
+// AudioRateIndependentNEQ applies the NEQ predicate on the "audio_rate_independent" field.
+func AudioRateIndependentNEQ(v bool) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldAudioRateIndependent, v))
+}
+
+// AudioRateMultiplierEQ applies the EQ predicate on the "audio_rate_multiplier" field.
+func AudioRateMultiplierEQ(v float64) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldAudioRateMultiplier, v))
+}
+
+// AudioRateMultiplierNEQ applies the NEQ predicate on the "audio_rate_multiplier" field.
+func AudioRateMultiplierNEQ(v float64) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldAudioRateMultiplier, v))
+}
+
+// AudioRateMultiplierIn applies the In predicate on the "audio_rate_multiplier" field.
+func AudioRateMultiplierIn(vs ...float64) predicate.Group {
+	return predicate.Group(sql.FieldIn(FieldAudioRateMultiplier, vs...))
+}
+
+// AudioRateMultiplierNotIn applies the NotIn predicate on the "audio_rate_multiplier" field.
+func AudioRateMultiplierNotIn(vs ...float64) predicate.Group {
+	return predicate.Group(sql.FieldNotIn(FieldAudioRateMultiplier, vs...))
+}
+
+// AudioRateMultiplierGT applies the GT predicate on the "audio_rate_multiplier" field.
+func AudioRateMultiplierGT(v float64) predicate.Group {
+	return predicate.Group(sql.FieldGT(FieldAudioRateMultiplier, v))
+}
+
+// AudioRateMultiplierGTE applies the GTE predicate on the "audio_rate_multiplier" field.
+func AudioRateMultiplierGTE(v float64) predicate.Group {
+	return predicate.Group(sql.FieldGTE(FieldAudioRateMultiplier, v))
+}
+
+// AudioRateMultiplierLT applies the LT predicate on the "audio_rate_multiplier" field.
+func AudioRateMultiplierLT(v float64) predicate.Group {
+	return predicate.Group(sql.FieldLT(FieldAudioRateMultiplier, v))
+}
+
+// AudioRateMultiplierLTE applies the LTE predicate on the "audio_rate_multiplier" field.
+func AudioRateMultiplierLTE(v float64) predicate.Group {
+	return predicate.Group(sql.FieldLTE(FieldAudioRateMultiplier, v))
 }
 
 // LongContextPricingEnabledEQ applies the EQ predicate on the "long_context_pricing_enabled" field.

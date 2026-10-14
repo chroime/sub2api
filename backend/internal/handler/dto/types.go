@@ -140,6 +140,8 @@ type Group struct {
 	AudioRealtimePricePerMin     *float64 `json:"audio_realtime_price_per_min"`
 	AudioTtsPricePerMillionChars *float64 `json:"audio_tts_price_per_million_chars"`
 	AudioSttPricePerHour         *float64 `json:"audio_stt_price_per_hour"`
+	AudioRateIndependent         bool     `json:"audio_rate_independent"`
+	AudioRateMultiplier          float64  `json:"audio_rate_multiplier"`
 
 	// Claude Code 客户端限制
 	ClaudeCodeOnly  bool   `json:"claude_code_only"`

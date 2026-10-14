@@ -98,8 +98,35 @@ func (m *modelStore) getRun(ctx context.Context, siteID int64, id string) (*Mode
 // the user-facing IQ projection. The run and its diagnostic evidence stay in
 // the administrator workbench so deletion cannot destroy an audit trail.
 func (m *modelStore) hideRunFromPublic(ctx context.Context, siteID int64, id string) error {
-	result, err := m.db.ExecContext(ctx, `UPDATE upstream_governance_model_runs SET public_visible=FALSE WHERE site_id=$1 AND id=$2`, siteID, id)
+	result, err := m.db.ExecContext(ctx, `UPDATE upstream_governance_model_runs SET public_visible=FALSE WHERE site_id=$1 AND id=$2 AND request->>'template'='pelican' AND request->'config'->>'target_type'='local_group'`, siteID, id)
 	return affected(result, err, ErrNotFound)
+}
+
+// deleteRun permanently removes a finished model run. Active runs remain in
+// the queue so workers cannot lose their lease or settle a partially executed
+// request after an administrator clicks delete.
+func (m *modelStore) deleteRun(ctx context.Context, siteID int64, id string) error {
+	result, err := m.db.ExecContext(ctx, `DELETE FROM upstream_governance_model_runs WHERE site_id=$1 AND id=$2 AND request->>'template'='pelican' AND request->'config'->>'target_type'='local_group' AND status NOT IN ('queued','running')`, siteID, id)
+	if err != nil {
+		return err
+	}
+	if n, err := result.RowsAffected(); err != nil {
+		return err
+	} else if n > 0 {
+		return nil
+	}
+	var status string
+	err = m.db.QueryRowContext(ctx, `SELECT status FROM upstream_governance_model_runs WHERE site_id=$1 AND id=$2`, siteID, id).Scan(&status)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+	if status == "queued" || status == "running" {
+		return ErrConflict
+	}
+	return ErrNotFound
 }
 func (m *modelStore) listRuns(ctx context.Context, siteID int64, page, size int, batchID string) (*ModelRunPage, error) {
 	p := &ModelRunPage{Items: []ModelRun{}, Page: page, PageSize: size, Counts: map[string]int64{}}

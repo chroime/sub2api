@@ -11,7 +11,6 @@ import { getSetupStatus } from '@/api/setup'
 import { updateFavicon } from '@/utils/branding'
 import { FeatureFlags, isFeatureFlagEnabled } from '@/utils/featureFlags'
 import { resolveSiteBillingMode } from '@/utils/siteBillingMode'
-import { useCanvasAuthHostBridge } from '@/composables/useCanvasAuthHostBridge'
 
 const router = useRouter()
 const route = useRoute()
@@ -21,8 +20,6 @@ const subscriptionStore = useSubscriptionStore()
 const announcementStore = useAnnouncementStore()
 const adminComplianceStore = useAdminComplianceStore()
 const adminSettingsStore = useAdminSettingsStore()
-
-useCanvasAuthHostBridge()
 
 function updateDocumentTitle() {
   const customMenuItems = [

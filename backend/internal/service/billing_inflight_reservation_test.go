@@ -249,6 +249,27 @@ func TestInflightEstimate_MediaKinds(t *testing.T) {
 	require.Greater(t, est, 0.0)
 }
 
+func TestInflightEstimate_AudioIndependentMultiplier(t *testing.T) {
+	groupID := int64(31)
+	price := 0.25
+	group := &Group{
+		ID: groupID, Platform: PlatformGrok, RateMultiplier: 7,
+		AudioRateIndependent: true, AudioRateMultiplier: 2,
+		AudioRealtimePricePerMin: &price,
+		ModelPricing: []ChannelModelPricing{{
+			Models: []string{"realtime"}, BillingMode: BillingModePerRequest, PerRequestPrice: &price,
+		}},
+	}
+	svc := newInflightEstimateGateway(t, nil)
+	apiKey := &APIKey{User: &User{ID: 1}, GroupID: &groupID, Group: group}
+
+	est, priced := svc.EstimateInflightReservation(context.Background(), apiKey, InflightEstimateRequest{
+		Model: "realtime", Kind: InflightEstimateAudio, AudioMode: "realtime", AudioUnits: 1,
+	})
+	require.True(t, priced)
+	require.InDelta(t, 0.5, est, 1e-12, "audio reservation must use the independent multiplier")
+}
+
 // ---------------------------------------------------------------------------
 // reservation handle: hand-off to billing task, renewal
 // ---------------------------------------------------------------------------

@@ -90,6 +90,7 @@ func TestGroupMediaPricingLooksIncomplete_VideoModelPricesComplete(t *testing.T)
 	price := 10.0
 	require.False(t, groupMediaPricingLooksIncomplete(&Group{SearchPricePer1k: &price}))
 	require.False(t, groupMediaPricingLooksIncomplete(&Group{AudioRealtimePricePerMin: &price}))
+	require.False(t, groupMediaPricingLooksIncomplete(&Group{AudioRateIndependent: true, AudioRateMultiplier: 0}))
 	// Legacy video price alone still marks complete (existing path).
 	require.False(t, groupMediaPricingLooksIncomplete(&Group{VideoPrice720P: &price}))
 }

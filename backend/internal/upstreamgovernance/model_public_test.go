@@ -35,7 +35,7 @@ func TestExtractIQHTMLArtifactStripsInnerMarkdownFenceLines(t *testing.T) {
 	require.NotContains(t, got, "```")
 }
 
-func TestBuildIQTimelineUsesDynamicWindowAndFailurePrecedence(t *testing.T) {
+func TestBuildIQTimelineUsesDynamicWindowAndSuccessPrecedence(t *testing.T) {
 	now := time.Date(2026, 10, 2, 12, 8, 0, 0, time.UTC)
 	base := now.Add(-24 * time.Hour)
 	points := buildIQTimeline(now, []iqTimelineSample{
@@ -43,12 +43,12 @@ func TestBuildIQTimelineUsesDynamicWindowAndFailurePrecedence(t *testing.T) {
 		{At: base.Add(20 * time.Minute), Status: "fail"},
 	}, 24)
 	require.Len(t, points, 49)
-	require.Equal(t, "fail", points[0].Status)
+	require.Equal(t, "pass", points[0].Status)
 	require.Equal(t, base.Truncate(30*time.Minute), points[0].At)
 	require.Equal(t, now.Truncate(30*time.Minute), points[len(points)-1].At)
 }
 
-func TestPublicIQDashboardSeparatesTemplateLimitsAndMarksWrongCandyAsFailed(t *testing.T) {
+func TestPublicIQDashboardOnlyReturnsVisibleLocalPelicanWorks(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer db.Close()
@@ -62,33 +62,18 @@ func TestPublicIQDashboardSeparatesTemplateLimitsAndMarksWrongCandyAsFailed(t *t
 		WillReturnRows(sqlmock.NewRows([]string{"bucket_at", "quality_status"}).
 			AddRow(now.Truncate(30*time.Minute), 2).
 			AddRow(now.Add(-12*time.Hour).Truncate(30*time.Minute), 1))
-	mock.ExpectQuery("SELECT r.id,r.created_at,s.name,r.status,").
-		WithArgs(since, 2).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at", "name", "status", "group_name", "managed_key_id", "model", "effort", "answer", "verdict", "duration_ms", "template_version"}).
-			AddRow("candy-wrong", now.Add(-2*time.Minute), "site", "succeeded", "GPT Lite", "4", "gpt-6", "low", "20", "numeric_incorrect", "10", "v1").
-			AddRow("candy-right", now.Add(-4*time.Minute), "site", "succeeded", "GPT Lite", "21", "gpt-6", "high", "21", "numeric_correct", "20", "v1"))
-	mock.ExpectQuery("SELECT r.id,r.created_at,s.name,r.status,").
+	mock.ExpectQuery("SELECT r.id,r.created_at,s.name,r.status,[\\s\\S]*target_type.*local_group").
 		WithArgs(since, 3, 0).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at", "name", "status", "group_name", "managed_key_id", "model", "effort", "html", "response_text", "duration_ms"}).
-			AddRow("pelican-1", now.Add(-3*time.Minute), "site", "succeeded", "GPT Lite", "5", "gpt-6", "medium", "<svg />", "", "30"))
+			AddRow("pelican-1", now.Add(-3*time.Minute), "site", "succeeded", "GPT Lite", "", "gpt-6", "medium", "<svg />", "", "30").
+			AddRow("candy-1", now.Add(-4*time.Minute), "site", "succeeded", "Candy", "", "gpt-6", "medium", "", "", "30").
+			AddRow("hidden-pelican", now.Add(-5*time.Minute), "site", "succeeded", "Hidden", "", "gpt-6", "medium", "<svg />", "", "30"))
 
 	dashboard, err := svc.PublicIQDashboard(t.Context(), 24, 2)
 	require.NoError(t, err)
-	require.Len(t, dashboard.CandyResults, 2)
 	require.Len(t, dashboard.PelicanWorks, 1)
-	require.Equal(t, "GPT Lite", dashboard.CandyResults[0].GroupName)
 	require.Equal(t, "GPT Lite", dashboard.PelicanWorks[0].GroupName)
-	require.Equal(t, "fail", dashboard.Timeline[len(dashboard.Timeline)-1].Status)
-	// The wrong candy run shares the current half-hour with the successful run;
-	// failure must take precedence over the successful HTTP status.
-	foundFail := false
-	for _, point := range dashboard.Timeline {
-		if point.Status == "fail" {
-			foundFail = true
-			break
-		}
-	}
-	require.True(t, foundFail)
+	require.Equal(t, "pass", dashboard.Timeline[len(dashboard.Timeline)-1].Status)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -108,12 +93,6 @@ func TestPublicIQDashboardPrefersLocalGroupNameProjection(t *testing.T) {
 
 	require.Contains(t, iqPublicGroupProjection, "imported_group.name")
 	require.NotContains(t, iqPublicGroupJoins, "remote_group.group_name")
-	candyQuery := "string_agg.*upstream_governance_bindings"
-	mock.ExpectQuery(candyQuery).
-		WithArgs(since, 1).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at", "name", "status", "group_name", "managed_key_id", "model", "effort", "answer", "verdict", "duration_ms", "template_version"}).
-			AddRow("candy-local-group", now.Add(-time.Minute), "site", "succeeded", "本地 GPT 分组", "", "gpt-6", "high", "21", "numeric_correct", "10", "v1"))
-
 	pelicanQuery := "string_agg.*upstream_governance_bindings"
 	mock.ExpectQuery(pelicanQuery).
 		WithArgs(since, 2, 0).
@@ -121,8 +100,6 @@ func TestPublicIQDashboardPrefersLocalGroupNameProjection(t *testing.T) {
 
 	dashboard, err := svc.PublicIQDashboard(t.Context(), 24, 1)
 	require.NoError(t, err)
-	require.Len(t, dashboard.CandyResults, 1)
-	require.Equal(t, "本地 GPT 分组", dashboard.CandyResults[0].GroupName)
 	require.Empty(t, dashboard.PelicanWorks)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
@@ -140,9 +117,6 @@ func TestPublicIQDashboardPaginatesPelicanWorks(t *testing.T) {
 	mock.ExpectQuery(regexp.QuoteMeta(iqTimelineQuery)).
 		WithArgs(since, now).
 		WillReturnRows(sqlmock.NewRows([]string{"bucket_at", "quality_status"}))
-	mock.ExpectQuery("SELECT r.id,r.created_at,s.name,r.status,").
-		WithArgs(since, 2).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at", "name", "status", "group_name", "managed_key_id", "model", "effort", "answer", "verdict", "duration_ms", "template_version"}))
 	mock.ExpectQuery("SELECT r.id,r.created_at,s.name,r.status,[\\s\\S]*r.request->>'template'='pelican'").
 		WithArgs(since, 3, 2).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at", "name", "status", "group_name", "managed_key_id", "model", "effort", "html", "response_text", "duration_ms"}).
@@ -173,9 +147,6 @@ func TestPublicIQDashboardHasMoreUsesRowsWhenArtifactsAreSkipped(t *testing.T) {
 	mock.ExpectQuery(regexp.QuoteMeta(iqTimelineQuery)).
 		WithArgs(since, now).
 		WillReturnRows(sqlmock.NewRows([]string{"bucket_at", "quality_status"}))
-	mock.ExpectQuery("SELECT r.id,r.created_at,s.name,r.status,").
-		WithArgs(since, 2).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at", "name", "status", "group_name", "managed_key_id", "model", "effort", "answer", "verdict", "duration_ms", "template_version"}))
 	valid := "<svg><path/></svg>"
 	mock.ExpectQuery("SELECT r.id,r.created_at,s.name,r.status,[\\s\\S]*r.request->>'template'='pelican'").
 		WithArgs(since, 3, 0).
@@ -224,15 +195,13 @@ func TestPublicIQDashboardEnforcesTotalHTMLBudgetAndSafeProjection(t *testing.T)
 	since := now.Add(-time.Hour)
 	mock.ExpectQuery(regexp.QuoteMeta(iqTimelineQuery)).WithArgs(since, now).
 		WillReturnRows(sqlmock.NewRows([]string{"bucket_at", "quality_status"}))
-	mock.ExpectQuery("SELECT r.id,r.created_at,s.name,r.status,[\\s\\S]*r.request->>'template'='candy'[\\s\\S]*LIMIT \\$2").WithArgs(since, 8).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at", "name", "status", "group_name", "managed_key_id", "model", "effort", "answer", "verdict", "duration_ms", "template_version"}))
 	rows := sqlmock.NewRows([]string{"id", "created_at", "name", "status", "group_name", "managed_key_id", "model", "effort", "html", "response_text", "duration_ms"})
 	html := "<html><body><svg>" + strings.Repeat("x", maxIQHTMLBytes-len("<html><body><svg></svg></body></html>")) + "</svg></body></html>"
 	require.Len(t, html, maxIQHTMLBytes)
 	for i := 0; i < 6; i++ {
 		rows.AddRow(fmt.Sprint(i), now, "site", "succeeded", "GPT Lite", "4", "gpt-model", "low", html, "", "10")
 	}
-	mock.ExpectQuery("SELECT r.id,r.created_at,s.name,r.status,[\\s\\S]*octet_length[\\s\\S]*r.request->>'template'='pelican'[\\s\\S]*LIMIT \\$2").WithArgs(since, 9, 0).WillReturnRows(rows)
+	mock.ExpectQuery("SELECT r.id,r.created_at,s.name,r.status,[\\s\\S]*octet_length[\\s\\S]*r.request->>'template'='pelican'[\\s\\S]*target_type[\\s\\S]*LIMIT \\$2").WithArgs(since, 9, 0).WillReturnRows(rows)
 	dashboard, err := svc.PublicIQDashboard(t.Context(), 1, 8)
 	require.NoError(t, err)
 	require.Len(t, dashboard.PelicanWorks, 4)
@@ -260,32 +229,10 @@ func TestBuildIQTimelineHandlesRequestedHoursAndWindowEdges(t *testing.T) {
 	}
 }
 
-// This optional PostgreSQL fixture verifies the actual CASE/MAX expression,
-// independently of the sqlmock projection tests above.
-func TestPublicIQDashboardPostgresAggregateIncludesOldFailedCandyBeyondCardLimit(t *testing.T) {
-	f := newModelEngineFixture(t)
-	cfg := f.config
-	cfg.Templates = []string{"candy", "pelican"}
-	cfg.Samples = 3
-	batch := f.batch(t, "iq-public-aggregate", cfg)
-	now := time.Now().UTC()
-	f.service.now = func() time.Time { return now }
-	_, err := f.db.Exec(`UPDATE upstream_governance_model_runs SET status='succeeded',created_at=$2,result='{"candy_verdict":"numeric_correct","candy_answer":21,"html":"<html><svg/></html>","duration_ms":15}'::jsonb WHERE batch_id=$1`, batch.ID, now.Add(-time.Minute))
-	require.NoError(t, err)
-	_, err = f.db.Exec(`UPDATE upstream_governance_model_runs SET created_at=$2,result='{"candy_verdict":"numeric_incorrect","candy_answer":20}'::jsonb WHERE id=(SELECT id FROM upstream_governance_model_runs WHERE batch_id=$1 AND request->>'template'='candy' ORDER BY sequence LIMIT 1)`, batch.ID, now.Add(-12*time.Hour))
-	require.NoError(t, err)
-	dashboard, err := f.service.PublicIQDashboard(t.Context(), 24, 1)
-	require.NoError(t, err)
-	require.Len(t, dashboard.CandyResults, 1)
-	require.Equal(t, "numeric_correct", dashboard.CandyResults[0].Verdict)
-	require.Len(t, dashboard.PelicanWorks, 1)
-	failedAt := now.Add(-12 * time.Hour).Truncate(30 * time.Minute)
-	found := false
-	for _, point := range dashboard.Timeline {
-		if point.At.Equal(failedAt) {
-			require.Equal(t, "fail", point.Status)
-			found = true
-		}
-	}
-	require.True(t, found)
+func TestPublicIQDashboardQueryRestrictsProjectionToLocalPelican(t *testing.T) {
+	require.Contains(t, iqTimelineQuery, "r.request->>'template'='pelican'")
+	require.Contains(t, iqTimelineQuery, "r.request->'config'->>'target_type'='local_group'")
+	require.Contains(t, iqTimelineQuery, "r.public_visible")
+	require.Contains(t, iqTimelineQuery, "WHEN r.status='succeeded' AND r.request->>'template'='pelican' THEN 2")
+	require.Contains(t, iqTimelineQuery, "WHEN r.status IN ('failed','indeterminate') THEN 1")
 }

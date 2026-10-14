@@ -167,7 +167,7 @@ export interface ReadinessCheck {
   detail?: string
   /** Omitted by the API when the safe count is zero. */
   count?: number
-  target_tab: 'overview' | 'import' | 'models' | 'monitor' | 'history'
+  target_tab: 'overview' | 'import' | 'models' | 'local-monitor' | 'monitor' | 'history'
 }
 export interface ReadinessOverview {
   site_id: number

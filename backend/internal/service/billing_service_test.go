@@ -1203,6 +1203,20 @@ func TestGetModelPricing_Grok47OfficialFallback(t *testing.T) {
 	}
 }
 
+func TestGetModelPricing_Grok47BuildFastUsesGrok47Card(t *testing.T) {
+	svc := newTestBillingService()
+	base, err := svc.GetModelPricing("grok-4.7")
+	require.NoError(t, err)
+
+	for _, model := range []string{"grok-4.7-build-fast", "grok-4.7-build-fast-latest"} {
+		pricing, err := svc.GetModelPricing(model)
+		require.NoError(t, err, model)
+		require.Equal(t, base, pricing)
+		require.True(t, svc.HasIdentifiedTokenPricing(model))
+	}
+	require.True(t, svc.HasIdentifiedTokenPricing("xai/grok-4.7-build-fast"))
+}
+
 func TestGetModelPricing_GrokOfficialFamilyCards(t *testing.T) {
 	svc := newTestBillingService()
 	for _, tc := range []struct {

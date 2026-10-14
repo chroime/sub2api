@@ -468,6 +468,13 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 	audioRealtimePricePerMin := normalizePrice(input.AudioRealtimePricePerMin)
 	audioTTSPricePerMillionChars := normalizePrice(input.AudioTTSPricePerMillionChars)
 	audioSTTPricePerHour := normalizePrice(input.AudioSTTPricePerHour)
+	audioRateMultiplier := 1.0
+	if input.AudioRateMultiplier != nil {
+		if *input.AudioRateMultiplier < 0 {
+			return nil, errors.New("audio_rate_multiplier must be >= 0")
+		}
+		audioRateMultiplier = *input.AudioRateMultiplier
+	}
 	imageRateMultiplier := 1.0
 	if input.ImageRateMultiplier != nil {
 		if *input.ImageRateMultiplier < 0 {
@@ -637,6 +644,8 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 		AudioRealtimePricePerMin:             audioRealtimePricePerMin,
 		AudioTTSPricePerMillionChars:         audioTTSPricePerMillionChars,
 		AudioSTTPricePerHour:                 audioSTTPricePerHour,
+		AudioRateIndependent:                 input.AudioRateIndependent,
+		AudioRateMultiplier:                  audioRateMultiplier,
 		ClaudeCodeOnly:                       input.ClaudeCodeOnly,
 		FallbackGroupID:                      input.FallbackGroupID,
 		FallbackGroupIDOnInvalidRequest:      fallbackOnInvalidRequest,
@@ -1026,6 +1035,15 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 	}
 	if input.AudioSTTPricePerHour != nil {
 		group.AudioSTTPricePerHour = normalizePrice(input.AudioSTTPricePerHour)
+	}
+	if input.AudioRateIndependent != nil {
+		group.AudioRateIndependent = *input.AudioRateIndependent
+	}
+	if input.AudioRateMultiplier != nil {
+		if *input.AudioRateMultiplier < 0 {
+			return nil, errors.New("audio_rate_multiplier must be >= 0")
+		}
+		group.AudioRateMultiplier = *input.AudioRateMultiplier
 	}
 
 	// Claude Code 客户端限制

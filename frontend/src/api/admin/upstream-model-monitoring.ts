@@ -181,6 +181,7 @@ const api = {
   async cancelBatch(id: number, batchId: string) { await apiClient.post(`${site(id)}/model-batches/${encodeURIComponent(batchId)}/cancel`, {}) },
   async runs(id: number, page = 1, batchId = '') { return (await apiClient.get<ModelRunPage>(`${site(id)}/model-runs`, { params: { page, page_size: 20, ...(batchId ? { batch_id: batchId } : {}) } })).data },
   async run(id: number, runId: string) { return (await apiClient.get<ModelRun>(`${site(id)}/model-runs/${encodeURIComponent(runId)}`)).data },
+  async hideRun(id: number, runId: string) { await apiClient.post(`${site(id)}/model-runs/${encodeURIComponent(runId)}/hide`, {}) },
   async deleteRun(id: number, runId: string) { await apiClient.delete(`${site(id)}/model-runs/${encodeURIComponent(runId)}`) },
   async review(id: number, runId: string, review: ModelReview, note: string) { return (await apiClient.put<ModelRun>(`${site(id)}/model-runs/${encodeURIComponent(runId)}/review`, { review, note })).data },
   async stats(id: number, days = 7) { return (await apiClient.get<ModelStats>(`${site(id)}/model-stats`, { params: { days } })).data },

@@ -167,7 +167,6 @@ export default {
     announcements: '公告',
     apiKeys: 'API 密钥',
     batchImage: '批量生图',
-    infiniteCanvas: '无限画布',
     usage: '使用记录',
     tokenRanking: '用量排行',
     redeem: '兑换',

@@ -61,6 +61,7 @@ const (
 	DefaultImagineVideoModel         = "grok-imagine-video"
 	DefaultImagineVideo15Model       = "grok-imagine-video-1.5"
 	DefaultImagineVideo15LegacyModel = "grok-imagine-video-1.5-preview"
+	DefaultImagineVideo15LiteModel   = "grok-imagine-video-1.5-lite"
 )
 
 // ModelMappingOptions controls optional expansions of the default mapping.
@@ -85,6 +86,7 @@ func (o ModelMappingOptions) defaultText() string {
 var defaultModels = []Model{
 	// Text
 	{ID: "grok-4.7", Object: "model", Type: "model", OwnedBy: "xai", DisplayName: "Grok 4.7"},
+	{ID: "grok-4.7-build-fast", Object: "model", Type: "model", OwnedBy: "xai", DisplayName: "Grok 4.7 Build Fast"},
 	{ID: "grok-4.6", Object: "model", Type: "model", OwnedBy: "xai", DisplayName: "Grok 4.6"},
 	{ID: "grok-4.5", Object: "model", Type: "model", OwnedBy: "xai", DisplayName: "Grok 4.5"},
 	{ID: "grok-4.3", Object: "model", Type: "model", OwnedBy: "xai", DisplayName: "Grok 4.3"},
@@ -99,6 +101,7 @@ var defaultModels = []Model{
 	{ID: DefaultImagineImage20Model, Object: "model", Type: "model", OwnedBy: "xai", DisplayName: "Grok Imagine Image 2.0"},
 	{ID: DefaultImagineVideoModel, Object: "model", Type: "model", OwnedBy: "xai", DisplayName: "Grok Imagine Video"},
 	{ID: DefaultImagineVideo15Model, Object: "model", Type: "model", OwnedBy: "xai", DisplayName: "Grok Imagine Video 1.5"},
+	{ID: DefaultImagineVideo15LiteModel, Object: "model", Type: "model", OwnedBy: "xai", DisplayName: "Grok Imagine Video 1.5 Lite"},
 }
 
 // grokTextResponsesModelAliases is the source of truth for Grok text models
@@ -109,6 +112,8 @@ var grokTextResponsesModelAliases = map[string]string{
 	"grok-latest":                  DefaultTextModel,
 	"grok-4.7":                     "grok-4.7",
 	"grok-4.7-latest":              "grok-4.7",
+	"grok-4.7-build-fast":          "grok-4.7-build-fast",
+	"grok-4.7-build-fast-latest":   "grok-4.7-build-fast",
 	"grok-4.6":                     "grok-4.6",
 	"grok-4.6-latest":              "grok-4.6",
 	"grok-4.5":                     "grok-4.5",
@@ -183,6 +188,7 @@ func ModelMappingWithOptions(opts ModelMappingOptions) map[string]string {
 	mapping["grok-imagine-video"] = DefaultImagineVideoModel
 	mapping["grok-imagine-video-1.5"] = DefaultImagineVideo15Model
 	mapping["grok-imagine-video-1.5-preview"] = DefaultImagineVideo15Model
+	mapping["grok-imagine-video-1.5-lite"] = DefaultImagineVideo15LiteModel
 	// Informal alias only:
 	mapping["grok-video-1.5"] = DefaultImagineVideo15Model
 
@@ -319,7 +325,7 @@ func ResolveDefaultTextModel(model string, defaultText ...string) string {
 }
 
 // CanonicalImagineVideoModel normalizes video model ids for pricing tables.
-// Legacy "grok-imagine-video-1.5" shares the 1.5 price family with preview.
+// The 1.5, preview, and lite variants share the 1.5 price family.
 func CanonicalImagineVideoModel(model string) string {
 	m := strings.ToLower(StripGrokProviderPrefix(model))
 	switch {

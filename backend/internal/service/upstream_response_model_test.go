@@ -97,6 +97,12 @@ func TestUpstreamModelMismatchTreatsGrokBuildRuntimeIDsAsAliases(t *testing.T) {
 	}
 }
 
+func TestUpstreamModelMismatchTreatsGrok47BuildFastAsGrok47Runtime(t *testing.T) {
+	require.True(t, upstreamModelsMatchForAudit("grok-4.7-build-fast", "grok-4.7-build"))
+	require.True(t, upstreamModelsMatchForAudit("grok-4.7", "grok-4.7-build-fast"))
+	require.False(t, upstreamModelsMatchForAudit("grok-4.6", "grok-4.7-build-fast"))
+}
+
 func TestUpstreamModelMismatchDoesNotCollapseDifferentModels(t *testing.T) {
 	tests := []struct {
 		name          string

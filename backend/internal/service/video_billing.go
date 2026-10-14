@@ -14,7 +14,7 @@ const (
 	VideoPriceFamilyGrokImagineVideo15 = "grok-imagine-video-1.5"
 )
 
-// CanonicalGrokImagineVideoPriceFamily normalizes model aliases / preview / legacy
+// CanonicalGrokImagineVideoPriceFamily normalizes model aliases / preview / lite
 // IDs onto the price-family keys stored in video_model_prices.
 func CanonicalGrokImagineVideoPriceFamily(model string) string {
 	if model == "" {

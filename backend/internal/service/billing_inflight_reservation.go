@@ -619,15 +619,17 @@ func (d inflightEstimateDeps) estimateOne(ctx context.Context, apiKey *APIKey, m
 			}
 		}
 	case InflightEstimateAudio:
+		audioConfig := groupAudioPriceConfigFromAPIKey(apiKey)
+		audioRate := audioBillingMultiplier(audioConfig, textRate)
 		if perRequestMode && resolved.Mode == BillingModePerRequest {
 			u := req.AudioUnits
 			if u <= 0 {
 				u = 1
 			}
-			cost = maxPerRequestPrice(resolved) * u * textRate
+			cost = maxPerRequestPrice(resolved) * u * audioRate
 		}
 		if d.billing != nil && req.AudioUnits > 0 {
-			if b := d.billing.CalculateAudioCost(req.AudioMode, req.AudioUnits, groupAudioPriceConfigFromAPIKey(apiKey), textRate); b != nil && b.ActualCost > cost {
+			if b := d.billing.CalculateAudioCost(req.AudioMode, req.AudioUnits, audioConfig, textRate); b != nil && b.ActualCost > cost {
 				cost = b.ActualCost
 			}
 		}

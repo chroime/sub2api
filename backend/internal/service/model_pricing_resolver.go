@@ -148,19 +148,41 @@ func matchGroupModelPricing(group *Group, model string) *ChannelModelPricing {
 	if group == nil {
 		return nil
 	}
-	model = normalizeChannelPricingModelName(model)
+	candidates := channelPricingModelCandidates(model)
+	if len(candidates) == 0 {
+		return nil
+	}
+	// Search exact entries by candidate priority first. This keeps an explicit
+	// variant price ahead of its inherited base-model price regardless of row
+	// order in the administrator's configuration.
+	for _, candidate := range candidates {
+		for i := range group.ModelPricing {
+			entry := &group.ModelPricing[i]
+			for _, pattern := range entry.Models {
+				if normalizeChannelPricingModelName(pattern) == candidate {
+					cp := entry.Clone()
+					return &cp
+				}
+			}
+		}
+	}
 	var wildcard *ChannelModelPricing
 	for i := range group.ModelPricing {
 		entry := &group.ModelPricing[i]
 		for _, pattern := range entry.Models {
 			normalized := normalizeChannelPricingModelName(pattern)
-			if normalized == model {
-				cp := entry.Clone()
-				return &cp
-			}
-			if strings.HasSuffix(normalized, "*") && strings.HasPrefix(model, strings.TrimSuffix(normalized, "*")) && wildcard == nil {
-				cp := entry.Clone()
-				wildcard = &cp
+			if strings.HasSuffix(normalized, "*") {
+				prefix := strings.TrimSuffix(normalized, "*")
+				for _, candidate := range candidates {
+					if strings.HasPrefix(candidate, prefix) {
+						cp := entry.Clone()
+						wildcard = &cp
+						break
+					}
+				}
+				if wildcard != nil {
+					return wildcard
+				}
 			}
 		}
 	}

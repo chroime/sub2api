@@ -898,6 +898,41 @@ func (_u *GroupUpdate) ClearAudioSttPricePerHour() *GroupUpdate {
 	return _u
 }
 
+// SetAudioRateIndependent sets the "audio_rate_independent" field.
+func (_u *GroupUpdate) SetAudioRateIndependent(v bool) *GroupUpdate {
+	_u.mutation.SetAudioRateIndependent(v)
+	return _u
+}
+
+// SetNillableAudioRateIndependent sets the "audio_rate_independent" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableAudioRateIndependent(v *bool) *GroupUpdate {
+	if v != nil {
+		_u.SetAudioRateIndependent(*v)
+	}
+	return _u
+}
+
+// SetAudioRateMultiplier sets the "audio_rate_multiplier" field.
+func (_u *GroupUpdate) SetAudioRateMultiplier(v float64) *GroupUpdate {
+	_u.mutation.ResetAudioRateMultiplier()
+	_u.mutation.SetAudioRateMultiplier(v)
+	return _u
+}
+
+// SetNillableAudioRateMultiplier sets the "audio_rate_multiplier" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableAudioRateMultiplier(v *float64) *GroupUpdate {
+	if v != nil {
+		_u.SetAudioRateMultiplier(*v)
+	}
+	return _u
+}
+
+// AddAudioRateMultiplier adds value to the "audio_rate_multiplier" field.
+func (_u *GroupUpdate) AddAudioRateMultiplier(v float64) *GroupUpdate {
+	_u.mutation.AddAudioRateMultiplier(v)
+	return _u
+}
+
 // SetLongContextPricingEnabled sets the "long_context_pricing_enabled" field.
 func (_u *GroupUpdate) SetLongContextPricingEnabled(v bool) *GroupUpdate {
 	_u.mutation.SetLongContextPricingEnabled(v)
@@ -1643,6 +1678,11 @@ func (_u *GroupUpdate) check() error {
 			return &ValidationError{Name: "audio_stt_price_per_hour", err: fmt.Errorf(`ent: validator failed for field "Group.audio_stt_price_per_hour": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.AudioRateMultiplier(); ok {
+		if err := group.AudioRateMultiplierValidator(v); err != nil {
+			return &ValidationError{Name: "audio_rate_multiplier", err: fmt.Errorf(`ent: validator failed for field "Group.audio_rate_multiplier": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.DefaultMappedModel(); ok {
 		if err := group.DefaultMappedModelValidator(v); err != nil {
 			return &ValidationError{Name: "default_mapped_model", err: fmt.Errorf(`ent: validator failed for field "Group.default_mapped_model": %w`, err)}
@@ -1933,6 +1973,15 @@ func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.AudioSttPricePerHourCleared() {
 		_spec.ClearField(group.FieldAudioSttPricePerHour, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.AudioRateIndependent(); ok {
+		_spec.SetField(group.FieldAudioRateIndependent, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.AudioRateMultiplier(); ok {
+		_spec.SetField(group.FieldAudioRateMultiplier, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedAudioRateMultiplier(); ok {
+		_spec.AddField(group.FieldAudioRateMultiplier, field.TypeFloat64, value)
 	}
 	if value, ok := _u.mutation.LongContextPricingEnabled(); ok {
 		_spec.SetField(group.FieldLongContextPricingEnabled, field.TypeBool, value)
@@ -3235,6 +3284,41 @@ func (_u *GroupUpdateOne) ClearAudioSttPricePerHour() *GroupUpdateOne {
 	return _u
 }
 
+// SetAudioRateIndependent sets the "audio_rate_independent" field.
+func (_u *GroupUpdateOne) SetAudioRateIndependent(v bool) *GroupUpdateOne {
+	_u.mutation.SetAudioRateIndependent(v)
+	return _u
+}
+
+// SetNillableAudioRateIndependent sets the "audio_rate_independent" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableAudioRateIndependent(v *bool) *GroupUpdateOne {
+	if v != nil {
+		_u.SetAudioRateIndependent(*v)
+	}
+	return _u
+}
+
+// SetAudioRateMultiplier sets the "audio_rate_multiplier" field.
+func (_u *GroupUpdateOne) SetAudioRateMultiplier(v float64) *GroupUpdateOne {
+	_u.mutation.ResetAudioRateMultiplier()
+	_u.mutation.SetAudioRateMultiplier(v)
+	return _u
+}
+
+// SetNillableAudioRateMultiplier sets the "audio_rate_multiplier" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableAudioRateMultiplier(v *float64) *GroupUpdateOne {
+	if v != nil {
+		_u.SetAudioRateMultiplier(*v)
+	}
+	return _u
+}
+
+// AddAudioRateMultiplier adds value to the "audio_rate_multiplier" field.
+func (_u *GroupUpdateOne) AddAudioRateMultiplier(v float64) *GroupUpdateOne {
+	_u.mutation.AddAudioRateMultiplier(v)
+	return _u
+}
+
 // SetLongContextPricingEnabled sets the "long_context_pricing_enabled" field.
 func (_u *GroupUpdateOne) SetLongContextPricingEnabled(v bool) *GroupUpdateOne {
 	_u.mutation.SetLongContextPricingEnabled(v)
@@ -3993,6 +4077,11 @@ func (_u *GroupUpdateOne) check() error {
 			return &ValidationError{Name: "audio_stt_price_per_hour", err: fmt.Errorf(`ent: validator failed for field "Group.audio_stt_price_per_hour": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.AudioRateMultiplier(); ok {
+		if err := group.AudioRateMultiplierValidator(v); err != nil {
+			return &ValidationError{Name: "audio_rate_multiplier", err: fmt.Errorf(`ent: validator failed for field "Group.audio_rate_multiplier": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.DefaultMappedModel(); ok {
 		if err := group.DefaultMappedModelValidator(v); err != nil {
 			return &ValidationError{Name: "default_mapped_model", err: fmt.Errorf(`ent: validator failed for field "Group.default_mapped_model": %w`, err)}
@@ -4300,6 +4389,15 @@ func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error)
 	}
 	if _u.mutation.AudioSttPricePerHourCleared() {
 		_spec.ClearField(group.FieldAudioSttPricePerHour, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.AudioRateIndependent(); ok {
+		_spec.SetField(group.FieldAudioRateIndependent, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.AudioRateMultiplier(); ok {
+		_spec.SetField(group.FieldAudioRateMultiplier, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedAudioRateMultiplier(); ok {
+		_spec.AddField(group.FieldAudioRateMultiplier, field.TypeFloat64, value)
 	}
 	if value, ok := _u.mutation.LongContextPricingEnabled(); ok {
 		_spec.SetField(group.FieldLongContextPricingEnabled, field.TypeBool, value)

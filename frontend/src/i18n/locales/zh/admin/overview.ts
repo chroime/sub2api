@@ -1127,10 +1127,12 @@ export default {
       },
       voicePricing: {
         title: 'Grok Voice 定价',
-        description: '分组级 Voice realtime / TTS / STT 单价（USD）。留空表示未配置。',
+        description: '分组级 Voice realtime / TTS / STT 单价（USD）。留空使用系统默认价，填 0 表示免费。',
         audioRealtimePerMin: 'Realtime 每分钟价格（USD）',
         audioTtsPerMillionChars: 'TTS 每百万字符价格（USD）',
         audioSttPerHour: 'STT 每小时价格（USD）',
+        independentMultiplier: '使用独立语音倍率（同时作用于 Realtime / TTS / STT）',
+        rateMultiplier: '语音独立倍率',
         pricePlaceholder: '可选'
       },
       webSearchPricing: {

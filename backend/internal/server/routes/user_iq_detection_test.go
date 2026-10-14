@@ -59,14 +59,14 @@ func TestUserIQDetectionRouteReturnsSafeEmptyProjectionForAuthenticatedUser(t *t
 	}
 	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &envelope))
 	require.Zero(t, envelope.Code)
-	require.Equal(t, 21, envelope.Data.StandardAnswer)
 	require.Equal(t, 24, envelope.Data.WindowHours)
-	require.NotNil(t, envelope.Data.CandyResults)
 	require.NotNil(t, envelope.Data.PelicanWorks)
 	require.NotNil(t, envelope.Data.Timeline)
 	require.Equal(t, 1, envelope.Data.PelicanPage)
 	require.Equal(t, 8, envelope.Data.PelicanPageSize)
 	require.NotContains(t, recorder.Body.String(), "request_body")
+	require.NotContains(t, recorder.Body.String(), "candy_results")
+	require.NotContains(t, recorder.Body.String(), "standard_answer")
 }
 
 func TestUserIQDetectionRouteRejectsInvalidQueryParameters(t *testing.T) {

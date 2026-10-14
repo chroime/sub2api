@@ -514,6 +514,19 @@ func (s *Service) HideModelRun(ctx context.Context, siteID int64, id string) err
 	}
 	return m.hideRunFromPublic(ctx, siteID, id)
 }
+
+// DeleteModelRun permanently removes a finished model run. Active runs are
+// protected from deletion so the worker queue can settle them safely.
+func (s *Service) DeleteModelRun(ctx context.Context, siteID int64, id string) error {
+	if siteID <= 0 || strings.TrimSpace(id) == "" {
+		return ErrInvalid
+	}
+	m, err := s.models()
+	if err != nil {
+		return err
+	}
+	return m.deleteRun(ctx, siteID, id)
+}
 func (s *Service) CancelModelBatch(ctx context.Context, siteID int64, id string) error {
 	m, err := s.models()
 	if err != nil {

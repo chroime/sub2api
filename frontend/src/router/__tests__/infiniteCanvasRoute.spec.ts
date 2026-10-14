@@ -7,11 +7,10 @@ import { describe, expect, it } from 'vitest'
 const routerPath = resolve(dirname(fileURLToPath(import.meta.url)), '../index.ts')
 const routerSource = readFileSync(routerPath, 'utf8')
 
-describe('Infinite Canvas route', () => {
-  it('registers the authenticated non-admin lazy route', () => {
-    expect(routerSource).toContain("path: '/infinite-canvas'")
-    expect(routerSource).toContain("name: 'InfiniteCanvas'")
-    expect(routerSource).toContain("import('@/views/user/CanvasEmbedView.vue')")
-    expect(routerSource).toMatch(/path: '\/infinite-canvas',[\s\S]*?requiresAuth: true,[\s\S]*?requiresAdmin: false/)
+describe('Built-in Infinite Canvas removal', () => {
+  it('does not register the removed built-in canvas route or embed view', () => {
+    expect(routerSource).not.toContain("path: '/infinite-canvas'")
+    expect(routerSource).not.toContain("name: 'InfiniteCanvas'")
+    expect(routerSource).not.toContain("CanvasEmbedView.vue")
   })
 })

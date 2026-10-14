@@ -39,4 +39,32 @@ func TestCalculateAudioCost(t *testing.T) {
 	require.Equal(t, 0.0, s.CalculateAudioCost("realtime", 1, &audioPriceConfig{RealtimePerMin: &zero}, 1).ActualCost)
 }
 
+func TestCalculateAudioCost_UsesIndependentMultiplierWhenEnabled(t *testing.T) {
+	t.Parallel()
+	s := &BillingService{}
+	price := 10.0
+	cfg := &audioPriceConfig{
+		TTSPerMChars:    &price,
+		RateIndependent: true,
+		RateMultiplier:  2.5,
+	}
+	cost := s.CalculateAudioCost("tts", 0.2, cfg, 9)
+	require.InDelta(t, 2.0, cost.TotalCost, 1e-9)
+	require.InDelta(t, 5.0, cost.ActualCost, 1e-9)
+}
+
+func TestCalculateAudioCost_UsesRequestMultiplierWhenIndependentDisabled(t *testing.T) {
+	t.Parallel()
+	s := &BillingService{}
+	price := 10.0
+	cfg := &audioPriceConfig{
+		TTSPerMChars:    &price,
+		RateIndependent: false,
+		RateMultiplier:  2.5,
+	}
+	cost := s.CalculateAudioCost("tts", 0.2, cfg, 3)
+	require.InDelta(t, 2.0, cost.TotalCost, 1e-9)
+	require.InDelta(t, 6.0, cost.ActualCost, 1e-9)
+}
+
 func floatPtr(v float64) *float64 { return &v }

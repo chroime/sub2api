@@ -51,8 +51,10 @@ func groupAudioPriceConfigFromAPIKey(apiKey *APIKey) *audioPriceConfig {
 	}
 	g := apiKey.Group
 	return &audioPriceConfig{
-		RealtimePerMin: g.AudioRealtimePricePerMin,
-		TTSPerMChars:   g.AudioTTSPricePerMillionChars,
-		STTPerHour:     g.AudioSTTPricePerHour,
+		RealtimePerMin:  g.AudioRealtimePricePerMin,
+		TTSPerMChars:    g.AudioTTSPricePerMillionChars,
+		STTPerHour:      g.AudioSTTPricePerHour,
+		RateIndependent: g.AudioRateIndependent,
+		RateMultiplier:  g.AudioRateMultiplier,
 	}
 }

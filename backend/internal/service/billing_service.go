@@ -956,6 +956,10 @@ func (s *BillingService) initFallbackPricing() {
 		LongContextInputMultiplier:    2,
 		LongContextOutputMultiplier:   2,
 	}
+	// xAI's build-fast variant uses the Grok 4.7 token card unless an operator
+	// explicitly overrides the concrete model in group/channel pricing.
+	s.fallbackPrices["grok-4.7-build-fast"] = s.fallbackPrices["grok-4.7"]
+	s.fallbackPrices["grok-4.7-build-fast-latest"] = s.fallbackPrices["grok-4.7"]
 
 	// xAI Grok 4.3: $1.25 input / $0.20 cached / $2.50 output below 200k;
 	// long-context rates are $2.50 / $0.40 / $5.
@@ -1241,10 +1245,11 @@ func (s *BillingService) getFallbackPricing(model string) *ModelPricing {
 		}
 	}
 
-	switch modelLower {
+	grokModelLower := strings.ToLower(strings.TrimSpace(xai.StripGrokProviderPrefix(modelLower)))
+	switch grokModelLower {
 	case "grok", "grok-latest", "grok-4.6", "grok-4.6-latest":
 		return s.fallbackPrices["grok-4.6"]
-	case "grok-4.7", "grok-4.7-latest":
+	case "grok-4.7", "grok-4.7-latest", "grok-4.7-build-fast", "grok-4.7-build-fast-latest":
 		return s.fallbackPrices["grok-4.7"]
 	case "grok-4.5", "grok-4.5-latest":
 		return s.fallbackPrices["grok-4.5"]
@@ -1327,13 +1332,21 @@ func (s *BillingService) HasIdentifiedTokenPricing(model string) bool {
 	if model == "" {
 		return false
 	}
+	nativeModel := strings.ToLower(strings.TrimSpace(xai.StripGrokProviderPrefix(model)))
 	if s.pricingService != nil {
 		// 仅有图片价的条目不能用于 token 计费，口径与 GetModelPricing 保持一致。
-		if pricing := s.pricingService.GetIdentifiedModelPricing(model); pricing != nil && !pricing.TokenPricingAbsent {
+		pricing := s.pricingService.GetIdentifiedModelPricing(model)
+		if pricing == nil && nativeModel != model {
+			pricing = s.pricingService.GetIdentifiedModelPricing(nativeModel)
+		}
+		if pricing != nil && !pricing.TokenPricingAbsent {
 			return true
 		}
 	}
 	pricing, ok := s.fallbackPrices[model]
+	if !ok && nativeModel != model {
+		pricing, ok = s.fallbackPrices[nativeModel]
+	}
 	return ok && pricing != nil
 }
 
@@ -2161,9 +2174,21 @@ func (s *BillingService) CalculateSearchCost(numCalls int, groupPricePer1k *floa
 }
 
 type audioPriceConfig struct {
-	RealtimePerMin *float64
-	TTSPerMChars   *float64
-	STTPerHour     *float64
+	RealtimePerMin  *float64
+	TTSPerMChars    *float64
+	STTPerHour      *float64
+	RateIndependent bool
+	RateMultiplier  float64
+}
+
+func audioBillingMultiplier(config *audioPriceConfig, fallback float64) float64 {
+	if config != nil && config.RateIndependent {
+		fallback = config.RateMultiplier
+	}
+	if fallback < 0 {
+		return 0
+	}
+	return fallback
 }
 
 // CalculateAudioCost supports realtime (per min), tts (per M chars), stt (per hr).
@@ -2195,9 +2220,7 @@ func (s *BillingService) CalculateAudioCost(mode string, durationOrUnits float64
 	if unitPrice <= 0 {
 		return &CostBreakdown{}
 	}
-	if rateMultiplier < 0 {
-		rateMultiplier = 0
-	}
+	rateMultiplier = audioBillingMultiplier(groupConfig, rateMultiplier)
 	total := unitPrice * durationOrUnits
 	return &CostBreakdown{
 		TotalCost:   total,

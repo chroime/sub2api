@@ -107,6 +107,8 @@ const sourceGroup = {
   audio_realtime_price_per_min: null,
   audio_tts_price_per_million_chars: null,
   audio_stt_price_per_hour: null,
+  audio_rate_independent: false,
+  audio_rate_multiplier: 1,
   peak_rate_enabled: false,
   peak_start: "",
   peak_end: "",
@@ -288,5 +290,39 @@ describe("GroupsView Codex manifest binding", () => {
     );
 
     wrapper.unmount();
+  });
+
+  it("shows the shared independent voice multiplier for Grok groups", async () => {
+    listGroups.mockResolvedValue({
+      items: [
+        {
+          ...sourceGroup,
+          id: 43,
+          name: "Grok",
+          platform: "grok",
+          audio_rate_independent: false,
+          audio_rate_multiplier: 1,
+        },
+      ],
+      total: 1,
+      page: 1,
+      page_size: 20,
+      pages: 1,
+    });
+
+    const wrapper = mountView();
+    await flushPromises();
+
+    const editButton = wrapper
+      .findAll("button")
+      .find((button) => button.text().includes("common.edit"));
+    expect(editButton).toBeTruthy();
+    await editButton!.trigger("click");
+    await flushPromises();
+
+    const toggle = wrapper.get('[data-testid="edit-audio-rate-independent"]');
+    expect(wrapper.find('[data-testid="edit-audio-rate-multiplier"]').exists()).toBe(false);
+    await toggle.setValue(true);
+    expect(wrapper.find('[data-testid="edit-audio-rate-multiplier"]').exists()).toBe(true);
   });
 });

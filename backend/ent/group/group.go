@@ -106,6 +106,10 @@ const (
 	FieldAudioTtsPricePerMillionChars = "audio_tts_price_per_million_chars"
 	// FieldAudioSttPricePerHour holds the string denoting the audio_stt_price_per_hour field in the database.
 	FieldAudioSttPricePerHour = "audio_stt_price_per_hour"
+	// FieldAudioRateIndependent holds the string denoting the audio_rate_independent field in the database.
+	FieldAudioRateIndependent = "audio_rate_independent"
+	// FieldAudioRateMultiplier holds the string denoting the audio_rate_multiplier field in the database.
+	FieldAudioRateMultiplier = "audio_rate_multiplier"
 	// FieldLongContextPricingEnabled holds the string denoting the long_context_pricing_enabled field in the database.
 	FieldLongContextPricingEnabled = "long_context_pricing_enabled"
 	// FieldModelPricing holds the string denoting the model_pricing field in the database.
@@ -280,6 +284,8 @@ var Columns = []string{
 	FieldAudioRealtimePricePerMin,
 	FieldAudioTtsPricePerMillionChars,
 	FieldAudioSttPricePerHour,
+	FieldAudioRateIndependent,
+	FieldAudioRateMultiplier,
 	FieldLongContextPricingEnabled,
 	FieldModelPricing,
 	FieldClaudeCodeOnly,
@@ -410,6 +416,12 @@ var (
 	AudioTtsPricePerMillionCharsValidator func(float64) error
 	// AudioSttPricePerHourValidator is a validator for the "audio_stt_price_per_hour" field. It is called by the builders before save.
 	AudioSttPricePerHourValidator func(float64) error
+	// DefaultAudioRateIndependent holds the default value on creation for the "audio_rate_independent" field.
+	DefaultAudioRateIndependent bool
+	// DefaultAudioRateMultiplier holds the default value on creation for the "audio_rate_multiplier" field.
+	DefaultAudioRateMultiplier float64
+	// AudioRateMultiplierValidator is a validator for the "audio_rate_multiplier" field. It is called by the builders before save.
+	AudioRateMultiplierValidator func(float64) error
 	// DefaultLongContextPricingEnabled holds the default value on creation for the "long_context_pricing_enabled" field.
 	DefaultLongContextPricingEnabled bool
 	// DefaultClaudeCodeOnly holds the default value on creation for the "claude_code_only" field.
@@ -685,6 +697,16 @@ func ByAudioTtsPricePerMillionChars(opts ...sql.OrderTermOption) OrderOption {
 // ByAudioSttPricePerHour orders the results by the audio_stt_price_per_hour field.
 func ByAudioSttPricePerHour(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldAudioSttPricePerHour, opts...).ToFunc()
+}
+
+// ByAudioRateIndependent orders the results by the audio_rate_independent field.
+func ByAudioRateIndependent(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAudioRateIndependent, opts...).ToFunc()
+}
+
+// ByAudioRateMultiplier orders the results by the audio_rate_multiplier field.
+func ByAudioRateMultiplier(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAudioRateMultiplier, opts...).ToFunc()
 }
 
 // ByLongContextPricingEnabled orders the results by the long_context_pricing_enabled field.

@@ -244,7 +244,10 @@ func (h *OpenAIGatewayHandler) GrokVoice(c *gin.Context, endpoint string) {
 	failed := map[int64]struct{}{}
 	var last *service.UpstreamFailoverError
 	reqLog := requestLogger(c, "handler.openai_gateway.grok_voice", zap.String("endpoint", endpoint))
-	selectionModel := "grok-4.5"
+	// TTS/STT are selected by the Grok voice capability. Passing a text model
+	// placeholder here makes channel-level restrict_models settings reject an
+	// otherwise valid voice request before account selection.
+	selectionModel := grokVoiceSelectionModel()
 
 	for attempts := 0; attempts < 4; attempts++ {
 		selection, _, selectErr := h.gatewayService.SelectAccountWithSchedulerForCapability(
@@ -305,6 +308,14 @@ func (h *OpenAIGatewayHandler) GrokVoice(c *gin.Context, endpoint string) {
 	if last != nil {
 		h.handleFailoverExhausted(c, last, false)
 	}
+}
+
+// grokVoiceSelectionModel intentionally returns an empty model. Voice HTTP
+// endpoints do not use a text model for scheduling; the request body carries
+// the upstream voice operation and the scheduler only needs the Grok voice
+// capability.
+func grokVoiceSelectionModel() string {
+	return ""
 }
 
 // recordGrokVoiceUsage bills TTS/STT/realtime via group audio prices when AudioUsage is set.

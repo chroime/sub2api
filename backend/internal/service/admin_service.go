@@ -280,6 +280,8 @@ type CreateGroupInput struct {
 	AudioRealtimePricePerMin     *float64
 	AudioTTSPricePerMillionChars *float64
 	AudioSTTPricePerHour         *float64
+	AudioRateIndependent         bool
+	AudioRateMultiplier          *float64
 	ClaudeCodeOnly               bool   // 仅允许 Claude Code 客户端
 	FallbackGroupID              *int64 // 降级分组 ID
 	// 无效请求兜底分组 ID（仅 anthropic 平台使用）
@@ -367,6 +369,8 @@ type UpdateGroupInput struct {
 	AudioRealtimePricePerMin     *float64
 	AudioTTSPricePerMillionChars *float64
 	AudioSTTPricePerHour         *float64
+	AudioRateIndependent         *bool
+	AudioRateMultiplier          *float64
 	ClaudeCodeOnly               *bool  // 仅允许 Claude Code 客户端
 	FallbackGroupID              *int64 // 降级分组 ID
 	// 无效请求兜底分组 ID（仅 anthropic 平台使用）

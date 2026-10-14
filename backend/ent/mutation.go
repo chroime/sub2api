@@ -22238,6 +22238,9 @@ type GroupMutation struct {
 	addaudio_tts_price_per_million_chars         *float64
 	audio_stt_price_per_hour                     *float64
 	addaudio_stt_price_per_hour                  *float64
+	audio_rate_independent                       *bool
+	audio_rate_multiplier                        *float64
+	addaudio_rate_multiplier                     *float64
 	long_context_pricing_enabled                 *bool
 	model_pricing                                *jsontext.Value
 	appendmodel_pricing                          jsontext.Value
@@ -24777,6 +24780,98 @@ func (m *GroupMutation) ResetAudioSttPricePerHour() {
 	delete(m.clearedFields, group.FieldAudioSttPricePerHour)
 }
 
+// SetAudioRateIndependent sets the "audio_rate_independent" field.
+func (m *GroupMutation) SetAudioRateIndependent(b bool) {
+	m.audio_rate_independent = &b
+}
+
+// AudioRateIndependent returns the value of the "audio_rate_independent" field in the mutation.
+func (m *GroupMutation) AudioRateIndependent() (r bool, exists bool) {
+	v := m.audio_rate_independent
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAudioRateIndependent returns the old "audio_rate_independent" field's value of the Group entity.
+// If the Group object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupMutation) OldAudioRateIndependent(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAudioRateIndependent is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAudioRateIndependent requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAudioRateIndependent: %w", err)
+	}
+	return oldValue.AudioRateIndependent, nil
+}
+
+// ResetAudioRateIndependent resets all changes to the "audio_rate_independent" field.
+func (m *GroupMutation) ResetAudioRateIndependent() {
+	m.audio_rate_independent = nil
+}
+
+// SetAudioRateMultiplier sets the "audio_rate_multiplier" field.
+func (m *GroupMutation) SetAudioRateMultiplier(f float64) {
+	m.audio_rate_multiplier = &f
+	m.addaudio_rate_multiplier = nil
+}
+
+// AudioRateMultiplier returns the value of the "audio_rate_multiplier" field in the mutation.
+func (m *GroupMutation) AudioRateMultiplier() (r float64, exists bool) {
+	v := m.audio_rate_multiplier
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAudioRateMultiplier returns the old "audio_rate_multiplier" field's value of the Group entity.
+// If the Group object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupMutation) OldAudioRateMultiplier(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAudioRateMultiplier is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAudioRateMultiplier requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAudioRateMultiplier: %w", err)
+	}
+	return oldValue.AudioRateMultiplier, nil
+}
+
+// AddAudioRateMultiplier adds f to the "audio_rate_multiplier" field.
+func (m *GroupMutation) AddAudioRateMultiplier(f float64) {
+	if m.addaudio_rate_multiplier != nil {
+		*m.addaudio_rate_multiplier += f
+	} else {
+		m.addaudio_rate_multiplier = &f
+	}
+}
+
+// AddedAudioRateMultiplier returns the value that was added to the "audio_rate_multiplier" field in this mutation.
+func (m *GroupMutation) AddedAudioRateMultiplier() (r float64, exists bool) {
+	v := m.addaudio_rate_multiplier
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetAudioRateMultiplier resets all changes to the "audio_rate_multiplier" field.
+func (m *GroupMutation) ResetAudioRateMultiplier() {
+	m.audio_rate_multiplier = nil
+	m.addaudio_rate_multiplier = nil
+}
+
 // SetLongContextPricingEnabled sets the "long_context_pricing_enabled" field.
 func (m *GroupMutation) SetLongContextPricingEnabled(b bool) {
 	m.long_context_pricing_enabled = &b
@@ -26327,7 +26422,7 @@ func (m *GroupMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *GroupMutation) Fields() []string {
-	fields := make([]string, 0, 72)
+	fields := make([]string, 0, 74)
 	if m.created_at != nil {
 		fields = append(fields, group.FieldCreatedAt)
 	}
@@ -26462,6 +26557,12 @@ func (m *GroupMutation) Fields() []string {
 	}
 	if m.audio_stt_price_per_hour != nil {
 		fields = append(fields, group.FieldAudioSttPricePerHour)
+	}
+	if m.audio_rate_independent != nil {
+		fields = append(fields, group.FieldAudioRateIndependent)
+	}
+	if m.audio_rate_multiplier != nil {
+		fields = append(fields, group.FieldAudioRateMultiplier)
 	}
 	if m.long_context_pricing_enabled != nil {
 		fields = append(fields, group.FieldLongContextPricingEnabled)
@@ -26642,6 +26743,10 @@ func (m *GroupMutation) Field(name string) (ent.Value, bool) {
 		return m.AudioTtsPricePerMillionChars()
 	case group.FieldAudioSttPricePerHour:
 		return m.AudioSttPricePerHour()
+	case group.FieldAudioRateIndependent:
+		return m.AudioRateIndependent()
+	case group.FieldAudioRateMultiplier:
+		return m.AudioRateMultiplier()
 	case group.FieldLongContextPricingEnabled:
 		return m.LongContextPricingEnabled()
 	case group.FieldModelPricing:
@@ -26795,6 +26900,10 @@ func (m *GroupMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldAudioTtsPricePerMillionChars(ctx)
 	case group.FieldAudioSttPricePerHour:
 		return m.OldAudioSttPricePerHour(ctx)
+	case group.FieldAudioRateIndependent:
+		return m.OldAudioRateIndependent(ctx)
+	case group.FieldAudioRateMultiplier:
+		return m.OldAudioRateMultiplier(ctx)
 	case group.FieldLongContextPricingEnabled:
 		return m.OldLongContextPricingEnabled(ctx)
 	case group.FieldModelPricing:
@@ -27173,6 +27282,20 @@ func (m *GroupMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetAudioSttPricePerHour(v)
 		return nil
+	case group.FieldAudioRateIndependent:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAudioRateIndependent(v)
+		return nil
+	case group.FieldAudioRateMultiplier:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAudioRateMultiplier(v)
+		return nil
 	case group.FieldLongContextPricingEnabled:
 		v, ok := value.(bool)
 		if !ok {
@@ -27445,6 +27568,9 @@ func (m *GroupMutation) AddedFields() []string {
 	if m.addaudio_stt_price_per_hour != nil {
 		fields = append(fields, group.FieldAudioSttPricePerHour)
 	}
+	if m.addaudio_rate_multiplier != nil {
+		fields = append(fields, group.FieldAudioRateMultiplier)
+	}
 	if m.addfallback_group_id != nil {
 		fields = append(fields, group.FieldFallbackGroupID)
 	}
@@ -27521,6 +27647,8 @@ func (m *GroupMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedAudioTtsPricePerMillionChars()
 	case group.FieldAudioSttPricePerHour:
 		return m.AddedAudioSttPricePerHour()
+	case group.FieldAudioRateMultiplier:
+		return m.AddedAudioRateMultiplier()
 	case group.FieldFallbackGroupID:
 		return m.AddedFallbackGroupID()
 	case group.FieldFallbackGroupIDOnInvalidRequest:
@@ -27716,6 +27844,13 @@ func (m *GroupMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddAudioSttPricePerHour(v)
+		return nil
+	case group.FieldAudioRateMultiplier:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddAudioRateMultiplier(v)
 		return nil
 	case group.FieldFallbackGroupID:
 		v, ok := value.(int64)
@@ -28061,6 +28196,12 @@ func (m *GroupMutation) ResetField(name string) error {
 		return nil
 	case group.FieldAudioSttPricePerHour:
 		m.ResetAudioSttPricePerHour()
+		return nil
+	case group.FieldAudioRateIndependent:
+		m.ResetAudioRateIndependent()
+		return nil
+	case group.FieldAudioRateMultiplier:
+		m.ResetAudioRateMultiplier()
 		return nil
 	case group.FieldLongContextPricingEnabled:
 		m.ResetLongContextPricingEnabled()

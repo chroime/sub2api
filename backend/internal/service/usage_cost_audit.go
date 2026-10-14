@@ -92,18 +92,21 @@ func (s *UsageCostAuditService) estimate(ctx context.Context, row *UsageLog, gro
 	if !usageCostAuditAmountsEqual(componentTotal, row.TotalCost) {
 		return unavailableUsageCostAudit("incomplete_cost_breakdown")
 	}
-	if usageCostAuditOriginalBillUsable(row) {
-		amount, total, billed := row.ActualCost, row.TotalCost, row.ActualCost
-		difference := billed - amount
-		return UsageCostAudit{
-			Amount: &amount, TotalCost: &total, BilledAmount: &billed, Difference: &difference,
-			Status: "recorded", Reason: "original_usage_unadjusted",
-		}
-	}
+	// An unadjusted historical bill is a safe fallback only when the current
+	// model price cannot be resolved. Prefer recalculating from the persisted
+	// upstream token buckets whenever pricing is available, so Amount always
+	// follows the same price-and-rate formula as the audit requirement.
+	originalBillUsable := usageCostAuditOriginalBillUsable(row)
 	if !usageCostAuditRawCacheAvailable(row) {
+		if originalBillUsable {
+			return recordedUsageCostAudit(row)
+		}
 		return unavailableUsageCostAudit("missing_upstream_cache_usage")
 	}
 	if s == nil || s.billing == nil || s.resolver == nil || s.resolver.billingService == nil {
+		if originalBillUsable {
+			return recordedUsageCostAudit(row)
+		}
 		return unavailableUsageCostAudit("pricing_unavailable")
 	}
 	group := s.loadGroup(ctx, row, groups)
@@ -169,7 +172,19 @@ func (s *UsageCostAuditService) estimate(ctx context.Context, row *UsageLog, gro
 			Status: "calculated", Reason: "current_pricing_calculation", Model: model, Breakdown: cost,
 		}
 	}
+	if originalBillUsable {
+		return recordedUsageCostAudit(row)
+	}
 	return unavailableUsageCostAudit("pricing_unavailable")
+}
+
+func recordedUsageCostAudit(row *UsageLog) UsageCostAudit {
+	amount, total, billed := row.ActualCost, row.TotalCost, row.ActualCost
+	difference := billed - amount
+	return UsageCostAudit{
+		Amount: &amount, TotalCost: &total, BilledAmount: &billed, Difference: &difference,
+		Status: "recorded", Reason: "original_usage_unadjusted",
+	}
 }
 
 func (s *UsageCostAuditService) loadGroup(ctx context.Context, row *UsageLog, groups map[int64]usageCostAuditGroup) usageCostAuditGroup {

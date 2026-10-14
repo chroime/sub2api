@@ -78,10 +78,12 @@ type Group struct {
 
 	// 搜索工具显式定价（per 1k calls）。
 	SearchPricePer1k *float64
-	// Grok Voice 显式定价（分组级，不按文本 RateMultiplier）。
+	// Grok Voice 显式定价（分组级），可选使用独立语音倍率。
 	AudioRealtimePricePerMin     *float64
 	AudioTTSPricePerMillionChars *float64
 	AudioSTTPricePerHour         *float64
+	AudioRateIndependent         bool
+	AudioRateMultiplier          float64
 
 	// ModelPricing overrides channel and built-in prices for matching models.
 	// Token intervals are selected only when LongContextPricingEnabled is true.

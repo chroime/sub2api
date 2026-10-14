@@ -682,18 +682,19 @@ func (s *OpenAIGatewayService) calculateOpenAIRecordUsageCost(
 		}
 	}
 	if result != nil && result.AudioUsage != nil {
+		audioConfig := groupAudioPriceConfigFromAPIKey(apiKey)
+		audioMultiplier := audioBillingMultiplier(audioConfig, webSearchMultiplier)
 		if resolved := s.resolveOpenAIChannelPricing(ctx, billingModel, apiKey); resolved != nil &&
 			(resolved.Mode == BillingModePerRequest) {
 			gid := apiKey.Group.ID
 			return s.billingService.CalculateCostUnified(CostInput{
 				Ctx: ctx, Model: billingModel, GroupID: &gid, Group: apiKey.Group,
 				UsageUnits: result.AudioUsage.DurationOrUnits, SizeTier: result.AudioUsage.Mode,
-				RateMultiplier: webSearchMultiplier, Resolver: s.resolver, Resolved: resolved,
+				RateMultiplier: audioMultiplier, Resolver: s.resolver, Resolved: resolved,
 				ReasoningEffort: optionalStringValue(result.ReasoningEffort),
 			})
 		}
-		cfg := groupAudioPriceConfigFromAPIKey(apiKey)
-		return s.billingService.CalculateAudioCost(result.AudioUsage.Mode, result.AudioUsage.DurationOrUnits, cfg, webSearchMultiplier), nil
+		return s.billingService.CalculateAudioCost(result.AudioUsage.Mode, result.AudioUsage.DurationOrUnits, audioConfig, webSearchMultiplier), nil
 	}
 
 	if result != nil && result.ImageCount > 0 {
@@ -994,10 +995,10 @@ func groupMediaPricingLooksIncomplete(group *Group) bool {
 	if group == nil {
 		return true
 	}
-	if group.ImageRateIndependent || group.VideoRateIndependent {
+	if group.ImageRateIndependent || group.VideoRateIndependent || group.AudioRateIndependent {
 		return false
 	}
-	if group.ImageRateMultiplier != 0 || group.VideoRateMultiplier != 0 {
+	if group.ImageRateMultiplier != 0 || group.VideoRateMultiplier != 0 || group.AudioRateMultiplier != 0 {
 		return false
 	}
 	// Any first-class pricing field present means the projection is not a blank shell.

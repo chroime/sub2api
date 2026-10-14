@@ -66,10 +66,34 @@ type channelModelKey struct {
 // differences equivalent in channel pricing cache keys.
 func normalizeChannelPricingModelName(model string) string {
 	model = strings.ToLower(strings.TrimSpace(model))
+	for _, prefix := range []string{"xai/", "x-ai/", "grok/"} {
+		if strings.HasPrefix(model, prefix) {
+			model = strings.TrimPrefix(model, prefix)
+			break
+		}
+	}
 	if strings.HasPrefix(model, "claude-") {
 		model = strings.ReplaceAll(model, ".", "-")
 	}
 	return model
+}
+
+// channelPricingModelCandidates returns the concrete model first, followed by
+// a stable base-family fallback for variants that share an administrator's
+// base price. Exact concrete entries therefore always win over inherited ones.
+func channelPricingModelCandidates(model string) []string {
+	normalized := normalizeChannelPricingModelName(model)
+	if normalized == "" {
+		return nil
+	}
+	candidates := []string{normalized}
+	switch normalized {
+	case "grok-4.7-build-fast", "grok-4.7-build-fast-latest":
+		candidates = append(candidates, "grok-4.7")
+	case "grok-imagine-video-1.5-lite":
+		candidates = append(candidates, "grok-imagine-video-1.5")
+	}
+	return candidates
 }
 
 // channelGroupPlatformKey 通配符定价缓存键
@@ -459,17 +483,21 @@ func (c *channelCache) matchWildcardMapping(groupID int64, platform, modelLower 
 // lookupPricingAcrossPlatforms 在分组平台内查找模型定价。
 // 各平台严格独立，只在本平台内查找（先精确匹配，再通配符）。
 func lookupPricingAcrossPlatforms(cache *channelCache, groupID int64, groupPlatform, modelLower string) *ChannelModelPricing {
-	modelLower = normalizeChannelPricingModelName(modelLower)
+	candidates := channelPricingModelCandidates(modelLower)
 	for _, p := range matchingPlatforms(groupPlatform) {
-		key := channelModelKey{groupID: groupID, platform: p, model: modelLower}
-		if pricing, ok := cache.pricingByGroupModel[key]; ok {
-			return pricing
+		for _, candidate := range candidates {
+			key := channelModelKey{groupID: groupID, platform: p, model: candidate}
+			if pricing, ok := cache.pricingByGroupModel[key]; ok {
+				return pricing
+			}
 		}
 	}
 	// 精确查找全部失败，依次尝试通配符匹配
 	for _, p := range matchingPlatforms(groupPlatform) {
-		if pricing := cache.matchWildcard(groupID, p, modelLower); pricing != nil {
-			return pricing
+		for _, candidate := range candidates {
+			if pricing := cache.matchWildcard(groupID, p, candidate); pricing != nil {
+				return pricing
+			}
 		}
 	}
 	return nil

@@ -164,6 +164,12 @@ func createGroupRecord(ctx context.Context, client *dbent.Client, groupIn *servi
 	if err != nil {
 		return fmt.Errorf("marshal group model pricing: %w", err)
 	}
+	audioRateMultiplier := groupIn.AudioRateMultiplier
+	// Keep the schema default for callers that construct service.Group directly.
+	// A zero multiplier is meaningful only when independent audio billing is enabled.
+	if !groupIn.AudioRateIndependent && audioRateMultiplier == 0 {
+		audioRateMultiplier = 1
+	}
 	builder := client.Group.Create().
 		SetName(groupIn.Name).
 		SetDescription(groupIn.Description).
@@ -201,6 +207,8 @@ func createGroupRecord(ctx context.Context, client *dbent.Client, groupIn *servi
 		SetNillableAudioRealtimePricePerMin(groupIn.AudioRealtimePricePerMin).
 		SetNillableAudioTtsPricePerMillionChars(groupIn.AudioTTSPricePerMillionChars).
 		SetNillableAudioSttPricePerHour(groupIn.AudioSTTPricePerHour).
+		SetAudioRateIndependent(groupIn.AudioRateIndependent).
+		SetAudioRateMultiplier(audioRateMultiplier).
 		SetLongContextPricingEnabled(groupIn.LongContextPricingEnabled).
 		SetModelPricing(modelPricing).
 		SetDefaultValidityDays(groupIn.DefaultValidityDays).
@@ -509,6 +517,8 @@ func (r *groupRepository) Update(ctx context.Context, groupIn *service.Group) er
 	} else {
 		builder = builder.ClearAudioSttPricePerHour()
 	}
+	builder = builder.SetAudioRateIndependent(groupIn.AudioRateIndependent)
+	builder = builder.SetAudioRateMultiplier(groupIn.AudioRateMultiplier)
 
 	// 处理 FallbackGroupID：nil 时清除，否则设置
 	if groupIn.FallbackGroupID != nil {

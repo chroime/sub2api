@@ -1542,6 +1542,27 @@
           <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">
             {{ t("admin.groups.explicitPricing.description") }}
           </p>
+          <label class="mb-3 flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+            <input
+              v-model="createForm.audio_rate_independent"
+              type="checkbox"
+              class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              data-testid="create-audio-rate-independent"
+            />
+            {{ t("admin.groups.voicePricing.independentMultiplier") }}
+          </label>
+          <div v-if="createForm.audio_rate_independent" class="mb-3">
+            <label class="input-label">{{ t("admin.groups.voicePricing.rateMultiplier") }}</label>
+            <input
+              v-model.number="createForm.audio_rate_multiplier"
+              type="number"
+              step="0.0001"
+              min="0"
+              class="input"
+              placeholder="1"
+              data-testid="create-audio-rate-multiplier"
+            />
+          </div>
           <div class="grid grid-cols-1 gap-3 md:grid-cols-3">
             <div>
               <label class="input-label">{{ t("admin.groups.explicitPricing.searchPricePer1k") }}</label>
@@ -3217,6 +3238,27 @@
           <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">
             {{ t("admin.groups.explicitPricing.description") }}
           </p>
+          <label class="mb-3 flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+            <input
+              v-model="editForm.audio_rate_independent"
+              type="checkbox"
+              class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              data-testid="edit-audio-rate-independent"
+            />
+            {{ t("admin.groups.voicePricing.independentMultiplier") }}
+          </label>
+          <div v-if="editForm.audio_rate_independent" class="mb-3">
+            <label class="input-label">{{ t("admin.groups.voicePricing.rateMultiplier") }}</label>
+            <input
+              v-model.number="editForm.audio_rate_multiplier"
+              type="number"
+              step="0.0001"
+              min="0"
+              class="input"
+              placeholder="1"
+              data-testid="edit-audio-rate-multiplier"
+            />
+          </div>
           <div class="grid grid-cols-1 gap-3 md:grid-cols-3">
             <div>
               <label class="input-label">{{ t("admin.groups.explicitPricing.searchPricePer1k") }}</label>
@@ -5048,6 +5090,8 @@ const createForm = reactive({
   audio_realtime_price_per_min: null as number | null,
   audio_tts_price_per_million_chars: null as number | null,
   audio_stt_price_per_hour: null as number | null,
+  audio_rate_independent: false,
+  audio_rate_multiplier: 1,
   // 高峰时段倍率配置
   peak_rate_enabled: false,
   peak_start: "",
@@ -5419,6 +5463,8 @@ const editForm = reactive({
   audio_realtime_price_per_min: null as number | null,
   audio_tts_price_per_million_chars: null as number | null,
   audio_stt_price_per_hour: null as number | null,
+  audio_rate_independent: false,
+  audio_rate_multiplier: 1,
   // 高峰时段倍率配置
   peak_rate_enabled: false,
   peak_start: "",
@@ -5884,6 +5930,8 @@ const closeCreateModal = () => {
   createForm.audio_realtime_price_per_min = null;
   createForm.audio_tts_price_per_million_chars = null;
   createForm.audio_stt_price_per_hour = null;
+  createForm.audio_rate_independent = false;
+  createForm.audio_rate_multiplier = 1;
   createForm.peak_rate_enabled = false;
   createForm.peak_start = "";
   createForm.peak_end = "";
@@ -6099,6 +6147,8 @@ const handleCreateGroup = async () => {
     requestData.audio_stt_price_per_hour = emptyToNull(
       requestData.audio_stt_price_per_hour,
     );
+    requestData.audio_rate_independent = createForm.audio_rate_independent;
+    requestData.audio_rate_multiplier = createForm.audio_rate_multiplier;
     requestData.web_search_price_per_call = emptyToNull(
       requestData.web_search_price_per_call,
     );
@@ -6188,6 +6238,8 @@ const handleEdit = async (group: AdminGroup) => {
   editForm.audio_realtime_price_per_min = group.audio_realtime_price_per_min ?? null;
   editForm.audio_tts_price_per_million_chars = group.audio_tts_price_per_million_chars ?? null;
   editForm.audio_stt_price_per_hour = group.audio_stt_price_per_hour ?? null;
+  editForm.audio_rate_independent = group.audio_rate_independent ?? false;
+  editForm.audio_rate_multiplier = group.audio_rate_multiplier ?? 1;
   editForm.peak_rate_enabled = group.peak_rate_enabled ?? false;
   editForm.peak_start = group.peak_start ?? "";
   editForm.peak_end = group.peak_end ?? "";
@@ -6304,6 +6356,8 @@ const closeEditModal = () => {
   editForm.audio_realtime_price_per_min = null;
   editForm.audio_tts_price_per_million_chars = null;
   editForm.audio_stt_price_per_hour = null;
+  editForm.audio_rate_independent = false;
+  editForm.audio_rate_multiplier = 1;
   resetMessagesDispatchFormState(editForm);
   editForm.allow_live = false;
   resetModelAllowlistState(editModelAllowlistState);
@@ -6470,6 +6524,8 @@ const handleUpdateGroup = async () => {
     payload.audio_stt_price_per_hour = emptyPriceToClear(
       payload.audio_stt_price_per_hour,
     );
+    payload.audio_rate_independent = editForm.audio_rate_independent;
+    payload.audio_rate_multiplier = editForm.audio_rate_multiplier;
     payload.web_search_price_per_call = emptyPriceToClear(
       payload.web_search_price_per_call,
     );

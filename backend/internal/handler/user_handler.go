@@ -53,7 +53,7 @@ func (h *UserHandler) SetGovernanceService(value *gov.Service) {
 	h.governanceService = value
 }
 
-// GetIQDetection returns the credential-free candy/pelican monitoring view for
+// GetIQDetection returns the credential-free local Pelican monitoring view for
 // authenticated users. It never exposes prompts, request bodies or raw JSON.
 // GET /api/v1/user/iq-detection
 func (h *UserHandler) GetIQDetection(c *gin.Context) {
@@ -95,7 +95,7 @@ func (h *UserHandler) GetIQDetection(c *gin.Context) {
 		pelicanPageSize = parsed
 	}
 	if h.governanceService == nil {
-		response.Success(c, &gov.IQDashboard{CandyResults: []gov.IQCandyResult{}, PelicanWorks: []gov.IQPelicanWork{}, PelicanPage: pelicanPage, PelicanPageSize: pelicanPageSize, Timeline: []gov.IQTimelinePoint{}, StandardAnswer: 21, WindowHours: hours, GeneratedAt: time.Now().UTC()})
+		response.Success(c, &gov.IQDashboard{PelicanWorks: []gov.IQPelicanWork{}, PelicanPage: pelicanPage, PelicanPageSize: pelicanPageSize, Timeline: []gov.IQTimelinePoint{}, WindowHours: hours, GeneratedAt: time.Now().UTC()})
 		return
 	}
 	result, err := h.governanceService.PublicIQDashboardPage(c.Request.Context(), hours, limit, pelicanPage, pelicanPageSize)

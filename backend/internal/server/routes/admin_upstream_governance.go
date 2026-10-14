@@ -76,6 +76,7 @@ func registerUpstreamGovernanceRoutes(admin *gin.RouterGroup, h *handler.Handler
 	g.GET("/sites/:id/model-runs", api.ModelRuns)
 	g.GET("/sites/:id/model-stats", api.ModelStats)
 	g.GET("/sites/:id/model-runs/:run_id", api.ModelRun)
+	g.POST("/sites/:id/model-runs/:run_id/hide", api.HideModelRun)
 	g.DELETE("/sites/:id/model-runs/:run_id", api.DeleteModelRun)
 	g.PUT("/sites/:id/model-runs/:run_id/review", api.ReviewModelRun)
 }

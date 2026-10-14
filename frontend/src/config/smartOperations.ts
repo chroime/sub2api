@@ -21,6 +21,13 @@ export const SMART_OPERATIONS_SECTIONS = [
     icon: 'cpu',
   },
   {
+    id: 'local-monitor',
+    path: '/admin/upstream-governance/local-monitor',
+    labelKey: 'governance.smartOperations.sections.localMonitor',
+    descriptionKey: 'governance.smartOperations.descriptions.localMonitor',
+    icon: 'beaker',
+  },
+  {
     id: 'monitor',
     path: '/admin/upstream-governance/monitor',
     labelKey: 'governance.smartOperations.sections.monitor',

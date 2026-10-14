@@ -42,47 +42,31 @@ LEFT JOIN LATERAL (
   ) mapped
 ) imported_group ON TRUE`
 
-// Reduce all runs in the requested time window in Postgres. A successful HTTP
-// request is not a passing candy result: only a validated correct answer passes.
-// Queued/running/cancelled/skipped runs are not quality evidence.
+// Reduce all visible local Pelican runs in the requested time window. A
+// successful local check wins when a bucket also contains failures, while
+// failed checks remain visible when no success exists.
 const iqTimelineQuery = `SELECT to_timestamp(floor(extract(epoch FROM r.created_at)/1800)*1800) AS bucket_at,
 MAX(CASE
- WHEN r.status IN ('failed','indeterminate') THEN 2
- WHEN r.status='succeeded' AND r.request->>'template'='candy' AND COALESCE(r.result->>'candy_verdict','') NOT IN ('numeric_correct','pass') THEN 2
- WHEN r.status='succeeded' AND (r.request->>'template'='pelican' OR r.result->>'candy_verdict' IN ('numeric_correct','pass')) THEN 1
+ WHEN r.status='succeeded' AND r.request->>'template'='pelican' THEN 2
+ WHEN r.status IN ('failed','indeterminate') THEN 1
  ELSE 0 END) AS quality_status
 FROM upstream_governance_model_runs r
-WHERE r.public_visible AND r.created_at >= $1 AND r.created_at <= $2 AND r.request->>'template' IN ('candy','pelican')
+WHERE r.public_visible AND r.created_at >= $1 AND r.created_at <= $2
+  AND r.request->>'template'='pelican'
+  AND r.request->'config'->>'target_type'='local_group'
 GROUP BY bucket_at ORDER BY bucket_at`
 
 // IQDashboard is a credential-free projection of model monitoring results for
 // the authenticated user-facing IQ page. It intentionally omits prompts,
 // request bodies, API keys, session data and raw JSON evidence.
 type IQDashboard struct {
-	CandyResults    []IQCandyResult   `json:"candy_results"`
 	PelicanWorks    []IQPelicanWork   `json:"pelican_works"`
 	PelicanPage     int               `json:"pelican_page"`
 	PelicanPageSize int               `json:"pelican_page_size"`
 	PelicanHasMore  bool              `json:"pelican_has_more"`
 	Timeline        []IQTimelinePoint `json:"timeline"`
-	StandardAnswer  int               `json:"standard_answer"`
 	WindowHours     int               `json:"window_hours"`
 	GeneratedAt     time.Time         `json:"generated_at"`
-}
-
-type IQCandyResult struct {
-	ID              string    `json:"id"`
-	SiteName        string    `json:"site_name"`
-	GroupName       string    `json:"group_name"`
-	AccountLabel    string    `json:"account_label"`
-	Model           string    `json:"model"`
-	Effort          string    `json:"effort"`
-	Answer          *int      `json:"answer,omitempty"`
-	Verdict         string    `json:"verdict"`
-	Status          string    `json:"status"`
-	DurationMS      int64     `json:"duration_ms"`
-	CreatedAt       time.Time `json:"created_at"`
-	TemplateVersion string    `json:"template_version,omitempty"`
 }
 
 type IQPelicanWork struct {
@@ -108,18 +92,14 @@ type iqTimelineSample struct {
 	Status string
 }
 
-// PublicIQDashboard returns only model quality artifacts that are safe to show
+// PublicIQDashboard returns only local Pelican artifacts that are safe to show
 // outside the administrator workbench. Model monitoring remains opt-in and an
 // empty result is a valid response when no administrator run has completed.
-// The timeline query is deliberately separate from the two detail queries:
-// candy and pelican each receive their own limit, while every run in the time
-// window contributes to the status timeline.
 func (s *Service) PublicIQDashboard(ctx context.Context, hours, limit int) (*IQDashboard, error) {
 	return s.PublicIQDashboardPage(ctx, hours, limit, 1, limit)
 }
 
-// PublicIQDashboardPage keeps the candy/timeline window stable while paging
-// only the potentially large Pelican artifact list. One extra row is fetched
+// PublicIQDashboardPage pages the potentially large Pelican artifact list. One extra row is fetched
 // to determine whether the next page exists without a second COUNT query.
 func (s *Service) PublicIQDashboardPage(ctx context.Context, hours, limit, pelicanPage, pelicanPageSize int) (*IQDashboard, error) {
 	if hours <= 0 || hours > 168 || limit <= 0 || limit > 20 || pelicanPage <= 0 || pelicanPage > 1000000 || pelicanPageSize <= 0 || pelicanPageSize > 20 {
@@ -131,7 +111,7 @@ func (s *Service) PublicIQDashboardPage(ctx context.Context, hours, limit, pelic
 	}
 	now := s.now().UTC()
 	since := now.Add(-time.Duration(hours) * time.Hour)
-	dashboard := &IQDashboard{CandyResults: []IQCandyResult{}, PelicanWorks: []IQPelicanWork{}, PelicanPage: pelicanPage, PelicanPageSize: pelicanPageSize, StandardAnswer: 21, WindowHours: hours, GeneratedAt: now}
+	dashboard := &IQDashboard{PelicanWorks: []IQPelicanWork{}, PelicanPage: pelicanPage, PelicanPageSize: pelicanPageSize, WindowHours: hours, GeneratedAt: now}
 
 	timelineRows, err := m.db.QueryContext(ctx, iqTimelineQuery, since, now)
 	if err != nil {
@@ -147,9 +127,9 @@ func (s *Service) PublicIQDashboardPage(ctx context.Context, hours, limit, pelic
 		}
 		status := "empty"
 		if quality == 2 {
-			status = "fail"
-		} else if quality == 1 {
 			status = "pass"
+		} else if quality == 1 {
+			status = "fail"
 		}
 		timelineSamples = append(timelineSamples, iqTimelineSample{At: at, Status: status})
 	}
@@ -158,37 +138,6 @@ func (s *Service) PublicIQDashboardPage(ctx context.Context, hours, limit, pelic
 		return nil, err
 	}
 	timelineRows.Close()
-
-	candyRows, err := m.db.QueryContext(ctx, `SELECT r.id,r.created_at,s.name,r.status,
-       `+iqPublicGroupProjection+`,
-       r.request->'config'->>'managed_key_id',r.request->'config'->>'model',r.request->>'effort',
-       r.result->>'candy_answer',r.result->>'candy_verdict',r.result->>'duration_ms',r.result->>'template_version'
-FROM upstream_governance_model_runs r
-JOIN upstream_governance_sites s ON s.id=r.site_id
-LEFT JOIN upstream_governance_keys managed_key
-  ON managed_key.id = CASE WHEN r.request->'config'->>'managed_key_id' ~ '^[0-9]+$' THEN (r.request->'config'->>'managed_key_id')::bigint END
-`+iqPublicGroupJoins+`
-WHERE r.public_visible AND r.created_at >= $1 AND r.request->>'template'='candy'
-ORDER BY r.created_at DESC,r.id DESC LIMIT $2`, since, limit)
-	if err != nil {
-		return nil, err
-	}
-	for candyRows.Next() {
-		var id, siteName, runStatus string
-		var createdAt time.Time
-		var groupName, managedID, model, effort, answer, verdict, duration, version sql.NullString
-		if err = candyRows.Scan(&id, &createdAt, &siteName, &runStatus, &groupName, &managedID, &model, &effort, &answer, &verdict, &duration, &version); err != nil {
-			candyRows.Close()
-			return nil, err
-		}
-		label := iqGroupLabel(groupName)
-		dashboard.CandyResults = append(dashboard.CandyResults, IQCandyResult{ID: id, SiteName: siteName, GroupName: label, AccountLabel: label, Model: model.String, Effort: effort.String, Answer: iqIntPointer(answer), Verdict: verdict.String, Status: runStatus, DurationMS: iqInt64(duration), CreatedAt: createdAt, TemplateVersion: version.String})
-	}
-	if err = candyRows.Err(); err != nil {
-		candyRows.Close()
-		return nil, err
-	}
-	candyRows.Close()
 
 	pelicanRows, err := m.db.QueryContext(ctx, fmt.Sprintf(`SELECT r.id,r.created_at,s.name,r.status,
        `+iqPublicGroupProjection+`,
@@ -201,7 +150,9 @@ JOIN upstream_governance_sites s ON s.id=r.site_id
 LEFT JOIN upstream_governance_keys managed_key
   ON managed_key.id = CASE WHEN r.request->'config'->>'managed_key_id' ~ '^[0-9]+$' THEN (r.request->'config'->>'managed_key_id')::bigint END
 `+iqPublicGroupJoins+`
-WHERE r.public_visible AND r.created_at >= $1 AND r.request->>'template'='pelican'
+WHERE r.public_visible AND r.status='succeeded' AND r.created_at >= $1
+  AND r.request->>'template'='pelican'
+  AND r.request->'config'->>'target_type'='local_group'
 ORDER BY r.created_at DESC,r.id DESC LIMIT $2 OFFSET $3`, maxIQHTMLBytes, maxIQHTMLBytes), since, pelicanPageSize+1, (pelicanPage-1)*pelicanPageSize)
 	if err != nil {
 		return nil, err
@@ -251,17 +202,6 @@ func iqGroupLabel(raw sql.NullString) string {
 		return strings.TrimSpace(raw.String)
 	}
 	return "检测分组"
-}
-
-func iqIntPointer(raw sql.NullString) *int {
-	if !raw.Valid {
-		return nil
-	}
-	v, err := strconv.Atoi(strings.TrimSpace(raw.String))
-	if err != nil {
-		return nil
-	}
-	return &v
 }
 
 func iqInt64(raw sql.NullString) int64 {
@@ -393,10 +333,10 @@ func buildIQTimeline(now time.Time, samples []iqTimelineSample, hours int) []IQT
 		if index < 0 || index >= len(points) {
 			continue
 		}
-		if sample.Status == "fail" {
-			points[index].Status = "fail"
-		} else if sample.Status == "pass" && points[index].Status == "empty" {
+		if sample.Status == "pass" {
 			points[index].Status = "pass"
+		} else if sample.Status == "fail" && points[index].Status == "empty" {
+			points[index].Status = "fail"
 		}
 	}
 	return points

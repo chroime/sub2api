@@ -269,9 +269,9 @@ func (h *UpstreamGovernanceHandler) ModelRun(c *gin.Context) {
 	}
 }
 
-// DeleteModelRun hides one model-monitoring result from the user-facing IQ
+// HideModelRun removes one model-monitoring result from the user-facing IQ
 // projection while retaining the run in the administrator workbench.
-func (h *UpstreamGovernanceHandler) DeleteModelRun(c *gin.Context) {
+func (h *UpstreamGovernanceHandler) HideModelRun(c *gin.Context) {
 	id, ok := governanceID(c, "id")
 	if !ok {
 		return
@@ -284,6 +284,24 @@ func (h *UpstreamGovernanceHandler) DeleteModelRun(c *gin.Context) {
 		return
 	}
 	if !governanceError(c, h.svc.HideModelRun(c.Request.Context(), id, run)) {
+		response.Success(c, gin.H{"hidden": true})
+	}
+}
+
+// DeleteModelRun permanently removes a finished model-monitoring result.
+func (h *UpstreamGovernanceHandler) DeleteModelRun(c *gin.Context) {
+	id, ok := governanceID(c, "id")
+	if !ok {
+		return
+	}
+	run, ok := governanceModelUUID(c, c.Param("run_id"))
+	if !ok {
+		return
+	}
+	if !h.authorizeModelSite(c, id) {
+		return
+	}
+	if !governanceError(c, h.svc.DeleteModelRun(c.Request.Context(), id, run)) {
 		response.Success(c, gin.H{"deleted": true})
 	}
 }

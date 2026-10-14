@@ -51,7 +51,9 @@ const tab = computed({
   set: (section: SmartOperationsSection) => {
     if (navigationLocked.value) return
     const entry = SMART_OPERATIONS_SECTIONS.find(item => item.id === section)!
-    void router.push({ path: entry.path, query: route.query })
+    const query = { ...route.query }
+    if (section === 'local-monitor') delete query.site
+    void router.push({ path: entry.path, query })
   },
 })
 const showOverview = ref(true)
@@ -205,16 +207,16 @@ async function load() {
 }
 async function loadLocalWorkspace() {
   if (localWorkspaceLoading.value) return
-  if (route.query.site !== undefined || tab.value !== 'models' || !showOverview.value) return
+  if (route.query.site !== undefined || tab.value !== 'local-monitor' || !showOverview.value) return
   const request = ++localWorkspaceGeneration
   localWorkspaceLoading.value = true
   localWorkspaceError.value = ''
   try {
     const workspace = await modelMonitoringAPI.localWorkspace()
-    if (request !== localWorkspaceGeneration || tab.value !== 'models' || !showOverview.value) return
+    if (request !== localWorkspaceGeneration || tab.value !== 'local-monitor' || !showOverview.value) return
     localWorkspace.value = workspace
   } catch (e) {
-    if (request !== localWorkspaceGeneration || tab.value !== 'models' || !showOverview.value) return
+    if (request !== localWorkspaceGeneration || tab.value !== 'local-monitor' || !showOverview.value) return
     localWorkspace.value = null
     localWorkspaceError.value = t('governance.modelMonitoring.localWorkspaceUnavailable')
   } finally {
@@ -226,7 +228,13 @@ function retryLocalWorkspace() {
   void loadLocalWorkspace()
 }
 watch([tab, showOverview, () => route.query.site], ([section, overview, siteQuery]) => {
-  if (section === 'models' && overview && siteQuery === undefined) void loadLocalWorkspace()
+  if (section === 'local-monitor' && siteQuery !== undefined) {
+    const query = { ...route.query }
+    delete query.site
+    void router.replace({ path: '/admin/upstream-governance/local-monitor', query })
+    return
+  }
+  if (section === 'local-monitor' && overview && siteQuery === undefined) void loadLocalWorkspace()
   else {
     ++localWorkspaceGeneration
     localWorkspaceLoading.value = false
@@ -617,20 +625,20 @@ onUnmounted(() => {
       <p v-if="error" role="alert" class="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-600 dark:border-red-900 dark:bg-red-900/10">{{ error }}</p>
       <p v-if="siteNotFound" role="status" class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-300">{{ t('governance.smartOperations.siteNotFound') }}</p>
       <GovernanceWorkbench v-if="tab === 'overview' && !siteNotFound && (showOverview || active)" :site-id="showOverview ? undefined : active?.id" :disabled="navigationLocked" @navigate="navigateFromWorkbench" />
-      <section v-if="tab === 'models' && showOverview && localWorkspaceLoading" data-test="local-model-workspace-loading" class="min-w-0 rounded-xl border border-dashed border-gray-200 bg-white p-8 text-center text-sm text-gray-500 dark:border-dark-600 dark:bg-dark-800">{{ t('governance.modelMonitoring.localWorkspaceLoading') }}</section>
-      <section v-else-if="tab === 'models' && showOverview && localWorkspaceError" data-test="local-model-workspace-error" class="min-w-0 rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-300">
+      <section v-if="tab === 'local-monitor' && showOverview && localWorkspaceLoading" data-test="local-model-workspace-loading" class="min-w-0 rounded-xl border border-dashed border-gray-200 bg-white p-8 text-center text-sm text-gray-500 dark:border-dark-600 dark:bg-dark-800">{{ t('governance.modelMonitoring.localWorkspaceLoading') }}</section>
+      <section v-else-if="tab === 'local-monitor' && showOverview && localWorkspaceError" data-test="local-model-workspace-error" class="min-w-0 rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-300">
         <p>{{ localWorkspaceError }}</p><p class="mt-2 text-xs">{{ t('governance.modelMonitoring.localWorkspaceUnavailableHint') }}</p><div class="mt-4 flex flex-wrap gap-3"><button type="button" class="btn btn-secondary text-sm" data-test="local-workspace-retry" :disabled="navigationLocked" @click="retryLocalWorkspace">{{ t('governance.modelMonitoring.retry') }}</button><button type="button" class="btn btn-secondary text-sm" data-test="local-workspace-manage-keys" :disabled="navigationLocked" @click="openLocalKeys">{{ t('governance.viewKeys') }}</button></div>
       </section>
-      <section v-else-if="tab === 'models' && showOverview && localWorkspace" data-test="local-model-workspace" class="min-w-0 space-y-4 rounded-xl border border-gray-200 bg-white p-4 dark:border-dark-600 dark:bg-dark-800 sm:p-5">
+      <section v-else-if="tab === 'local-monitor' && showOverview && localWorkspace" data-test="local-model-workspace" class="min-w-0 space-y-4 rounded-xl border border-gray-200 bg-white p-4 dark:border-dark-600 dark:bg-dark-800 sm:p-5">
         <div><h3 class="text-lg font-semibold">{{ t('governance.modelMonitoring.localWorkspace') }}</h3><p class="mt-1 text-sm leading-relaxed text-gray-500 dark:text-dark-300">{{ t('governance.modelMonitoring.localWorkspaceHint') }}</p></div>
         <ModelMonitorPanel :key="`local-${localWorkspace.site.id}`" :site-id="localWorkspace.site.id" :remote-groups="[]" :managed-keys="[]" :local-only="true" :local-targets="localWorkspace.targets || []" :disabled="working" @busy="modelBusy = $event" @manage-keys="openLocalKeys" />
       </section>
-      <div v-if="showOverview && sites.length && tab !== 'overview' && !(tab === 'models' && (localWorkspace || localWorkspaceLoading || localWorkspaceError))" data-test="site-selection-empty" class="flex min-h-64 flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-gray-200 bg-white p-8 text-center dark:border-dark-600 dark:bg-dark-800">
+      <div v-if="showOverview && sites.length && tab !== 'overview' && tab !== 'local-monitor'" data-test="site-selection-empty" class="flex min-h-64 flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-gray-200 bg-white p-8 text-center dark:border-dark-600 dark:bg-dark-800">
         <span class="rounded-2xl bg-gray-100 p-4 dark:bg-dark-700"><Icon name="server" size="lg" class="text-gray-500" /></span>
         <div><h3 class="text-base font-semibold">{{ t('governance.smartOperations.chooseSite') }}</h3><p class="mt-2 max-w-sm text-sm leading-relaxed text-gray-500 dark:text-dark-300">{{ t('governance.smartOperations.chooseSiteHint') }}</p></div>
       </div>
       <p v-if="busy && !active" role="status" class="p-8 text-center text-sm text-gray-500">{{ t('common.loading') }}</p>
-      <p v-if="!busy && !sites.length && !(tab === 'models' && (localWorkspace || localWorkspaceLoading || localWorkspaceError))" class="rounded-xl border border-dashed border-gray-200 p-8 text-center text-sm text-gray-500 dark:border-dark-600">{{ t('governance.empty') }}</p>
+      <p v-if="!busy && !sites.length && tab !== 'local-monitor'" class="rounded-xl border border-dashed border-gray-200 p-8 text-center text-sm text-gray-500 dark:border-dark-600">{{ t('governance.empty') }}</p>
       <section v-if="active" v-show="!showOverview" data-test="active-site-workspace" class="min-w-0 space-y-4">
         <div class="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-dark-600 dark:bg-dark-800">
           <div class="flex flex-wrap items-center gap-3 p-4 sm:p-5">

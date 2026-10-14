@@ -376,6 +376,8 @@ func TestAPIContracts(t *testing.T) {
 						"audio_tts_price_per_million_chars": null,
 						"audio_stt_price_per_hour": null,
 						"audio_realtime_price_per_min": null,
+						"audio_rate_independent": false,
+						"audio_rate_multiplier": 0,
 						"allow_image_generation": false,
 						"allow_batch_image_generation": false,
 						"batch_image_discount_multiplier": 0,

@@ -1130,10 +1130,12 @@ export default {
       },
       voicePricing: {
         title: 'Grok Voice Pricing',
-        description: 'Optional per-group prices for Voice realtime / TTS / STT (USD). Leave empty to leave unpriced.',
+        description: 'Optional per-group prices for Voice realtime / TTS / STT (USD). Leave empty for system defaults; 0 means free.',
         audioRealtimePerMin: 'Realtime price per minute (USD)',
         audioTtsPerMillionChars: 'TTS price per million chars (USD)',
         audioSttPerHour: 'STT price per hour (USD)',
+        independentMultiplier: 'Use an independent voice multiplier for Realtime / TTS / STT',
+        rateMultiplier: 'Independent voice multiplier',
         pricePlaceholder: 'optional'
       },
       webSearchPricing: {
