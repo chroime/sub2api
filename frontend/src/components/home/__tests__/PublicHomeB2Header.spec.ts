@@ -55,7 +55,7 @@ describe('PublicHomeB2Header', () => {
   it('uses shared public header styling with dynamic branding and account navigation', async () => {
     const { wrapper } = render()
     expect(wrapper.element.tagName).toBe('HEADER')
-    expect(wrapper.classes()).toEqual(['public-site-header', 'public-site-header-dark'])
+    expect(wrapper.classes()).toEqual(['public-site-header', 'public-site-header-dark', 'public-site-header-story'])
     expect(wrapper.get('.public-brand').element.tagName).toBe('A')
     expect(wrapper.get('.public-brand-icon img').attributes('src')).toBe('/xeno-alien-spin.svg?rev=20260914-round-head-2')
     expect(wrapper.get('.public-brand-icon img').attributes('alt')).toBe('XenoAI')

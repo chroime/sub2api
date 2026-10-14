@@ -145,6 +145,9 @@ onBeforeUnmount(() => themeObserver?.disconnect())
 @media (max-width: 1200px) {
   .public-site-header-story .public-header-inner { width: calc(100% - 48px); }
 }
+@media (min-width: 1800px) {
+  .public-site-header-story .public-header-inner { width: min(1280px, calc(100% - 96px)); }
+}
 @media (max-width: 720px) {
   .public-site-header-story .public-header-inner { width: calc(100% - 40px); min-height: 66px; padding: 16px 0; }
   .public-site-header-story .public-brand-name { font-size: 19px; }
