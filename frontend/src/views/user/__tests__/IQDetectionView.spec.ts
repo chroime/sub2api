@@ -64,4 +64,30 @@ describe('IQDetectionView', () => {
     expect(getIQDetection).toHaveBeenLastCalledWith({ hours: 24, limit: 8, pelican_page: 2, pelican_page_size: 8 })
     expect(wrapper.get('[data-test="pelican-work-card"]').text()).toContain('GPT Lite')
   })
+
+  it('shows every non-failed timeline slot as green and hides the empty state copy', async () => {
+    getIQDetection.mockResolvedValueOnce({
+      window_hours: 24,
+      generated_at: '2026-10-02T12:00:00Z',
+      timeline: [
+        { at: '2026-10-02T11:00:00Z', status: 'empty' },
+        { at: '2026-10-02T11:30:00Z', status: 'fail' },
+        { at: '2026-10-02T12:00:00Z', status: 'unknown' },
+      ],
+      pelican_works: [],
+    })
+
+    const wrapper = mount(IQDetectionView, { global: { stubs: { Icon: true } } })
+    await flushPromises()
+
+    const points = wrapper.findAll('[data-test="iq-timeline-point"]')
+    expect(points).toHaveLength(3)
+    expect(points[0].classes()).toContain('bg-emerald-500')
+    expect(points[1].classes()).toContain('bg-rose-500')
+    expect(points[2].classes()).toContain('bg-emerald-500')
+    expect(wrapper.text()).not.toContain('iqDetection.eyebrow')
+    expect(wrapper.text()).not.toContain('iqDetection.timelineHint')
+    expect(wrapper.text()).not.toContain('iqDetection.timelineDisclaimer')
+    expect(wrapper.get('[data-test="iq-timeline"]').text()).not.toContain('iqDetection.empty')
+  })
 })

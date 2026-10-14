@@ -1,18 +1,14 @@
 export default {
   iqDetection: {
-    eyebrow: 'Model quality lab',
     title: 'IQ Monitoring',
     description: 'View Pelican works produced by local group model monitoring.',
     recentCount: 'Last {count}',
     page: 'Page {page}',
     timelineTitle: '24-hour test timeline',
-    timelineHint: 'Each block is 30 minutes. Failures take precedence over passes; empty means no evidence.',
-    timelineDisclaimer: 'A fixed test reflects one behavior only and does not represent overall model quality by itself.',
     hoursAgo: '{hours} hours ago',
     now: 'Now',
     pass: 'Pass',
     fail: 'Fail',
-    empty: 'No data',
     pelicanTitle: 'Pelican riding works',
     pelicanHint: 'Generated HTML runs inside an isolated preview so you can watch the animation directly.',
     emptyPelican: 'No pelican works yet. They appear after an administrator runs the pelican test.',

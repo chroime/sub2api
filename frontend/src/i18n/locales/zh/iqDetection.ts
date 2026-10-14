@@ -1,18 +1,14 @@
 export default {
   iqDetection: {
-    eyebrow: '模型质量实验室',
     title: '智商监测',
     description: '查看本地分组模型监测产生的鹈鹕作品。',
     recentCount: '最近 {count} 次',
     page: '第 {page} 页',
     timelineTitle: '24 小时检测时间线',
-    timelineHint: '每格代表 30 分钟；失败优先于通过，空白表示没有检测证据。',
-    timelineDisclaimer: '检测结果只反映模型在固定题目上的表现，不能单独代表整体能力。',
     hoursAgo: '{hours} 小时前',
     now: '现在',
     pass: '通过',
     fail: '未通过',
-    empty: '无数据',
     pelicanTitle: '鹈鹕骑行作品',
     pelicanHint: '模型生成的 HTML 会在隔离预览框中运行，可直接查看动画效果。',
     emptyPelican: '暂无鹈鹕作品。管理员运行鹈鹕测试后，生成的动画会显示在这里。',

@@ -3,10 +3,6 @@
     <div class="iq-page mx-auto min-h-full max-w-screen-2xl space-y-8 px-4 py-6 sm:px-6 lg:px-8" data-test="iq-detection-page">
     <header class="flex flex-wrap items-end justify-between gap-4">
       <div>
-        <div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-primary-600 dark:text-primary-300">
-          <Icon name="brain" size="sm" />
-          <span>{{ t('iqDetection.eyebrow') }}</span>
-        </div>
         <h1 class="mt-2 text-2xl font-semibold tracking-tight text-gray-900 dark:text-white sm:text-3xl">{{ t('iqDetection.title') }}</h1>
         <p class="mt-2 max-w-2xl text-sm leading-6 text-gray-500 dark:text-dark-300">{{ t('iqDetection.description') }}</p>
       </div>
@@ -24,17 +20,15 @@
         <div class="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 id="iq-timeline-title" class="text-lg font-semibold text-gray-900 dark:text-white">{{ t('iqDetection.timelineTitle') }}</h2>
-            <p class="mt-1 text-xs text-gray-500 dark:text-dark-400">{{ t('iqDetection.timelineHint') }}</p>
           </div>
-          <div class="flex flex-wrap gap-3 text-xs text-gray-500 dark:text-dark-400"><span><i class="iq-dot bg-emerald-500" />{{ t('iqDetection.pass') }}</span><span><i class="iq-dot bg-rose-500" />{{ t('iqDetection.fail') }}</span><span><i class="iq-dot bg-amber-400" />{{ t('iqDetection.empty') }}</span></div>
+          <div class="flex flex-wrap gap-3 text-xs text-gray-500 dark:text-dark-400"><span><i class="iq-dot bg-emerald-500" />{{ t('iqDetection.pass') }}</span><span><i class="iq-dot bg-rose-500" />{{ t('iqDetection.fail') }}</span></div>
         </div>
         <div class="overflow-x-auto" data-test="iq-timeline" :aria-label="t('iqDetection.timelineTitle')">
           <div class="flex min-w-[388px] gap-1">
-            <span v-for="point in dashboard.timeline" :key="point.at" class="h-8 min-w-1 flex-1 rounded-sm" :class="timelineClass(point.status)" :title="`${formatTime(point.at)} · ${timelineLabel(point.status)}`" />
+            <span v-for="point in dashboard.timeline" :key="point.at" data-test="iq-timeline-point" class="h-8 min-w-1 flex-1 rounded-sm" :class="timelineClass(point.status)" :title="`${formatTime(point.at)} · ${timelineLabel(point.status)}`" />
           </div>
         </div>
         <div class="flex justify-between text-[11px] text-gray-400"><span>{{ t('iqDetection.hoursAgo', { hours: dashboard.window_hours }) }}</span><span>{{ t('iqDetection.now') }}</span></div>
-        <p class="text-xs text-gray-500 dark:text-dark-400">{{ t('iqDetection.timelineDisclaimer') }}</p>
       </section>
 
       <section class="space-y-4" aria-labelledby="iq-pelican-title">
@@ -132,8 +126,8 @@ function formatTime(value: string) {
   return `${values.year}-${values.month}-${values.day} ${values.hour}:${values.minute}:${values.second}`
 }
 function effortLabel(value: string) { return value?.trim() || '—' }
-function timelineClass(status: string) { return status === 'pass' ? 'bg-emerald-500' : status === 'fail' ? 'bg-rose-500' : 'bg-amber-300' }
-function timelineLabel(status: string) { return status === 'pass' ? t('iqDetection.pass') : status === 'fail' ? t('iqDetection.fail') : t('iqDetection.empty') }
+function timelineClass(status: string) { return status === 'fail' ? 'bg-rose-500' : 'bg-emerald-500' }
+function timelineLabel(status: string) { return status === 'fail' ? t('iqDetection.fail') : t('iqDetection.pass') }
 function preview(html: string) {
   const source = html || ''
   const styled = /<\/head\s*>/i.test(source)
