@@ -20,6 +20,35 @@ const (
 	grokVoiceRealtimeUpstream    = "grok-voice-latest"
 )
 
+// xAI's native TTS endpoint accepts Grok voice IDs, while OpenAI-compatible
+// clients commonly send the standard OpenAI voice names. Keep the ingress
+// contract compatible by translating the known names before forwarding. Grok
+// IDs are canonicalized only for casing; unknown values remain untouched so
+// custom voice IDs continue to work.
+var grokOpenAIVoiceAliases = map[string]string{
+	"alloy":   "Ara",
+	"ash":     "Rex",
+	"ballad":  "Sal",
+	"coral":   "Eve",
+	"echo":    "Leo",
+	"fable":   "Ara",
+	"nova":    "Eve",
+	"onyx":    "Rex",
+	"sage":    "Sal",
+	"shimmer": "Eve",
+	"verse":   "Leo",
+	"marin":   "Ara",
+	"cedar":   "Rex",
+}
+
+var grokVoiceIDs = map[string]string{
+	"ara": "Ara",
+	"rex": "Rex",
+	"sal": "Sal",
+	"eve": "Eve",
+	"leo": "Leo",
+}
+
 // normalizeGrokOpenAIAudioRequest translates the standard OpenAI audio
 // request shape into the native xAI/Grok Voice request shape. The returned
 // model is kept separately because Grok's HTTP voice endpoints select the
@@ -51,7 +80,7 @@ func normalizeGrokOpenAISpeechRequest(body []byte) ([]byte, string, string, erro
 
 	upstream := map[string]any{"text": request.Input}
 	if voice := strings.TrimSpace(request.Voice); voice != "" {
-		upstream["voice_id"] = voice
+		upstream["voice_id"] = normalizeGrokVoiceID(voice)
 	}
 	language := strings.TrimSpace(request.Language)
 	if language == "" {
@@ -67,6 +96,21 @@ func normalizeGrokOpenAISpeechRequest(body []byte) ([]byte, string, string, erro
 		model = grokVoiceTTSPublicModel
 	}
 	return normalized, "application/json", model, nil
+}
+
+func normalizeGrokVoiceID(voice string) string {
+	trimmed := strings.TrimSpace(voice)
+	if trimmed == "" {
+		return ""
+	}
+	lower := strings.ToLower(trimmed)
+	if alias, ok := grokOpenAIVoiceAliases[lower]; ok {
+		return alias
+	}
+	if canonical, ok := grokVoiceIDs[lower]; ok {
+		return canonical
+	}
+	return trimmed
 }
 
 func normalizeGrokOpenAITranscriptionRequest(body []byte, contentType string) ([]byte, string, string, error) {

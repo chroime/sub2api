@@ -25,6 +25,26 @@ func TestNormalizeGrokOpenAISpeechRequest(t *testing.T) {
 	require.JSONEq(t, `{"text":"Hello voice","voice_id":"Ara","language":"en"}`, string(normalized))
 }
 
+func TestNormalizeGrokOpenAISpeechRequestMapsOpenAIVoiceAlias(t *testing.T) {
+	body := []byte(`{"model":"grok-voice-tts","input":"Hello voice","voice":"alloy"}`)
+
+	normalized, _, _, err := normalizeGrokOpenAIAudioRequest("speech", body, "application/json")
+
+	require.NoError(t, err)
+	// The OpenAI-compatible ingress accepts standard voice names, but xAI's
+	// native TTS endpoint only accepts Grok voice IDs.
+	require.JSONEq(t, `{"text":"Hello voice","voice_id":"Ara","language":"en"}`, string(normalized))
+}
+
+func TestNormalizeGrokOpenAISpeechRequestPreservesGrokVoiceID(t *testing.T) {
+	body := []byte(`{"model":"grok-voice-tts","input":"Hello voice","voice":"Rex"}`)
+
+	normalized, _, _, err := normalizeGrokOpenAIAudioRequest("speech", body, "application/json")
+
+	require.NoError(t, err)
+	require.JSONEq(t, `{"text":"Hello voice","voice_id":"Rex","language":"en"}`, string(normalized))
+}
+
 func TestNormalizeGrokOpenAISpeechRequestRequiresInput(t *testing.T) {
 	_, _, _, err := normalizeGrokOpenAIAudioRequest("speech", []byte(`{"model":"grok-voice-tts"}`), "application/json")
 
