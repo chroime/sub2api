@@ -176,7 +176,10 @@ const xaiModels = [
   'grok-imagine-image-2.0',
   'grok-imagine-video',
   'grok-imagine-video-1.5',
-  'grok-imagine-video-1.5-lite'
+  'grok-imagine-video-1.5-lite',
+  'grok-voice-tts',
+  'grok-voice-stt',
+  'grok-voice-realtime'
 ]
 
 // Cohere

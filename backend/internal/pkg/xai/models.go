@@ -62,6 +62,9 @@ const (
 	DefaultImagineVideo15Model       = "grok-imagine-video-1.5"
 	DefaultImagineVideo15LegacyModel = "grok-imagine-video-1.5-preview"
 	DefaultImagineVideo15LiteModel   = "grok-imagine-video-1.5-lite"
+	DefaultVoiceTTSModel             = "grok-voice-tts"
+	DefaultVoiceSTTModel             = "grok-voice-stt"
+	DefaultVoiceRealtimeModel        = "grok-voice-realtime"
 )
 
 // ModelMappingOptions controls optional expansions of the default mapping.
@@ -102,6 +105,12 @@ var defaultModels = []Model{
 	{ID: DefaultImagineVideoModel, Object: "model", Type: "model", OwnedBy: "xai", DisplayName: "Grok Imagine Video"},
 	{ID: DefaultImagineVideo15Model, Object: "model", Type: "model", OwnedBy: "xai", DisplayName: "Grok Imagine Video 1.5"},
 	{ID: DefaultImagineVideo15LiteModel, Object: "model", Type: "model", OwnedBy: "xai", DisplayName: "Grok Imagine Video 1.5 Lite"},
+	// Voice aliases are gateway-facing capabilities. The native xAI Voice
+	// endpoints select TTS/STT by path and Realtime by its websocket model
+	// query, so these IDs are intentionally stable public aliases.
+	{ID: DefaultVoiceTTSModel, Object: "model", Type: "audio", OwnedBy: "xai", DisplayName: "Grok Voice TTS"},
+	{ID: DefaultVoiceSTTModel, Object: "model", Type: "audio", OwnedBy: "xai", DisplayName: "Grok Voice STT"},
+	{ID: DefaultVoiceRealtimeModel, Object: "model", Type: "audio", OwnedBy: "xai", DisplayName: "Grok Voice Realtime"},
 }
 
 // grokTextResponsesModelAliases is the source of truth for Grok text models
@@ -152,6 +161,13 @@ func DefaultModelIDs() []string {
 	return ids
 }
 
+// DefaultVoiceModelIDs returns the stable gateway-facing voice capability IDs.
+// They are separate from the native xAI operation paths so clients can expose
+// them in a model picker without learning the /tts and /stt wire formats.
+func DefaultVoiceModelIDs() []string {
+	return []string{DefaultVoiceTTSModel, DefaultVoiceSTTModel, DefaultVoiceRealtimeModel}
+}
+
 // DefaultModelMapping returns native Grok/Imagine identity + aliases, using
 // runtime options (default text model / optional cross-client wildcards).
 // Does NOT enable gpt-*/claude-* unless SetRuntimeModelMappingOptions enables them.
@@ -189,6 +205,8 @@ func ModelMappingWithOptions(opts ModelMappingOptions) map[string]string {
 	mapping["grok-imagine-video-1.5"] = DefaultImagineVideo15Model
 	mapping["grok-imagine-video-1.5-preview"] = DefaultImagineVideo15Model
 	mapping["grok-imagine-video-1.5-lite"] = DefaultImagineVideo15LiteModel
+	mapping["grok-voice-latest"] = "grok-voice-latest"
+	mapping[DefaultVoiceRealtimeModel] = "grok-voice-latest"
 	// Informal alias only:
 	mapping["grok-video-1.5"] = DefaultImagineVideo15Model
 

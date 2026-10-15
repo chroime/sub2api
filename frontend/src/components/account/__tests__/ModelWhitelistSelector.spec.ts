@@ -100,6 +100,16 @@ describe('ModelWhitelistSelector', () => {
     resetPlatformCatalog()
   })
 
+  it('shows Grok voice capability aliases in the model whitelist', async () => {
+    const wrapper = mountSelector({ platform: 'grok' })
+
+    await wrapper.get('.cursor-pointer').trigger('click')
+
+    for (const modelID of ['grok-voice-tts', 'grok-voice-stt', 'grok-voice-realtime']) {
+      expect(findModelRow(wrapper, modelID)).toBeTruthy()
+    }
+  })
+
   it.each(['anthropic', 'openai', 'gemini', 'antigravity', 'grok', 'kimi', 'zhipu', 'deepseek', 'minimax', 'opencode_go', 'command_code', 'cline'])(
     'supports upstream sync for %s saved accounts and creation previews',
     (platform) => {

@@ -89,6 +89,13 @@ func TestDefaultModelsIncludesGrok46And47(t *testing.T) {
 	require.Equal(t, "grok-4.6", ResolveGrokTextResponsesModelID("grok-4.6-latest"))
 }
 
+func TestDefaultModelsIncludeGrokVoiceAliases(t *testing.T) {
+	ids := DefaultModelIDs()
+	require.Contains(t, ids, "grok-voice-tts")
+	require.Contains(t, ids, "grok-voice-stt")
+	require.Contains(t, ids, "grok-voice-realtime")
+}
+
 func TestResolveGrokTextResponsesModelID(t *testing.T) {
 	t.Parallel()
 	require.Equal(t, "grok-4.6", ResolveGrokTextResponsesModelID(""))

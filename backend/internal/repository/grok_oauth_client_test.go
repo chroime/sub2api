@@ -5,6 +5,7 @@ package repository
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -124,6 +125,13 @@ func TestGrokOAuthEntitlementDenialRequiresExplicitEvidence(t *testing.T) {
 	require.False(t, grokOAuthHasExplicitEntitlementDenial(`<html>403 Forbidden</html>`))
 	require.False(t, grokOAuthHasExplicitEntitlementDenial(`{"error":"access_denied","message":"You have run out of credits"}`))
 	require.False(t, grokOAuthHasExplicitEntitlementDenial(`{"code":"subscription_required","message":"included free usage exhausted"}`))
+}
+
+func TestGrokSSOConversionErrorMapsBrowserRequired(t *testing.T) {
+	err := grokSSOConversionError(fmt.Errorf("approve: %w", xai.ErrSSOBrowserRequired))
+	require.Error(t, err)
+	require.Contains(t, strings.ToUpper(err.Error()), "GROK_SSO_BROWSER_REQUIRED")
+	require.Contains(t, err.Error(), "browser verification")
 }
 
 func TestNewGrokOAuthClient_UnvalidatedTokenURLFallsBackToDefault(t *testing.T) {

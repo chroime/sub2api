@@ -1333,6 +1333,10 @@ export default {
           failedToExchangeCode: 'Failed to exchange Grok authorization code',
           failedToValidateRT: 'Failed to validate Grok refresh token',
           failedToConvertSSO: 'Failed to convert Grok SSO cookie',
+          ssoBrowserRequiredTitle: 'xAI requires browser verification',
+          ssoBrowserRequiredDesc:
+            'xAI blocked this SSO device approval with a browser challenge. Use browser OAuth authorization for the same account; the raw SSO key is not stored.',
+          ssoBrowserFallback: 'Switch to browser OAuth authorization',
           errors: {
             GROK_OAUTH_SESSION_NOT_FOUND:
               'Grok OAuth session was not found or has expired. Generate a new auth URL and paste the newest callback URL.',

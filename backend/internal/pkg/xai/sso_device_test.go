@@ -19,6 +19,8 @@ type ssoDeviceFakeClient struct {
 	t             *testing.T
 	tokenCalls    int
 	cookieHeaders []string
+	approveStatus int
+	approveBody   string
 }
 
 func (c *ssoDeviceFakeClient) Do(req *http.Request) (*http.Response, error) {
@@ -52,11 +54,18 @@ func (c *ssoDeviceFakeClient) Do(req *http.Request) (*http.Response, error) {
 		require.Equal(c.t, http.MethodPost, req.Method)
 		require.Equal(c.t, "https://auth.x.ai", req.Header.Get("Origin"))
 		require.Equal(c.t, "https://auth.x.ai/oauth2/device/consent", req.Header.Get("Referer"))
+		require.Equal(c.t, "navigate", req.Header.Get("Sec-Fetch-Mode"))
+		require.Equal(c.t, "document", req.Header.Get("Sec-Fetch-Dest"))
+		require.Equal(c.t, "?1", req.Header.Get("Sec-Fetch-User"))
+		require.Contains(c.t, req.Header.Get("Sec-CH-UA"), `"Google Chrome";v="120"`)
 		values := readSSODeviceForm(c.t, req)
 		require.Equal(c.t, "USER-1", values.Get("user_code"))
 		require.Equal(c.t, "allow", values.Get("action"))
 		require.Equal(c.t, "User", values.Get("principal_type"))
 		require.Equal(c.t, "consent&token", values.Get("consent_token"))
+		if c.approveStatus != 0 {
+			return ssoDeviceResponse(c.approveStatus, nil, c.approveBody), nil
+		}
 		return ssoDeviceResponse(http.StatusSeeOther, http.Header{"Location": {"/oauth2/device/done"}}, ``), nil
 	case "https://auth.x.ai/oauth2/device/done":
 		require.Equal(c.t, http.MethodGet, req.Method)
@@ -97,6 +106,41 @@ func TestConvertSSOToBuildCompletesDeviceFlow(t *testing.T) {
 	for _, cookie := range client.cookieHeaders {
 		require.NotContains(t, cookie, "consent&token")
 	}
+}
+
+func TestConvertSSOToBuildClassifiesCastleApprovalChallenge(t *testing.T) {
+	t.Setenv(EnvClientID, "")
+	client := &ssoDeviceFakeClient{
+		t:             t,
+		approveStatus: http.StatusForbidden,
+		approveBody:   `<html><title>Castle request token required</title><p>We couldn't verify this request.</p></html>`,
+	}
+	_, err := ConvertSSOToBuild(context.Background(), "sso=sso-token", &SSODeviceOptions{
+		HTTPClient: client,
+		Sleep: func(context.Context, time.Duration) error {
+			return nil
+		},
+	})
+	require.ErrorIs(t, err, ErrSSOBrowserRequired)
+}
+
+func TestConvertSSOToBuildKeepsGenericApprovalForbidden(t *testing.T) {
+	t.Setenv(EnvClientID, "")
+	client := &ssoDeviceFakeClient{
+		t:             t,
+		approveStatus: http.StatusForbidden,
+		approveBody:   `<html><title>Forbidden</title></html>`,
+	}
+	_, err := ConvertSSOToBuild(context.Background(), "sso=sso-token", &SSODeviceOptions{
+		HTTPClient: client,
+		Sleep: func(context.Context, time.Duration) error {
+			return nil
+		},
+	})
+	var statusErr SSOHTTPError
+	require.ErrorAs(t, err, &statusErr)
+	require.Equal(t, http.StatusForbidden, statusErr.Status)
+	require.NotErrorIs(t, err, ErrSSOBrowserRequired)
 }
 
 func TestSSOConsentToken(t *testing.T) {

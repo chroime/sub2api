@@ -753,6 +753,8 @@ func TestEmbeddedFrontendBypassesBareAPIAliases(t *testing.T) {
 		"/videos",
 		"/tts",
 		"/stt",
+		"/audio/speech",
+		"/audio/transcriptions",
 		"/custom-voices",
 		"/custom-voices/voice-123",
 		"/custom-voices/voice-123/audio",

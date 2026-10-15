@@ -15,10 +15,12 @@ import (
 
 // reqClientOptions 定义 req 客户端的构建参数
 type reqClientOptions struct {
-	ProxyURL    string        // 代理 URL（支持 http/https/socks5）
-	Timeout     time.Duration // 请求超时时间
-	Impersonate bool          // 是否模拟浏览器指纹（当前为 Firefox，Chrome 伪装会被 chatgpt.com 的 Cloudflare 质询）
-	ForceHTTP2  bool          // 是否强制使用 HTTP/2
+	ProxyURL          string        // 代理 URL（支持 http/https/socks5）
+	Timeout           time.Duration // 请求超时时间
+	Impersonate       bool          // 是否模拟 Firefox 浏览器指纹
+	ImpersonateChrome bool          // 是否模拟 Chrome 浏览器指纹
+	DisableCookieJar  bool          // 是否禁用 req 客户端的共享 CookieJar
+	ForceHTTP2        bool          // 是否强制使用 HTTP/2
 }
 
 // sharedReqClients 存储按配置参数缓存的 req 客户端实例
@@ -49,7 +51,14 @@ func getSharedReqClient(opts reqClientOptions) (*req.Client, error) {
 	if opts.ForceHTTP2 {
 		client = client.EnableForceHTTP2()
 	}
-	if opts.Impersonate {
+	if opts.DisableCookieJar {
+		// OAuth callers that manage cookies explicitly must not share req's
+		// process-local jar with another authorization flow.
+		client = client.SetCookieJar(nil)
+	}
+	if opts.ImpersonateChrome {
+		client = client.ImpersonateChrome()
+	} else if opts.Impersonate {
 		// chatgpt.com 的 Cloudflare 会对 req 内置的 Chrome 伪装（UA 固定为 Chrome/120，
 		// 与 sec-ch-ua 等 Client Hints 一起已明显过时）直接返回 403 cf-mitigated=challenge，
 		// 导致 accounts/check、subscriptions、隐私设置等 backend-api 调用全部失败，
@@ -85,10 +94,12 @@ func instrumentReqClient(client *req.Client) *req.Client {
 }
 
 func buildReqClientKey(opts reqClientOptions) string {
-	return fmt.Sprintf("%s|%s|%t|%t",
+	return fmt.Sprintf("%s|%s|%t|%t|%t|%t",
 		strings.TrimSpace(opts.ProxyURL),
 		opts.Timeout.String(),
 		opts.Impersonate,
+		opts.ImpersonateChrome,
+		opts.DisableCookieJar,
 		opts.ForceHTTP2,
 	)
 }

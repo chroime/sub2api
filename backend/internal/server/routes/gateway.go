@@ -319,6 +319,24 @@ func RegisterGatewayRoutes(
 			}
 			h.OpenAIGateway.GrokRealtime(c)
 		})
+		// OpenAI-compatible audio aliases. The handler translates the standard
+		// speech/transcription payloads into Grok's native /tts and /stt shapes.
+		gateway.POST("/audio/speech", func(c *gin.Context) {
+			if getGroupPlatform(c) != service.PlatformGrok {
+				service.MarkOpsClientBusinessLimited(c, service.OpsClientBusinessLimitedReasonLocalFeatureGate)
+				c.JSON(http.StatusNotFound, gin.H{"error": gin.H{"type": "not_found_error", "message": "Voice API is not supported for this platform"}})
+				return
+			}
+			h.OpenAIGateway.GrokOpenAIAudio(c, "speech")
+		})
+		gateway.POST("/audio/transcriptions", func(c *gin.Context) {
+			if getGroupPlatform(c) != service.PlatformGrok {
+				service.MarkOpsClientBusinessLimited(c, service.OpsClientBusinessLimitedReasonLocalFeatureGate)
+				c.JSON(http.StatusNotFound, gin.H{"error": gin.H{"type": "not_found_error", "message": "Voice API is not supported for this platform"}})
+				return
+			}
+			h.OpenAIGateway.GrokOpenAIAudio(c, "transcriptions")
+		})
 		gateway.POST("/web_search", func(c *gin.Context) {
 			if getGroupPlatform(c) != service.PlatformGrok {
 				service.MarkOpsClientBusinessLimited(c, service.OpsClientBusinessLimitedReasonLocalFeatureGate)
@@ -473,6 +491,22 @@ func RegisterGatewayRoutes(
 			return
 		}
 		h.OpenAIGateway.GrokRealtime(c)
+	})
+	rootRoute(http.MethodPost, "/audio/speech", bodyLimit, func(c *gin.Context) {
+		if getGroupPlatform(c) != service.PlatformGrok {
+			service.MarkOpsClientBusinessLimited(c, service.OpsClientBusinessLimitedReasonLocalFeatureGate)
+			c.JSON(http.StatusNotFound, gin.H{"error": gin.H{"type": "not_found_error", "message": "Voice API is not supported for this platform"}})
+			return
+		}
+		h.OpenAIGateway.GrokOpenAIAudio(c, "speech")
+	})
+	rootRoute(http.MethodPost, "/audio/transcriptions", bodyLimit, func(c *gin.Context) {
+		if getGroupPlatform(c) != service.PlatformGrok {
+			service.MarkOpsClientBusinessLimited(c, service.OpsClientBusinessLimitedReasonLocalFeatureGate)
+			c.JSON(http.StatusNotFound, gin.H{"error": gin.H{"type": "not_found_error", "message": "Voice API is not supported for this platform"}})
+			return
+		}
+		h.OpenAIGateway.GrokOpenAIAudio(c, "transcriptions")
 	})
 	rootRoute(http.MethodPost, "/web_search", bodyLimit, func(c *gin.Context) {
 		if getGroupPlatform(c) != service.PlatformGrok {

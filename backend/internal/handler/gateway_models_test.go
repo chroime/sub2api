@@ -57,6 +57,7 @@ type codexReasoningLevelForTest struct {
 type gatewayModelItemForTest struct {
 	ID                      string                                `json:"id"`
 	Object                  string                                `json:"object"`
+	Type                    string                                `json:"type"`
 	Created                 int64                                 `json:"created"`
 	OwnedBy                 string                                `json:"owned_by"`
 	CreatedAt               string                                `json:"created_at"`
@@ -586,6 +587,42 @@ func TestGatewayModels_Grok46AdvertisesXHighReasoningEffortForGrokBuild(t *testi
 	}
 }
 
+func TestGatewayModels_GrokAddsVoiceAliasesToConfiguredCatalog(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	const groupID int64 = 4412
+	h := newGatewayModelsHandlerForTest(
+		&gatewayModelsAccountRepoStub{byGroup: map[int64][]service.Account{
+			groupID: {{
+				ID:       1,
+				Platform: service.PlatformGrok,
+				Credentials: map[string]any{
+					"model_mapping": map[string]any{"grok-4.6": "grok-4.6"},
+				},
+			}},
+		}},
+	)
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodGet, "/v1/models", nil)
+	c.Set(string(middleware2.ContextKeyAPIKey), &service.APIKey{
+		Group: &service.Group{ID: groupID, Platform: service.PlatformGrok},
+	})
+
+	h.Models(c)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	var got gatewayModelsResponseForTest
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	byID := make(map[string]gatewayModelItemForTest, len(got.Data))
+	for _, model := range got.Data {
+		byID[model.ID] = model
+	}
+	require.Equal(t, "audio", byID["grok-voice-tts"].Type)
+	require.Equal(t, "audio", byID["grok-voice-stt"].Type)
+	require.Equal(t, "audio", byID["grok-voice-realtime"].Type)
+}
+
 func assertGrokGatewayReasoningEfforts(t *testing.T, groupID int64, modelID string, want []gatewayReasoningEffortOptionForTest) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
@@ -618,8 +655,14 @@ func assertGrokGatewayReasoningEfforts(t *testing.T, groupID int64, modelID stri
 	require.Equal(t, http.StatusOK, rec.Code)
 	var got gatewayModelsResponseForTest
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
-	require.Len(t, got.Data, 1)
-	model := got.Data[0]
+	var model gatewayModelItemForTest
+	for _, candidate := range got.Data {
+		if candidate.ID == modelID {
+			model = candidate
+			break
+		}
+	}
+	require.NotEmpty(t, model.ID)
 	require.Equal(t, modelID, model.ID)
 	require.True(t, model.SupportsReasoningEffort)
 	require.Equal(t, "high", model.ReasoningEffort)

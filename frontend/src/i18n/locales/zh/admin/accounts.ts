@@ -1428,6 +1428,10 @@ export default {
           failedToExchangeCode: 'Grok 授权码兑换失败',
           failedToValidateRT: '验证 Grok refresh token 失败',
           failedToConvertSSO: 'Grok SSO 转换失败',
+          ssoBrowserRequiredTitle: 'xAI 要求浏览器验证',
+          ssoBrowserRequiredDesc:
+            '这个 SSO key 的设备授权被 xAI 的浏览器挑战拦截。请使用浏览器 OAuth 授权完成同一个账号；原始 SSO key 不会保存。',
+          ssoBrowserFallback: '切换到浏览器 OAuth 授权',
           errors: {
             GROK_OAUTH_SESSION_NOT_FOUND:
               'Grok OAuth 会话不存在或已过期。请重新生成授权链接，并粘贴最新的回调链接。',

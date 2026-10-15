@@ -3836,6 +3836,28 @@
         @authorize-password="handleGrokAuthorizePassword"
       />
 
+      <div
+        v-if="grokSSOBrowserRequired"
+        class="rounded-lg border border-amber-300 bg-amber-50 p-4 dark:border-amber-700 dark:bg-amber-900/20"
+        data-testid="grok-sso-browser-required"
+      >
+        <p class="font-medium text-amber-900 dark:text-amber-200">
+          {{ t('admin.accounts.oauth.grok.ssoBrowserRequiredTitle') }}
+        </p>
+        <p class="mt-1 text-sm text-amber-800 dark:text-amber-300">
+          {{ t('admin.accounts.oauth.grok.ssoBrowserRequiredDesc') }}
+        </p>
+        <button
+          type="button"
+          class="btn btn-secondary mt-3"
+          data-testid="grok-sso-browser-fallback"
+          @click="handleGrokSSOBrowserFallback"
+        >
+          <Icon name="globe" size="sm" class="mr-2" />
+          {{ t('admin.accounts.oauth.grok.ssoBrowserFallback') }}
+        </button>
+      </div>
+
     </div>
 
     <template #footer>
@@ -4244,6 +4266,7 @@ import {
   parseDateTimeLocalInput
 } from '@/utils/format'
 import { createStableObjectKeyResolver } from '@/utils/stableObjectKey'
+import { isGrokSSOBrowserRequired } from '@/utils/grokOAuthFallback'
 import { getAccountExpiryTimestamp } from '@/components/account/accountExpiry'
 import { VERTEX_LOCATION_OPTIONS } from '@/constants/account'
 import {
@@ -4409,6 +4432,10 @@ const currentOAuthError = computed(() => {
   if (form.platform === 'antigravity') return antigravityOAuth.error.value
   if (form.platform === 'grok') return grokOAuth.error.value
   return oauth.error.value
+})
+
+const grokSSOBrowserRequired = computed(() => {
+  return form.platform === 'grok' && isGrokSSOBrowserRequired(grokOAuth.error.value)
 })
 
 // Refs
@@ -6306,6 +6333,13 @@ const handleGenerateUrl = async () => {
   } else {
     await oauth.generateAuthUrl(addMethod.value, form.proxy_id)
   }
+}
+
+const handleGrokSSOBrowserFallback = async () => {
+  if (form.platform !== 'grok' || !oauthFlowRef.value) return
+  oauthFlowRef.value.inputMethod = 'manual'
+  grokOAuth.error.value = ''
+  await handleGenerateUrl()
 }
 
 const handleValidateRefreshToken = (rt: string) => {

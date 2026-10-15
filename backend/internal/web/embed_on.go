@@ -375,6 +375,8 @@ func shouldBypassEmbeddedFrontend(path string) bool {
 		trimmed == "/x_search" ||
 		trimmed == "/tts" ||
 		trimmed == "/stt" ||
+		trimmed == "/audio/speech" ||
+		trimmed == "/audio/transcriptions" ||
 		trimmed == "/realtime" ||
 		trimmed == "/custom-voices" ||
 		strings.HasPrefix(trimmed, "/custom-voices/") ||

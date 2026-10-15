@@ -1213,6 +1213,15 @@ func (h *GatewayHandler) Models(c *gin.Context) {
 
 	// Get available models from account configurations for the selected group platform.
 	availableModels := h.gatewayService.GetAvailableModels(c.Request.Context(), groupID, platform)
+	if platform == service.PlatformGrok {
+		// Voice is exposed by the gateway capability layer rather than by the
+		// text-model mapping returned from a Grok account. Keep the aliases visible
+		// even when an account has a custom text-only model mapping.
+		if len(availableModels) == 0 {
+			availableModels = defaultModelIDsForPlatform(platform)
+		}
+		availableModels = mergeModelIDs(availableModels, xai.DefaultVoiceModelIDs())
+	}
 	if apiKey != nil && apiKey.Group != nil && apiKey.Group.ModelAllowlistEnabled() {
 		source := modelListingSource(platform, availableModels, defaultModelIDsForPlatform(platform))
 		writeAllowlistedModelsList(c, platform, apiKey.Group.ModelAllowlist.FilterForListing(source))
