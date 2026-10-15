@@ -308,6 +308,12 @@ func TestNonceTemplate(t *testing.T) {
 	})
 }
 
+func TestDefaultCSPPolicyAllowsDataAudioPreview(t *testing.T) {
+	assert.Equal(t, 1, countDirectiveValue(config.DefaultCSPPolicy, "media-src", "'self'"))
+	assert.Equal(t, 1, countDirectiveValue(config.DefaultCSPPolicy, "media-src", "data:"))
+	assert.Equal(t, 1, countDirectiveValue(config.DefaultCSPPolicy, "media-src", "blob:"))
+}
+
 func TestEnhanceCSPPolicy(t *testing.T) {
 	t.Run("adds_nonce_placeholder_if_missing", func(t *testing.T) {
 		policy := "default-src 'self'; script-src 'self'"
