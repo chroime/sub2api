@@ -36,7 +36,10 @@ describe('IQDetectionView', () => {
     expect(wrapper.find('[data-test="pelican-work-grid"]').classes()).toContain('items-start')
     expect(wrapper.find('[data-test="pelican-work-grid"]').classes()).not.toContain('2xl:grid-cols-3')
     expect(wrapper.find('[data-test="pelican-work-grid"]').classes()).not.toContain('items-stretch')
-    expect(wrapper.find('[data-test="pelican-work-preview"]').classes()).toContain('aspect-[3/2]')
+    expect(wrapper.get('[data-test="pelican-work-card"]').classes()).toContain('h-[620px]')
+    expect(wrapper.find('[data-test="pelican-work-preview"]').classes()).toContain('h-[420px]')
+    expect(wrapper.find('[data-test="pelican-work-preview"]').classes()).not.toContain('aspect-[3/2]')
+    expect(wrapper.get('[data-test="pelican-work-meta"]').classes()).toContain('h-[200px]')
     expect(wrapper.get('[data-test="pelican-work-meta"]').classes()).not.toContain('flex-1')
     expect(wrapper.get('[data-test="pelican-work-footer"]').classes()).not.toContain('mt-auto')
     expect(wrapper.get('[data-test="pelican-work-format"]').text()).toBe('HTML')
@@ -56,7 +59,7 @@ describe('IQDetectionView', () => {
     expect(getIQDetection).toHaveBeenCalledWith({ hours: 24, limit: 8 })
   })
 
-  it('expands a preview to the isolated document height', async () => {
+  it('fits an isolated document inside the fixed preview frame', async () => {
     getIQDetection.mockResolvedValueOnce({
       window_hours: 24,
       generated_at: '2026-10-02T12:00:00Z',
@@ -68,13 +71,14 @@ describe('IQDetectionView', () => {
 
     const frame = wrapper.get('iframe').element as HTMLIFrameElement
     expect(frame.getAttribute('srcdoc')).toContain('data-pelican-preview-size')
-    window.dispatchEvent(new MessageEvent('message', {
-      data: { type: 'pelican-preview-size', id: 'pelican-tall', width: 320, height: 420 },
-      source: frame.contentWindow,
+    ;(wrapper.vm as any).handlePreviewMessage(new MessageEvent('message', {
+      data: { type: 'pelican-preview-size', id: 'pelican-tall', width: 320, height: 840 },
     }))
     await nextTick()
 
-    expect(wrapper.get('[data-test="pelican-work-preview"]').attributes('style')).toContain('height: 420px')
+    expect(wrapper.get('[data-test="pelican-work-preview"]').attributes('style')).toBeUndefined()
+    expect(wrapper.get('[data-test="pelican-work-preview-frame"]').attributes('style')).toContain('height: 840px')
+    expect(wrapper.get('[data-test="pelican-work-preview-frame"]').attributes('style')).toContain('scale(0.5)')
   })
 
   it('paginates pelican works with a next-page request', async () => {

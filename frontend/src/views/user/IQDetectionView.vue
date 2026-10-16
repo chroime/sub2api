@@ -40,13 +40,13 @@
           <span class="text-xs text-gray-500 dark:text-dark-400">{{ t('iqDetection.recentCount', { count: dashboard.pelican_works.length }) }}</span>
         </div>
         <div v-if="dashboard.pelican_works.length" class="grid grid-cols-1 items-start gap-5 md:grid-cols-2 lg:grid-cols-4" data-test="pelican-work-grid">
-          <article v-for="work in dashboard.pelican_works" :key="work.id" class="group flex min-w-0 flex-col overflow-hidden rounded-[1.35rem] border border-gray-200/90 bg-white shadow-sm ring-1 ring-black/[0.02] transition duration-300 hover:-translate-y-0.5 hover:shadow-lg dark:border-dark-700 dark:bg-dark-800 dark:ring-white/[0.03]" data-test="pelican-work-card">
-            <div class="iq-pelican-preview relative aspect-[3/2] shrink-0 overflow-hidden bg-slate-100 dark:bg-dark-900" :style="previewHeightStyle(work.id)" data-test="pelican-work-preview">
-              <iframe :key="`${work.id}:${replayNonce[work.id] || 0}`" :srcdoc="preview(work.html, work.id)" :title="`${t('iqDetection.pelicanTitle')} ${work.model}`" :data-pelican-preview-id="work.id" sandbox="allow-scripts" scrolling="no" referrerpolicy="no-referrer" class="pointer-events-none block h-full w-full select-none border-0" />
+          <article v-for="work in dashboard.pelican_works" :key="work.id" class="group flex h-[620px] min-w-0 flex-col overflow-hidden rounded-[1.35rem] border border-gray-200/90 bg-white shadow-sm ring-1 ring-black/[0.02] transition duration-300 hover:-translate-y-0.5 hover:shadow-lg dark:border-dark-700 dark:bg-dark-800 dark:ring-white/[0.03]" data-test="pelican-work-card">
+            <div class="iq-pelican-preview relative h-[420px] shrink-0 overflow-hidden bg-slate-100 dark:bg-dark-900" data-test="pelican-work-preview">
+              <iframe :key="`${work.id}:${replayNonce[work.id] || 0}`" :srcdoc="preview(work.html, work.id)" :title="`${t('iqDetection.pelicanTitle')} ${work.model}`" :data-pelican-preview-id="work.id" :style="previewFrameStyle(work.id)" data-test="pelican-work-preview-frame" sandbox="allow-scripts" scrolling="no" referrerpolicy="no-referrer" class="pointer-events-none absolute left-1/2 top-0 block w-full select-none border-0" />
               <div class="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/25 via-black/5 to-transparent" />
               <button type="button" class="absolute bottom-3 right-3 inline-flex items-center gap-1.5 rounded-full bg-white/95 px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-lg ring-1 ring-black/5 transition hover:bg-white dark:bg-dark-800/95 dark:text-dark-100 dark:ring-white/10 dark:hover:bg-dark-800" @click="replay(work.id)"><Icon name="play" size="xs" />{{ t('iqDetection.replay') }}</button>
             </div>
-            <div class="flex flex-col gap-3 p-4 text-sm" data-test="pelican-work-meta">
+            <div class="flex h-[200px] flex-none flex-col gap-2 p-3 text-sm" data-test="pelican-work-meta">
               <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0">
                   <p class="truncate font-semibold leading-5 text-gray-800 dark:text-dark-100" data-test="pelican-work-group">{{ work.group_name || work.account_label }}</p>
@@ -58,7 +58,7 @@
                 <span class="min-w-0 truncate font-medium text-gray-600 dark:text-dark-200">{{ work.model }}</span>
                 <span class="shrink-0 rounded-md bg-gray-100 px-2 py-1 dark:bg-dark-700">{{ effortLabel(work.effort) }}</span>
               </div>
-              <div class="flex items-center justify-between gap-3 border-t border-gray-100 pt-3 text-xs text-gray-500 dark:border-dark-700 dark:text-dark-400" data-test="pelican-work-footer"><span class="inline-flex items-center gap-2"><span class="rounded-full bg-primary-50 px-2 py-0.5 font-medium text-primary-700 dark:bg-primary-900/30 dark:text-primary-300" data-test="pelican-work-format">HTML</span><span>{{ t('iqDetection.generated') }}</span></span><span class="shrink-0">{{ work.duration_ms }} ms</span></div>
+              <div class="flex items-center justify-between gap-2 border-t border-gray-100 pt-2 text-xs text-gray-500 dark:border-dark-700 dark:text-dark-400" data-test="pelican-work-footer"><span class="inline-flex items-center gap-2"><span class="rounded-full bg-primary-50 px-2 py-0.5 font-medium text-primary-700 dark:bg-primary-900/30 dark:text-primary-300" data-test="pelican-work-format">HTML</span><span>{{ t('iqDetection.generated') }}</span></span><span class="shrink-0">{{ work.duration_ms }} ms</span></div>
               <button type="button" class="inline-flex items-center gap-1.5 self-start text-xs font-semibold text-primary-700 transition hover:text-primary-800 hover:underline dark:text-primary-300 dark:hover:text-primary-200" data-test="pelican-work-view" @click="openWork(work)"><Icon name="externalLink" size="xs" />{{ t('iqDetection.viewWork') }}</button>
             </div>
           </article>
@@ -74,7 +74,7 @@
       </section>
       <BaseDialog v-if="selectedWork" :show="true" :title="`${t('iqDetection.pelicanTitle')} · ${selectedWork.model}`" width="wide" @close="selectedWork = null">
         <div class="aspect-[6/5] min-h-[24rem] overflow-hidden rounded-xl bg-slate-50 dark:bg-dark-900">
-          <iframe :srcdoc="preview(selectedWork.html, selectedWork.id)" :title="selectedWork.model" sandbox="allow-scripts" scrolling="no" referrerpolicy="no-referrer" class="pointer-events-none block h-full w-full select-none border-0" />
+          <iframe :srcdoc="preview(selectedWork.html, selectedWork.id)" :title="selectedWork.model" :data-pelican-preview-id="selectedWork.id" sandbox="allow-scripts" scrolling="no" referrerpolicy="no-referrer" class="pointer-events-none block h-full w-full select-none border-0" />
         </div>
       </BaseDialog>
     </template>
@@ -96,12 +96,12 @@ const loading = ref(true)
 const error = ref('')
 const dashboard = ref<IQDashboard>({ pelican_works: [], pelican_page: 1, pelican_page_size: 8, pelican_has_more: false, timeline: [], window_hours: 24, generated_at: '' })
 const replayNonce = ref<Record<string, number>>({})
-const previewHeights = ref<Record<string, number>>({})
+const previewMetrics = ref<Record<string, { height: number }>>({})
 const pelicanLoading = ref(false)
 const selectedWork = ref<IQDashboard['pelican_works'][number] | null>(null)
 const pelicanPage = computed(() => dashboard.value.pelican_page || 1)
-const minPelicanPreviewHeight = 180
-const maxPelicanPreviewHeight = 720
+const pelicanPreviewHeight = 420
+const maxPelicanContentHeight = 2400
 const pelicanPreviewStyle = '<style data-pelican-preview-style>html,body{width:100%!important;min-height:0!important;height:auto!important;max-height:none!important;margin:0!important;overflow:hidden!important;overscroll-behavior:none!important;scrollbar-width:none!important}html::-webkit-scrollbar,body::-webkit-scrollbar{display:none!important;width:0!important;height:0!important}*,*::before,*::after{box-sizing:border-box!important}body>*{max-width:100%!important;min-height:0!important;height:auto!important;max-height:none!important}svg,canvas,img,video{max-width:100%!important;max-height:none!important}</style>'
 
 function pelicanPreviewScript(id: string) {
@@ -140,20 +140,22 @@ function formatTime(value: string) {
 function effortLabel(value: string) { return value?.trim() || '—' }
 function timelineClass(status: string) { return status === 'fail' ? 'bg-rose-500' : 'bg-emerald-500' }
 function timelineLabel(status: string) { return status === 'fail' ? t('iqDetection.fail') : t('iqDetection.pass') }
-function previewHeightStyle(id: string) {
-  const height = previewHeights.value[id]
-  return height ? { height: `${height}px` } : undefined
+function previewFrameStyle(id: string) {
+  const measuredHeight = previewMetrics.value[id]?.height
+  if (!measuredHeight) return { height: '100%', transform: 'translateX(-50%) scale(1)', transformOrigin: 'top center' }
+  const scale = Math.min(1, pelicanPreviewHeight / measuredHeight)
+  return { height: `${measuredHeight}px`, transform: `translateX(-50%) scale(${scale})`, transformOrigin: 'top center' }
 }
 function handlePreviewMessage(event: MessageEvent) {
   const data = event.data
   if (!data || data.type !== 'pelican-preview-size' || typeof data.id !== 'string') return
   if (!dashboard.value.pelican_works.some((work) => work.id === data.id)) return
   const frames = Array.from(document.querySelectorAll<HTMLIFrameElement>('iframe[data-pelican-preview-id]'))
-  if (frames.length && !frames.some((frame) => frame.dataset.pelicanPreviewId === data.id && (event.source == null || frame.contentWindow === event.source))) return
+  if (frames.length && event.source != null && !frames.some((frame) => frame.dataset.pelicanPreviewId === data.id && frame.contentWindow === event.source)) return
   const measuredHeight = Number(data.height)
   if (!Number.isFinite(measuredHeight) || measuredHeight <= 0) return
-  const height = Math.min(maxPelicanPreviewHeight, Math.max(minPelicanPreviewHeight, Math.ceil(measuredHeight)))
-  if (previewHeights.value[data.id] !== height) previewHeights.value = { ...previewHeights.value, [data.id]: height }
+  const height = Math.min(maxPelicanContentHeight, Math.ceil(measuredHeight))
+  if (previewMetrics.value[data.id]?.height !== height) previewMetrics.value = { ...previewMetrics.value, [data.id]: { height } }
 }
 function preview(html: string, id?: string) {
   const source = html || ''
