@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
+import { nextTick } from 'vue'
 import IQDetectionView from '../IQDetectionView.vue'
 
 const { getIQDetection } = vi.hoisted(() => ({ getIQDetection: vi.fn() }))
@@ -31,8 +32,13 @@ describe('IQDetectionView', () => {
     expect(wrapper.find('[data-test="iq-timeline"]').exists()).toBe(true)
     expect(wrapper.findAll('[data-test="pelican-work-card"]')).toHaveLength(1)
     expect(wrapper.find('[data-test="iq-detection-page"]').classes()).toContain('max-w-screen-2xl')
-    expect(wrapper.find('[data-test="pelican-work-grid"]').classes()).toEqual(expect.arrayContaining(['grid-cols-1', 'md:grid-cols-2', '2xl:grid-cols-3']))
-    expect(wrapper.find('[data-test="pelican-work-preview"]').classes()).toContain('aspect-[6/5]')
+    expect(wrapper.find('[data-test="pelican-work-grid"]').classes()).toEqual(expect.arrayContaining(['grid-cols-1', 'md:grid-cols-2', 'lg:grid-cols-4']))
+    expect(wrapper.find('[data-test="pelican-work-grid"]').classes()).toContain('items-start')
+    expect(wrapper.find('[data-test="pelican-work-grid"]').classes()).not.toContain('2xl:grid-cols-3')
+    expect(wrapper.find('[data-test="pelican-work-grid"]').classes()).not.toContain('items-stretch')
+    expect(wrapper.find('[data-test="pelican-work-preview"]').classes()).toContain('aspect-[3/2]')
+    expect(wrapper.get('[data-test="pelican-work-meta"]').classes()).not.toContain('flex-1')
+    expect(wrapper.get('[data-test="pelican-work-footer"]').classes()).not.toContain('mt-auto')
     expect(wrapper.get('[data-test="pelican-work-format"]').text()).toBe('HTML')
     await wrapper.get('[data-test="pelican-work-view"]').trigger('click')
     await flushPromises()
@@ -41,9 +47,34 @@ describe('IQDetectionView', () => {
     expect(wrapper.get('[data-test="pelican-work-time"]').text()).toBe('2026-10-02 20:00:00')
     expect(wrapper.get('iframe').attributes('sandbox')).toBe('allow-scripts')
     expect(wrapper.get('iframe').attributes('scrolling')).toBe('no')
+    expect(wrapper.get('iframe').classes()).toContain('pointer-events-none')
     expect(wrapper.get('iframe').attributes('srcdoc')).toContain('data-pelican-preview-style')
     expect(wrapper.get('iframe').attributes('srcdoc')).toContain('scrollbar-width:none')
+    expect(wrapper.get('iframe').attributes('srcdoc')).toContain('body>*{max-width:100%!important;min-height:0!important;height:auto!important;max-height:none!important}')
+    expect(wrapper.get('iframe').attributes('srcdoc')).not.toContain('max-height:100%!important')
+    expect(wrapper.get('iframe').attributes('srcdoc')).not.toContain('min-height:100%!important')
     expect(getIQDetection).toHaveBeenCalledWith({ hours: 24, limit: 8 })
+  })
+
+  it('expands a preview to the isolated document height', async () => {
+    getIQDetection.mockResolvedValueOnce({
+      window_hours: 24,
+      generated_at: '2026-10-02T12:00:00Z',
+      timeline: [],
+      pelican_works: [{ id: 'pelican-tall', site_name: 'fixture', group_name: 'GPT Lite', account_label: 'GPT Lite', model: 'gpt-6-astra', effort: 'low', html: '<html><body><h1>Long title</h1></body></html>', status: 'succeeded', duration_ms: 50, created_at: '2026-10-02T12:00:00Z' }],
+    })
+    const wrapper = mount(IQDetectionView, { global: { stubs: { Icon: true } } })
+    await flushPromises()
+
+    const frame = wrapper.get('iframe').element as HTMLIFrameElement
+    expect(frame.getAttribute('srcdoc')).toContain('data-pelican-preview-size')
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { type: 'pelican-preview-size', id: 'pelican-tall', width: 320, height: 420 },
+      source: frame.contentWindow,
+    }))
+    await nextTick()
+
+    expect(wrapper.get('[data-test="pelican-work-preview"]').attributes('style')).toContain('height: 420px')
   })
 
   it('paginates pelican works with a next-page request', async () => {
@@ -63,6 +94,18 @@ describe('IQDetectionView', () => {
     await flushPromises()
     expect(getIQDetection).toHaveBeenLastCalledWith({ hours: 24, limit: 8, pelican_page: 2, pelican_page_size: 8 })
     expect(wrapper.get('[data-test="pelican-work-card"]').text()).toContain('GPT Lite')
+  })
+
+  it('marks a failed pelican work with a red status badge', async () => {
+    getIQDetection.mockResolvedValueOnce({
+      window_hours: 24,
+      generated_at: '2026-10-02T12:00:00Z',
+      timeline: [],
+      pelican_works: [{ id: 'pelican-failed', site_name: 'fixture', group_name: 'GPT Lite', account_label: 'GPT Lite', model: 'gpt-6-astra', effort: 'low', html: '<html><body /></html>', status: 'failed', duration_ms: 50, created_at: '2026-10-02T12:00:00Z' }],
+    })
+    const wrapper = mount(IQDetectionView, { global: { stubs: { Icon: true } } })
+    await flushPromises()
+    expect(wrapper.get('[data-test="pelican-work-status"]').classes()).toContain('bg-rose-50')
   })
 
   it('shows every non-failed timeline slot as green and hides the empty state copy', async () => {
