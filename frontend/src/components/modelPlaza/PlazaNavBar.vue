@@ -1,5 +1,5 @@
 <template>
-  <PublicSiteHeader :site-name="siteName" :site-logo="siteLogo" :subtitle="t('publicDocs.modelPlaza')" :destination="destination" :authenticated="authStore.isAuthenticated">
+  <PublicSiteHeader :site-name="siteName" :site-logo="siteLogo" :subtitle="t('publicDocs.modelPlaza')" :destination="destination" :authenticated="authStore.isAuthenticated" variant="story">
     <RouterLink to="/home" class="public-nav-link">{{ t('publicDocs.home') }}</RouterLink>
     <RouterLink to="/docs" class="public-nav-link">{{ t('publicDocs.title') }}</RouterLink>
   </PublicSiteHeader>

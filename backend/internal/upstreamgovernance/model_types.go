@@ -8,7 +8,13 @@ import (
 
 // ModelTestConfig is snapshotted on every batch; credentials are referenced, never copied.
 type ModelTestConfig struct {
+	// TargetType selects the credential source for a model test. An omitted
+	// value keeps the historical upstream-governance target behavior.
+	TargetType                 string   `json:"target_type,omitempty"`
 	ManagedKeyID               int64    `json:"managed_key_id"`
+	LocalGroupID               int64    `json:"local_group_id,omitempty"`
+	LocalAPIKeyID              int64    `json:"local_api_key_id,omitempty"`
+	TargetOwnerUserID          int64    `json:"target_owner_user_id,omitempty"`
 	Platform                   string   `json:"platform"`
 	Model                      string   `json:"model"`
 	APIMode                    string   `json:"api_mode"`
@@ -180,6 +186,35 @@ type ModelRunPage struct {
 
 type ModelRunner interface {
 	RunModel(context.Context, Site, RemoteKey, ModelRunRequest) (ModelRunResult, error)
+}
+
+// LocalModelTarget is a server-side snapshot of a local gateway API key and
+// its group. Key is intentionally omitted from JSON responses and only lives
+// in memory for the duration of a worker request.
+type LocalModelTarget struct {
+	GroupID          int64  `json:"group_id"`
+	GroupName        string `json:"group_name"`
+	Platform         string `json:"platform"`
+	APIKeyID         int64  `json:"api_key_id"`
+	APIKeyName       string `json:"api_key_name"`
+	OwnerUserID      int64  `json:"owner_user_id,omitempty"`
+	Key              string `json:"-"`
+	GroupFingerprint string `json:"-"`
+	KeyFingerprint   string `json:"-"`
+}
+
+// LocalModelTargetReader resolves only the current administrator's own local
+// API keys. Implementations must never return keys belonging to another user.
+type LocalModelTargetReader interface {
+	ListLocalModelTargets(context.Context, int64) ([]LocalModelTarget, error)
+	ResolveLocalModelTarget(context.Context, int64, int64, int64) (LocalModelTarget, error)
+}
+
+// LocalModelRunner sends a model probe through the application's own gateway,
+// so group routing, billing and response normalization are exercised exactly
+// as they are for a real user request.
+type LocalModelRunner interface {
+	RunLocalModel(context.Context, LocalModelTarget, ModelRunRequest) (ModelRunResult, error)
 }
 
 type ModelNotice struct {

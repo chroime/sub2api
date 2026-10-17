@@ -41,14 +41,14 @@ func (s *Service) cancelActiveModels(batchID string) {
 	}
 }
 func (s *Service) startModelWorker() {
-	if !s.durableKey || s.cipher == nil {
+	if (!s.durableKey || s.cipher == nil) && s.localModelRunner == nil {
 		return
 	}
 	m, err := s.models()
 	if err != nil {
 		return
 	}
-	if _, ok := s.connector.(ModelRunner); !ok {
+	if _, ok := s.connector.(ModelRunner); !ok && s.localModelRunner == nil {
 		return
 	}
 	s.modelMu.Lock()
@@ -160,7 +160,7 @@ func (s *Service) executeModelRun(ctx, parent context.Context, m *modelStore, ow
 		status = "cancelled"
 		return
 	}
-	site, key, err := s.verifyModelIdentity(ctx, claim)
+	target, err := s.verifyModelExecution(ctx, claim)
 	if err != nil {
 		result.ErrorCode = modelExecutionError(err)
 		if claim.Run.PolicyID != nil && errors.Is(err, ErrModelGroupGone) {
@@ -188,7 +188,7 @@ func (s *Service) executeModelRun(ctx, parent context.Context, m *modelStore, ow
 					cancel()
 					return
 				}
-				if _, _, e = s.verifyModelIdentity(ctx, claim); e != nil {
+				if _, e = s.verifyModelExecution(ctx, claim); e != nil {
 					if ctx.Err() == nil {
 						changedIdentity.Store(true)
 					}
@@ -198,7 +198,17 @@ func (s *Service) executeModelRun(ctx, parent context.Context, m *modelStore, ow
 			}
 		}
 	}()
-	result, err = s.connector.(ModelRunner).RunModel(ctx, site, key, claim.Run.Request)
+	if target.local != nil {
+		if s.localModelRunner == nil {
+			result.ErrorCode = "local_runner_unavailable"
+			err = ErrUnsupported
+		}
+		if s.localModelRunner != nil {
+			result, err = s.localModelRunner.RunLocalModel(ctx, *target.local, claim.Run.Request)
+		}
+	} else {
+		result, err = s.connector.(ModelRunner).RunModel(ctx, target.site, target.key, claim.Run.Request)
+	}
 	if result.Success && err == nil {
 		status = "succeeded"
 	} else {
@@ -227,7 +237,7 @@ func (s *Service) executeModelRun(ctx, parent context.Context, m *modelStore, ow
 		}
 	}
 	if ctx.Err() == nil {
-		if _, _, verifyErr := s.verifyModelIdentity(ctx, claim); verifyErr != nil {
+		if _, verifyErr := s.verifyModelExecution(ctx, claim); verifyErr != nil {
 			if ctx.Err() == nil {
 				changedIdentity.Store(true)
 			}

@@ -99,6 +99,10 @@ type Group struct {
 	IsExclusive    bool    `json:"is_exclusive"`
 	Status         string  `json:"status"`
 
+	// I18n 名称与描述的各语言译文。只有管理端输出；用户侧接口经 Localized 把
+	// name/description 换成请求语言的版本后清空本字段。
+	I18n domain.GroupI18n `json:"i18n,omitempty"`
+
 	SubscriptionType          string   `json:"subscription_type"`
 	DailyLimitUSD             *float64 `json:"daily_limit_usd"`
 	WeeklyLimitUSD            *float64 `json:"weekly_limit_usd"`
@@ -136,6 +140,8 @@ type Group struct {
 	AudioRealtimePricePerMin     *float64 `json:"audio_realtime_price_per_min"`
 	AudioTtsPricePerMillionChars *float64 `json:"audio_tts_price_per_million_chars"`
 	AudioSttPricePerHour         *float64 `json:"audio_stt_price_per_hour"`
+	AudioRateIndependent         bool     `json:"audio_rate_independent"`
+	AudioRateMultiplier          float64  `json:"audio_rate_multiplier"`
 
 	// Claude Code 客户端限制
 	ClaudeCodeOnly  bool   `json:"claude_code_only"`
@@ -169,10 +175,11 @@ type Group struct {
 // 注意：普通用户接口不得返回 model_routing/account_count/account_groups 等内部信息。
 type AdminGroup struct {
 	Group
-	BillingInputTokenMultiplier  float64 `json:"billing_input_token_multiplier"`
-	BillingOutputTokenMultiplier float64 `json:"billing_output_token_multiplier"`
-	BillingTokenAdjustmentMinInputTokens int `json:"billing_token_adjustment_min_input_tokens"`
-	StreamingACKEnabled          *bool   `json:"streaming_ack_enabled"`
+	BillingInputTokenMultiplier          float64 `json:"billing_input_token_multiplier"`
+	BillingOutputTokenMultiplier         float64 `json:"billing_output_token_multiplier"`
+	BillingUnifiedTokenMultiplier        float64 `json:"billing_unified_token_multiplier"`
+	BillingTokenAdjustmentMinInputTokens int     `json:"billing_token_adjustment_min_input_tokens"`
+	StreamingACKEnabled                  *bool   `json:"streaming_ack_enabled"`
 	// ForceOpenAIFast 是管理端请求策略，用户侧分组 DTO 无需暴露。
 	ForceOpenAIFast bool `json:"force_openai_fast"`
 	// FreeOpenAIFast 是管理端计费策略，用户侧分组 DTO 无需暴露。
@@ -677,9 +684,38 @@ type UsageLog struct {
 	Subscription *UserSubscription `json:"subscription,omitempty"`
 }
 
+// UsageCostAudit is a read-only comparison using original upstream usage.
+// TotalCost is the baseline actual-token cost before the record's effective
+// rate multiplier. Amount is the real-token cost after that multiplier;
+// BilledAmount is the recorded user charge and Difference is
+// BilledAmount - Amount.
+type UsageCostAudit struct {
+	Amount       *float64 `json:"amount"`
+	TotalCost    *float64 `json:"total_cost"`
+	BilledAmount *float64 `json:"billed_amount"`
+	Difference   *float64 `json:"difference"`
+	Status       string   `json:"status"`
+	Reason       string   `json:"reason"`
+	Model        string   `json:"model,omitempty"`
+}
+
 // AdminUsageLog 是管理员接口使用的 usage log DTO（包含管理员字段）。
 type AdminUsageLog struct {
 	UsageLog
+
+	RawCostAudit    *UsageCostAudit          `json:"raw_cost_audit,omitempty"`
+	UsageLimitAudit *service.UsageLimitAudit `json:"usage_limit_audit,omitempty"`
+
+	// UpstreamInputTokens/UpstreamOutputTokens are the raw non-cache counts
+	// returned by the upstream before any customer billing adjustment.
+	UpstreamInputTokens  int `json:"upstream_input_tokens"`
+	UpstreamOutputTokens int `json:"upstream_output_tokens"`
+	// UpstreamCache* are the raw cache buckets before any customer billing
+	// adjustment. Omitted from the user DTO.
+	UpstreamCacheReadTokens       int `json:"upstream_cache_read_tokens"`
+	UpstreamCacheCreationTokens   int `json:"upstream_cache_creation_tokens"`
+	UpstreamCacheCreation5mTokens int `json:"upstream_cache_creation_5m_tokens"`
+	UpstreamCacheCreation1hTokens int `json:"upstream_cache_creation_1h_tokens"`
 
 	// UpstreamModel is the actual model sent to the upstream provider after mapping.
 	// Omitted when no mapping was applied (requested model was used as-is).

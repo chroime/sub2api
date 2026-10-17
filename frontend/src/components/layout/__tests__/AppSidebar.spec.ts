@@ -81,13 +81,10 @@ describe('AppSidebar subscription feature flag', () => {
   })
 })
 
-describe('Infinite Canvas navigation', () => {
-  it('shares the entry between regular and admin personal navigation without batch-image gating', () => {
-    expect(componentSource).toContain("path: '/infinite-canvas', label: t('nav.infiniteCanvas')")
-    expect(componentSource).toContain('icon: InfiniteCanvasIcon, hideInSimpleMode: true')
-    expect(componentSource).not.toMatch(/path: '\/infinite-canvas'[^\n]*featureFlag/)
-    expect(componentSource).toContain('const personalNavItems = computed((): NavItem[] => finalizeNav(buildSelfNavItems(false)))')
-    expect(componentSource).toContain('const userNavItems = computed((): NavItem[] => finalizeNav(buildSelfNavItems(true)))')
+describe('Infinite Canvas navigation removal', () => {
+  it('does not expose the removed built-in canvas entry', () => {
+    expect(componentSource).not.toContain("path: '/infinite-canvas'")
+    expect(componentSource).not.toContain('InfiniteCanvasIcon')
   })
 })
 
@@ -96,7 +93,7 @@ describe('Distinct navigation icons', () => {
     expect(componentSource).toContain("const SmartOperationsIcon = {")
     expect(componentSource).toContain("render: () => h(Icon, { name: 'sparkles' })")
     expect(componentSource).toContain("const TokenRankingIcon = {")
-    expect(componentSource).toContain("render: () => h(Icon, { name: 'trophy' })")
+    expect(componentSource).toContain("d: 'M4.5 19.5h4.5v-4.5H4.5v4.5zm5.25 0h4.5V9.75h-4.5v9.75zm5.25 0h4.5V12h-4.5v7.5z'")
     expect(componentSource).toMatch(/path: '\/token-ranking'[\s\S]*?icon: TokenRankingIcon/)
     expect(componentSource).toMatch(/path: smartOperationsRootPath,[\s\S]*?icon: SmartOperationsIcon/)
   })

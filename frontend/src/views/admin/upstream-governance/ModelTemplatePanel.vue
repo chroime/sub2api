@@ -10,7 +10,7 @@ import api, {
   type RemoteGroup,
   type Transport,
 } from '@/api/admin/upstream-governance'
-import type { ModelSelections } from './import-config'
+import { isOpenAITextModel, type ModelSelections } from './import-config'
 import { errorKey } from './feedback'
 import { providerLabel, transportPlatforms } from './providers'
 const props = defineProps<{
@@ -73,7 +73,7 @@ const availableModels = computed(() => [
     ...upstreamModels(platform.value),
     ...getModelsByPlatform(platform.value),
   ]),
-])
+].filter(model => platform.value !== 'openai' || isOpenAITextModel(model)))
 const filteredModels = computed(() =>
   availableModels.value.filter((model) =>
     model.toLowerCase().includes(search.value.toLowerCase()),

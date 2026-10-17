@@ -180,7 +180,7 @@ func TestGroupHandlerSimpleModeResponseUsesFieldAllowlist(t *testing.T) {
 	for _, forbidden := range []string{
 		"rate_multiplier", "rpm_limit", "long_context_pricing_enabled", "model_pricing",
 		"allow_batch_image_generation", "video_price_720p", "web_search_price_per_call",
-		"audio_realtime_price_per_min", "model_routing",
+		"audio_realtime_price_per_min", "audio_rate_independent", "audio_rate_multiplier", "model_routing",
 	} {
 		_, exposed := item[forbidden]
 		require.Falsef(t, exposed, "simple mode exposed %s", forbidden)
@@ -224,7 +224,7 @@ func TestGroupHandlerSimpleModeAllReadAndWriteResponsesUseFieldAllowlist(t *test
 		for _, forbidden := range []string{
 			"rate_multiplier", "rpm_limit", "long_context_pricing_enabled", "model_pricing",
 			"allow_batch_image_generation", "video_price_720p", "web_search_price_per_call",
-			"audio_realtime_price_per_min", "model_routing",
+			"audio_realtime_price_per_min", "audio_rate_independent", "audio_rate_multiplier", "model_routing",
 		} {
 			_, exposed := item[forbidden]
 			require.Falsef(t, exposed, "simple mode exposed %s", forbidden)

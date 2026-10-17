@@ -914,6 +914,11 @@ export default {
         descriptionPlaceholder: '请输入描述（可选）',
         rateMultiplierLabel: '费率倍数',
         rateMultiplierHint: '1.0 = 标准费率，0.5 = 半价，2.0 = 双倍',
+        unifiedTokenMultiplier: 'Token 统一倍率',
+        unifiedTokenMultiplierHint: '同时放大输入、输出、缓存读取和缓存写入。客户命中率与上游一致，费用按各桶单价乘该倍率。默认 1.00。',
+        unifiedTokenMultiplierSplitHint: '该分组仍在使用旧的输入/输出分项倍率。保存统一倍率（不等于 1）后改为四桶同倍率。',
+        tokenAdjustmentMinInput: 'Token 倍率生效的最小输入量',
+        tokenAdjustmentMinInputHint: '原始非缓存输入 Token 少于此值时不应用 Token 倍率；0 表示所有正常请求都应用。探针不使用自定义倍率。',
         rpmLimit: '每分钟请求数 (RPM)',
         rpmLimitPlaceholder: '0 表示不限制',
         rpmLimitHint: '每用户在本分组每分钟最大请求数，0 = 不限制；一旦设置即接管该用户的限流（覆盖用户级 rpm_limit）',
@@ -1014,6 +1019,12 @@ export default {
         privacySetOnly: '仅允许隐私保护已设置的账号',
         privacySetOnlyEnabled: '已启用 — Privacy 未设置的账号将被排除',
         disabled: '未启用'
+      },
+      i18nField: {
+        default: '默认',
+        add: '新增 {language} 版',
+        edit: '编辑 {language} 版',
+        placeholder: '{language} 版，留空则显示默认内容'
       },
       enterGroupName: '请输入分组名称',
       optionalDescription: '可选描述',
@@ -1116,10 +1127,12 @@ export default {
       },
       voicePricing: {
         title: 'Grok Voice 定价',
-        description: '分组级 Voice realtime / TTS / STT 单价（USD）。留空表示未配置。',
+        description: '分组级 Voice realtime / TTS / STT 单价（USD）。留空使用系统默认价，填 0 表示免费。',
         audioRealtimePerMin: 'Realtime 每分钟价格（USD）',
         audioTtsPerMillionChars: 'TTS 每百万字符价格（USD）',
         audioSttPerHour: 'STT 每小时价格（USD）',
+        independentMultiplier: '使用独立语音倍率（同时作用于 Realtime / TTS / STT）',
+        rateMultiplier: '语音独立倍率',
         pricePlaceholder: '可选'
       },
       webSearchPricing: {

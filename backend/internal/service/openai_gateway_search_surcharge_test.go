@@ -38,6 +38,7 @@ func TestCalculateOpenAIRecordUsageCost_SearchIsAdditiveToTokens(t *testing.T) {
 		UsageTokens{InputTokens: 1000, OutputTokens: 500},
 		"",
 		boolPtr(false),
+		false,
 		time.Time{},
 	)
 	require.NoError(t, err)
@@ -69,6 +70,7 @@ func TestCalculateOpenAIRecordUsageCost_SearchOnlyWhenNoTokenPricing(t *testing.
 		UsageTokens{},
 		"",
 		boolPtr(false),
+		false,
 		time.Time{},
 	)
 	require.NoError(t, err)
@@ -88,6 +90,7 @@ func TestGroupMediaPricingLooksIncomplete_VideoModelPricesComplete(t *testing.T)
 	price := 10.0
 	require.False(t, groupMediaPricingLooksIncomplete(&Group{SearchPricePer1k: &price}))
 	require.False(t, groupMediaPricingLooksIncomplete(&Group{AudioRealtimePricePerMin: &price}))
+	require.False(t, groupMediaPricingLooksIncomplete(&Group{AudioRateIndependent: true, AudioRateMultiplier: 0}))
 	// Legacy video price alone still marks complete (existing path).
 	require.False(t, groupMediaPricingLooksIncomplete(&Group{VideoPrice720P: &price}))
 }
@@ -115,6 +118,7 @@ func TestCalculateOpenAIRecordUsageCost_TokenPricingErrorNotSwallowedBySearch(t 
 		UsageTokens{InputTokens: 1000, OutputTokens: 500},
 		"",
 		boolPtr(false),
+		false,
 		time.Time{},
 	)
 	require.Error(t, err)

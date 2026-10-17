@@ -64,7 +64,7 @@ func (s *Service) ConfigureObservationPolicy(ctx context.Context, id, version in
 	if err := validateObservationPolicy(policy); err != nil {
 		return ObservationPolicyConfiguration{}, err
 	}
-	site, release, err := s.siteLock(ctx, id)
+	site, release, err := s.remoteSiteLock(ctx, id)
 	if err != nil {
 		return ObservationPolicyConfiguration{}, err
 	}
@@ -137,7 +137,7 @@ func (s *Service) ConfigurePricingPolicies(ctx context.Context, id int64, input 
 	if input.Version < 0 {
 		return PricingPoliciesConfiguration{}, ErrInvalid
 	}
-	if _, release, err := s.siteLock(ctx, id); err != nil {
+	if _, release, err := s.remoteSiteLock(ctx, id); err != nil {
 		return PricingPoliciesConfiguration{}, err
 	} else {
 		defer release()

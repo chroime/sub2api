@@ -148,7 +148,7 @@ func (s *Service) AuditKeys(ctx context.Context, siteID int64) ([]ManagedKey, er
 		return nil, err
 	}
 	defer free()
-	site, release, err := s.siteLock(ctx, siteID)
+	site, release, err := s.remoteSiteLock(ctx, siteID)
 	if err != nil {
 		return nil, err
 	}

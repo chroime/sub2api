@@ -17,7 +17,10 @@ type ModelStatsPoint struct {
 }
 type ModelStatsGroup struct {
 	ConfigHash      string            `json:"config_hash"`
+	TargetType      string            `json:"target_type,omitempty"`
 	ManagedKeyID    int64             `json:"managed_key_id"`
+	LocalGroupID    int64             `json:"local_group_id,omitempty"`
+	LocalAPIKeyID   int64             `json:"local_api_key_id,omitempty"`
 	Model           string            `json:"model"`
 	APIMode         string            `json:"api_mode"`
 	Template        string            `json:"template"`
@@ -92,7 +95,7 @@ func (s *Service) ModelStats(ctx context.Context, siteID int64, days int) (*Mode
 			rows.Close()
 			return nil, err
 		}
-		g.ManagedKeyID, g.Model, g.APIMode = req.Config.ManagedKeyID, req.Config.Model, req.Config.APIMode
+		g.TargetType, g.ManagedKeyID, g.LocalGroupID, g.LocalAPIKeyID, g.Model, g.APIMode = req.Config.TargetType, req.Config.ManagedKeyID, req.Config.LocalGroupID, req.Config.LocalAPIKeyID, req.Config.Model, req.Config.APIMode
 		g.Template, g.Effort = req.Template, req.Effort
 		g.Comparable = g.TemplateVersion != "" && g.AdapterVersion != ""
 		if !g.Comparable || g.TTFTSamples < 5 {

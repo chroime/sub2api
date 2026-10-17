@@ -45,10 +45,7 @@ func (h *OpenAIGatewayHandler) GrokRealtime(c *gin.Context) {
 	}
 
 	reqLog := requestLogger(c, "handler.openai_gateway.grok_realtime")
-	model := c.Query("model")
-	if strings.TrimSpace(model) == "" {
-		model = "grok-voice-latest"
-	}
+	model := normalizeGrokRealtimeModel(c.Query("model"))
 	// 余额模式在途预留（与计费同口径估算；计费任务扣减余额缓存后才释放）。
 	inflightDone, inflightErr := reserveInflightBalance(c, h.billingCacheService, h.gatewayService, apiKey, subscription, service.InflightEstimateRequest{Model: model, Kind: service.InflightEstimateAudio, AudioMode: "realtime", AudioUnits: 1})
 	if inflightErr != nil {
@@ -183,13 +180,65 @@ func isExpectedGrokRealtimeClose(err error) bool {
 
 // GrokVoice handles xAI Voice HTTP endpoints. endpoint is "tts", "stt", or "custom-voices".
 func (h *OpenAIGatewayHandler) GrokVoice(c *gin.Context, endpoint string) {
+	apiKey, subscription, ok := h.prepareGrokVoice(c)
+	if !ok {
+		return
+	}
+	body, err := readGrokVoiceGatewayBody(c)
+	if err != nil {
+		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", err.Error())
+		return
+	}
+	contentType := c.GetHeader("Content-Type")
+	if strings.TrimSpace(contentType) == "" {
+		contentType = "application/json"
+	}
+	h.grokVoiceWithBody(c, apiKey, subscription, endpoint, body, contentType, "")
+}
+
+// GrokOpenAIAudio provides the standard OpenAI-compatible audio endpoints
+// while keeping the native /tts and /stt endpoints available for callers that
+// already use Grok's request format.
+func (h *OpenAIGatewayHandler) GrokOpenAIAudio(c *gin.Context, operation string) {
+	apiKey, subscription, ok := h.prepareGrokVoice(c)
+	if !ok {
+		return
+	}
+	body, err := readGrokVoiceGatewayBody(c)
+	if err != nil {
+		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", err.Error())
+		return
+	}
+	contentType := c.GetHeader("Content-Type")
+	if strings.TrimSpace(contentType) == "" {
+		contentType = "application/json"
+	}
+	endpoint := ""
+	switch strings.ToLower(strings.TrimSpace(operation)) {
+	case "speech":
+		endpoint = "tts"
+	case "transcriptions":
+		endpoint = "stt"
+	default:
+		h.errorResponse(c, http.StatusNotFound, "not_found_error", "Unsupported Grok audio operation")
+		return
+	}
+	normalizedBody, normalizedContentType, model, normalizeErr := normalizeGrokOpenAIAudioRequest(operation, body, contentType)
+	if normalizeErr != nil {
+		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", normalizeErr.Error())
+		return
+	}
+	h.grokVoiceWithBody(c, apiKey, subscription, endpoint, normalizedBody, normalizedContentType, model)
+}
+
+func (h *OpenAIGatewayHandler) prepareGrokVoice(c *gin.Context) (*service.APIKey, *service.UserSubscription, bool) {
 	apiKey, ok := middleware2.GetAPIKeyFromContext(c)
 	if !ok || apiKey.Group == nil || apiKey.Group.Platform != service.PlatformGrok {
 		h.errorResponse(c, http.StatusNotFound, "not_found_error", "Voice API is not supported for this platform")
-		return
+		return nil, nil, false
 	}
 	if !h.ensureResponsesDependencies(c, nil) {
-		return
+		return nil, nil, false
 	}
 	subscription, _ := middleware2.GetSubscriptionFromContext(c)
 	if err := h.billingCacheService.CheckBillingEligibility(c.Request.Context(), apiKey.User, apiKey, apiKey.Group, subscription, service.QuotaPlatform(c.Request.Context(), apiKey)); err != nil {
@@ -198,14 +247,20 @@ func (h *OpenAIGatewayHandler) GrokVoice(c *gin.Context, endpoint string) {
 			c.Header("Retry-After", strconv.Itoa(retryAfter))
 		}
 		h.errorResponse(c, status, code, message)
-		return
+		return nil, nil, false
 	}
+	return apiKey, subscription, true
+}
 
-	body, err := readGrokVoiceGatewayBody(c)
-	if err != nil {
-		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", err.Error())
-		return
-	}
+func (h *OpenAIGatewayHandler) grokVoiceWithBody(
+	c *gin.Context,
+	apiKey *service.APIKey,
+	subscription *service.UserSubscription,
+	endpoint string,
+	body []byte,
+	contentType string,
+	requestedModel string,
+) {
 	if endpoint == "tts" {
 		subject, _ := middleware2.GetAuthSubjectFromContext(c)
 		reqLog := requestLogger(c, "handler.openai_gateway.grok_voice", zap.String("endpoint", endpoint))
@@ -236,15 +291,13 @@ func (h *OpenAIGatewayHandler) GrokVoice(c *gin.Context, endpoint string) {
 	}
 	defer inflightDone()
 
-	contentType := c.GetHeader("Content-Type")
-	if strings.TrimSpace(contentType) == "" {
-		contentType = "application/json"
-	}
-
 	failed := map[int64]struct{}{}
 	var last *service.UpstreamFailoverError
 	reqLog := requestLogger(c, "handler.openai_gateway.grok_voice", zap.String("endpoint", endpoint))
-	selectionModel := "grok-4.5"
+	// TTS/STT are selected by the Grok voice capability. Passing a text model
+	// placeholder here makes channel-level restrict_models settings reject an
+	// otherwise valid voice request before account selection.
+	selectionModel := grokVoiceSelectionModel()
 
 	for attempts := 0; attempts < 4; attempts++ {
 		selection, _, selectErr := h.gatewayService.SelectAccountWithSchedulerForCapability(
@@ -290,6 +343,9 @@ func (h *OpenAIGatewayHandler) GrokVoice(c *gin.Context, endpoint string) {
 			return h.gatewayService.ForwardGrokVoice(c.Request.Context(), c, account, endpoint, body, contentType)
 		}()
 		if forwardErr == nil {
+			if requestedModel != "" {
+				result.Model = requestedModel
+			}
 			h.recordGrokVoiceUsage(c, apiKey, account, subscription, endpoint, body, result)
 			return
 		}
@@ -305,6 +361,14 @@ func (h *OpenAIGatewayHandler) GrokVoice(c *gin.Context, endpoint string) {
 	if last != nil {
 		h.handleFailoverExhausted(c, last, false)
 	}
+}
+
+// grokVoiceSelectionModel intentionally returns an empty model. Voice HTTP
+// endpoints do not use a text model for scheduling; the request body carries
+// the upstream voice operation and the scheduler only needs the Grok voice
+// capability.
+func grokVoiceSelectionModel() string {
+	return ""
 }
 
 // recordGrokVoiceUsage bills TTS/STT/realtime via group audio prices when AudioUsage is set.

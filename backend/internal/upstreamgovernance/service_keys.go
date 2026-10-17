@@ -103,7 +103,7 @@ func (s *Service) RevealKey(ctx context.Context, siteID, keyID int64) (*RevealKe
 	if !s.durableKey || s.cipher == nil {
 		return nil, ErrEncryption
 	}
-	_, release, err := s.siteLock(ctx, siteID)
+	_, release, err := s.remoteSiteLock(ctx, siteID)
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +131,7 @@ func (s *Service) CreateKeys(ctx context.Context, siteID int64, input CreateKeys
 		return nil, err
 	}
 	defer free()
-	site, release, err := s.siteLock(ctx, siteID)
+	site, release, err := s.remoteSiteLock(ctx, siteID)
 	if err != nil {
 		return nil, err
 	}

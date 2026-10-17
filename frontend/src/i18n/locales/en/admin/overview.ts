@@ -932,6 +932,11 @@ export default {
         descriptionPlaceholder: 'Enter description (optional)',
         rateMultiplierLabel: 'Rate Multiplier',
         rateMultiplierHint: '1.0 = standard rate, 0.5 = half price, 2.0 = double',
+        unifiedTokenMultiplier: 'Unified Token Multiplier',
+        unifiedTokenMultiplierHint: 'Scales input, output, cache read, and cache write together. Customer cache-hit rates stay aligned with upstream; each bucket is billed at its unit price times this multiplier. Default 1.00.',
+        unifiedTokenMultiplierSplitHint: 'This group still uses the old split input/output multipliers. Saving a unified multiplier other than 1 switches all four buckets to the same multiplier.',
+        tokenAdjustmentMinInput: 'Minimum input tokens for the token multiplier',
+        tokenAdjustmentMinInputHint: 'The token multiplier is not applied when raw non-cached input tokens are below this value; 0 applies it to all normal requests. Probes do not use a custom multiplier.',
         rpmLimit: 'Requests Per Minute (RPM)',
         rpmLimitPlaceholder: '0 = unlimited',
         rpmLimitHint: 'Max requests per minute for each user in this group; 0 = unlimited. Once set, it takes over per-user rate limiting in this group (overrides the user-level rpm_limit fallback).',
@@ -980,6 +985,12 @@ export default {
       exclusiveObj: {
         yes: 'Yes',
         no: 'No'
+      },
+      i18nField: {
+        default: 'Default',
+        add: 'Add {language} version',
+        edit: 'Edit {language} version',
+        placeholder: '{language} version; leave empty to show the default text'
       },
       enterGroupName: 'Enter group name',
       optionalDescription: 'Optional description',
@@ -1119,10 +1130,12 @@ export default {
       },
       voicePricing: {
         title: 'Grok Voice Pricing',
-        description: 'Optional per-group prices for Voice realtime / TTS / STT (USD). Leave empty to leave unpriced.',
+        description: 'Optional per-group prices for Voice realtime / TTS / STT (USD). Leave empty for system defaults; 0 means free.',
         audioRealtimePerMin: 'Realtime price per minute (USD)',
         audioTtsPerMillionChars: 'TTS price per million chars (USD)',
         audioSttPerHour: 'STT price per hour (USD)',
+        independentMultiplier: 'Use an independent voice multiplier for Realtime / TTS / STT',
+        rateMultiplier: 'Independent voice multiplier',
         pricePlaceholder: 'optional'
       },
       webSearchPricing: {

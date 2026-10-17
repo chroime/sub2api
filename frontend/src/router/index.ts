@@ -19,7 +19,7 @@ import { resolveRouteDocumentTitle } from './title'
  */
 const routes: RouteRecordRaw[] = [
   {
-    path: '/admin/upstream-governance/:section(overview|import|models|monitor|history)?',
+    path: '/admin/upstream-governance/:section(overview|import|models|local-monitor|monitor|history)?',
     name: 'AdminUpstreamGovernance',
     component: () => import('@/views/admin/upstream-governance/UpstreamGovernanceView.vue'),
     meta: {
@@ -260,18 +260,6 @@ const routes: RouteRecordRaw[] = [
       title: 'Batch Image Guide',
       titleKey: 'batchImageGuide.title',
       descriptionKey: 'batchImageGuide.description'
-    }
-  },
-  {
-    path: '/infinite-canvas',
-    name: 'InfiniteCanvas',
-    component: () => import('@/views/user/InfiniteCanvasView.vue'),
-    meta: {
-      requiresAuth: true,
-      requiresAdmin: false,
-      title: 'Infinite Canvas',
-      titleKey: 'infiniteCanvas.title',
-      descriptionKey: 'infiniteCanvas.description'
     }
   },
   {

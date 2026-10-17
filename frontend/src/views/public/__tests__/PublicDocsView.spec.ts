@@ -42,6 +42,7 @@ describe('public documentation', () => {
   it('renders public settings as safe Markdown with a Chinese directory and code copying', async () => {
     const { wrapper } = mountDocs()
     await flushPromises()
+    expect(wrapper.get('header').classes()).toContain('public-site-header-story')
     expect(wrapper.get('h1').text()).toBe('开发文档')
     expect(wrapper.text()).toContain('章节目录')
     expect(wrapper.get('article h2').text()).toBe('快速开始')

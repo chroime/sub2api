@@ -145,7 +145,7 @@ func (s *Service) RechargePlan(ctx context.Context, siteID int64) (*RechargePlan
 }
 
 func (s *Service) ConfigureRechargePlan(ctx context.Context, siteID, version int64, policy RechargePolicy) (*RechargePlanResult, error) {
-	site, release, err := s.siteLock(ctx, siteID)
+	site, release, err := s.remoteSiteLock(ctx, siteID)
 	if err != nil {
 		return nil, err
 	}
@@ -171,7 +171,7 @@ func (s *Service) ConfigureRechargePlan(ctx context.Context, siteID, version int
 }
 
 func (s *Service) EvaluateRechargePlan(ctx context.Context, siteID int64) (*RechargePlanResult, error) {
-	site, release, err := s.siteLock(ctx, siteID)
+	site, release, err := s.remoteSiteLock(ctx, siteID)
 	if err != nil {
 		return nil, err
 	}

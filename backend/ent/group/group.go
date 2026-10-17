@@ -26,12 +26,16 @@ const (
 	FieldName = "name"
 	// FieldDescription holds the string denoting the description field in the database.
 	FieldDescription = "description"
+	// FieldI18n holds the string denoting the i18n field in the database.
+	FieldI18n = "i18n"
 	// FieldRateMultiplier holds the string denoting the rate_multiplier field in the database.
 	FieldRateMultiplier = "rate_multiplier"
 	// FieldBillingInputTokenMultiplier holds the string denoting the billing_input_token_multiplier field in the database.
 	FieldBillingInputTokenMultiplier = "billing_input_token_multiplier"
 	// FieldBillingOutputTokenMultiplier holds the string denoting the billing_output_token_multiplier field in the database.
 	FieldBillingOutputTokenMultiplier = "billing_output_token_multiplier"
+	// FieldBillingUnifiedTokenMultiplier holds the string denoting the billing_unified_token_multiplier field in the database.
+	FieldBillingUnifiedTokenMultiplier = "billing_unified_token_multiplier"
 	// FieldBillingTokenAdjustmentMinInputTokens holds the string denoting the billing_token_adjustment_min_input_tokens field in the database.
 	FieldBillingTokenAdjustmentMinInputTokens = "billing_token_adjustment_min_input_tokens"
 	// FieldPeakRateEnabled holds the string denoting the peak_rate_enabled field in the database.
@@ -102,6 +106,10 @@ const (
 	FieldAudioTtsPricePerMillionChars = "audio_tts_price_per_million_chars"
 	// FieldAudioSttPricePerHour holds the string denoting the audio_stt_price_per_hour field in the database.
 	FieldAudioSttPricePerHour = "audio_stt_price_per_hour"
+	// FieldAudioRateIndependent holds the string denoting the audio_rate_independent field in the database.
+	FieldAudioRateIndependent = "audio_rate_independent"
+	// FieldAudioRateMultiplier holds the string denoting the audio_rate_multiplier field in the database.
+	FieldAudioRateMultiplier = "audio_rate_multiplier"
 	// FieldLongContextPricingEnabled holds the string denoting the long_context_pricing_enabled field in the database.
 	FieldLongContextPricingEnabled = "long_context_pricing_enabled"
 	// FieldModelPricing holds the string denoting the model_pricing field in the database.
@@ -236,9 +244,11 @@ var Columns = []string{
 	FieldDeletedAt,
 	FieldName,
 	FieldDescription,
+	FieldI18n,
 	FieldRateMultiplier,
 	FieldBillingInputTokenMultiplier,
 	FieldBillingOutputTokenMultiplier,
+	FieldBillingUnifiedTokenMultiplier,
 	FieldBillingTokenAdjustmentMinInputTokens,
 	FieldPeakRateEnabled,
 	FieldPeakStart,
@@ -274,6 +284,8 @@ var Columns = []string{
 	FieldAudioRealtimePricePerMin,
 	FieldAudioTtsPricePerMillionChars,
 	FieldAudioSttPricePerHour,
+	FieldAudioRateIndependent,
+	FieldAudioRateMultiplier,
 	FieldLongContextPricingEnabled,
 	FieldModelPricing,
 	FieldClaudeCodeOnly,
@@ -338,12 +350,16 @@ var (
 	UpdateDefaultUpdatedAt func() time.Time
 	// NameValidator is a validator for the "name" field. It is called by the builders before save.
 	NameValidator func(string) error
+	// DefaultI18n holds the default value on creation for the "i18n" field.
+	DefaultI18n domain.GroupI18n
 	// DefaultRateMultiplier holds the default value on creation for the "rate_multiplier" field.
 	DefaultRateMultiplier float64
 	// DefaultBillingInputTokenMultiplier holds the default value on creation for the "billing_input_token_multiplier" field.
 	DefaultBillingInputTokenMultiplier float64
 	// DefaultBillingOutputTokenMultiplier holds the default value on creation for the "billing_output_token_multiplier" field.
 	DefaultBillingOutputTokenMultiplier float64
+	// DefaultBillingUnifiedTokenMultiplier holds the default value on creation for the "billing_unified_token_multiplier" field.
+	DefaultBillingUnifiedTokenMultiplier float64
 	// DefaultBillingTokenAdjustmentMinInputTokens holds the default value on creation for the "billing_token_adjustment_min_input_tokens" field.
 	DefaultBillingTokenAdjustmentMinInputTokens int
 	// DefaultPeakRateEnabled holds the default value on creation for the "peak_rate_enabled" field.
@@ -400,6 +416,12 @@ var (
 	AudioTtsPricePerMillionCharsValidator func(float64) error
 	// AudioSttPricePerHourValidator is a validator for the "audio_stt_price_per_hour" field. It is called by the builders before save.
 	AudioSttPricePerHourValidator func(float64) error
+	// DefaultAudioRateIndependent holds the default value on creation for the "audio_rate_independent" field.
+	DefaultAudioRateIndependent bool
+	// DefaultAudioRateMultiplier holds the default value on creation for the "audio_rate_multiplier" field.
+	DefaultAudioRateMultiplier float64
+	// AudioRateMultiplierValidator is a validator for the "audio_rate_multiplier" field. It is called by the builders before save.
+	AudioRateMultiplierValidator func(float64) error
 	// DefaultLongContextPricingEnabled holds the default value on creation for the "long_context_pricing_enabled" field.
 	DefaultLongContextPricingEnabled bool
 	// DefaultClaudeCodeOnly holds the default value on creation for the "claude_code_only" field.
@@ -500,6 +522,11 @@ func ByBillingInputTokenMultiplier(opts ...sql.OrderTermOption) OrderOption {
 // ByBillingOutputTokenMultiplier orders the results by the billing_output_token_multiplier field.
 func ByBillingOutputTokenMultiplier(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldBillingOutputTokenMultiplier, opts...).ToFunc()
+}
+
+// ByBillingUnifiedTokenMultiplier orders the results by the billing_unified_token_multiplier field.
+func ByBillingUnifiedTokenMultiplier(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBillingUnifiedTokenMultiplier, opts...).ToFunc()
 }
 
 // ByBillingTokenAdjustmentMinInputTokens orders the results by the billing_token_adjustment_min_input_tokens field.
@@ -670,6 +697,16 @@ func ByAudioTtsPricePerMillionChars(opts ...sql.OrderTermOption) OrderOption {
 // ByAudioSttPricePerHour orders the results by the audio_stt_price_per_hour field.
 func ByAudioSttPricePerHour(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldAudioSttPricePerHour, opts...).ToFunc()
+}
+
+// ByAudioRateIndependent orders the results by the audio_rate_independent field.
+func ByAudioRateIndependent(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAudioRateIndependent, opts...).ToFunc()
+}
+
+// ByAudioRateMultiplier orders the results by the audio_rate_multiplier field.
+func ByAudioRateMultiplier(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAudioRateMultiplier, opts...).ToFunc()
 }
 
 // ByLongContextPricingEnabled orders the results by the long_context_pricing_enabled field.

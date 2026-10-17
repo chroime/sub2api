@@ -332,18 +332,6 @@ const BatchImageIcon = {
       ]
     )
 }
-const InfiniteCanvasIcon = {
-  render: () => h('svg', {
-    class: 'sidebar-svg-icon',
-    viewBox: '0 0 24 24',
-    fill: 'none',
-    xmlns: 'http://www.w3.org/2000/svg'
-  }, [
-    h('path', { d: 'M4 4h6v6H4V4Zm10 0h6v6h-6V4ZM4 14h6v6H4v-6Zm10 0h6v6h-6v-6Z', stroke: 'currentColor', 'stroke-width': '1.7', 'stroke-linejoin': 'round' }),
-    h('path', { d: 'M10 7h4M7 10v4m10-4v4m-4 3h-3', stroke: 'currentColor', 'stroke-width': '1.7', 'stroke-linecap': 'round' })
-  ])
-}
-
 const ChartIcon = {
   render: () =>
     h(
@@ -517,7 +505,18 @@ const SmartOperationsIcon = {
 }
 
 const TokenRankingIcon = {
-  render: () => h(Icon, { name: 'trophy' })
+  render: () =>
+    h(
+      'svg',
+      { fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', 'stroke-width': '1.5' },
+      [
+        h('path', {
+          'stroke-linecap': 'round',
+          'stroke-linejoin': 'round',
+          d: 'M4.5 19.5h4.5v-4.5H4.5v4.5zm5.25 0h4.5V9.75h-4.5v9.75zm5.25 0h4.5V12h-4.5v7.5z'
+        })
+      ]
+    )
 }
 
 const BellIcon = {
@@ -764,7 +763,6 @@ function buildSelfNavItems(withDashboard: boolean): NavItem[] {
   items.push(
     { path: '/keys', label: t('nav.apiKeys'), icon: KeyIcon },
     { path: '/batch-image', label: t('nav.batchImage'), icon: BatchImageIcon, hideInSimpleMode: true, featureFlag: flagBatchImageAccess },
-    { path: '/infinite-canvas', label: t('nav.infiniteCanvas'), icon: InfiniteCanvasIcon, hideInSimpleMode: true },
     { path: '/usage', label: t('nav.usage'), icon: ChartIcon, hideInSimpleMode: true },
     { path: '/token-ranking', label: t('nav.tokenRanking'), icon: TokenRankingIcon, hideInSimpleMode: true },
     { path: '/available-channels', label: t('nav.availableChannels'), icon: ChannelIcon, hideInSimpleMode: true, featureFlag: flagAvailableChannels },
@@ -961,6 +959,7 @@ function isChildActive(child: NavItem): boolean {
 
 function childLocation(child: NavItem): RouteLocationRaw {
   if (child.smartOperationsSection && route.name === 'AdminUpstreamGovernance' && route.query.site !== undefined) {
+    if (child.smartOperationsSection === 'local-monitor') return child.path
     return { path: child.path, query: { site: route.query.site } }
   }
   return child.path

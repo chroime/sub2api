@@ -10,7 +10,7 @@ import (
 )
 
 func importTemplateFixture() ImportTemplates {
-	return ImportTemplates{Version: 0, Templates: []ImportTemplate{{ID: "basic", Name: "Basic", IsDefault: true, Settings: ImportTemplateSettings{Concurrency: 5000, Priority: 1, QuotaEnabled: true, QuotaDailyLimit: 10000, QuotaWeeklyLimit: 700000, QuotaLimit: 10000000, UpstreamBillingRateSyncEnabled: true, OpenAILongContextBillingEnabled: true}}}}
+	return ImportTemplates{Version: 0, Templates: []ImportTemplate{{ID: "basic", Name: "Basic", IsDefault: true, Settings: ImportTemplateSettings{Concurrency: 5000, Priority: 1, QuotaEnabled: true, QuotaDailyLimit: 100000, QuotaWeeklyLimit: 700000, QuotaLimit: 10000000, UpstreamBillingRateSyncEnabled: true, OpenAILongContextBillingEnabled: true}}}}
 }
 
 func TestImportTemplatesNormalizeNamesAndPreserveExplicitZeroSettings(t *testing.T) {

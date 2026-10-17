@@ -30,12 +30,16 @@ type Group struct {
 	Name string `json:"name,omitempty"`
 	// Description holds the value of the "description" field.
 	Description *string `json:"description,omitempty"`
+	// 名称与描述的界面语言译文：语言代码 -> {name, description}；缺失的语言沿用 name/description
+	I18n domain.GroupI18n `json:"i18n,omitempty"`
 	// RateMultiplier holds the value of the "rate_multiplier" field.
 	RateMultiplier float64 `json:"rate_multiplier,omitempty"`
 	// 下游计费输入 Token 修正倍率；1.0 表示沿用上游/网关计量
 	BillingInputTokenMultiplier float64 `json:"billing_input_token_multiplier,omitempty"`
 	// 下游计费输出 Token 修正倍率；1.0 表示沿用上游计量
 	BillingOutputTokenMultiplier float64 `json:"billing_output_token_multiplier,omitempty"`
+	// 下游计费对 input/output/cache_read/cache_write 的统一 Token 倍率；1.0 表示沿用上游计量
+	BillingUnifiedTokenMultiplier float64 `json:"billing_unified_token_multiplier,omitempty"`
 	// 仅当原始输入 Token 达到此阈值时应用下游 Token 修正倍率；0 表示不设阈值
 	BillingTokenAdjustmentMinInputTokens int `json:"billing_token_adjustment_min_input_tokens,omitempty"`
 	// 是否启用高峰时段倍率
@@ -106,6 +110,10 @@ type Group struct {
 	AudioTtsPricePerMillionChars *float64 `json:"audio_tts_price_per_million_chars,omitempty"`
 	// STT 每小时价格（USD）
 	AudioSttPricePerHour *float64 `json:"audio_stt_price_per_hour,omitempty"`
+	// 是否使用独立语音计费倍率；关闭时沿用分组生效倍率
+	AudioRateIndependent bool `json:"audio_rate_independent,omitempty"`
+	// 语音独立计费倍率，仅 audio_rate_independent=true 时生效
+	AudioRateMultiplier float64 `json:"audio_rate_multiplier,omitempty"`
 	// 是否按上下文长度应用模型阶梯价格；默认开启以保持官方/渠道长上下文价
 	LongContextPricingEnabled bool `json:"long_context_pricing_enabled,omitempty"`
 	// 分组逐模型定价；优先级高于渠道和内置定价
@@ -266,11 +274,11 @@ func (*Group) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case group.FieldVideoModelPrices, group.FieldModelPricing, group.FieldModelRouting, group.FieldSupportedModelScopes, group.FieldMessagesDispatchModelConfig, group.FieldModelAllowlist, group.FieldCodexModelsManifestConfig, group.FieldReasoningEffortMappings:
+		case group.FieldI18n, group.FieldVideoModelPrices, group.FieldModelPricing, group.FieldModelRouting, group.FieldSupportedModelScopes, group.FieldMessagesDispatchModelConfig, group.FieldModelAllowlist, group.FieldCodexModelsManifestConfig, group.FieldReasoningEffortMappings:
 			values[i] = new([]byte)
-		case group.FieldPeakRateEnabled, group.FieldIsExclusive, group.FieldStreamingAckEnabled, group.FieldAllowImageGeneration, group.FieldAllowBatchImageGeneration, group.FieldImageRateIndependent, group.FieldVideoRateIndependent, group.FieldLongContextPricingEnabled, group.FieldClaudeCodeOnly, group.FieldModelRoutingEnabled, group.FieldMcpXMLInject, group.FieldAllowMessagesDispatch, group.FieldAllowLive, group.FieldForceOpenaiFast, group.FieldFreeOpenaiFast, group.FieldRequireOauthOnly, group.FieldRequirePrivacySet, group.FieldProfitControlEnabled:
+		case group.FieldPeakRateEnabled, group.FieldIsExclusive, group.FieldStreamingAckEnabled, group.FieldAllowImageGeneration, group.FieldAllowBatchImageGeneration, group.FieldImageRateIndependent, group.FieldVideoRateIndependent, group.FieldAudioRateIndependent, group.FieldLongContextPricingEnabled, group.FieldClaudeCodeOnly, group.FieldModelRoutingEnabled, group.FieldMcpXMLInject, group.FieldAllowMessagesDispatch, group.FieldAllowLive, group.FieldForceOpenaiFast, group.FieldFreeOpenaiFast, group.FieldRequireOauthOnly, group.FieldRequirePrivacySet, group.FieldProfitControlEnabled:
 			values[i] = new(sql.NullBool)
-		case group.FieldRateMultiplier, group.FieldBillingInputTokenMultiplier, group.FieldBillingOutputTokenMultiplier, group.FieldPeakRateMultiplier, group.FieldDailyLimitUsd, group.FieldWeeklyLimitUsd, group.FieldMonthlyLimitUsd, group.FieldImageRateMultiplier, group.FieldImagePrice1k, group.FieldImagePrice2k, group.FieldImagePrice4k, group.FieldBatchImageDiscountMultiplier, group.FieldBatchImageHoldMultiplier, group.FieldVideoRateMultiplier, group.FieldVideoPrice480p, group.FieldVideoPrice720p, group.FieldVideoPrice1080p, group.FieldWebSearchPricePerCall, group.FieldSearchPricePer1k, group.FieldAudioRealtimePricePerMin, group.FieldAudioTtsPricePerMillionChars, group.FieldAudioSttPricePerHour, group.FieldProfitMinMargin, group.FieldProfitSafetyBuffer:
+		case group.FieldRateMultiplier, group.FieldBillingInputTokenMultiplier, group.FieldBillingOutputTokenMultiplier, group.FieldBillingUnifiedTokenMultiplier, group.FieldPeakRateMultiplier, group.FieldDailyLimitUsd, group.FieldWeeklyLimitUsd, group.FieldMonthlyLimitUsd, group.FieldImageRateMultiplier, group.FieldImagePrice1k, group.FieldImagePrice2k, group.FieldImagePrice4k, group.FieldBatchImageDiscountMultiplier, group.FieldBatchImageHoldMultiplier, group.FieldVideoRateMultiplier, group.FieldVideoPrice480p, group.FieldVideoPrice720p, group.FieldVideoPrice1080p, group.FieldWebSearchPricePerCall, group.FieldSearchPricePer1k, group.FieldAudioRealtimePricePerMin, group.FieldAudioTtsPricePerMillionChars, group.FieldAudioSttPricePerHour, group.FieldAudioRateMultiplier, group.FieldProfitMinMargin, group.FieldProfitSafetyBuffer:
 			values[i] = new(sql.NullFloat64)
 		case group.FieldID, group.FieldBillingTokenAdjustmentMinInputTokens, group.FieldDefaultValidityDays, group.FieldFallbackGroupID, group.FieldFallbackGroupIDOnInvalidRequest, group.FieldSortOrder, group.FieldRpmLimit:
 			values[i] = new(sql.NullInt64)
@@ -331,6 +339,14 @@ func (_m *Group) assignValues(columns []string, values []any) error {
 				_m.Description = new(string)
 				*_m.Description = value.String
 			}
+		case group.FieldI18n:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field i18n", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.I18n); err != nil {
+					return fmt.Errorf("unmarshal field i18n: %w", err)
+				}
+			}
 		case group.FieldRateMultiplier:
 			if value, ok := values[i].(*sql.NullFloat64); !ok {
 				return fmt.Errorf("unexpected type %T for field rate_multiplier", values[i])
@@ -348,6 +364,12 @@ func (_m *Group) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field billing_output_token_multiplier", values[i])
 			} else if value.Valid {
 				_m.BillingOutputTokenMultiplier = value.Float64
+			}
+		case group.FieldBillingUnifiedTokenMultiplier:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field billing_unified_token_multiplier", values[i])
+			} else if value.Valid {
+				_m.BillingUnifiedTokenMultiplier = value.Float64
 			}
 		case group.FieldBillingTokenAdjustmentMinInputTokens:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -576,6 +598,18 @@ func (_m *Group) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.AudioSttPricePerHour = new(float64)
 				*_m.AudioSttPricePerHour = value.Float64
+			}
+		case group.FieldAudioRateIndependent:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field audio_rate_independent", values[i])
+			} else if value.Valid {
+				_m.AudioRateIndependent = value.Bool
+			}
+		case group.FieldAudioRateMultiplier:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field audio_rate_multiplier", values[i])
+			} else if value.Valid {
+				_m.AudioRateMultiplier = value.Float64
 			}
 		case group.FieldLongContextPricingEnabled:
 			if value, ok := values[i].(*sql.NullBool); !ok {
@@ -850,6 +884,9 @@ func (_m *Group) String() string {
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
+	builder.WriteString("i18n=")
+	builder.WriteString(fmt.Sprintf("%v", _m.I18n))
+	builder.WriteString(", ")
 	builder.WriteString("rate_multiplier=")
 	builder.WriteString(fmt.Sprintf("%v", _m.RateMultiplier))
 	builder.WriteString(", ")
@@ -858,6 +895,9 @@ func (_m *Group) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("billing_output_token_multiplier=")
 	builder.WriteString(fmt.Sprintf("%v", _m.BillingOutputTokenMultiplier))
+	builder.WriteString(", ")
+	builder.WriteString("billing_unified_token_multiplier=")
+	builder.WriteString(fmt.Sprintf("%v", _m.BillingUnifiedTokenMultiplier))
 	builder.WriteString(", ")
 	builder.WriteString("billing_token_adjustment_min_input_tokens=")
 	builder.WriteString(fmt.Sprintf("%v", _m.BillingTokenAdjustmentMinInputTokens))
@@ -995,6 +1035,12 @@ func (_m *Group) String() string {
 		builder.WriteString("audio_stt_price_per_hour=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
+	builder.WriteString(", ")
+	builder.WriteString("audio_rate_independent=")
+	builder.WriteString(fmt.Sprintf("%v", _m.AudioRateIndependent))
+	builder.WriteString(", ")
+	builder.WriteString("audio_rate_multiplier=")
+	builder.WriteString(fmt.Sprintf("%v", _m.AudioRateMultiplier))
 	builder.WriteString(", ")
 	builder.WriteString("long_context_pricing_enabled=")
 	builder.WriteString(fmt.Sprintf("%v", _m.LongContextPricingEnabled))

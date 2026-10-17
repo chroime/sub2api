@@ -220,6 +220,36 @@ func TestGatewayRoutesGrokCustomVoiceCRUDPathsAreRegistered(t *testing.T) {
 	}
 }
 
+func TestGatewayRoutesGrokOpenAIAudioPathsAreRegistered(t *testing.T) {
+	router := newGatewayRoutesTestRouter(service.PlatformGrok)
+	registered := make(map[string]bool)
+	for _, route := range router.Routes() {
+		registered[route.Method+" "+route.Path] = true
+	}
+	for _, route := range []string{
+		"POST /v1/audio/speech",
+		"POST /v1/audio/transcriptions",
+		"POST /audio/speech",
+		"POST /audio/transcriptions",
+	} {
+		require.True(t, registered[route], "%s should be registered", route)
+	}
+}
+
+func TestGatewayRoutesNonGrokOpenAIAudioIsRejected(t *testing.T) {
+	router := newGatewayRoutesTestRouter(service.PlatformOpenAI)
+	for _, path := range []string{"/v1/audio/speech", "/v1/audio/transcriptions", "/audio/speech", "/audio/transcriptions"} {
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{"model":"grok-voice-tts","input":"hello"}`))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		require.Equal(t, http.StatusNotFound, w.Code, "path=%s", path)
+		require.Contains(t, w.Body.String(), "Voice API is not supported for this platform")
+	}
+}
+
 func TestGrokCustomVoiceEndpointUsesRouteTemplateNotRawPath(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()

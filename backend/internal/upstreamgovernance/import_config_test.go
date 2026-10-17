@@ -26,7 +26,7 @@ func TestPreviewFreezesAccountImportDefaults(t *testing.T) {
 		"priority":                            float64(1),
 		"model_mapping":                       map[string]any{"gpt-fixture": "gpt-fixture"},
 		"upstream_billing_rate_sync_enabled":  true,
-		"quota_daily_limit":                   float64(10000),
+		"quota_daily_limit":                   float64(100000),
 		"quota_weekly_limit":                  float64(700000),
 		"quota_limit":                         float64(10000000),
 		"openai_long_context_billing_enabled": true,

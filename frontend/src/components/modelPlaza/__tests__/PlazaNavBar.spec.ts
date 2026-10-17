@@ -33,6 +33,7 @@ describe('model plaza public navigation', () => {
   it('uses the docs header styling and text-only navigation with shared language control', () => {
     const wrapper = render()
     expect(wrapper.get('header').classes()).toContain('public-site-header')
+    expect(wrapper.get('header').classes()).toContain('public-site-header-story')
     const links = wrapper.findAllComponents(RouterLinkStub)
     expect(links.filter(link => link.props('to') === '/home')).toHaveLength(2)
     const docs = links.find(link => link.props('to') === '/docs')!

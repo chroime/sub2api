@@ -413,6 +413,157 @@ func TestGatewayServiceRecordUsage_TimePricingUsesPricingAt(t *testing.T) {
 	require.InDelta(t, baseCost*2*0.8, usageRepo.lastLog.ActualCost, 1e-12)
 	require.InDelta(t, 0.8, usageRepo.lastLog.RateMultiplier, 1e-12)
 }
+
+func TestGatewayServiceRecordUsage_GroupTokenAdjustmentKeepsUpstreamUsage(t *testing.T) {
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	userRepo := &openAIRecordUsageUserRepoStub{}
+	svc := newGatewayRecordUsageServiceForTest(usageRepo, userRepo, &openAIRecordUsageSubRepoStub{})
+	groupID := int64(906)
+	group := &Group{
+		ID:                                   groupID,
+		RateMultiplier:                       1,
+		BillingInputTokenMultiplier:          2,
+		BillingOutputTokenMultiplier:         3,
+		BillingTokenAdjustmentMinInputTokens: 100,
+	}
+
+	err := svc.RecordUsage(context.Background(), &RecordUsageInput{
+		Result: &ForwardResult{
+			RequestID: "gateway_group_token_adjustment_raw_usage",
+			Model:     "claude-sonnet-4",
+			Usage:     ClaudeUsage{InputTokens: 200, OutputTokens: 50},
+			Duration:  time.Second,
+		},
+		APIKey:  &APIKey{ID: 806, GroupID: &groupID, Group: group},
+		User:    &User{ID: 606},
+		Account: &Account{ID: 706},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, usageRepo.lastLog)
+	require.Equal(t, 400, usageRepo.lastLog.InputTokens)
+	require.Equal(t, 150, usageRepo.lastLog.OutputTokens)
+	require.Equal(t, 200, usageRepo.lastLog.UpstreamInputTokens)
+	require.Equal(t, 50, usageRepo.lastLog.UpstreamOutputTokens)
+}
+
+func TestGatewayServiceRecordUsage_GroupTokenAdjustmentDoesNotChangeCacheCharge(t *testing.T) {
+	groupID := int64(907)
+	group := &Group{
+		ID:                                   groupID,
+		RateMultiplier:                       1,
+		BillingInputTokenMultiplier:          2,
+		BillingOutputTokenMultiplier:         1,
+		BillingTokenAdjustmentMinInputTokens: 100,
+	}
+	prices := &PricingService{pricingData: map[string]*LiteLLMModelPricing{
+		"claude-sonnet-4": {InputCostPerToken: 1e-6, OutputCostPerToken: 2e-6, CacheReadInputTokenCost: 0.1e-6},
+	}}
+	newService := func(repo *openAIRecordUsageLogRepoStub, userRepo *openAIRecordUsageUserRepoStub) *GatewayService {
+		svc := newGatewayRecordUsageServiceForTest(repo, userRepo, &openAIRecordUsageSubRepoStub{})
+		svc.billingService = NewBillingService(svc.cfg, prices)
+		return svc
+	}
+
+	withoutCacheRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	withoutCacheUser := &openAIRecordUsageUserRepoStub{}
+	withoutCache := newService(withoutCacheRepo, withoutCacheUser)
+	require.NoError(t, withoutCache.RecordUsage(context.Background(), &RecordUsageInput{
+		Result:  &ForwardResult{RequestID: "gateway_cache_neutral_miss", Model: "claude-sonnet-4", Usage: ClaudeUsage{InputTokens: 1000, OutputTokens: 10}},
+		APIKey:  &APIKey{ID: 807, GroupID: &groupID, Group: group},
+		User:    &User{ID: 607},
+		Account: &Account{ID: 707},
+	}))
+
+	withCacheRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	withCacheUser := &openAIRecordUsageUserRepoStub{}
+	withCache := newService(withCacheRepo, withCacheUser)
+	require.NoError(t, withCache.RecordUsage(context.Background(), &RecordUsageInput{
+		Result: &ForwardResult{RequestID: "gateway_cache_neutral_hit", Model: "claude-sonnet-4", Usage: ClaudeUsage{
+			InputTokens: 200, OutputTokens: 10, CacheReadInputTokens: 800,
+		}},
+		APIKey:  &APIKey{ID: 808, GroupID: &groupID, Group: group},
+		User:    &User{ID: 608},
+		Account: &Account{ID: 708},
+	}))
+
+	require.InDelta(t, withoutCacheRepo.lastLog.ActualCost, withCacheRepo.lastLog.ActualCost, 1e-12)
+}
+
+func TestGatewayServiceRecordUsage_UnifiedMultiplierScalesCacheBuckets(t *testing.T) {
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	userRepo := &openAIRecordUsageUserRepoStub{}
+	prices := &PricingService{pricingData: map[string]*LiteLLMModelPricing{
+		"claude-sonnet-4": {InputCostPerToken: 1e-6, OutputCostPerToken: 2e-6, CacheReadInputTokenCost: 0.1e-6, CacheCreationInputTokenCost: 1.25e-6},
+	}}
+	svc := newGatewayRecordUsageServiceForTest(usageRepo, userRepo, &openAIRecordUsageSubRepoStub{})
+	svc.billingService = NewBillingService(svc.cfg, prices)
+	groupID := int64(931)
+	group := &Group{
+		ID:                                   groupID,
+		RateMultiplier:                       1,
+		BillingUnifiedTokenMultiplier:        2,
+		BillingTokenAdjustmentMinInputTokens: 0,
+	}
+	require.NoError(t, svc.RecordUsage(context.Background(), &RecordUsageInput{
+		Result: &ForwardResult{
+			RequestID: "gateway_unified_cache",
+			Model:     "claude-sonnet-4",
+			Usage: ClaudeUsage{
+				InputTokens: 200, OutputTokens: 50,
+				CacheReadInputTokens: 600, CacheCreationInputTokens: 200,
+			},
+		},
+		APIKey:  &APIKey{ID: 831, GroupID: &groupID, Group: group},
+		User:    &User{ID: 631},
+		Account: &Account{ID: 731},
+	}))
+	require.Equal(t, 400, usageRepo.lastLog.InputTokens)
+	require.Equal(t, 100, usageRepo.lastLog.OutputTokens)
+	require.Equal(t, 1200, usageRepo.lastLog.CacheReadTokens)
+	require.Equal(t, 400, usageRepo.lastLog.CacheCreationTokens)
+	require.Equal(t, 200, usageRepo.lastLog.UpstreamInputTokens)
+	require.Equal(t, 50, usageRepo.lastLog.UpstreamOutputTokens)
+	require.Equal(t, 600, usageRepo.lastLog.UpstreamCacheReadTokens)
+	require.Equal(t, 200, usageRepo.lastLog.UpstreamCacheCreationTokens)
+	want := 400*1e-6 + 100*2e-6 + 1200*0.1e-6 + 400*1.25e-6
+	require.InDelta(t, want, usageRepo.lastLog.ActualCost, 1e-12)
+}
+
+func TestGatewayServiceRecordUsage_GroupTokenAdjustmentDoesNotRewritePerRequestImageUsage(t *testing.T) {
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	userRepo := &openAIRecordUsageUserRepoStub{}
+	svc := newGatewayRecordUsageServiceForTest(usageRepo, userRepo, &openAIRecordUsageSubRepoStub{})
+	groupID := int64(908)
+	imagePrice := 0.2
+	group := &Group{
+		ID:                                   groupID,
+		RateMultiplier:                       1,
+		BillingInputTokenMultiplier:          2,
+		BillingOutputTokenMultiplier:         3,
+		BillingTokenAdjustmentMinInputTokens: 100,
+		ImagePrice2K:                         &imagePrice,
+	}
+
+	err := svc.RecordUsage(context.Background(), &RecordUsageInput{
+		Result: &ForwardResult{
+			RequestID:  "gateway_group_token_adjustment_image",
+			Model:      "gpt-image-2",
+			ImageCount: 1,
+			ImageSize:  ImageBillingSize2K,
+			Usage:      ClaudeUsage{InputTokens: 200, OutputTokens: 50},
+		},
+		APIKey:  &APIKey{ID: 809, GroupID: &groupID, Group: group},
+		User:    &User{ID: 609},
+		Account: &Account{ID: 709},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, usageRepo.lastLog)
+	require.Equal(t, 200, usageRepo.lastLog.InputTokens)
+	require.Equal(t, 50, usageRepo.lastLog.OutputTokens)
+	require.InDelta(t, imagePrice, usageRepo.lastLog.ActualCost, 1e-12)
+}
 func TestGatewayServiceRecordUsage_UsesExplicitPricingAtForPeakRate(t *testing.T) {
 	for _, platform := range []string{PlatformAnthropic, PlatformGemini, PlatformGrok, PlatformAntigravity} {
 		t.Run(platform, func(t *testing.T) {

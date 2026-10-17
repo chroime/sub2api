@@ -123,6 +123,7 @@ onBeforeUnmount(() => themeObserver?.disconnect())
 .public-header-locale :deep(> div > button:hover), .public-header-locale :deep(> div > button.bg-primary-50) { background: var(--public-hover); color: var(--public-heading); }
 .public-header-locale :deep(svg) { color: inherit; }
 .public-nav-cta { display: inline-flex; min-width: 88px; min-height: 44px; flex-shrink: 0; align-items: center; justify-content: center; padding: 10px 18px; border: 1px solid transparent; border-radius: 8px; background: var(--public-cta-bg); color: var(--public-cta-ink); font-family: "Microsoft YaHei", "PingFang SC", ui-sans-serif, system-ui, sans-serif; font-size: 15px; font-weight: 600; line-height: 22px; white-space: nowrap; text-shadow: none; transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, box-shadow 160ms ease; }
+.public-site-header-story .public-nav-cta { min-height: 42px; padding-block: 9px; font-size: 14px; line-height: 20px; }
 .public-nav-cta:hover { background: var(--public-cta-hover); color: var(--public-cta-ink); }
 .public-nav-cta:active { background: var(--public-cta-hover); box-shadow: inset 0 2px 4px rgb(0 0 0 / .12); }
 .public-nav-cta:focus-visible { outline: 2px solid var(--public-accent); outline-offset: 3px; }
@@ -144,6 +145,9 @@ onBeforeUnmount(() => themeObserver?.disconnect())
 }
 @media (max-width: 1200px) {
   .public-site-header-story .public-header-inner { width: calc(100% - 48px); }
+}
+@media (min-width: 1800px) {
+  .public-site-header-story .public-header-inner { width: min(1280px, calc(100% - 96px)); }
 }
 @media (max-width: 720px) {
   .public-site-header-story .public-header-inner { width: calc(100% - 40px); min-height: 66px; padding: 16px 0; }

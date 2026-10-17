@@ -22173,12 +22173,15 @@ type GroupMutation struct {
 	deleted_at                                   *time.Time
 	name                                         *string
 	description                                  *string
+	i18n                                         *domain.GroupI18n
 	rate_multiplier                              *float64
 	addrate_multiplier                           *float64
 	billing_input_token_multiplier               *float64
 	addbilling_input_token_multiplier            *float64
 	billing_output_token_multiplier              *float64
 	addbilling_output_token_multiplier           *float64
+	billing_unified_token_multiplier             *float64
+	addbilling_unified_token_multiplier          *float64
 	billing_token_adjustment_min_input_tokens    *int
 	addbilling_token_adjustment_min_input_tokens *int
 	peak_rate_enabled                            *bool
@@ -22235,6 +22238,9 @@ type GroupMutation struct {
 	addaudio_tts_price_per_million_chars         *float64
 	audio_stt_price_per_hour                     *float64
 	addaudio_stt_price_per_hour                  *float64
+	audio_rate_independent                       *bool
+	audio_rate_multiplier                        *float64
+	addaudio_rate_multiplier                     *float64
 	long_context_pricing_enabled                 *bool
 	model_pricing                                *jsontext.Value
 	appendmodel_pricing                          jsontext.Value
@@ -22599,6 +22605,42 @@ func (m *GroupMutation) ResetDescription() {
 	delete(m.clearedFields, group.FieldDescription)
 }
 
+// SetI18n sets the "i18n" field.
+func (m *GroupMutation) SetI18n(di domain.GroupI18n) {
+	m.i18n = &di
+}
+
+// I18n returns the value of the "i18n" field in the mutation.
+func (m *GroupMutation) I18n() (r domain.GroupI18n, exists bool) {
+	v := m.i18n
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldI18n returns the old "i18n" field's value of the Group entity.
+// If the Group object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupMutation) OldI18n(ctx context.Context) (v domain.GroupI18n, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldI18n is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldI18n requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldI18n: %w", err)
+	}
+	return oldValue.I18n, nil
+}
+
+// ResetI18n resets all changes to the "i18n" field.
+func (m *GroupMutation) ResetI18n() {
+	m.i18n = nil
+}
+
 // SetRateMultiplier sets the "rate_multiplier" field.
 func (m *GroupMutation) SetRateMultiplier(f float64) {
 	m.rate_multiplier = &f
@@ -22765,6 +22807,62 @@ func (m *GroupMutation) AddedBillingOutputTokenMultiplier() (r float64, exists b
 func (m *GroupMutation) ResetBillingOutputTokenMultiplier() {
 	m.billing_output_token_multiplier = nil
 	m.addbilling_output_token_multiplier = nil
+}
+
+// SetBillingUnifiedTokenMultiplier sets the "billing_unified_token_multiplier" field.
+func (m *GroupMutation) SetBillingUnifiedTokenMultiplier(f float64) {
+	m.billing_unified_token_multiplier = &f
+	m.addbilling_unified_token_multiplier = nil
+}
+
+// BillingUnifiedTokenMultiplier returns the value of the "billing_unified_token_multiplier" field in the mutation.
+func (m *GroupMutation) BillingUnifiedTokenMultiplier() (r float64, exists bool) {
+	v := m.billing_unified_token_multiplier
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBillingUnifiedTokenMultiplier returns the old "billing_unified_token_multiplier" field's value of the Group entity.
+// If the Group object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupMutation) OldBillingUnifiedTokenMultiplier(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBillingUnifiedTokenMultiplier is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBillingUnifiedTokenMultiplier requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBillingUnifiedTokenMultiplier: %w", err)
+	}
+	return oldValue.BillingUnifiedTokenMultiplier, nil
+}
+
+// AddBillingUnifiedTokenMultiplier adds f to the "billing_unified_token_multiplier" field.
+func (m *GroupMutation) AddBillingUnifiedTokenMultiplier(f float64) {
+	if m.addbilling_unified_token_multiplier != nil {
+		*m.addbilling_unified_token_multiplier += f
+	} else {
+		m.addbilling_unified_token_multiplier = &f
+	}
+}
+
+// AddedBillingUnifiedTokenMultiplier returns the value that was added to the "billing_unified_token_multiplier" field in this mutation.
+func (m *GroupMutation) AddedBillingUnifiedTokenMultiplier() (r float64, exists bool) {
+	v := m.addbilling_unified_token_multiplier
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetBillingUnifiedTokenMultiplier resets all changes to the "billing_unified_token_multiplier" field.
+func (m *GroupMutation) ResetBillingUnifiedTokenMultiplier() {
+	m.billing_unified_token_multiplier = nil
+	m.addbilling_unified_token_multiplier = nil
 }
 
 // SetBillingTokenAdjustmentMinInputTokens sets the "billing_token_adjustment_min_input_tokens" field.
@@ -24682,6 +24780,98 @@ func (m *GroupMutation) ResetAudioSttPricePerHour() {
 	delete(m.clearedFields, group.FieldAudioSttPricePerHour)
 }
 
+// SetAudioRateIndependent sets the "audio_rate_independent" field.
+func (m *GroupMutation) SetAudioRateIndependent(b bool) {
+	m.audio_rate_independent = &b
+}
+
+// AudioRateIndependent returns the value of the "audio_rate_independent" field in the mutation.
+func (m *GroupMutation) AudioRateIndependent() (r bool, exists bool) {
+	v := m.audio_rate_independent
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAudioRateIndependent returns the old "audio_rate_independent" field's value of the Group entity.
+// If the Group object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupMutation) OldAudioRateIndependent(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAudioRateIndependent is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAudioRateIndependent requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAudioRateIndependent: %w", err)
+	}
+	return oldValue.AudioRateIndependent, nil
+}
+
+// ResetAudioRateIndependent resets all changes to the "audio_rate_independent" field.
+func (m *GroupMutation) ResetAudioRateIndependent() {
+	m.audio_rate_independent = nil
+}
+
+// SetAudioRateMultiplier sets the "audio_rate_multiplier" field.
+func (m *GroupMutation) SetAudioRateMultiplier(f float64) {
+	m.audio_rate_multiplier = &f
+	m.addaudio_rate_multiplier = nil
+}
+
+// AudioRateMultiplier returns the value of the "audio_rate_multiplier" field in the mutation.
+func (m *GroupMutation) AudioRateMultiplier() (r float64, exists bool) {
+	v := m.audio_rate_multiplier
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAudioRateMultiplier returns the old "audio_rate_multiplier" field's value of the Group entity.
+// If the Group object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupMutation) OldAudioRateMultiplier(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAudioRateMultiplier is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAudioRateMultiplier requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAudioRateMultiplier: %w", err)
+	}
+	return oldValue.AudioRateMultiplier, nil
+}
+
+// AddAudioRateMultiplier adds f to the "audio_rate_multiplier" field.
+func (m *GroupMutation) AddAudioRateMultiplier(f float64) {
+	if m.addaudio_rate_multiplier != nil {
+		*m.addaudio_rate_multiplier += f
+	} else {
+		m.addaudio_rate_multiplier = &f
+	}
+}
+
+// AddedAudioRateMultiplier returns the value that was added to the "audio_rate_multiplier" field in this mutation.
+func (m *GroupMutation) AddedAudioRateMultiplier() (r float64, exists bool) {
+	v := m.addaudio_rate_multiplier
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetAudioRateMultiplier resets all changes to the "audio_rate_multiplier" field.
+func (m *GroupMutation) ResetAudioRateMultiplier() {
+	m.audio_rate_multiplier = nil
+	m.addaudio_rate_multiplier = nil
+}
+
 // SetLongContextPricingEnabled sets the "long_context_pricing_enabled" field.
 func (m *GroupMutation) SetLongContextPricingEnabled(b bool) {
 	m.long_context_pricing_enabled = &b
@@ -26232,7 +26422,7 @@ func (m *GroupMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *GroupMutation) Fields() []string {
-	fields := make([]string, 0, 70)
+	fields := make([]string, 0, 74)
 	if m.created_at != nil {
 		fields = append(fields, group.FieldCreatedAt)
 	}
@@ -26248,6 +26438,9 @@ func (m *GroupMutation) Fields() []string {
 	if m.description != nil {
 		fields = append(fields, group.FieldDescription)
 	}
+	if m.i18n != nil {
+		fields = append(fields, group.FieldI18n)
+	}
 	if m.rate_multiplier != nil {
 		fields = append(fields, group.FieldRateMultiplier)
 	}
@@ -26256,6 +26449,9 @@ func (m *GroupMutation) Fields() []string {
 	}
 	if m.billing_output_token_multiplier != nil {
 		fields = append(fields, group.FieldBillingOutputTokenMultiplier)
+	}
+	if m.billing_unified_token_multiplier != nil {
+		fields = append(fields, group.FieldBillingUnifiedTokenMultiplier)
 	}
 	if m.billing_token_adjustment_min_input_tokens != nil {
 		fields = append(fields, group.FieldBillingTokenAdjustmentMinInputTokens)
@@ -26362,6 +26558,12 @@ func (m *GroupMutation) Fields() []string {
 	if m.audio_stt_price_per_hour != nil {
 		fields = append(fields, group.FieldAudioSttPricePerHour)
 	}
+	if m.audio_rate_independent != nil {
+		fields = append(fields, group.FieldAudioRateIndependent)
+	}
+	if m.audio_rate_multiplier != nil {
+		fields = append(fields, group.FieldAudioRateMultiplier)
+	}
 	if m.long_context_pricing_enabled != nil {
 		fields = append(fields, group.FieldLongContextPricingEnabled)
 	}
@@ -26461,12 +26663,16 @@ func (m *GroupMutation) Field(name string) (ent.Value, bool) {
 		return m.Name()
 	case group.FieldDescription:
 		return m.Description()
+	case group.FieldI18n:
+		return m.I18n()
 	case group.FieldRateMultiplier:
 		return m.RateMultiplier()
 	case group.FieldBillingInputTokenMultiplier:
 		return m.BillingInputTokenMultiplier()
 	case group.FieldBillingOutputTokenMultiplier:
 		return m.BillingOutputTokenMultiplier()
+	case group.FieldBillingUnifiedTokenMultiplier:
+		return m.BillingUnifiedTokenMultiplier()
 	case group.FieldBillingTokenAdjustmentMinInputTokens:
 		return m.BillingTokenAdjustmentMinInputTokens()
 	case group.FieldPeakRateEnabled:
@@ -26537,6 +26743,10 @@ func (m *GroupMutation) Field(name string) (ent.Value, bool) {
 		return m.AudioTtsPricePerMillionChars()
 	case group.FieldAudioSttPricePerHour:
 		return m.AudioSttPricePerHour()
+	case group.FieldAudioRateIndependent:
+		return m.AudioRateIndependent()
+	case group.FieldAudioRateMultiplier:
+		return m.AudioRateMultiplier()
 	case group.FieldLongContextPricingEnabled:
 		return m.LongContextPricingEnabled()
 	case group.FieldModelPricing:
@@ -26610,12 +26820,16 @@ func (m *GroupMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldName(ctx)
 	case group.FieldDescription:
 		return m.OldDescription(ctx)
+	case group.FieldI18n:
+		return m.OldI18n(ctx)
 	case group.FieldRateMultiplier:
 		return m.OldRateMultiplier(ctx)
 	case group.FieldBillingInputTokenMultiplier:
 		return m.OldBillingInputTokenMultiplier(ctx)
 	case group.FieldBillingOutputTokenMultiplier:
 		return m.OldBillingOutputTokenMultiplier(ctx)
+	case group.FieldBillingUnifiedTokenMultiplier:
+		return m.OldBillingUnifiedTokenMultiplier(ctx)
 	case group.FieldBillingTokenAdjustmentMinInputTokens:
 		return m.OldBillingTokenAdjustmentMinInputTokens(ctx)
 	case group.FieldPeakRateEnabled:
@@ -26686,6 +26900,10 @@ func (m *GroupMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldAudioTtsPricePerMillionChars(ctx)
 	case group.FieldAudioSttPricePerHour:
 		return m.OldAudioSttPricePerHour(ctx)
+	case group.FieldAudioRateIndependent:
+		return m.OldAudioRateIndependent(ctx)
+	case group.FieldAudioRateMultiplier:
+		return m.OldAudioRateMultiplier(ctx)
 	case group.FieldLongContextPricingEnabled:
 		return m.OldLongContextPricingEnabled(ctx)
 	case group.FieldModelPricing:
@@ -26784,6 +27002,13 @@ func (m *GroupMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetDescription(v)
 		return nil
+	case group.FieldI18n:
+		v, ok := value.(domain.GroupI18n)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetI18n(v)
+		return nil
 	case group.FieldRateMultiplier:
 		v, ok := value.(float64)
 		if !ok {
@@ -26804,6 +27029,13 @@ func (m *GroupMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetBillingOutputTokenMultiplier(v)
+		return nil
+	case group.FieldBillingUnifiedTokenMultiplier:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBillingUnifiedTokenMultiplier(v)
 		return nil
 	case group.FieldBillingTokenAdjustmentMinInputTokens:
 		v, ok := value.(int)
@@ -27050,6 +27282,20 @@ func (m *GroupMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetAudioSttPricePerHour(v)
 		return nil
+	case group.FieldAudioRateIndependent:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAudioRateIndependent(v)
+		return nil
+	case group.FieldAudioRateMultiplier:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAudioRateMultiplier(v)
+		return nil
 	case group.FieldLongContextPricingEnabled:
 		v, ok := value.(bool)
 		if !ok {
@@ -27256,6 +27502,9 @@ func (m *GroupMutation) AddedFields() []string {
 	if m.addbilling_output_token_multiplier != nil {
 		fields = append(fields, group.FieldBillingOutputTokenMultiplier)
 	}
+	if m.addbilling_unified_token_multiplier != nil {
+		fields = append(fields, group.FieldBillingUnifiedTokenMultiplier)
+	}
 	if m.addbilling_token_adjustment_min_input_tokens != nil {
 		fields = append(fields, group.FieldBillingTokenAdjustmentMinInputTokens)
 	}
@@ -27319,6 +27568,9 @@ func (m *GroupMutation) AddedFields() []string {
 	if m.addaudio_stt_price_per_hour != nil {
 		fields = append(fields, group.FieldAudioSttPricePerHour)
 	}
+	if m.addaudio_rate_multiplier != nil {
+		fields = append(fields, group.FieldAudioRateMultiplier)
+	}
 	if m.addfallback_group_id != nil {
 		fields = append(fields, group.FieldFallbackGroupID)
 	}
@@ -27351,6 +27603,8 @@ func (m *GroupMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedBillingInputTokenMultiplier()
 	case group.FieldBillingOutputTokenMultiplier:
 		return m.AddedBillingOutputTokenMultiplier()
+	case group.FieldBillingUnifiedTokenMultiplier:
+		return m.AddedBillingUnifiedTokenMultiplier()
 	case group.FieldBillingTokenAdjustmentMinInputTokens:
 		return m.AddedBillingTokenAdjustmentMinInputTokens()
 	case group.FieldPeakRateMultiplier:
@@ -27393,6 +27647,8 @@ func (m *GroupMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedAudioTtsPricePerMillionChars()
 	case group.FieldAudioSttPricePerHour:
 		return m.AddedAudioSttPricePerHour()
+	case group.FieldAudioRateMultiplier:
+		return m.AddedAudioRateMultiplier()
 	case group.FieldFallbackGroupID:
 		return m.AddedFallbackGroupID()
 	case group.FieldFallbackGroupIDOnInvalidRequest:
@@ -27434,6 +27690,13 @@ func (m *GroupMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddBillingOutputTokenMultiplier(v)
+		return nil
+	case group.FieldBillingUnifiedTokenMultiplier:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddBillingUnifiedTokenMultiplier(v)
 		return nil
 	case group.FieldBillingTokenAdjustmentMinInputTokens:
 		v, ok := value.(int)
@@ -27581,6 +27844,13 @@ func (m *GroupMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddAudioSttPricePerHour(v)
+		return nil
+	case group.FieldAudioRateMultiplier:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddAudioRateMultiplier(v)
 		return nil
 	case group.FieldFallbackGroupID:
 		v, ok := value.(int64)
@@ -27807,6 +28077,9 @@ func (m *GroupMutation) ResetField(name string) error {
 	case group.FieldDescription:
 		m.ResetDescription()
 		return nil
+	case group.FieldI18n:
+		m.ResetI18n()
+		return nil
 	case group.FieldRateMultiplier:
 		m.ResetRateMultiplier()
 		return nil
@@ -27815,6 +28088,9 @@ func (m *GroupMutation) ResetField(name string) error {
 		return nil
 	case group.FieldBillingOutputTokenMultiplier:
 		m.ResetBillingOutputTokenMultiplier()
+		return nil
+	case group.FieldBillingUnifiedTokenMultiplier:
+		m.ResetBillingUnifiedTokenMultiplier()
 		return nil
 	case group.FieldBillingTokenAdjustmentMinInputTokens:
 		m.ResetBillingTokenAdjustmentMinInputTokens()
@@ -27920,6 +28196,12 @@ func (m *GroupMutation) ResetField(name string) error {
 		return nil
 	case group.FieldAudioSttPricePerHour:
 		m.ResetAudioSttPricePerHour()
+		return nil
+	case group.FieldAudioRateIndependent:
+		m.ResetAudioRateIndependent()
+		return nil
+	case group.FieldAudioRateMultiplier:
+		m.ResetAudioRateMultiplier()
 		return nil
 	case group.FieldLongContextPricingEnabled:
 		m.ResetLongContextPricingEnabled()
@@ -45089,88 +45371,100 @@ func (m *UsageCleanupTaskMutation) ResetEdge(name string) error {
 // UsageLogMutation represents an operation that mutates the UsageLog nodes in the graph.
 type UsageLogMutation struct {
 	config
-	op                           Op
-	typ                          string
-	id                           *int64
-	request_id                   *string
-	model                        *string
-	requested_model              *string
-	upstream_model               *string
-	upstream_response_model      *string
-	upstream_model_mismatch      *bool
-	channel_id                   *int64
-	addchannel_id                *int64
-	model_mapping_chain          *string
-	billing_tier                 *string
-	billing_mode                 *string
-	input_tokens                 *int
-	addinput_tokens              *int
-	output_tokens                *int
-	addoutput_tokens             *int
-	cache_creation_tokens        *int
-	addcache_creation_tokens     *int
-	cache_read_tokens            *int
-	addcache_read_tokens         *int
-	cache_creation_5m_tokens     *int
-	addcache_creation_5m_tokens  *int
-	cache_creation_1h_tokens     *int
-	addcache_creation_1h_tokens  *int
-	input_cost                   *float64
-	addinput_cost                *float64
-	output_cost                  *float64
-	addoutput_cost               *float64
-	cache_creation_cost          *float64
-	addcache_creation_cost       *float64
-	cache_read_cost              *float64
-	addcache_read_cost           *float64
-	total_cost                   *float64
-	addtotal_cost                *float64
-	actual_cost                  *float64
-	addactual_cost               *float64
-	rate_multiplier              *float64
-	addrate_multiplier           *float64
-	long_context_billing_applied *bool
-	account_rate_multiplier      *float64
-	addaccount_rate_multiplier   *float64
-	billing_type                 *int8
-	addbilling_type              *int8
-	stream                       *bool
-	duration_ms                  *int
-	addduration_ms               *int
-	first_token_ms               *int
-	addfirst_token_ms            *int
-	streaming_ack_ms             *int
-	addstreaming_ack_ms          *int
-	user_agent                   *string
-	ip_address                   *string
-	image_count                  *int
-	addimage_count               *int
-	image_size                   *string
-	image_input_size             *string
-	image_output_size            *string
-	image_size_source            *string
-	image_size_breakdown         *map[string]int
-	video_count                  *int
-	addvideo_count               *int
-	video_resolution             *string
-	video_duration_seconds       *int
-	addvideo_duration_seconds    *int
-	cache_ttl_overridden         *bool
-	created_at                   *time.Time
-	clearedFields                map[string]struct{}
-	user                         *int64
-	cleareduser                  bool
-	api_key                      *int64
-	clearedapi_key               bool
-	account                      *int64
-	clearedaccount               bool
-	group                        *int64
-	clearedgroup                 bool
-	subscription                 *int64
-	clearedsubscription          bool
-	done                         bool
-	oldValue                     func(context.Context) (*UsageLog, error)
-	predicates                   []predicate.UsageLog
+	op                                   Op
+	typ                                  string
+	id                                   *int64
+	request_id                           *string
+	model                                *string
+	requested_model                      *string
+	upstream_model                       *string
+	upstream_response_model              *string
+	upstream_model_mismatch              *bool
+	channel_id                           *int64
+	addchannel_id                        *int64
+	model_mapping_chain                  *string
+	billing_tier                         *string
+	billing_mode                         *string
+	input_tokens                         *int
+	addinput_tokens                      *int
+	output_tokens                        *int
+	addoutput_tokens                     *int
+	upstream_input_tokens                *int
+	addupstream_input_tokens             *int
+	upstream_output_tokens               *int
+	addupstream_output_tokens            *int
+	cache_creation_tokens                *int
+	addcache_creation_tokens             *int
+	cache_read_tokens                    *int
+	addcache_read_tokens                 *int
+	cache_creation_5m_tokens             *int
+	addcache_creation_5m_tokens          *int
+	cache_creation_1h_tokens             *int
+	addcache_creation_1h_tokens          *int
+	input_cost                           *float64
+	addinput_cost                        *float64
+	output_cost                          *float64
+	addoutput_cost                       *float64
+	cache_creation_cost                  *float64
+	addcache_creation_cost               *float64
+	cache_read_cost                      *float64
+	addcache_read_cost                   *float64
+	total_cost                           *float64
+	addtotal_cost                        *float64
+	actual_cost                          *float64
+	addactual_cost                       *float64
+	rate_multiplier                      *float64
+	addrate_multiplier                   *float64
+	long_context_billing_applied         *bool
+	account_rate_multiplier              *float64
+	addaccount_rate_multiplier           *float64
+	billing_type                         *int8
+	addbilling_type                      *int8
+	stream                               *bool
+	duration_ms                          *int
+	addduration_ms                       *int
+	first_token_ms                       *int
+	addfirst_token_ms                    *int
+	streaming_ack_ms                     *int
+	addstreaming_ack_ms                  *int
+	user_agent                           *string
+	ip_address                           *string
+	image_count                          *int
+	addimage_count                       *int
+	image_size                           *string
+	image_input_size                     *string
+	image_output_size                    *string
+	image_size_source                    *string
+	image_size_breakdown                 *map[string]int
+	video_count                          *int
+	addvideo_count                       *int
+	video_resolution                     *string
+	video_duration_seconds               *int
+	addvideo_duration_seconds            *int
+	cache_ttl_overridden                 *bool
+	created_at                           *time.Time
+	upstream_cache_read_tokens           *int
+	addupstream_cache_read_tokens        *int
+	upstream_cache_creation_tokens       *int
+	addupstream_cache_creation_tokens    *int
+	upstream_cache_creation_5m_tokens    *int
+	addupstream_cache_creation_5m_tokens *int
+	upstream_cache_creation_1h_tokens    *int
+	addupstream_cache_creation_1h_tokens *int
+	clearedFields                        map[string]struct{}
+	user                                 *int64
+	cleareduser                          bool
+	api_key                              *int64
+	clearedapi_key                       bool
+	account                              *int64
+	clearedaccount                       bool
+	group                                *int64
+	clearedgroup                         bool
+	subscription                         *int64
+	clearedsubscription                  bool
+	done                                 bool
+	oldValue                             func(context.Context) (*UsageLog, error)
+	predicates                           []predicate.UsageLog
 }
 
 var _ ent.Mutation = (*UsageLogMutation)(nil)
@@ -46072,6 +46366,118 @@ func (m *UsageLogMutation) AddedOutputTokens() (r int, exists bool) {
 func (m *UsageLogMutation) ResetOutputTokens() {
 	m.output_tokens = nil
 	m.addoutput_tokens = nil
+}
+
+// SetUpstreamInputTokens sets the "upstream_input_tokens" field.
+func (m *UsageLogMutation) SetUpstreamInputTokens(i int) {
+	m.upstream_input_tokens = &i
+	m.addupstream_input_tokens = nil
+}
+
+// UpstreamInputTokens returns the value of the "upstream_input_tokens" field in the mutation.
+func (m *UsageLogMutation) UpstreamInputTokens() (r int, exists bool) {
+	v := m.upstream_input_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpstreamInputTokens returns the old "upstream_input_tokens" field's value of the UsageLog entity.
+// If the UsageLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UsageLogMutation) OldUpstreamInputTokens(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpstreamInputTokens is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpstreamInputTokens requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpstreamInputTokens: %w", err)
+	}
+	return oldValue.UpstreamInputTokens, nil
+}
+
+// AddUpstreamInputTokens adds i to the "upstream_input_tokens" field.
+func (m *UsageLogMutation) AddUpstreamInputTokens(i int) {
+	if m.addupstream_input_tokens != nil {
+		*m.addupstream_input_tokens += i
+	} else {
+		m.addupstream_input_tokens = &i
+	}
+}
+
+// AddedUpstreamInputTokens returns the value that was added to the "upstream_input_tokens" field in this mutation.
+func (m *UsageLogMutation) AddedUpstreamInputTokens() (r int, exists bool) {
+	v := m.addupstream_input_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetUpstreamInputTokens resets all changes to the "upstream_input_tokens" field.
+func (m *UsageLogMutation) ResetUpstreamInputTokens() {
+	m.upstream_input_tokens = nil
+	m.addupstream_input_tokens = nil
+}
+
+// SetUpstreamOutputTokens sets the "upstream_output_tokens" field.
+func (m *UsageLogMutation) SetUpstreamOutputTokens(i int) {
+	m.upstream_output_tokens = &i
+	m.addupstream_output_tokens = nil
+}
+
+// UpstreamOutputTokens returns the value of the "upstream_output_tokens" field in the mutation.
+func (m *UsageLogMutation) UpstreamOutputTokens() (r int, exists bool) {
+	v := m.upstream_output_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpstreamOutputTokens returns the old "upstream_output_tokens" field's value of the UsageLog entity.
+// If the UsageLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UsageLogMutation) OldUpstreamOutputTokens(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpstreamOutputTokens is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpstreamOutputTokens requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpstreamOutputTokens: %w", err)
+	}
+	return oldValue.UpstreamOutputTokens, nil
+}
+
+// AddUpstreamOutputTokens adds i to the "upstream_output_tokens" field.
+func (m *UsageLogMutation) AddUpstreamOutputTokens(i int) {
+	if m.addupstream_output_tokens != nil {
+		*m.addupstream_output_tokens += i
+	} else {
+		m.addupstream_output_tokens = &i
+	}
+}
+
+// AddedUpstreamOutputTokens returns the value that was added to the "upstream_output_tokens" field in this mutation.
+func (m *UsageLogMutation) AddedUpstreamOutputTokens() (r int, exists bool) {
+	v := m.addupstream_output_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetUpstreamOutputTokens resets all changes to the "upstream_output_tokens" field.
+func (m *UsageLogMutation) ResetUpstreamOutputTokens() {
+	m.upstream_output_tokens = nil
+	m.addupstream_output_tokens = nil
 }
 
 // SetCacheCreationTokens sets the "cache_creation_tokens" field.
@@ -47744,6 +48150,230 @@ func (m *UsageLogMutation) ResetCreatedAt() {
 	m.created_at = nil
 }
 
+// SetUpstreamCacheReadTokens sets the "upstream_cache_read_tokens" field.
+func (m *UsageLogMutation) SetUpstreamCacheReadTokens(i int) {
+	m.upstream_cache_read_tokens = &i
+	m.addupstream_cache_read_tokens = nil
+}
+
+// UpstreamCacheReadTokens returns the value of the "upstream_cache_read_tokens" field in the mutation.
+func (m *UsageLogMutation) UpstreamCacheReadTokens() (r int, exists bool) {
+	v := m.upstream_cache_read_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpstreamCacheReadTokens returns the old "upstream_cache_read_tokens" field's value of the UsageLog entity.
+// If the UsageLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UsageLogMutation) OldUpstreamCacheReadTokens(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpstreamCacheReadTokens is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpstreamCacheReadTokens requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpstreamCacheReadTokens: %w", err)
+	}
+	return oldValue.UpstreamCacheReadTokens, nil
+}
+
+// AddUpstreamCacheReadTokens adds i to the "upstream_cache_read_tokens" field.
+func (m *UsageLogMutation) AddUpstreamCacheReadTokens(i int) {
+	if m.addupstream_cache_read_tokens != nil {
+		*m.addupstream_cache_read_tokens += i
+	} else {
+		m.addupstream_cache_read_tokens = &i
+	}
+}
+
+// AddedUpstreamCacheReadTokens returns the value that was added to the "upstream_cache_read_tokens" field in this mutation.
+func (m *UsageLogMutation) AddedUpstreamCacheReadTokens() (r int, exists bool) {
+	v := m.addupstream_cache_read_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetUpstreamCacheReadTokens resets all changes to the "upstream_cache_read_tokens" field.
+func (m *UsageLogMutation) ResetUpstreamCacheReadTokens() {
+	m.upstream_cache_read_tokens = nil
+	m.addupstream_cache_read_tokens = nil
+}
+
+// SetUpstreamCacheCreationTokens sets the "upstream_cache_creation_tokens" field.
+func (m *UsageLogMutation) SetUpstreamCacheCreationTokens(i int) {
+	m.upstream_cache_creation_tokens = &i
+	m.addupstream_cache_creation_tokens = nil
+}
+
+// UpstreamCacheCreationTokens returns the value of the "upstream_cache_creation_tokens" field in the mutation.
+func (m *UsageLogMutation) UpstreamCacheCreationTokens() (r int, exists bool) {
+	v := m.upstream_cache_creation_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpstreamCacheCreationTokens returns the old "upstream_cache_creation_tokens" field's value of the UsageLog entity.
+// If the UsageLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UsageLogMutation) OldUpstreamCacheCreationTokens(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpstreamCacheCreationTokens is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpstreamCacheCreationTokens requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpstreamCacheCreationTokens: %w", err)
+	}
+	return oldValue.UpstreamCacheCreationTokens, nil
+}
+
+// AddUpstreamCacheCreationTokens adds i to the "upstream_cache_creation_tokens" field.
+func (m *UsageLogMutation) AddUpstreamCacheCreationTokens(i int) {
+	if m.addupstream_cache_creation_tokens != nil {
+		*m.addupstream_cache_creation_tokens += i
+	} else {
+		m.addupstream_cache_creation_tokens = &i
+	}
+}
+
+// AddedUpstreamCacheCreationTokens returns the value that was added to the "upstream_cache_creation_tokens" field in this mutation.
+func (m *UsageLogMutation) AddedUpstreamCacheCreationTokens() (r int, exists bool) {
+	v := m.addupstream_cache_creation_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetUpstreamCacheCreationTokens resets all changes to the "upstream_cache_creation_tokens" field.
+func (m *UsageLogMutation) ResetUpstreamCacheCreationTokens() {
+	m.upstream_cache_creation_tokens = nil
+	m.addupstream_cache_creation_tokens = nil
+}
+
+// SetUpstreamCacheCreation5mTokens sets the "upstream_cache_creation_5m_tokens" field.
+func (m *UsageLogMutation) SetUpstreamCacheCreation5mTokens(i int) {
+	m.upstream_cache_creation_5m_tokens = &i
+	m.addupstream_cache_creation_5m_tokens = nil
+}
+
+// UpstreamCacheCreation5mTokens returns the value of the "upstream_cache_creation_5m_tokens" field in the mutation.
+func (m *UsageLogMutation) UpstreamCacheCreation5mTokens() (r int, exists bool) {
+	v := m.upstream_cache_creation_5m_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpstreamCacheCreation5mTokens returns the old "upstream_cache_creation_5m_tokens" field's value of the UsageLog entity.
+// If the UsageLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UsageLogMutation) OldUpstreamCacheCreation5mTokens(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpstreamCacheCreation5mTokens is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpstreamCacheCreation5mTokens requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpstreamCacheCreation5mTokens: %w", err)
+	}
+	return oldValue.UpstreamCacheCreation5mTokens, nil
+}
+
+// AddUpstreamCacheCreation5mTokens adds i to the "upstream_cache_creation_5m_tokens" field.
+func (m *UsageLogMutation) AddUpstreamCacheCreation5mTokens(i int) {
+	if m.addupstream_cache_creation_5m_tokens != nil {
+		*m.addupstream_cache_creation_5m_tokens += i
+	} else {
+		m.addupstream_cache_creation_5m_tokens = &i
+	}
+}
+
+// AddedUpstreamCacheCreation5mTokens returns the value that was added to the "upstream_cache_creation_5m_tokens" field in this mutation.
+func (m *UsageLogMutation) AddedUpstreamCacheCreation5mTokens() (r int, exists bool) {
+	v := m.addupstream_cache_creation_5m_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetUpstreamCacheCreation5mTokens resets all changes to the "upstream_cache_creation_5m_tokens" field.
+func (m *UsageLogMutation) ResetUpstreamCacheCreation5mTokens() {
+	m.upstream_cache_creation_5m_tokens = nil
+	m.addupstream_cache_creation_5m_tokens = nil
+}
+
+// SetUpstreamCacheCreation1hTokens sets the "upstream_cache_creation_1h_tokens" field.
+func (m *UsageLogMutation) SetUpstreamCacheCreation1hTokens(i int) {
+	m.upstream_cache_creation_1h_tokens = &i
+	m.addupstream_cache_creation_1h_tokens = nil
+}
+
+// UpstreamCacheCreation1hTokens returns the value of the "upstream_cache_creation_1h_tokens" field in the mutation.
+func (m *UsageLogMutation) UpstreamCacheCreation1hTokens() (r int, exists bool) {
+	v := m.upstream_cache_creation_1h_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpstreamCacheCreation1hTokens returns the old "upstream_cache_creation_1h_tokens" field's value of the UsageLog entity.
+// If the UsageLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UsageLogMutation) OldUpstreamCacheCreation1hTokens(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpstreamCacheCreation1hTokens is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpstreamCacheCreation1hTokens requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpstreamCacheCreation1hTokens: %w", err)
+	}
+	return oldValue.UpstreamCacheCreation1hTokens, nil
+}
+
+// AddUpstreamCacheCreation1hTokens adds i to the "upstream_cache_creation_1h_tokens" field.
+func (m *UsageLogMutation) AddUpstreamCacheCreation1hTokens(i int) {
+	if m.addupstream_cache_creation_1h_tokens != nil {
+		*m.addupstream_cache_creation_1h_tokens += i
+	} else {
+		m.addupstream_cache_creation_1h_tokens = &i
+	}
+}
+
+// AddedUpstreamCacheCreation1hTokens returns the value that was added to the "upstream_cache_creation_1h_tokens" field in this mutation.
+func (m *UsageLogMutation) AddedUpstreamCacheCreation1hTokens() (r int, exists bool) {
+	v := m.addupstream_cache_creation_1h_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetUpstreamCacheCreation1hTokens resets all changes to the "upstream_cache_creation_1h_tokens" field.
+func (m *UsageLogMutation) ResetUpstreamCacheCreation1hTokens() {
+	m.upstream_cache_creation_1h_tokens = nil
+	m.addupstream_cache_creation_1h_tokens = nil
+}
+
 // ClearUser clears the "user" edge to the User entity.
 func (m *UsageLogMutation) ClearUser() {
 	m.cleareduser = true
@@ -47913,7 +48543,7 @@ func (m *UsageLogMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UsageLogMutation) Fields() []string {
-	fields := make([]string, 0, 48)
+	fields := make([]string, 0, 54)
 	if m.user != nil {
 		fields = append(fields, usagelog.FieldUserID)
 	}
@@ -47964,6 +48594,12 @@ func (m *UsageLogMutation) Fields() []string {
 	}
 	if m.output_tokens != nil {
 		fields = append(fields, usagelog.FieldOutputTokens)
+	}
+	if m.upstream_input_tokens != nil {
+		fields = append(fields, usagelog.FieldUpstreamInputTokens)
+	}
+	if m.upstream_output_tokens != nil {
+		fields = append(fields, usagelog.FieldUpstreamOutputTokens)
 	}
 	if m.cache_creation_tokens != nil {
 		fields = append(fields, usagelog.FieldCacheCreationTokens)
@@ -48058,6 +48694,18 @@ func (m *UsageLogMutation) Fields() []string {
 	if m.created_at != nil {
 		fields = append(fields, usagelog.FieldCreatedAt)
 	}
+	if m.upstream_cache_read_tokens != nil {
+		fields = append(fields, usagelog.FieldUpstreamCacheReadTokens)
+	}
+	if m.upstream_cache_creation_tokens != nil {
+		fields = append(fields, usagelog.FieldUpstreamCacheCreationTokens)
+	}
+	if m.upstream_cache_creation_5m_tokens != nil {
+		fields = append(fields, usagelog.FieldUpstreamCacheCreation5mTokens)
+	}
+	if m.upstream_cache_creation_1h_tokens != nil {
+		fields = append(fields, usagelog.FieldUpstreamCacheCreation1hTokens)
+	}
 	return fields
 }
 
@@ -48100,6 +48748,10 @@ func (m *UsageLogMutation) Field(name string) (ent.Value, bool) {
 		return m.InputTokens()
 	case usagelog.FieldOutputTokens:
 		return m.OutputTokens()
+	case usagelog.FieldUpstreamInputTokens:
+		return m.UpstreamInputTokens()
+	case usagelog.FieldUpstreamOutputTokens:
+		return m.UpstreamOutputTokens()
 	case usagelog.FieldCacheCreationTokens:
 		return m.CacheCreationTokens()
 	case usagelog.FieldCacheReadTokens:
@@ -48162,6 +48814,14 @@ func (m *UsageLogMutation) Field(name string) (ent.Value, bool) {
 		return m.CacheTTLOverridden()
 	case usagelog.FieldCreatedAt:
 		return m.CreatedAt()
+	case usagelog.FieldUpstreamCacheReadTokens:
+		return m.UpstreamCacheReadTokens()
+	case usagelog.FieldUpstreamCacheCreationTokens:
+		return m.UpstreamCacheCreationTokens()
+	case usagelog.FieldUpstreamCacheCreation5mTokens:
+		return m.UpstreamCacheCreation5mTokens()
+	case usagelog.FieldUpstreamCacheCreation1hTokens:
+		return m.UpstreamCacheCreation1hTokens()
 	}
 	return nil, false
 }
@@ -48205,6 +48865,10 @@ func (m *UsageLogMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldInputTokens(ctx)
 	case usagelog.FieldOutputTokens:
 		return m.OldOutputTokens(ctx)
+	case usagelog.FieldUpstreamInputTokens:
+		return m.OldUpstreamInputTokens(ctx)
+	case usagelog.FieldUpstreamOutputTokens:
+		return m.OldUpstreamOutputTokens(ctx)
 	case usagelog.FieldCacheCreationTokens:
 		return m.OldCacheCreationTokens(ctx)
 	case usagelog.FieldCacheReadTokens:
@@ -48267,6 +48931,14 @@ func (m *UsageLogMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldCacheTTLOverridden(ctx)
 	case usagelog.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
+	case usagelog.FieldUpstreamCacheReadTokens:
+		return m.OldUpstreamCacheReadTokens(ctx)
+	case usagelog.FieldUpstreamCacheCreationTokens:
+		return m.OldUpstreamCacheCreationTokens(ctx)
+	case usagelog.FieldUpstreamCacheCreation5mTokens:
+		return m.OldUpstreamCacheCreation5mTokens(ctx)
+	case usagelog.FieldUpstreamCacheCreation1hTokens:
+		return m.OldUpstreamCacheCreation1hTokens(ctx)
 	}
 	return nil, fmt.Errorf("unknown UsageLog field %s", name)
 }
@@ -48394,6 +49066,20 @@ func (m *UsageLogMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetOutputTokens(v)
+		return nil
+	case usagelog.FieldUpstreamInputTokens:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpstreamInputTokens(v)
+		return nil
+	case usagelog.FieldUpstreamOutputTokens:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpstreamOutputTokens(v)
 		return nil
 	case usagelog.FieldCacheCreationTokens:
 		v, ok := value.(int)
@@ -48612,6 +49298,34 @@ func (m *UsageLogMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetCreatedAt(v)
 		return nil
+	case usagelog.FieldUpstreamCacheReadTokens:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpstreamCacheReadTokens(v)
+		return nil
+	case usagelog.FieldUpstreamCacheCreationTokens:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpstreamCacheCreationTokens(v)
+		return nil
+	case usagelog.FieldUpstreamCacheCreation5mTokens:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpstreamCacheCreation5mTokens(v)
+		return nil
+	case usagelog.FieldUpstreamCacheCreation1hTokens:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpstreamCacheCreation1hTokens(v)
+		return nil
 	}
 	return fmt.Errorf("unknown UsageLog field %s", name)
 }
@@ -48628,6 +49342,12 @@ func (m *UsageLogMutation) AddedFields() []string {
 	}
 	if m.addoutput_tokens != nil {
 		fields = append(fields, usagelog.FieldOutputTokens)
+	}
+	if m.addupstream_input_tokens != nil {
+		fields = append(fields, usagelog.FieldUpstreamInputTokens)
+	}
+	if m.addupstream_output_tokens != nil {
+		fields = append(fields, usagelog.FieldUpstreamOutputTokens)
 	}
 	if m.addcache_creation_tokens != nil {
 		fields = append(fields, usagelog.FieldCacheCreationTokens)
@@ -48686,6 +49406,18 @@ func (m *UsageLogMutation) AddedFields() []string {
 	if m.addvideo_duration_seconds != nil {
 		fields = append(fields, usagelog.FieldVideoDurationSeconds)
 	}
+	if m.addupstream_cache_read_tokens != nil {
+		fields = append(fields, usagelog.FieldUpstreamCacheReadTokens)
+	}
+	if m.addupstream_cache_creation_tokens != nil {
+		fields = append(fields, usagelog.FieldUpstreamCacheCreationTokens)
+	}
+	if m.addupstream_cache_creation_5m_tokens != nil {
+		fields = append(fields, usagelog.FieldUpstreamCacheCreation5mTokens)
+	}
+	if m.addupstream_cache_creation_1h_tokens != nil {
+		fields = append(fields, usagelog.FieldUpstreamCacheCreation1hTokens)
+	}
 	return fields
 }
 
@@ -48700,6 +49432,10 @@ func (m *UsageLogMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedInputTokens()
 	case usagelog.FieldOutputTokens:
 		return m.AddedOutputTokens()
+	case usagelog.FieldUpstreamInputTokens:
+		return m.AddedUpstreamInputTokens()
+	case usagelog.FieldUpstreamOutputTokens:
+		return m.AddedUpstreamOutputTokens()
 	case usagelog.FieldCacheCreationTokens:
 		return m.AddedCacheCreationTokens()
 	case usagelog.FieldCacheReadTokens:
@@ -48738,6 +49474,14 @@ func (m *UsageLogMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedVideoCount()
 	case usagelog.FieldVideoDurationSeconds:
 		return m.AddedVideoDurationSeconds()
+	case usagelog.FieldUpstreamCacheReadTokens:
+		return m.AddedUpstreamCacheReadTokens()
+	case usagelog.FieldUpstreamCacheCreationTokens:
+		return m.AddedUpstreamCacheCreationTokens()
+	case usagelog.FieldUpstreamCacheCreation5mTokens:
+		return m.AddedUpstreamCacheCreation5mTokens()
+	case usagelog.FieldUpstreamCacheCreation1hTokens:
+		return m.AddedUpstreamCacheCreation1hTokens()
 	}
 	return nil, false
 }
@@ -48767,6 +49511,20 @@ func (m *UsageLogMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddOutputTokens(v)
+		return nil
+	case usagelog.FieldUpstreamInputTokens:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddUpstreamInputTokens(v)
+		return nil
+	case usagelog.FieldUpstreamOutputTokens:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddUpstreamOutputTokens(v)
 		return nil
 	case usagelog.FieldCacheCreationTokens:
 		v, ok := value.(int)
@@ -48900,6 +49658,34 @@ func (m *UsageLogMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddVideoDurationSeconds(v)
+		return nil
+	case usagelog.FieldUpstreamCacheReadTokens:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddUpstreamCacheReadTokens(v)
+		return nil
+	case usagelog.FieldUpstreamCacheCreationTokens:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddUpstreamCacheCreationTokens(v)
+		return nil
+	case usagelog.FieldUpstreamCacheCreation5mTokens:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddUpstreamCacheCreation5mTokens(v)
+		return nil
+	case usagelog.FieldUpstreamCacheCreation1hTokens:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddUpstreamCacheCreation1hTokens(v)
 		return nil
 	}
 	return fmt.Errorf("unknown UsageLog numeric field %s", name)
@@ -49120,6 +49906,12 @@ func (m *UsageLogMutation) ResetField(name string) error {
 	case usagelog.FieldOutputTokens:
 		m.ResetOutputTokens()
 		return nil
+	case usagelog.FieldUpstreamInputTokens:
+		m.ResetUpstreamInputTokens()
+		return nil
+	case usagelog.FieldUpstreamOutputTokens:
+		m.ResetUpstreamOutputTokens()
+		return nil
 	case usagelog.FieldCacheCreationTokens:
 		m.ResetCacheCreationTokens()
 		return nil
@@ -49212,6 +50004,18 @@ func (m *UsageLogMutation) ResetField(name string) error {
 		return nil
 	case usagelog.FieldCreatedAt:
 		m.ResetCreatedAt()
+		return nil
+	case usagelog.FieldUpstreamCacheReadTokens:
+		m.ResetUpstreamCacheReadTokens()
+		return nil
+	case usagelog.FieldUpstreamCacheCreationTokens:
+		m.ResetUpstreamCacheCreationTokens()
+		return nil
+	case usagelog.FieldUpstreamCacheCreation5mTokens:
+		m.ResetUpstreamCacheCreation5mTokens()
+		return nil
+	case usagelog.FieldUpstreamCacheCreation1hTokens:
+		m.ResetUpstreamCacheCreation1hTokens()
 		return nil
 	}
 	return fmt.Errorf("unknown UsageLog field %s", name)

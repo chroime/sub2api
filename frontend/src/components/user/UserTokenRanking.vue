@@ -58,7 +58,9 @@
               >
                 {{ medals[item.rank - 1] }}
               </span>
-              <span class="text-xs font-semibold uppercase tracking-wider opacity-70">#{{ item.rank }}</span>
+              <span class="text-xs font-semibold uppercase tracking-wider opacity-70">
+                {{ t('usage.ranking.rank', { rank: item.rank }) }}
+              </span>
             </div>
             <p class="mt-4 truncate text-sm font-semibold" :title="item.email">{{ item.email || `User #${item.user_id}` }}</p>
             <p class="mt-2 text-2xl font-bold tabular-nums">{{ formatTokens(item.total_tokens) }}</p>
@@ -68,7 +70,7 @@
 
         <div class="overflow-hidden rounded-2xl border border-gray-200 dark:border-dark-700">
           <div class="grid grid-cols-[3rem_minmax(0,1fr)_7rem_7rem] gap-3 bg-gray-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:bg-dark-800 dark:text-gray-400 sm:grid-cols-[4rem_minmax(0,1fr)_8rem_8rem]">
-            <span>#</span>
+            <span>{{ t('usage.ranking.rankLabel') }}</span>
             <span>{{ t('usage.ranking.user') }}</span>
             <span class="text-right">{{ t('usage.ranking.requestsLabel') }}</span>
             <span class="text-right">{{ t('usage.ranking.total') }}</span>

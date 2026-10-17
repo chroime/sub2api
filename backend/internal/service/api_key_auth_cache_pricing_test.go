@@ -48,3 +48,32 @@ func TestAPIKeyAuthSnapshotGroupPricingRoundtrip(t *testing.T) {
 	require.InDelta(t, inputPrice, resolved.BasePricing.InputPricePerToken, 1e-12)
 	require.InDelta(t, outputPrice, resolved.BasePricing.OutputPricePerToken, 1e-12)
 }
+
+func TestAPIKeyAuthSnapshotGroupAudioPricingRoundtrip(t *testing.T) {
+	groupID := int64(51)
+	price := 12.5
+	apiKey := &APIKey{
+		ID: 83, UserID: 40, GroupID: &groupID, Key: "sk-audio-pricing-roundtrip", Status: StatusActive,
+		User: &User{ID: 40, Status: StatusActive},
+		Group: &Group{
+			ID: groupID, Name: "audio-pricing-roundtrip", Platform: PlatformGrok, Status: StatusActive,
+			AudioRateIndependent: true, AudioRateMultiplier: 2.25,
+			AudioTTSPricePerMillionChars: &price,
+		},
+	}
+	svc := &APIKeyService{}
+
+	payload, err := json.Marshal(&APIKeyAuthCacheEntry{Snapshot: svc.snapshotFromAPIKey(context.Background(), apiKey)})
+	require.NoError(t, err)
+	var cached APIKeyAuthCacheEntry
+	require.NoError(t, json.Unmarshal(payload, &cached))
+
+	materialized, used, err := svc.applyAuthCacheEntry(apiKey.Key, &cached)
+	require.NoError(t, err)
+	require.True(t, used)
+	require.NotNil(t, materialized.Group)
+	require.True(t, materialized.Group.AudioRateIndependent)
+	require.InDelta(t, 2.25, materialized.Group.AudioRateMultiplier, 1e-12)
+	require.NotNil(t, materialized.Group.AudioTTSPricePerMillionChars)
+	require.InDelta(t, price, *materialized.Group.AudioTTSPricePerMillionChars, 1e-12)
+}

@@ -241,7 +241,8 @@ func isForcedUsageBillingRequestID(requestID string) bool {
 	return strings.HasPrefix(id, "web_search:") ||
 		strings.HasPrefix(id, "grok-video:") ||
 		strings.HasPrefix(id, "grok_audio:") ||
-		strings.HasPrefix(id, "grok_realtime:")
+		strings.HasPrefix(id, "grok_realtime:") ||
+		strings.HasPrefix(id, GeminiCachedContentUsageRequestIDPrefix)
 }
 
 // StableGrokAudioBillingRequestID is the durable usage_logs / dedup key for one
@@ -815,51 +816,57 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 		cacheTTLOverridden = (result.Usage.CacheCreation5mTokens + result.Usage.CacheCreation1hTokens) > 0
 	}
 
-	// Apply the group-level customer billing adjustment after cache buckets have
-	// been classified. Cache read/write tokens stay in their own buckets so they
-	// are not multiplied a second time.
+	// Keep the upstream usage immutable after cache classification. Customer
+	// billing receives a separate cache-aware view so cache hits and misses do
+	// not change the customer charge when a group adjustment is enabled;
+	// administrator/account-cost paths continue to consume the raw buckets.
+	rawResult := *result
+	billingResult := rawResult
+	displayResult := rawResult
 	if apiKey != nil {
-		adjusted := tokenUsageAdjustmentForGroup(apiKey.Group).ApplyForRequest(result.Usage.InputTokens, result.Usage.OutputTokens)
-		result.Usage.InputTokens = adjusted.InputTokens
-		result.Usage.OutputTokens = adjusted.OutputTokens
+		adjustment := tokenUsageAdjustmentForGroup(apiKey.Group)
+		adjusted := adjustment.ApplyForRequestUsage(
+			rawResult.Usage.InputTokens,
+			rawResult.Usage.CacheReadInputTokens,
+			rawResult.Usage.CacheCreationInputTokens,
+			rawResult.Usage.OutputTokens,
+		)
+		billingResult.Usage.InputTokens = adjusted.Customer.InputTokens
+		billingResult.Usage.OutputTokens = adjusted.Customer.OutputTokens
+		displayResult.Usage.InputTokens = adjusted.Customer.InputTokens
+		displayResult.Usage.OutputTokens = adjusted.Customer.OutputTokens
+		if adjusted.Applied {
+			if adjustment.unifiedEnabled() {
+				billingResult.Usage.CacheReadInputTokens = adjusted.Customer.CacheReadTokens
+				billingResult.Usage.CacheCreationInputTokens = adjusted.Customer.CacheWriteTokens
+				five, one := scaleCacheTTLBuckets(
+					rawResult.Usage.CacheCreation5mTokens,
+					rawResult.Usage.CacheCreation1hTokens,
+					adjustment.normalized().UnifiedMultiplier,
+					adjusted.Customer.CacheWriteTokens,
+				)
+				billingResult.Usage.CacheCreation5mTokens = five
+				billingResult.Usage.CacheCreation1hTokens = one
+				displayResult.Usage.CacheReadInputTokens = adjusted.Customer.CacheReadTokens
+				displayResult.Usage.CacheCreationInputTokens = adjusted.Customer.CacheWriteTokens
+				displayResult.Usage.CacheCreation5mTokens = five
+				displayResult.Usage.CacheCreation1hTokens = one
+			} else {
+				billingResult.Usage.CacheReadInputTokens = 0
+				billingResult.Usage.CacheCreationInputTokens = 0
+				billingResult.Usage.CacheCreation5mTokens = 0
+				billingResult.Usage.CacheCreation1hTokens = 0
+				displayResult.Usage.CacheReadInputTokens = 0
+				displayResult.Usage.CacheCreationInputTokens = 0
+				displayResult.Usage.CacheCreation5mTokens = 0
+				displayResult.Usage.CacheCreation1hTokens = 0
+			}
+		}
 	}
 
-	// 获取费率倍数（优先级：用户专属 > 分组默认 > 系统默认）
-	multiplier := 1.0
-	if s.cfg != nil {
-		multiplier = s.cfg.Default.RateMultiplier
-	}
-	if apiKey.GroupID != nil && apiKey.Group != nil {
-		groupDefault := apiKey.Group.RateMultiplier
-		multiplier = s.ResolveUserGroupRateMultiplier(ctx, user.ID, *apiKey.GroupID, groupDefault)
-	}
-	// token 倍率叠加高峰因子（token 计费含图片 token，图片按次倍率不受影响）。高峰因子按请求时刻现算，
-	// 不并入上面的 getUserGroupRateMultiplier，以免污染 user:group 倍率缓存。
-	pricingAt := input.PricingAt
-	if pricingAt.IsZero() {
-		pricingAt = timezone.Now()
-	}
-	multiplier, imageMultiplier := computePeakAwareMultipliers(apiKey, multiplier, pricingAt)
-
-	// 确定计费模型
-	concreteBillingModel := forwardResultBillingModel(result.Model, result.UpstreamModel)
-	billingModel := concreteBillingModel
-	if input.BillingModelSource == BillingModelSourceChannelMapped && input.ChannelMappedModel != "" {
-		billingModel = input.ChannelMappedModel
-	}
-	if input.BillingModelSource == BillingModelSourceRequested && input.OriginalModel != "" {
-		billingModel = input.OriginalModel
-	}
-	// composite 分组的公开别名（如 all/claude）会经 OriginalModel/ChannelMappedModel
-	// 进入上面的来源覆盖：任意别名查无价会静默落 $0，含家族词的别名则被价格表的
-	// 家族模糊匹配错计（如 Opus 流量按 Sonnet 兜底价）。除非管理员为别名显式配置了
-	// 渠道定价（OpenRouter 式自定价），composite 请求一律按实际转发的具体模型计费。
-	if apiKey.Group != nil && apiKey.Group.Platform == PlatformComposite {
-		billingModel = s.compositeBillableModel(ctx, apiKey, billingModel, concreteBillingModel)
-	}
-	// 通用兜底（与 OpenAI 路径的 usageBillingModelCandidates 语义对齐）：
-	// 选定模型查不到任何价格时回退到实际转发的具体模型。已定价流量不受影响。
-	billingModel = s.billableModelWithFallback(ctx, apiKey, billingModel, result.UpstreamModel, result.Model)
+	multiplier, imageMultiplier, pricingAt := s.recordUsageMultipliers(ctx, apiKey, user, input.PricingAt)
+	billingModel := s.recordUsageBillingModel(ctx, apiKey, result, input.ChannelUsageFields)
+	cacheStorageCost := s.cacheStorageCost(result, billingModel)
 
 	// 确定 RequestedModel（渠道映射前的原始模型）
 	requestedModel := result.Model
@@ -868,7 +875,7 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	}
 
 	// 计算费用
-	cost := s.calculateRecordUsageCost(ctx, result, apiKey, billingModel, multiplier, imageMultiplier, pricingAt)
+	cost := s.calculateRecordUsageCost(ctx, &billingResult, apiKey, billingModel, multiplier, imageMultiplier, pricingAt)
 	// response_model：按上游成功响应自报的模型计费（渠道显式开启才生效）。
 	// 采纳条件见 responseModelBillingDeclaration + hasIdentifiedResponseModelPricing
 	// + responseModelBillingAdoptable。任一条件不满足都静默回落基线，即开启本模式前的
@@ -877,10 +884,10 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 		input.BillingModelSource,
 		result.UpstreamResponseModel,
 		result.UpstreamResponseModelConflict,
-		result.ImageCount > 0 || result.AudioUsage != nil || result.SearchCount > 0,
+		result.ImageCount > 0 || result.AudioUsage != nil || result.SearchCount > 0 || result.CacheStorageTokenHours > 0,
 	); responseModel != "" && !strings.EqualFold(responseModel, strings.TrimSpace(billingModel)) {
 		if identified, responseChannelPriced := s.hasIdentifiedResponseModelPricing(ctx, responseModel, apiKey); identified {
-			responseCost := s.calculateRecordUsageCost(ctx, result, apiKey, responseModel, multiplier, imageMultiplier, pricingAt)
+			responseCost := s.calculateRecordUsageCost(ctx, &billingResult, apiKey, responseModel, multiplier, imageMultiplier, pricingAt)
 			baselineChannelPriced := s.resolveChannelPricing(ctx, billingModel, apiKey) != nil
 			if responseModelBillingAdoptable(cost, responseCost, baselineChannelPriced, responseChannelPriced) {
 				// billingModel 到此为止只是定价查表的入参，后续流程只消费 cost，
@@ -900,25 +907,38 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 
 	// 创建使用日志
 	accountRateMultiplier := account.BillingRateMultiplier()
-	usageLog := s.buildRecordUsageLog(ctx, input, result, apiKey, user, account, subscription,
+	logResult := &rawResult
+	if cost != nil && (cost.BillingMode == string(BillingModeToken) ||
+		(cost.BillingMode == "" && rawResult.ImageCount == 0 && rawResult.AudioUsage == nil)) {
+		logResult = &displayResult
+	}
+	usageLog := s.buildRecordUsageLog(ctx, input, logResult, apiKey, user, account, subscription,
 		requestedModel, multiplier, imageMultiplier, accountRateMultiplier, billingType, cacheTTLOverridden, cost)
+	usageLog.UpstreamInputTokens = rawResult.Usage.InputTokens
+	usageLog.UpstreamOutputTokens = rawResult.Usage.OutputTokens
+	usageLog.UpstreamCacheReadTokens = rawResult.Usage.CacheReadInputTokens
+	usageLog.UpstreamCacheCreationTokens = rawResult.Usage.CacheCreationInputTokens
+	usageLog.UpstreamCacheCreation5mTokens = rawResult.Usage.CacheCreation5mTokens
+	usageLog.UpstreamCacheCreation1hTokens = rawResult.Usage.CacheCreation1hTokens
 
-	// 计算账号统计定价费用（使用最终上游模型匹配自定义规则）
-	if apiKey.GroupID != nil {
+	// 计算账号统计定价费用（使用最终上游模型匹配自定义规则）。纯存储费不是一次模型请求，
+	// 账号统计成本回落 total_cost（官方存储价）。
+	if apiKey.GroupID != nil && !isCacheStorageOnlyResult(result) {
 		applyAccountStatsCost(ctx, usageLog, s.channelService, s.billingService,
 			account.ID, *apiKey.GroupID, result.UpstreamModel, result.Model,
 			// Anthropic's input_tokens excludes cache_read and cache_creation (billed separately);
 			// OpenAI gateway uses actualInputTokens which also excludes cache_read for the same reason.
 			UsageTokens{
-				InputTokens:         result.Usage.InputTokens,
-				OutputTokens:        result.Usage.OutputTokens,
-				CacheCreationTokens: result.Usage.CacheCreationInputTokens,
-				CacheReadTokens:     result.Usage.CacheReadInputTokens,
-				ImageOutputTokens:   result.Usage.ImageOutputTokens,
+				InputTokens:         rawResult.Usage.InputTokens,
+				OutputTokens:        rawResult.Usage.OutputTokens,
+				CacheCreationTokens: rawResult.Usage.CacheCreationInputTokens,
+				CacheReadTokens:     rawResult.Usage.CacheReadInputTokens,
+				ImageOutputTokens:   rawResult.Usage.ImageOutputTokens,
 			},
-			cost.TotalCost, pricingAt,
+			cost.TotalCost-cacheStorageCost, pricingAt,
 			accountStatsLongContextPricingEnabled(nil),
 		)
+		addCacheStorageToAccountStatsCost(usageLog, cacheStorageCost)
 	}
 
 	simpleModeKeyRateLimitOnly := simpleModeKeyRateLimitBillingEnabled(s.cfg, apiKey)
@@ -964,6 +984,112 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	return nil
 }
 
+// recordUsageMultipliers 返回 token / 图片售价倍率（用户专属 > 分组默认 > 系统默认，token 倍率叠加高峰因子）
+// 与计价时刻；pricingAt 为零值时取当前时刻。
+func (s *GatewayService) recordUsageMultipliers(ctx context.Context, apiKey *APIKey, user *User, pricingAt time.Time) (float64, float64, time.Time) {
+	multiplier := 1.0
+	if s.cfg != nil {
+		multiplier = s.cfg.Default.RateMultiplier
+	}
+	if apiKey.GroupID != nil && apiKey.Group != nil {
+		multiplier = apiKey.Group.RateMultiplier
+		if user != nil {
+			multiplier = s.ResolveUserGroupRateMultiplier(ctx, user.ID, *apiKey.GroupID, multiplier)
+		}
+	}
+	// 高峰因子按请求时刻现算，不并入 getUserGroupRateMultiplier，以免污染 user:group 倍率缓存。
+	if pricingAt.IsZero() {
+		pricingAt = timezone.Now()
+	}
+	multiplier, imageMultiplier := computePeakAwareMultipliers(apiKey, multiplier, pricingAt)
+	return multiplier, imageMultiplier, pricingAt
+}
+
+// recordUsageBillingModel 按计费模型来源、composite 规则与无价兜底确定计费模型。
+func (s *GatewayService) recordUsageBillingModel(ctx context.Context, apiKey *APIKey, result *ForwardResult, fields ChannelUsageFields) string {
+	concreteBillingModel := forwardResultBillingModel(result.Model, result.UpstreamModel)
+	billingModel := concreteBillingModel
+	if fields.BillingModelSource == BillingModelSourceChannelMapped && fields.ChannelMappedModel != "" {
+		billingModel = fields.ChannelMappedModel
+	}
+	if fields.BillingModelSource == BillingModelSourceRequested && fields.OriginalModel != "" {
+		billingModel = fields.OriginalModel
+	}
+	// composite 分组的公开别名（如 all/claude）会经 OriginalModel/ChannelMappedModel
+	// 进入上面的来源覆盖：任意别名查无价会静默落 $0，含家族词的别名则被价格表的
+	// 家族模糊匹配错计（如 Opus 流量按 Sonnet 兜底价）。除非管理员为别名显式配置了
+	// 渠道定价（OpenRouter 式自定价），composite 请求一律按实际转发的具体模型计费。
+	if apiKey.Group != nil && apiKey.Group.Platform == PlatformComposite {
+		billingModel = s.compositeBillableModel(ctx, apiKey, billingModel, concreteBillingModel)
+	}
+	// 通用兜底（与 OpenAI 路径的 usageBillingModelCandidates 语义对齐）：
+	// 选定模型查不到任何价格时回退到实际转发的具体模型。已定价流量不受影响。
+	return s.billableModelWithFallback(ctx, apiKey, billingModel, result.UpstreamModel, result.Model)
+}
+
+// cacheStoragePrice 返回计费模型的显式缓存存储单价；计费模型未配置时依次回退到实际转发模型与请求模型。
+func (s *GatewayService) cacheStoragePrice(result *ForwardResult, billingModel string) float64 {
+	if s.billingService == nil {
+		return 0
+	}
+	for _, model := range []string{billingModel, result.UpstreamModel, result.Model} {
+		if strings.TrimSpace(model) == "" {
+			continue
+		}
+		if price := s.billingService.CacheStoragePricePerTokenHour(model); price > 0 {
+			return price
+		}
+	}
+	return 0
+}
+
+// cacheStorageCost 返回 result 的显式缓存存储费（USD，倍率前）。
+func (s *GatewayService) cacheStorageCost(result *ForwardResult, billingModel string) float64 {
+	if result.CacheStorageTokenHours <= 0 {
+		return 0
+	}
+	return result.CacheStorageTokenHours * s.cacheStoragePrice(result, billingModel)
+}
+
+// isCacheStorageOnlyResult 判断 result 是否只有显式缓存存储费（延长有效期）：不含 token 用量，不算一次模型请求。
+func isCacheStorageOnlyResult(result *ForwardResult) bool {
+	u := result.Usage
+	return result.CacheStorageTokenHours > 0 && u.InputTokens == 0 && u.OutputTokens == 0 &&
+		u.CacheCreationInputTokens == 0 && u.CacheReadInputTokens == 0 && u.ImageOutputTokens == 0 &&
+		result.ImageCount == 0 && result.AudioUsage == nil && result.SearchCount == 0
+}
+
+// CacheStoragePriced 判断 RecordUsage 对 input.Result 采用的计费模型（含回退候选）是否配置了显式缓存存储单价。
+func (s *GatewayService) CacheStoragePriced(ctx context.Context, input *RecordUsageInput) bool {
+	billingModel := s.recordUsageBillingModel(ctx, input.APIKey, input.Result, input.ChannelUsageFields)
+	return s.cacheStoragePrice(input.Result, billingModel) > 0
+}
+
+// QuoteUsageCost 按与 RecordUsage 相同的倍率、计费模型与定价计算 input.Result 的应付金额（倍率后 USD），不记录也不扣费。
+func (s *GatewayService) QuoteUsageCost(ctx context.Context, input *RecordUsageInput) float64 {
+	user := input.User
+	if user == nil {
+		user = input.APIKey.User
+	}
+	multiplier, imageMultiplier, pricingAt := s.recordUsageMultipliers(ctx, input.APIKey, user, input.PricingAt)
+	billingModel := s.recordUsageBillingModel(ctx, input.APIKey, input.Result, input.ChannelUsageFields)
+	cost := s.calculateRecordUsageCost(ctx, input.Result, input.APIKey, billingModel, multiplier, imageMultiplier, pricingAt)
+	if cost == nil {
+		return 0
+	}
+	return cost.ActualCost
+}
+
+// addCacheStorageToAccountStatsCost 把显式缓存存储费按官方价叠加到账号统计成本。
+// 账号统计定价只覆盖 token 部分；统计成本为空时成本统计回落 total_cost，其中已含存储费。
+func addCacheStorageToAccountStatsCost(usageLog *UsageLog, storageCost float64) {
+	if usageLog == nil || usageLog.AccountStatsCost == nil || storageCost <= 0 {
+		return
+	}
+	cost := *usageLog.AccountStatsCost + storageCost
+	usageLog.AccountStatsCost = &cost
+}
+
 // calculateRecordUsageCost 根据请求类型计算费用。
 func (s *GatewayService) calculateRecordUsageCost(
 	ctx context.Context,
@@ -984,25 +1110,31 @@ func (s *GatewayService) calculateRecordUsageCost(
 
 	// Voice audio (TTS / STT / realtime) when present on the forward result.
 	if result.AudioUsage != nil {
+		audioConfig := groupAudioPriceConfigFromAPIKey(apiKey)
+		audioMultiplier := audioBillingMultiplier(audioConfig, multiplier)
 		if resolved := s.resolveChannelPricing(ctx, billingModel, apiKey); resolved != nil &&
 			resolved.Mode == BillingModePerRequest {
 			gid := apiKey.Group.ID
 			cost, err := s.billingService.CalculateCostUnified(CostInput{
 				Ctx: ctx, Model: billingModel, GroupID: &gid, Group: apiKey.Group,
 				UsageUnits: result.AudioUsage.DurationOrUnits, SizeTier: result.AudioUsage.Mode,
-				RateMultiplier: multiplier, Resolver: s.resolver, Resolved: resolved,
+				RateMultiplier: audioMultiplier, Resolver: s.resolver, Resolved: resolved,
 				ReasoningEffort: optionalStringValue(result.ReasoningEffort),
 			})
 			if err == nil {
 				return cost
 			}
 		}
-		cfg := groupAudioPriceConfigFromAPIKey(apiKey)
-		return s.billingService.CalculateAudioCost(result.AudioUsage.Mode, result.AudioUsage.DurationOrUnits, cfg, multiplier)
+		return s.billingService.CalculateAudioCost(result.AudioUsage.Mode, result.AudioUsage.DurationOrUnits, audioConfig, multiplier)
 	}
 
-	// Token 计费；SearchCount 为叠加 surcharge（不替代 token）。
-	tokenCost := s.calculateTokenCost(ctx, result, apiKey, billingModel, multiplier, pricingAt)
+	// Token 计费；SearchCount 为叠加 surcharge（不替代 token）。纯存储费不是一次模型请求，不计 token / 按次费用。
+	var tokenCost *CostBreakdown
+	if isCacheStorageOnlyResult(result) {
+		tokenCost = &CostBreakdown{}
+	} else {
+		tokenCost = s.calculateTokenCost(ctx, result, apiKey, billingModel, multiplier, pricingAt)
+	}
 	if result.SearchCount > 0 {
 		price := groupSearchPricePer1kFromAPIKey(apiKey)
 		if price != nil && *price == 0 {
@@ -1016,6 +1148,14 @@ func (s *GatewayService) calculateRecordUsageCost(
 			tokenCost.TotalCost += searchCost.TotalCost
 			tokenCost.ActualCost += searchCost.ActualCost
 		}
+	}
+	// 显式缓存存储费同为叠加 surcharge，与 token 费用使用同一计费模型与倍率。
+	if storageCost := s.cacheStorageCost(result, billingModel); storageCost > 0 {
+		if tokenCost == nil {
+			tokenCost = &CostBreakdown{}
+		}
+		tokenCost.TotalCost += storageCost
+		tokenCost.ActualCost += storageCost * multiplier
 	}
 	return tokenCost
 }

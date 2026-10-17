@@ -92,6 +92,12 @@ func (_c *GroupCreate) SetNillableDescription(v *string) *GroupCreate {
 	return _c
 }
 
+// SetI18n sets the "i18n" field.
+func (_c *GroupCreate) SetI18n(v domain.GroupI18n) *GroupCreate {
+	_c.mutation.SetI18n(v)
+	return _c
+}
+
 // SetRateMultiplier sets the "rate_multiplier" field.
 func (_c *GroupCreate) SetRateMultiplier(v float64) *GroupCreate {
 	_c.mutation.SetRateMultiplier(v)
@@ -130,6 +136,20 @@ func (_c *GroupCreate) SetBillingOutputTokenMultiplier(v float64) *GroupCreate {
 func (_c *GroupCreate) SetNillableBillingOutputTokenMultiplier(v *float64) *GroupCreate {
 	if v != nil {
 		_c.SetBillingOutputTokenMultiplier(*v)
+	}
+	return _c
+}
+
+// SetBillingUnifiedTokenMultiplier sets the "billing_unified_token_multiplier" field.
+func (_c *GroupCreate) SetBillingUnifiedTokenMultiplier(v float64) *GroupCreate {
+	_c.mutation.SetBillingUnifiedTokenMultiplier(v)
+	return _c
+}
+
+// SetNillableBillingUnifiedTokenMultiplier sets the "billing_unified_token_multiplier" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableBillingUnifiedTokenMultiplier(v *float64) *GroupCreate {
+	if v != nil {
+		_c.SetBillingUnifiedTokenMultiplier(*v)
 	}
 	return _c
 }
@@ -612,6 +632,34 @@ func (_c *GroupCreate) SetAudioSttPricePerHour(v float64) *GroupCreate {
 func (_c *GroupCreate) SetNillableAudioSttPricePerHour(v *float64) *GroupCreate {
 	if v != nil {
 		_c.SetAudioSttPricePerHour(*v)
+	}
+	return _c
+}
+
+// SetAudioRateIndependent sets the "audio_rate_independent" field.
+func (_c *GroupCreate) SetAudioRateIndependent(v bool) *GroupCreate {
+	_c.mutation.SetAudioRateIndependent(v)
+	return _c
+}
+
+// SetNillableAudioRateIndependent sets the "audio_rate_independent" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableAudioRateIndependent(v *bool) *GroupCreate {
+	if v != nil {
+		_c.SetAudioRateIndependent(*v)
+	}
+	return _c
+}
+
+// SetAudioRateMultiplier sets the "audio_rate_multiplier" field.
+func (_c *GroupCreate) SetAudioRateMultiplier(v float64) *GroupCreate {
+	_c.mutation.SetAudioRateMultiplier(v)
+	return _c
+}
+
+// SetNillableAudioRateMultiplier sets the "audio_rate_multiplier" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableAudioRateMultiplier(v *float64) *GroupCreate {
+	if v != nil {
+		_c.SetAudioRateMultiplier(*v)
 	}
 	return _c
 }
@@ -1103,6 +1151,10 @@ func (_c *GroupCreate) defaults() error {
 		v := group.DefaultUpdatedAt()
 		_c.mutation.SetUpdatedAt(v)
 	}
+	if _, ok := _c.mutation.I18n(); !ok {
+		v := group.DefaultI18n
+		_c.mutation.SetI18n(v)
+	}
 	if _, ok := _c.mutation.RateMultiplier(); !ok {
 		v := group.DefaultRateMultiplier
 		_c.mutation.SetRateMultiplier(v)
@@ -1114,6 +1166,10 @@ func (_c *GroupCreate) defaults() error {
 	if _, ok := _c.mutation.BillingOutputTokenMultiplier(); !ok {
 		v := group.DefaultBillingOutputTokenMultiplier
 		_c.mutation.SetBillingOutputTokenMultiplier(v)
+	}
+	if _, ok := _c.mutation.BillingUnifiedTokenMultiplier(); !ok {
+		v := group.DefaultBillingUnifiedTokenMultiplier
+		_c.mutation.SetBillingUnifiedTokenMultiplier(v)
 	}
 	if _, ok := _c.mutation.BillingTokenAdjustmentMinInputTokens(); !ok {
 		v := group.DefaultBillingTokenAdjustmentMinInputTokens
@@ -1186,6 +1242,14 @@ func (_c *GroupCreate) defaults() error {
 	if _, ok := _c.mutation.VideoRateMultiplier(); !ok {
 		v := group.DefaultVideoRateMultiplier
 		_c.mutation.SetVideoRateMultiplier(v)
+	}
+	if _, ok := _c.mutation.AudioRateIndependent(); !ok {
+		v := group.DefaultAudioRateIndependent
+		_c.mutation.SetAudioRateIndependent(v)
+	}
+	if _, ok := _c.mutation.AudioRateMultiplier(); !ok {
+		v := group.DefaultAudioRateMultiplier
+		_c.mutation.SetAudioRateMultiplier(v)
 	}
 	if _, ok := _c.mutation.LongContextPricingEnabled(); !ok {
 		v := group.DefaultLongContextPricingEnabled
@@ -1298,6 +1362,9 @@ func (_c *GroupCreate) check() error {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Group.name": %w`, err)}
 		}
 	}
+	if _, ok := _c.mutation.I18n(); !ok {
+		return &ValidationError{Name: "i18n", err: errors.New(`ent: missing required field "Group.i18n"`)}
+	}
 	if _, ok := _c.mutation.RateMultiplier(); !ok {
 		return &ValidationError{Name: "rate_multiplier", err: errors.New(`ent: missing required field "Group.rate_multiplier"`)}
 	}
@@ -1306,6 +1373,9 @@ func (_c *GroupCreate) check() error {
 	}
 	if _, ok := _c.mutation.BillingOutputTokenMultiplier(); !ok {
 		return &ValidationError{Name: "billing_output_token_multiplier", err: errors.New(`ent: missing required field "Group.billing_output_token_multiplier"`)}
+	}
+	if _, ok := _c.mutation.BillingUnifiedTokenMultiplier(); !ok {
+		return &ValidationError{Name: "billing_unified_token_multiplier", err: errors.New(`ent: missing required field "Group.billing_unified_token_multiplier"`)}
 	}
 	if _, ok := _c.mutation.BillingTokenAdjustmentMinInputTokens(); !ok {
 		return &ValidationError{Name: "billing_token_adjustment_min_input_tokens", err: errors.New(`ent: missing required field "Group.billing_token_adjustment_min_input_tokens"`)}
@@ -1409,6 +1479,17 @@ func (_c *GroupCreate) check() error {
 	if v, ok := _c.mutation.AudioSttPricePerHour(); ok {
 		if err := group.AudioSttPricePerHourValidator(v); err != nil {
 			return &ValidationError{Name: "audio_stt_price_per_hour", err: fmt.Errorf(`ent: validator failed for field "Group.audio_stt_price_per_hour": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.AudioRateIndependent(); !ok {
+		return &ValidationError{Name: "audio_rate_independent", err: errors.New(`ent: missing required field "Group.audio_rate_independent"`)}
+	}
+	if _, ok := _c.mutation.AudioRateMultiplier(); !ok {
+		return &ValidationError{Name: "audio_rate_multiplier", err: errors.New(`ent: missing required field "Group.audio_rate_multiplier"`)}
+	}
+	if v, ok := _c.mutation.AudioRateMultiplier(); ok {
+		if err := group.AudioRateMultiplierValidator(v); err != nil {
+			return &ValidationError{Name: "audio_rate_multiplier", err: fmt.Errorf(`ent: validator failed for field "Group.audio_rate_multiplier": %w`, err)}
 		}
 	}
 	if _, ok := _c.mutation.LongContextPricingEnabled(); !ok {
@@ -1542,6 +1623,10 @@ func (_c *GroupCreate) createSpec() (*Group, *sqlgraph.CreateSpec) {
 		_spec.SetField(group.FieldDescription, field.TypeString, value)
 		_node.Description = &value
 	}
+	if value, ok := _c.mutation.I18n(); ok {
+		_spec.SetField(group.FieldI18n, field.TypeJSON, value)
+		_node.I18n = value
+	}
 	if value, ok := _c.mutation.RateMultiplier(); ok {
 		_spec.SetField(group.FieldRateMultiplier, field.TypeFloat64, value)
 		_node.RateMultiplier = value
@@ -1553,6 +1638,10 @@ func (_c *GroupCreate) createSpec() (*Group, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.BillingOutputTokenMultiplier(); ok {
 		_spec.SetField(group.FieldBillingOutputTokenMultiplier, field.TypeFloat64, value)
 		_node.BillingOutputTokenMultiplier = value
+	}
+	if value, ok := _c.mutation.BillingUnifiedTokenMultiplier(); ok {
+		_spec.SetField(group.FieldBillingUnifiedTokenMultiplier, field.TypeFloat64, value)
+		_node.BillingUnifiedTokenMultiplier = value
 	}
 	if value, ok := _c.mutation.BillingTokenAdjustmentMinInputTokens(); ok {
 		_spec.SetField(group.FieldBillingTokenAdjustmentMinInputTokens, field.TypeInt, value)
@@ -1693,6 +1782,14 @@ func (_c *GroupCreate) createSpec() (*Group, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.AudioSttPricePerHour(); ok {
 		_spec.SetField(group.FieldAudioSttPricePerHour, field.TypeFloat64, value)
 		_node.AudioSttPricePerHour = &value
+	}
+	if value, ok := _c.mutation.AudioRateIndependent(); ok {
+		_spec.SetField(group.FieldAudioRateIndependent, field.TypeBool, value)
+		_node.AudioRateIndependent = value
+	}
+	if value, ok := _c.mutation.AudioRateMultiplier(); ok {
+		_spec.SetField(group.FieldAudioRateMultiplier, field.TypeFloat64, value)
+		_node.AudioRateMultiplier = value
 	}
 	if value, ok := _c.mutation.LongContextPricingEnabled(); ok {
 		_spec.SetField(group.FieldLongContextPricingEnabled, field.TypeBool, value)
@@ -2018,6 +2115,18 @@ func (u *GroupUpsert) ClearDescription() *GroupUpsert {
 	return u
 }
 
+// SetI18n sets the "i18n" field.
+func (u *GroupUpsert) SetI18n(v domain.GroupI18n) *GroupUpsert {
+	u.Set(group.FieldI18n, v)
+	return u
+}
+
+// UpdateI18n sets the "i18n" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateI18n() *GroupUpsert {
+	u.SetExcluded(group.FieldI18n)
+	return u
+}
+
 // SetRateMultiplier sets the "rate_multiplier" field.
 func (u *GroupUpsert) SetRateMultiplier(v float64) *GroupUpsert {
 	u.Set(group.FieldRateMultiplier, v)
@@ -2069,6 +2178,24 @@ func (u *GroupUpsert) UpdateBillingOutputTokenMultiplier() *GroupUpsert {
 // AddBillingOutputTokenMultiplier adds v to the "billing_output_token_multiplier" field.
 func (u *GroupUpsert) AddBillingOutputTokenMultiplier(v float64) *GroupUpsert {
 	u.Add(group.FieldBillingOutputTokenMultiplier, v)
+	return u
+}
+
+// SetBillingUnifiedTokenMultiplier sets the "billing_unified_token_multiplier" field.
+func (u *GroupUpsert) SetBillingUnifiedTokenMultiplier(v float64) *GroupUpsert {
+	u.Set(group.FieldBillingUnifiedTokenMultiplier, v)
+	return u
+}
+
+// UpdateBillingUnifiedTokenMultiplier sets the "billing_unified_token_multiplier" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateBillingUnifiedTokenMultiplier() *GroupUpsert {
+	u.SetExcluded(group.FieldBillingUnifiedTokenMultiplier)
+	return u
+}
+
+// AddBillingUnifiedTokenMultiplier adds v to the "billing_unified_token_multiplier" field.
+func (u *GroupUpsert) AddBillingUnifiedTokenMultiplier(v float64) *GroupUpsert {
+	u.Add(group.FieldBillingUnifiedTokenMultiplier, v)
 	return u
 }
 
@@ -2702,6 +2829,36 @@ func (u *GroupUpsert) ClearAudioSttPricePerHour() *GroupUpsert {
 	return u
 }
 
+// SetAudioRateIndependent sets the "audio_rate_independent" field.
+func (u *GroupUpsert) SetAudioRateIndependent(v bool) *GroupUpsert {
+	u.Set(group.FieldAudioRateIndependent, v)
+	return u
+}
+
+// UpdateAudioRateIndependent sets the "audio_rate_independent" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateAudioRateIndependent() *GroupUpsert {
+	u.SetExcluded(group.FieldAudioRateIndependent)
+	return u
+}
+
+// SetAudioRateMultiplier sets the "audio_rate_multiplier" field.
+func (u *GroupUpsert) SetAudioRateMultiplier(v float64) *GroupUpsert {
+	u.Set(group.FieldAudioRateMultiplier, v)
+	return u
+}
+
+// UpdateAudioRateMultiplier sets the "audio_rate_multiplier" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateAudioRateMultiplier() *GroupUpsert {
+	u.SetExcluded(group.FieldAudioRateMultiplier)
+	return u
+}
+
+// AddAudioRateMultiplier adds v to the "audio_rate_multiplier" field.
+func (u *GroupUpsert) AddAudioRateMultiplier(v float64) *GroupUpsert {
+	u.Add(group.FieldAudioRateMultiplier, v)
+	return u
+}
+
 // SetLongContextPricingEnabled sets the "long_context_pricing_enabled" field.
 func (u *GroupUpsert) SetLongContextPricingEnabled(v bool) *GroupUpsert {
 	u.Set(group.FieldLongContextPricingEnabled, v)
@@ -3204,6 +3361,20 @@ func (u *GroupUpsertOne) ClearDescription() *GroupUpsertOne {
 	})
 }
 
+// SetI18n sets the "i18n" field.
+func (u *GroupUpsertOne) SetI18n(v domain.GroupI18n) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetI18n(v)
+	})
+}
+
+// UpdateI18n sets the "i18n" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateI18n() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateI18n()
+	})
+}
+
 // SetRateMultiplier sets the "rate_multiplier" field.
 func (u *GroupUpsertOne) SetRateMultiplier(v float64) *GroupUpsertOne {
 	return u.Update(func(s *GroupUpsert) {
@@ -3264,6 +3435,27 @@ func (u *GroupUpsertOne) AddBillingOutputTokenMultiplier(v float64) *GroupUpsert
 func (u *GroupUpsertOne) UpdateBillingOutputTokenMultiplier() *GroupUpsertOne {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateBillingOutputTokenMultiplier()
+	})
+}
+
+// SetBillingUnifiedTokenMultiplier sets the "billing_unified_token_multiplier" field.
+func (u *GroupUpsertOne) SetBillingUnifiedTokenMultiplier(v float64) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetBillingUnifiedTokenMultiplier(v)
+	})
+}
+
+// AddBillingUnifiedTokenMultiplier adds v to the "billing_unified_token_multiplier" field.
+func (u *GroupUpsertOne) AddBillingUnifiedTokenMultiplier(v float64) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.AddBillingUnifiedTokenMultiplier(v)
+	})
+}
+
+// UpdateBillingUnifiedTokenMultiplier sets the "billing_unified_token_multiplier" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateBillingUnifiedTokenMultiplier() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateBillingUnifiedTokenMultiplier()
 	})
 }
 
@@ -4002,6 +4194,41 @@ func (u *GroupUpsertOne) ClearAudioSttPricePerHour() *GroupUpsertOne {
 	})
 }
 
+// SetAudioRateIndependent sets the "audio_rate_independent" field.
+func (u *GroupUpsertOne) SetAudioRateIndependent(v bool) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetAudioRateIndependent(v)
+	})
+}
+
+// UpdateAudioRateIndependent sets the "audio_rate_independent" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateAudioRateIndependent() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateAudioRateIndependent()
+	})
+}
+
+// SetAudioRateMultiplier sets the "audio_rate_multiplier" field.
+func (u *GroupUpsertOne) SetAudioRateMultiplier(v float64) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetAudioRateMultiplier(v)
+	})
+}
+
+// AddAudioRateMultiplier adds v to the "audio_rate_multiplier" field.
+func (u *GroupUpsertOne) AddAudioRateMultiplier(v float64) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.AddAudioRateMultiplier(v)
+	})
+}
+
+// UpdateAudioRateMultiplier sets the "audio_rate_multiplier" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateAudioRateMultiplier() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateAudioRateMultiplier()
+	})
+}
+
 // SetLongContextPricingEnabled sets the "long_context_pricing_enabled" field.
 func (u *GroupUpsertOne) SetLongContextPricingEnabled(v bool) *GroupUpsertOne {
 	return u.Update(func(s *GroupUpsert) {
@@ -4734,6 +4961,20 @@ func (u *GroupUpsertBulk) ClearDescription() *GroupUpsertBulk {
 	})
 }
 
+// SetI18n sets the "i18n" field.
+func (u *GroupUpsertBulk) SetI18n(v domain.GroupI18n) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetI18n(v)
+	})
+}
+
+// UpdateI18n sets the "i18n" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateI18n() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateI18n()
+	})
+}
+
 // SetRateMultiplier sets the "rate_multiplier" field.
 func (u *GroupUpsertBulk) SetRateMultiplier(v float64) *GroupUpsertBulk {
 	return u.Update(func(s *GroupUpsert) {
@@ -4794,6 +5035,27 @@ func (u *GroupUpsertBulk) AddBillingOutputTokenMultiplier(v float64) *GroupUpser
 func (u *GroupUpsertBulk) UpdateBillingOutputTokenMultiplier() *GroupUpsertBulk {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateBillingOutputTokenMultiplier()
+	})
+}
+
+// SetBillingUnifiedTokenMultiplier sets the "billing_unified_token_multiplier" field.
+func (u *GroupUpsertBulk) SetBillingUnifiedTokenMultiplier(v float64) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetBillingUnifiedTokenMultiplier(v)
+	})
+}
+
+// AddBillingUnifiedTokenMultiplier adds v to the "billing_unified_token_multiplier" field.
+func (u *GroupUpsertBulk) AddBillingUnifiedTokenMultiplier(v float64) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.AddBillingUnifiedTokenMultiplier(v)
+	})
+}
+
+// UpdateBillingUnifiedTokenMultiplier sets the "billing_unified_token_multiplier" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateBillingUnifiedTokenMultiplier() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateBillingUnifiedTokenMultiplier()
 	})
 }
 
@@ -5529,6 +5791,41 @@ func (u *GroupUpsertBulk) UpdateAudioSttPricePerHour() *GroupUpsertBulk {
 func (u *GroupUpsertBulk) ClearAudioSttPricePerHour() *GroupUpsertBulk {
 	return u.Update(func(s *GroupUpsert) {
 		s.ClearAudioSttPricePerHour()
+	})
+}
+
+// SetAudioRateIndependent sets the "audio_rate_independent" field.
+func (u *GroupUpsertBulk) SetAudioRateIndependent(v bool) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetAudioRateIndependent(v)
+	})
+}
+
+// UpdateAudioRateIndependent sets the "audio_rate_independent" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateAudioRateIndependent() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateAudioRateIndependent()
+	})
+}
+
+// SetAudioRateMultiplier sets the "audio_rate_multiplier" field.
+func (u *GroupUpsertBulk) SetAudioRateMultiplier(v float64) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetAudioRateMultiplier(v)
+	})
+}
+
+// AddAudioRateMultiplier adds v to the "audio_rate_multiplier" field.
+func (u *GroupUpsertBulk) AddAudioRateMultiplier(v float64) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.AddAudioRateMultiplier(v)
+	})
+}
+
+// UpdateAudioRateMultiplier sets the "audio_rate_multiplier" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateAudioRateMultiplier() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateAudioRateMultiplier()
 	})
 }
 

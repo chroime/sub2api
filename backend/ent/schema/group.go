@@ -44,6 +44,11 @@ func (Group) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			SchemaType(map[string]string{dialect.Postgres: "text"}),
+		// 名称与描述的界面语言译文 (added by migration 242)
+		field.JSON("i18n", domain.GroupI18n{}).
+			Default(domain.GroupI18n{}).
+			SchemaType(map[string]string{dialect.Postgres: "jsonb"}).
+			Comment("名称与描述的界面语言译文：语言代码 -> {name, description}；缺失的语言沿用 name/description"),
 		field.Float("rate_multiplier").
 			SchemaType(map[string]string{dialect.Postgres: "decimal(10,4)"}).
 			Default(1.0),
@@ -55,6 +60,10 @@ func (Group) Fields() []ent.Field {
 			SchemaType(map[string]string{dialect.Postgres: "decimal(10,4)"}).
 			Default(1.0).
 			Comment("下游计费输出 Token 修正倍率；1.0 表示沿用上游计量"),
+		field.Float("billing_unified_token_multiplier").
+			SchemaType(map[string]string{dialect.Postgres: "decimal(10,4)"}).
+			Default(1.0).
+			Comment("下游计费对 input/output/cache_read/cache_write 的统一 Token 倍率；1.0 表示沿用上游计量"),
 		field.Int("billing_token_adjustment_min_input_tokens").
 			Default(100).
 			Comment("仅当原始输入 Token 达到此阈值时应用下游 Token 修正倍率；0 表示不设阈值"),
@@ -183,7 +192,7 @@ func (Group) Fields() []ent.Field {
 			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
 			Comment("搜索工具价格 per 1000 calls（web_search 等）"),
 
-		// Grok Voice 显式定价（realtime / TTS / STT），不按文本 RateMultiplier。
+		// Grok Voice 显式定价（realtime / TTS / STT）；可选使用独立语音倍率。
 		field.Float("audio_realtime_price_per_min").
 			Optional().
 			Nillable().
@@ -202,6 +211,14 @@ func (Group) Fields() []ent.Field {
 			Min(0).
 			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
 			Comment("STT 每小时价格（USD）"),
+		field.Bool("audio_rate_independent").
+			Default(false).
+			Comment("是否使用独立语音计费倍率；关闭时沿用分组生效倍率"),
+		field.Float("audio_rate_multiplier").
+			Default(1.0).
+			Min(0).
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
+			Comment("语音独立计费倍率，仅 audio_rate_independent=true 时生效"),
 		field.Bool("long_context_pricing_enabled").
 			Default(true).
 			Comment("是否按上下文长度应用模型阶梯价格；默认开启以保持官方/渠道长上下文价"),

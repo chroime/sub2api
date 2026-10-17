@@ -21,7 +21,7 @@ func TestGovernanceImportCreatesConfiguredAccount(t *testing.T) {
 	require.NotNil(t, admin.account.Notes)
 	require.Equal(t, "fixture-import-key", *admin.account.Notes)
 	require.True(t, upstreamBillingRateSyncEnabled(admin.account))
-	require.Equal(t, 10000.0, admin.account.GetQuotaDailyLimit())
+	require.Equal(t, 100000.0, admin.account.GetQuotaDailyLimit())
 	require.Equal(t, 700000.0, admin.account.GetQuotaWeeklyLimit())
 	require.Equal(t, 10000000.0, admin.account.GetQuotaLimit())
 	require.True(t, admin.account.IsOpenAILongContextBillingEnabled())

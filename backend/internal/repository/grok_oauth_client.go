@@ -14,7 +14,6 @@ import (
 	"time"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
-	sharedhttp "github.com/Wei-Shaw/sub2api/internal/pkg/httpclient"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/Wei-Shaw/sub2api/internal/util/logredact"
@@ -159,15 +158,16 @@ func createGrokReqClient(proxyURL string) (*req.Client, error) {
 }
 
 func createGrokSSOHTTPClient(proxyURL string) (*http.Client, error) {
-	client, err := sharedhttp.GetClient(sharedhttp.Options{
-		ProxyURL:              proxyURL,
-		Timeout:               xai.SSOConversionTimeout,
-		ResponseHeaderTimeout: 30 * time.Second,
+	client, err := getSharedReqClient(reqClientOptions{
+		ProxyURL:          proxyURL,
+		Timeout:           xai.SSOConversionTimeout,
+		ImpersonateChrome: true,
+		DisableCookieJar:  true,
 	})
 	if err != nil {
 		return nil, err
 	}
-	clone := *client
+	clone := *client.GetClient()
 	clone.CheckRedirect = func(*http.Request, []*http.Request) error {
 		return http.ErrUseLastResponse
 	}
@@ -177,6 +177,9 @@ func createGrokSSOHTTPClient(proxyURL string) (*http.Client, error) {
 func grokSSOConversionError(err error) error {
 	if errors.Is(err, xai.ErrSSOUnauthorized) {
 		return infraerrors.New(http.StatusUnauthorized, "GROK_SSO_UNAUTHORIZED", "Grok Web SSO cookie is invalid or expired")
+	}
+	if errors.Is(err, xai.ErrSSOBrowserRequired) {
+		return infraerrors.New(http.StatusForbidden, "GROK_SSO_BROWSER_REQUIRED", "xAI requires browser verification to approve this device")
 	}
 	if errors.Is(err, xai.ErrSSOAuthorizationDenied) {
 		return infraerrors.New(http.StatusForbidden, "GROK_SSO_AUTHORIZATION_DENIED", "xAI device authorization was denied or expired")

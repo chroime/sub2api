@@ -40,6 +40,8 @@ func newGroupModelAllowlistTestRouter(apiKey *service.APIKey, pathPrefix string)
 	register(http.MethodPost, pathPrefix+"/models/*modelAction")
 	register(http.MethodGet, pathPrefix+"/realtime")
 	register(http.MethodPost, pathPrefix+"/images/edits")
+	register(http.MethodPost, pathPrefix+"/audio/speech")
+	register(http.MethodPost, pathPrefix+"/audio/transcriptions")
 	register(http.MethodPost, pathPrefix+"/live")
 	return router, &calls
 }
@@ -245,6 +247,35 @@ func TestGroupModelAllowlistRealtimeQueryParameter(t *testing.T) {
 	router.ServeHTTP(w, req)
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("expected 404 for unlisted realtime model, got %d", w.Code)
+	}
+}
+
+func TestGroupModelAllowlistOpenAIAudioModels(t *testing.T) {
+	router, calls := newGroupModelAllowlistTestRouter(allowlistAPIKey(true, "grok-voice-tts", "grok-voice-stt"), "/v1")
+
+	w := doJSON(t, router, http.MethodPost, "/v1/audio/speech", `{"model":"grok-voice-tts","input":"hello"}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected TTS model to be allowed, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	_ = writer.WriteField("model", "grok-voice-stt")
+	part, err := writer.CreateFormFile("file", "sample.wav")
+	if err != nil {
+		t.Fatalf("create audio part: %v", err)
+	}
+	_, _ = part.Write([]byte("RIFF-audio"))
+	_ = writer.Close()
+	req := httptest.NewRequest(http.MethodPost, "/v1/audio/transcriptions", &body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected STT model to be allowed, got %d: %s", w.Code, w.Body.String())
+	}
+	if len(*calls) != 2 {
+		t.Fatalf("expected both audio handlers to run, got %v", *calls)
 	}
 }
 

@@ -57,6 +57,10 @@ type UsageLog struct {
 	InputTokens int `json:"input_tokens,omitempty"`
 	// OutputTokens holds the value of the "output_tokens" field.
 	OutputTokens int `json:"output_tokens,omitempty"`
+	// UpstreamInputTokens holds the value of the "upstream_input_tokens" field.
+	UpstreamInputTokens int `json:"upstream_input_tokens,omitempty"`
+	// UpstreamOutputTokens holds the value of the "upstream_output_tokens" field.
+	UpstreamOutputTokens int `json:"upstream_output_tokens,omitempty"`
 	// CacheCreationTokens holds the value of the "cache_creation_tokens" field.
 	CacheCreationTokens int `json:"cache_creation_tokens,omitempty"`
 	// CacheReadTokens holds the value of the "cache_read_tokens" field.
@@ -119,6 +123,14 @@ type UsageLog struct {
 	CacheTTLOverridden bool `json:"cache_ttl_overridden,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
+	// UpstreamCacheReadTokens holds the value of the "upstream_cache_read_tokens" field.
+	UpstreamCacheReadTokens int `json:"upstream_cache_read_tokens,omitempty"`
+	// UpstreamCacheCreationTokens holds the value of the "upstream_cache_creation_tokens" field.
+	UpstreamCacheCreationTokens int `json:"upstream_cache_creation_tokens,omitempty"`
+	// UpstreamCacheCreation5mTokens holds the value of the "upstream_cache_creation_5m_tokens" field.
+	UpstreamCacheCreation5mTokens int `json:"upstream_cache_creation_5m_tokens,omitempty"`
+	// UpstreamCacheCreation1hTokens holds the value of the "upstream_cache_creation_1h_tokens" field.
+	UpstreamCacheCreation1hTokens int `json:"upstream_cache_creation_1h_tokens,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the UsageLogQuery when eager-loading is set.
 	Edges        UsageLogEdges `json:"edges"`
@@ -208,7 +220,7 @@ func (*UsageLog) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case usagelog.FieldInputCost, usagelog.FieldOutputCost, usagelog.FieldCacheCreationCost, usagelog.FieldCacheReadCost, usagelog.FieldTotalCost, usagelog.FieldActualCost, usagelog.FieldRateMultiplier, usagelog.FieldAccountRateMultiplier:
 			values[i] = new(sql.NullFloat64)
-		case usagelog.FieldID, usagelog.FieldUserID, usagelog.FieldAPIKeyID, usagelog.FieldAccountID, usagelog.FieldChannelID, usagelog.FieldGroupID, usagelog.FieldSubscriptionID, usagelog.FieldInputTokens, usagelog.FieldOutputTokens, usagelog.FieldCacheCreationTokens, usagelog.FieldCacheReadTokens, usagelog.FieldCacheCreation5mTokens, usagelog.FieldCacheCreation1hTokens, usagelog.FieldBillingType, usagelog.FieldDurationMs, usagelog.FieldFirstTokenMs, usagelog.FieldStreamingAckMs, usagelog.FieldImageCount, usagelog.FieldVideoCount, usagelog.FieldVideoDurationSeconds:
+		case usagelog.FieldID, usagelog.FieldUserID, usagelog.FieldAPIKeyID, usagelog.FieldAccountID, usagelog.FieldChannelID, usagelog.FieldGroupID, usagelog.FieldSubscriptionID, usagelog.FieldInputTokens, usagelog.FieldOutputTokens, usagelog.FieldUpstreamInputTokens, usagelog.FieldUpstreamOutputTokens, usagelog.FieldCacheCreationTokens, usagelog.FieldCacheReadTokens, usagelog.FieldCacheCreation5mTokens, usagelog.FieldCacheCreation1hTokens, usagelog.FieldBillingType, usagelog.FieldDurationMs, usagelog.FieldFirstTokenMs, usagelog.FieldStreamingAckMs, usagelog.FieldImageCount, usagelog.FieldVideoCount, usagelog.FieldVideoDurationSeconds, usagelog.FieldUpstreamCacheReadTokens, usagelog.FieldUpstreamCacheCreationTokens, usagelog.FieldUpstreamCacheCreation5mTokens, usagelog.FieldUpstreamCacheCreation1hTokens:
 			values[i] = new(sql.NullInt64)
 		case usagelog.FieldRequestID, usagelog.FieldModel, usagelog.FieldRequestedModel, usagelog.FieldUpstreamModel, usagelog.FieldUpstreamResponseModel, usagelog.FieldModelMappingChain, usagelog.FieldBillingTier, usagelog.FieldBillingMode, usagelog.FieldUserAgent, usagelog.FieldIPAddress, usagelog.FieldImageSize, usagelog.FieldImageInputSize, usagelog.FieldImageOutputSize, usagelog.FieldImageSizeSource, usagelog.FieldVideoResolution:
 			values[i] = new(sql.NullString)
@@ -346,6 +358,18 @@ func (_m *UsageLog) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field output_tokens", values[i])
 			} else if value.Valid {
 				_m.OutputTokens = int(value.Int64)
+			}
+		case usagelog.FieldUpstreamInputTokens:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field upstream_input_tokens", values[i])
+			} else if value.Valid {
+				_m.UpstreamInputTokens = int(value.Int64)
+			}
+		case usagelog.FieldUpstreamOutputTokens:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field upstream_output_tokens", values[i])
+			} else if value.Valid {
+				_m.UpstreamOutputTokens = int(value.Int64)
 			}
 		case usagelog.FieldCacheCreationTokens:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -547,6 +571,30 @@ func (_m *UsageLog) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.CreatedAt = value.Time
 			}
+		case usagelog.FieldUpstreamCacheReadTokens:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field upstream_cache_read_tokens", values[i])
+			} else if value.Valid {
+				_m.UpstreamCacheReadTokens = int(value.Int64)
+			}
+		case usagelog.FieldUpstreamCacheCreationTokens:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field upstream_cache_creation_tokens", values[i])
+			} else if value.Valid {
+				_m.UpstreamCacheCreationTokens = int(value.Int64)
+			}
+		case usagelog.FieldUpstreamCacheCreation5mTokens:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field upstream_cache_creation_5m_tokens", values[i])
+			} else if value.Valid {
+				_m.UpstreamCacheCreation5mTokens = int(value.Int64)
+			}
+		case usagelog.FieldUpstreamCacheCreation1hTokens:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field upstream_cache_creation_1h_tokens", values[i])
+			} else if value.Valid {
+				_m.UpstreamCacheCreation1hTokens = int(value.Int64)
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -679,6 +727,12 @@ func (_m *UsageLog) String() string {
 	builder.WriteString("output_tokens=")
 	builder.WriteString(fmt.Sprintf("%v", _m.OutputTokens))
 	builder.WriteString(", ")
+	builder.WriteString("upstream_input_tokens=")
+	builder.WriteString(fmt.Sprintf("%v", _m.UpstreamInputTokens))
+	builder.WriteString(", ")
+	builder.WriteString("upstream_output_tokens=")
+	builder.WriteString(fmt.Sprintf("%v", _m.UpstreamOutputTokens))
+	builder.WriteString(", ")
 	builder.WriteString("cache_creation_tokens=")
 	builder.WriteString(fmt.Sprintf("%v", _m.CacheCreationTokens))
 	builder.WriteString(", ")
@@ -795,6 +849,18 @@ func (_m *UsageLog) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
 	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(", ")
+	builder.WriteString("upstream_cache_read_tokens=")
+	builder.WriteString(fmt.Sprintf("%v", _m.UpstreamCacheReadTokens))
+	builder.WriteString(", ")
+	builder.WriteString("upstream_cache_creation_tokens=")
+	builder.WriteString(fmt.Sprintf("%v", _m.UpstreamCacheCreationTokens))
+	builder.WriteString(", ")
+	builder.WriteString("upstream_cache_creation_5m_tokens=")
+	builder.WriteString(fmt.Sprintf("%v", _m.UpstreamCacheCreation5mTokens))
+	builder.WriteString(", ")
+	builder.WriteString("upstream_cache_creation_1h_tokens=")
+	builder.WriteString(fmt.Sprintf("%v", _m.UpstreamCacheCreation1hTokens))
 	builder.WriteByte(')')
 	return builder.String()
 }

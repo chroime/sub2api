@@ -162,7 +162,7 @@
               ]"
             >
               <PlatformIcon :platform="value" size="xs" />
-              {{ t("admin.groups.platforms." + value) }}
+              {{ t("admin.groups.platforms." + value, platformLabel(value)) }}
             </span>
           </template>
 
@@ -500,26 +500,26 @@
         class="space-y-5"
       >
         <div>
-          <label class="input-label">{{ t("admin.groups.form.name") }}</label>
-          <input
+          <GroupI18nField
             v-model="createForm.name"
-            type="text"
+            v-model:i18n="createForm.i18n"
+            :label="t('admin.groups.form.name')"
+            field="name"
             required
-            class="input"
             :placeholder="t('admin.groups.enterGroupName')"
             data-tour="group-form-name"
           />
         </div>
         <div>
-          <label class="input-label">{{
-            t("admin.groups.form.description")
-          }}</label>
-          <textarea
+          <GroupI18nField
             v-model="createForm.description"
+            v-model:i18n="createForm.i18n"
+            :label="t('admin.groups.form.description')"
+            field="description"
+            multiline
             rows="3"
-            class="input"
             :placeholder="t('admin.groups.optionalDescription')"
-          ></textarea>
+          />
         </div>
         <div>
           <label class="input-label">{{
@@ -639,22 +639,29 @@
           />
           <p class="input-hint">{{ t("admin.groups.rateMultiplierHint") }}</p>
         </div>
-        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div>
-            <label class="input-label">下游输入 Token 计费倍率</label>
-            <input v-model.number="createForm.billing_input_token_multiplier" type="number" min="0.1" max="10" step="0.01" class="input" />
-          </div>
-          <div>
-            <label class="input-label">下游输出 Token 计费倍率</label>
-            <input v-model.number="createForm.billing_output_token_multiplier" type="number" min="0.1" max="10" step="0.01" class="input" />
-          </div>
+        <div>
+          <label class="input-label">{{ t('admin.groups.form.unifiedTokenMultiplier') }}</label>
+          <input
+            v-model.number="createForm.billing_unified_token_multiplier"
+            type="number"
+            min="0.1"
+            max="10"
+            step="0.01"
+            class="input"
+          />
+          <p class="input-hint">{{ t('admin.groups.form.unifiedTokenMultiplierHint') }}</p>
+          <p
+            v-if="createForm.billing_unified_token_multiplier === 1 && (createForm.billing_input_token_multiplier !== 1 || createForm.billing_output_token_multiplier !== 1)"
+            class="input-hint"
+          >
+            {{ t('admin.groups.form.unifiedTokenMultiplierSplitHint') }}
+          </p>
         </div>
         <div>
-          <label class="input-label">Token 倍率生效的最小输入量</label>
+          <label class="input-label">{{ t('admin.groups.form.tokenAdjustmentMinInput') }}</label>
           <input v-model.number="createForm.billing_token_adjustment_min_input_tokens" type="number" min="0" max="1000000" step="1" class="input" />
-          <p class="input-hint">原始输入 Token 少于此值时不应用输入/输出倍率；设置为 0 表示所有正常请求都应用。探针不使用自定义倍率，实际用量仅管理员可见，不进入普通用户记录。</p>
+          <p class="input-hint">{{ t('admin.groups.form.tokenAdjustmentMinInputHint') }}</p>
         </div>
-        <p class="input-hint">仅影响下游扣费、配额和用量排行；普通用户不会看到修正痕迹。默认 1.00。</p>
         <div>
           <label class="input-label">{{ t("admin.groups.form.rpmLimit") }}</label>
           <input
@@ -1535,6 +1542,27 @@
           <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">
             {{ t("admin.groups.explicitPricing.description") }}
           </p>
+          <label class="mb-3 flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+            <input
+              v-model="createForm.audio_rate_independent"
+              type="checkbox"
+              class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              data-testid="create-audio-rate-independent"
+            />
+            {{ t("admin.groups.voicePricing.independentMultiplier") }}
+          </label>
+          <div v-if="createForm.audio_rate_independent" class="mb-3">
+            <label class="input-label">{{ t("admin.groups.voicePricing.rateMultiplier") }}</label>
+            <input
+              v-model.number="createForm.audio_rate_multiplier"
+              type="number"
+              step="0.0001"
+              min="0"
+              class="input"
+              placeholder="1"
+              data-testid="create-audio-rate-multiplier"
+            />
+          </div>
           <div class="grid grid-cols-1 gap-3 md:grid-cols-3">
             <div>
               <label class="input-label">{{ t("admin.groups.explicitPricing.searchPricePer1k") }}</label>
@@ -2156,24 +2184,24 @@
         class="space-y-5"
       >
         <div>
-          <label class="input-label">{{ t("admin.groups.form.name") }}</label>
-          <input
+          <GroupI18nField
             v-model="editForm.name"
-            type="text"
+            v-model:i18n="editForm.i18n"
+            :label="t('admin.groups.form.name')"
+            field="name"
             required
-            class="input"
             data-tour="edit-group-form-name"
           />
         </div>
         <div>
-          <label class="input-label">{{
-            t("admin.groups.form.description")
-          }}</label>
-          <textarea
+          <GroupI18nField
             v-model="editForm.description"
+            v-model:i18n="editForm.i18n"
+            :label="t('admin.groups.form.description')"
+            field="description"
+            multiline
             rows="3"
-            class="input"
-          ></textarea>
+          />
         </div>
         <div>
           <label class="input-label">{{
@@ -2295,22 +2323,29 @@
             data-tour="group-form-multiplier"
           />
         </div>
-        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div>
-            <label class="input-label">下游输入 Token 计费倍率</label>
-            <input v-model.number="editForm.billing_input_token_multiplier" type="number" min="0.1" max="10" step="0.01" class="input" />
-          </div>
-          <div>
-            <label class="input-label">下游输出 Token 计费倍率</label>
-            <input v-model.number="editForm.billing_output_token_multiplier" type="number" min="0.1" max="10" step="0.01" class="input" />
-          </div>
+        <div>
+          <label class="input-label">{{ t('admin.groups.form.unifiedTokenMultiplier') }}</label>
+          <input
+            v-model.number="editForm.billing_unified_token_multiplier"
+            type="number"
+            min="0.1"
+            max="10"
+            step="0.01"
+            class="input"
+          />
+          <p class="input-hint">{{ t('admin.groups.form.unifiedTokenMultiplierHint') }}</p>
+          <p
+            v-if="editForm.billing_unified_token_multiplier === 1 && (editForm.billing_input_token_multiplier !== 1 || editForm.billing_output_token_multiplier !== 1)"
+            class="input-hint"
+          >
+            {{ t('admin.groups.form.unifiedTokenMultiplierSplitHint') }}
+          </p>
         </div>
         <div>
-          <label class="input-label">Token 倍率生效的最小输入量</label>
+          <label class="input-label">{{ t('admin.groups.form.tokenAdjustmentMinInput') }}</label>
           <input v-model.number="editForm.billing_token_adjustment_min_input_tokens" type="number" min="0" max="1000000" step="1" class="input" />
-          <p class="input-hint">原始输入 Token 少于此值时不应用输入/输出倍率；设置为 0 表示所有正常请求都应用。探针不使用自定义倍率，实际用量仅管理员可见，不进入普通用户记录。</p>
+          <p class="input-hint">{{ t('admin.groups.form.tokenAdjustmentMinInputHint') }}</p>
         </div>
-        <p class="input-hint">仅影响下游扣费、配额和用量排行；普通用户不会看到修正痕迹。默认 1.00。</p>
         <div>
           <label class="input-label">{{ t("admin.groups.form.rpmLimit") }}</label>
           <input
@@ -3203,6 +3238,27 @@
           <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">
             {{ t("admin.groups.explicitPricing.description") }}
           </p>
+          <label class="mb-3 flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+            <input
+              v-model="editForm.audio_rate_independent"
+              type="checkbox"
+              class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              data-testid="edit-audio-rate-independent"
+            />
+            {{ t("admin.groups.voicePricing.independentMultiplier") }}
+          </label>
+          <div v-if="editForm.audio_rate_independent" class="mb-3">
+            <label class="input-label">{{ t("admin.groups.voicePricing.rateMultiplier") }}</label>
+            <input
+              v-model.number="editForm.audio_rate_multiplier"
+              type="number"
+              step="0.0001"
+              min="0"
+              class="input"
+              placeholder="1"
+              data-testid="edit-audio-rate-multiplier"
+            />
+          </div>
           <div class="grid grid-cols-1 gap-3 md:grid-cols-3">
             <div>
               <label class="input-label">{{ t("admin.groups.explicitPricing.searchPricePer1k") }}</label>
@@ -3885,7 +3941,7 @@
                                     : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
                   ]"
                 >
-                  {{ t("admin.groups.platforms." + group.platform) }}
+                  {{ t("admin.groups.platforms." + group.platform, platformLabel(group.platform)) }}
                 </span>
               </div>
             </div>
@@ -4326,6 +4382,7 @@ import type {
   CompositeRouteDecision,
   CompositeRouteEndpoint,
   CompositeRouteMatchType,
+  GroupI18n,
   GroupPlatform,
   SubscriptionType,
 } from "@/types";
@@ -4344,7 +4401,9 @@ import ConfirmDialog from "@/components/common/ConfirmDialog.vue";
 import EmptyState from "@/components/common/EmptyState.vue";
 import Select from "@/components/common/Select.vue";
 import PlatformIcon from "@/components/common/PlatformIcon.vue";
+import { platformLabel } from "@/utils/platformColors";
 import Icon from "@/components/icons/Icon.vue";
+import GroupI18nField from "@/components/admin/group/GroupI18nField.vue";
 import GroupRateMultipliersModal from "@/components/admin/group/GroupRateMultipliersModal.vue";
 import GroupRPMOverridesModal from "@/components/admin/group/GroupRPMOverridesModal.vue";
 import GroupBalancePrechargeSettings from "@/components/admin/group/GroupBalancePrechargeSettings.vue";
@@ -4797,7 +4856,7 @@ const canCopyAccountsFromGroup = (targetPlatform: GroupPlatform, sourcePlatform:
 
 const copyAccountsGroupLabel = (g: AdminGroup) => {
   const count = g.account_count || 0;
-  const platform = t("admin.groups.platforms." + g.platform);
+  const platform = t("admin.groups.platforms." + g.platform, platformLabel(g.platform));
   return `${g.name} - ${platform} (${t("admin.groups.accountsCount", { count })})`;
 };
 
@@ -4992,8 +5051,10 @@ const createForm = reactive({
   streaming_ack_enabled: false,
   name: "",
   description: "",
+  i18n: {} as GroupI18n,
   platform: "anthropic" as GroupPlatform,
   rate_multiplier: 1.0,
+  billing_unified_token_multiplier: 1.0,
   billing_input_token_multiplier: 1.0,
   billing_output_token_multiplier: 1.0,
   billing_token_adjustment_min_input_tokens: 100,
@@ -5029,6 +5090,8 @@ const createForm = reactive({
   audio_realtime_price_per_min: null as number | null,
   audio_tts_price_per_million_chars: null as number | null,
   audio_stt_price_per_hour: null as number | null,
+  audio_rate_independent: false,
+  audio_rate_multiplier: 1,
   // 高峰时段倍率配置
   peak_rate_enabled: false,
   peak_start: "",
@@ -5360,8 +5423,10 @@ const editForm = reactive({
   streaming_ack_enabled: null as boolean | null,
   name: "",
   description: "",
+  i18n: {} as GroupI18n,
   platform: "anthropic" as GroupPlatform,
   rate_multiplier: 1.0,
+  billing_unified_token_multiplier: 1.0,
   billing_input_token_multiplier: 1.0,
   billing_output_token_multiplier: 1.0,
   billing_token_adjustment_min_input_tokens: 100,
@@ -5398,6 +5463,8 @@ const editForm = reactive({
   audio_realtime_price_per_min: null as number | null,
   audio_tts_price_per_million_chars: null as number | null,
   audio_stt_price_per_hour: null as number | null,
+  audio_rate_independent: false,
+  audio_rate_multiplier: 1,
   // 高峰时段倍率配置
   peak_rate_enabled: false,
   peak_start: "",
@@ -5826,8 +5893,10 @@ const closeCreateModal = () => {
   clearAllAccountSearchState();
   createForm.name = "";
   createForm.description = "";
+  createForm.i18n = {};
   createForm.platform = "anthropic";
   createForm.rate_multiplier = 1.0;
+  createForm.billing_unified_token_multiplier = 1.0;
   createForm.billing_input_token_multiplier = 1.0;
   createForm.billing_output_token_multiplier = 1.0;
   createForm.billing_token_adjustment_min_input_tokens = 100;
@@ -5861,6 +5930,8 @@ const closeCreateModal = () => {
   createForm.audio_realtime_price_per_min = null;
   createForm.audio_tts_price_per_million_chars = null;
   createForm.audio_stt_price_per_hour = null;
+  createForm.audio_rate_independent = false;
+  createForm.audio_rate_multiplier = 1;
   createForm.peak_rate_enabled = false;
   createForm.peak_start = "";
   createForm.peak_end = "";
@@ -5966,6 +6037,10 @@ const handleCreateGroup = async () => {
   }
   submitting.value = true;
   try {
+    if (createForm.billing_unified_token_multiplier !== 1) {
+      createForm.billing_input_token_multiplier = 1.0;
+      createForm.billing_output_token_multiplier = 1.0;
+    }
     const {
       video_model_prices: _createFormVideoModelPrices,
       ...createGroupForm
@@ -6072,6 +6147,8 @@ const handleCreateGroup = async () => {
     requestData.audio_stt_price_per_hour = emptyToNull(
       requestData.audio_stt_price_per_hour,
     );
+    requestData.audio_rate_independent = createForm.audio_rate_independent;
+    requestData.audio_rate_multiplier = createForm.audio_rate_multiplier;
     requestData.web_search_price_per_call = emptyToNull(
       requestData.web_search_price_per_call,
     );
@@ -6085,6 +6162,7 @@ const handleCreateGroup = async () => {
       ? {
           name: createForm.name,
           description: createForm.description,
+          i18n: createForm.i18n,
           platform: createForm.platform,
           streaming_ack_enabled: createForm.streaming_ack_enabled,
         }
@@ -6112,8 +6190,15 @@ const handleEdit = async (group: AdminGroup) => {
   editingGroup.value = group;
   editForm.name = group.name;
   editForm.description = group.description || "";
+  editForm.i18n = Object.fromEntries(
+    Object.entries(group.i18n ?? {}).map(([locale, text]) => [
+      locale,
+      { ...text },
+    ]),
+  );
   editForm.platform = group.platform;
   editForm.rate_multiplier = group.rate_multiplier;
+  editForm.billing_unified_token_multiplier = group.billing_unified_token_multiplier ?? 1.0;
   editForm.billing_input_token_multiplier = group.billing_input_token_multiplier ?? 1.0;
   editForm.billing_output_token_multiplier = group.billing_output_token_multiplier ?? 1.0;
   editForm.billing_token_adjustment_min_input_tokens = group.billing_token_adjustment_min_input_tokens ?? 100;
@@ -6153,6 +6238,8 @@ const handleEdit = async (group: AdminGroup) => {
   editForm.audio_realtime_price_per_min = group.audio_realtime_price_per_min ?? null;
   editForm.audio_tts_price_per_million_chars = group.audio_tts_price_per_million_chars ?? null;
   editForm.audio_stt_price_per_hour = group.audio_stt_price_per_hour ?? null;
+  editForm.audio_rate_independent = group.audio_rate_independent ?? false;
+  editForm.audio_rate_multiplier = group.audio_rate_multiplier ?? 1;
   editForm.peak_rate_enabled = group.peak_rate_enabled ?? false;
   editForm.peak_start = group.peak_start ?? "";
   editForm.peak_end = group.peak_end ?? "";
@@ -6269,6 +6356,8 @@ const closeEditModal = () => {
   editForm.audio_realtime_price_per_min = null;
   editForm.audio_tts_price_per_million_chars = null;
   editForm.audio_stt_price_per_hour = null;
+  editForm.audio_rate_independent = false;
+  editForm.audio_rate_multiplier = 1;
   resetMessagesDispatchFormState(editForm);
   editForm.allow_live = false;
   resetModelAllowlistState(editModelAllowlistState);
@@ -6315,6 +6404,10 @@ const handleUpdateGroup = async () => {
 
   submitting.value = true;
   try {
+    if (editForm.billing_unified_token_multiplier !== 1) {
+      editForm.billing_input_token_multiplier = 1.0;
+      editForm.billing_output_token_multiplier = 1.0;
+    }
     // 转换 fallback_group_id: null -> 0 (后端使用 0 表示清除)
     const { streaming_ack_enabled: ackPolicy, ...groupEditFields } = editForm;
     const payload = {
@@ -6431,6 +6524,8 @@ const handleUpdateGroup = async () => {
     payload.audio_stt_price_per_hour = emptyPriceToClear(
       payload.audio_stt_price_per_hour,
     );
+    payload.audio_rate_independent = editForm.audio_rate_independent;
+    payload.audio_rate_multiplier = editForm.audio_rate_multiplier;
     payload.web_search_price_per_call = emptyPriceToClear(
       payload.web_search_price_per_call,
     );
@@ -6445,6 +6540,7 @@ const handleUpdateGroup = async () => {
           name: editForm.name,
           description: editForm.description,
           ...(ackPolicy === null ? {} : { streaming_ack_enabled: ackPolicy }),
+          i18n: editForm.i18n,
         }
       : payload;
     await adminAPI.groups.update(editingGroup.value.id, requestData);
@@ -6524,7 +6620,7 @@ const formatCompositeEndpoint = (endpoint: CompositeRouteEndpoint) =>
 
 const formatCompositePlatform = (platform: string) => {
   if (!platform) return "—";
-  return t(`admin.groups.platforms.${platform}`);
+  return t(`admin.groups.platforms.${platform}`, platformLabel(platform));
 };
 
 const compositeRouteSourceLabel = (source: string) => {

@@ -8,7 +8,7 @@
 # =============================================================================
 
 ARG NODE_IMAGE=node:24-alpine
-ARG GOLANG_IMAGE=golang:1.27.0-alpine
+ARG GOLANG_IMAGE=golang:1.27.2-alpine
 ARG ALPINE_IMAGE=alpine:3.21
 ARG POSTGRES_IMAGE=postgres:18-alpine
 ARG GOPROXY=https://goproxy.cn,direct
@@ -22,6 +22,11 @@ ARG NPM_CONFIG_REGISTRY=
 # it on the native host arch instead of under QEMU emulation for the target.
 FROM --platform=${BUILDPLATFORM} ${NODE_IMAGE} AS frontend-builder
 ARG NPM_CONFIG_REGISTRY
+
+# vue-tsc and Vite can exceed Node's default ~2 GiB heap on the full frontend.
+# Keep the build within the server's available memory instead of aborting with
+# exit code 134 while the currently running container remains untouched.
+ENV NODE_OPTIONS=--max-old-space-size=4096
 
 WORKDIR /app/frontend
 

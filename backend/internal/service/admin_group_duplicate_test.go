@@ -121,41 +121,47 @@ func groupDuplicateTestPointer[T any](value T) *T { return &value }
 func TestDuplicateGroupCopiesConfigurationDeeplyAndResetsRuntimeState(t *testing.T) {
 	createdAt := time.Date(2026, time.July, 1, 2, 3, 4, 0, time.UTC)
 	source := &Group{
-		ID:                           41,
-		Name:                         "高级订阅",
-		Description:                  "configuration",
-		Platform:                     PlatformOpenAI,
-		RateMultiplier:               1.75,
-		PeakRateEnabled:              true,
-		PeakStart:                    "09:00",
-		PeakEnd:                      "18:00",
-		PeakRateMultiplier:           1.2,
-		IsExclusive:                  true,
-		Status:                       StatusActive,
-		Hydrated:                     true,
-		SubscriptionType:             SubscriptionTypeSubscription,
-		DailyLimitUSD:                groupDuplicateTestPointer(11.0),
-		WeeklyLimitUSD:               groupDuplicateTestPointer(22.0),
-		MonthlyLimitUSD:              groupDuplicateTestPointer(33.0),
-		DefaultValidityDays:          91,
-		AllowImageGeneration:         true,
-		AllowBatchImageGeneration:    true,
-		ImageRateIndependent:         true,
-		ImageRateMultiplier:          1.4,
-		ImagePrice1K:                 groupDuplicateTestPointer(0.01),
-		ImagePrice2K:                 groupDuplicateTestPointer(0.02),
-		ImagePrice4K:                 groupDuplicateTestPointer(0.04),
-		BatchImageDiscountMultiplier: 0.4,
-		BatchImageHoldMultiplier:     0.7,
-		VideoRateIndependent:         true,
-		VideoRateMultiplier:          2.1,
-		VideoPrice480P:               groupDuplicateTestPointer(0.1),
-		VideoPrice720P:               groupDuplicateTestPointer(0.2),
-		VideoPrice1080P:              groupDuplicateTestPointer(0.3),
+		ID:                                   41,
+		Name:                                 "高级订阅",
+		Description:                          "configuration",
+		Platform:                             PlatformOpenAI,
+		RateMultiplier:                       1.75,
+		BillingUnifiedTokenMultiplier:        2.5,
+		BillingInputTokenMultiplier:          1.25,
+		BillingOutputTokenMultiplier:         1.75,
+		BillingTokenAdjustmentMinInputTokens: 123,
+		PeakRateEnabled:                      true,
+		PeakStart:                            "09:00",
+		PeakEnd:                              "18:00",
+		PeakRateMultiplier:                   1.2,
+		IsExclusive:                          true,
+		Status:                               StatusActive,
+		Hydrated:                             true,
+		SubscriptionType:                     SubscriptionTypeSubscription,
+		DailyLimitUSD:                        groupDuplicateTestPointer(11.0),
+		WeeklyLimitUSD:                       groupDuplicateTestPointer(22.0),
+		MonthlyLimitUSD:                      groupDuplicateTestPointer(33.0),
+		DefaultValidityDays:                  91,
+		AllowImageGeneration:                 true,
+		AllowBatchImageGeneration:            true,
+		ImageRateIndependent:                 true,
+		ImageRateMultiplier:                  1.4,
+		ImagePrice1K:                         groupDuplicateTestPointer(0.01),
+		ImagePrice2K:                         groupDuplicateTestPointer(0.02),
+		ImagePrice4K:                         groupDuplicateTestPointer(0.04),
+		BatchImageDiscountMultiplier:         0.4,
+		BatchImageHoldMultiplier:             0.7,
+		VideoRateIndependent:                 true,
+		VideoRateMultiplier:                  2.1,
+		VideoPrice480P:                       groupDuplicateTestPointer(0.1),
+		VideoPrice720P:                       groupDuplicateTestPointer(0.2),
+		VideoPrice1080P:                      groupDuplicateTestPointer(0.3),
 		VideoModelPrices: map[string]map[string]float64{
 			VideoPriceFamilyGrokImagineVideo15: {VideoBillingResolution720P: 0.14},
 		},
 		WebSearchPricePerCall:           groupDuplicateTestPointer(0.005),
+		AudioRateIndependent:             true,
+		AudioRateMultiplier:              1.8,
 		ClaudeCodeOnly:                  true,
 		FallbackGroupID:                 groupDuplicateTestPointer(int64(7)),
 		FallbackGroupIDOnInvalidRequest: groupDuplicateTestPointer(int64(8)),
@@ -207,11 +213,17 @@ func TestDuplicateGroupCopiesConfigurationDeeplyAndResetsRuntimeState(t *testing
 	require.Equal(t, source.Description, duplicate.Description)
 	require.Equal(t, source.Platform, duplicate.Platform)
 	require.Equal(t, source.RateMultiplier, duplicate.RateMultiplier)
+	require.Equal(t, source.BillingUnifiedTokenMultiplier, duplicate.BillingUnifiedTokenMultiplier)
+	require.Equal(t, source.BillingInputTokenMultiplier, duplicate.BillingInputTokenMultiplier)
+	require.Equal(t, source.BillingOutputTokenMultiplier, duplicate.BillingOutputTokenMultiplier)
+	require.Equal(t, source.BillingTokenAdjustmentMinInputTokens, duplicate.BillingTokenAdjustmentMinInputTokens)
 	require.Equal(t, source.PeakRateMultiplier, duplicate.PeakRateMultiplier)
 	require.Equal(t, source.DefaultValidityDays, duplicate.DefaultValidityDays)
 	require.Equal(t, source.ImagePrice4K, duplicate.ImagePrice4K)
 	require.Equal(t, source.VideoModelPrices, duplicate.VideoModelPrices)
 	require.Equal(t, source.WebSearchPricePerCall, duplicate.WebSearchPricePerCall)
+	require.Equal(t, source.AudioRateIndependent, duplicate.AudioRateIndependent)
+	require.Equal(t, source.AudioRateMultiplier, duplicate.AudioRateMultiplier)
 	require.Equal(t, source.FallbackGroupID, duplicate.FallbackGroupID)
 	require.Equal(t, source.ModelRouting, duplicate.ModelRouting)
 	require.Equal(t, source.MessagesDispatchModelConfig, duplicate.MessagesDispatchModelConfig)

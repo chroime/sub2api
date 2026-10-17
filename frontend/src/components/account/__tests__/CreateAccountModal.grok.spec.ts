@@ -33,4 +33,9 @@ describe('CreateAccountModal Grok account types', () => {
   it('hides Grok password authorize option in the create flow', () => {
     expect(source).toContain(':show-email-password-option="false"')
   })
+
+  it('offers browser OAuth fallback when xAI blocks SSO device approval', () => {
+    expect(source).toContain('data-testid="grok-sso-browser-fallback"')
+    expect(source).toContain('handleGrokSSOBrowserFallback')
+  })
 })

@@ -2344,3 +2344,58 @@ func TestAdminService_CreateGroup_CodexModelsManifestConfigDisabledAccepted(t *t
 	require.Equal(t, []int64{1, 2}, group.CodexModelsManifestConfig.AccountIDs)
 	require.False(t, repo.created.CodexModelsManifestConfig.Enabled)
 }
+
+func TestAdminService_CreateGroup_UnifiedMultiplierClearsSplitMultipliers(t *testing.T) {
+	repo := &groupRepoStubForAdmin{createID: 1}
+	svc := &adminServiceImpl{groupRepo: repo}
+	_, err := svc.CreateGroup(context.Background(), &CreateGroupInput{
+		Name:                          "unified",
+		Platform:                      PlatformAnthropic,
+		RateMultiplier:                1,
+		BillingUnifiedTokenMultiplier: 2,
+		BillingInputTokenMultiplier:   5,
+		BillingOutputTokenMultiplier:  7,
+	})
+	require.NoError(t, err)
+	require.InDelta(t, 2, repo.created.BillingUnifiedTokenMultiplier, 1e-12)
+	require.InDelta(t, 1, repo.created.BillingInputTokenMultiplier, 1e-12)
+	require.InDelta(t, 1, repo.created.BillingOutputTokenMultiplier, 1e-12)
+}
+
+func TestAdminService_UpdateGroup_UnifiedMultiplierClearsSplitEvenWhenOmitted(t *testing.T) {
+	existing := &Group{
+		ID:                            9,
+		Name:                          "g",
+		Platform:                      PlatformAnthropic,
+		RateMultiplier:                1,
+		BillingInputTokenMultiplier:   2,
+		BillingOutputTokenMultiplier:  3,
+		BillingUnifiedTokenMultiplier: 1,
+	}
+	repo := &groupRepoStubForAdmin{getByID: existing}
+	svc := &adminServiceImpl{groupRepo: repo}
+	unified := 1.5
+	_, err := svc.UpdateGroup(context.Background(), 9, &UpdateGroupInput{
+		BillingUnifiedTokenMultiplier: &unified,
+	})
+	require.NoError(t, err)
+	require.InDelta(t, 1.5, repo.updated.BillingUnifiedTokenMultiplier, 1e-12)
+	require.InDelta(t, 1, repo.updated.BillingInputTokenMultiplier, 1e-12)
+	require.InDelta(t, 1, repo.updated.BillingOutputTokenMultiplier, 1e-12)
+}
+
+func TestAdminService_CreateGroup_SplitMultipliersRemainWhenUnifiedIsOne(t *testing.T) {
+	repo := &groupRepoStubForAdmin{createID: 1}
+	svc := &adminServiceImpl{groupRepo: repo}
+	_, err := svc.CreateGroup(context.Background(), &CreateGroupInput{
+		Name:                         "split",
+		Platform:                     PlatformAnthropic,
+		RateMultiplier:               1,
+		BillingInputTokenMultiplier:  2,
+		BillingOutputTokenMultiplier: 3,
+	})
+	require.NoError(t, err)
+	require.InDelta(t, 1, repo.created.BillingUnifiedTokenMultiplier, 1e-12)
+	require.InDelta(t, 2, repo.created.BillingInputTokenMultiplier, 1e-12)
+	require.InDelta(t, 3, repo.created.BillingOutputTokenMultiplier, 1e-12)
+}

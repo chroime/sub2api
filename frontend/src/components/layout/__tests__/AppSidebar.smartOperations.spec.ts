@@ -62,6 +62,7 @@ const sectionCases = [
   ['/overview', 'overview'],
   ['/import', 'import'],
   ['/models', 'models'],
+  ['/local-monitor', 'localMonitor'],
   ['/monitor', 'monitor'],
   ['/history', 'history'],
 ] as const
@@ -100,7 +101,7 @@ describe('Smart Operations route registration', () => {
     const route = applicationRouter.resolve(`${rootPath}${suffix}?site=site-42`)
 
     expect(route.name).toBe('AdminUpstreamGovernance')
-    expect(route.params.section || 'overview').toBe(section)
+    expect(route.params.section || 'overview').toBe(section === 'localMonitor' ? 'local-monitor' : section)
     expect(route.meta.requiresAuth).toBe(true)
     expect(route.meta.requiresAdmin).toBe(true)
     expect(route.meta.titleKey).toBe('governance.smartOperations.title')
@@ -125,7 +126,7 @@ describe('AppSidebar Smart Operations navigation', () => {
     vi.clearAllMocks()
   })
 
-  it('expands five ordered sections without navigating away from the current page', async () => {
+  it('expands ordered sections without navigating away from the current page', async () => {
     const { wrapper, router } = await mountSidebar()
     const button = smartOperationsButton(wrapper)
     expect(button.attributes('aria-expanded')).toBe('false')
@@ -138,6 +139,7 @@ describe('AppSidebar Smart Operations navigation', () => {
       ['governance.smartOperations.sections.overview', rootPath],
       ['governance.smartOperations.sections.import', `${rootPath}/import`],
       ['governance.smartOperations.sections.models', `${rootPath}/models`],
+      ['governance.smartOperations.sections.localMonitor', `${rootPath}/local-monitor`],
       ['governance.smartOperations.sections.monitor', `${rootPath}/monitor`],
       ['governance.smartOperations.sections.history', `${rootPath}/history`],
     ])
@@ -176,6 +178,15 @@ describe('AppSidebar Smart Operations navigation', () => {
     expect(router.currentRoute.value.query).toEqual({})
   })
 
+  it('does not carry an upstream site into the local monitoring workspace', async () => {
+    const { wrapper, router } = await mountSidebar(`${rootPath}/models?site=site-42`)
+    await wrapper.get(`a[href="${rootPath}/local-monitor"]`).trigger('click')
+    await flushPromises()
+
+    expect(router.currentRoute.value.path).toBe(`${rootPath}/local-monitor`)
+    expect(router.currentRoute.value.query).toEqual({})
+  })
+
   it('opens a collapsed sidebar and reveals the Smart Operations children on click', async () => {
     appStore.sidebarCollapsed = true
     const { wrapper, router } = await mountSidebar()
@@ -186,7 +197,7 @@ describe('AppSidebar Smart Operations navigation', () => {
 
     expect(wrapper.get('aside').classes()).toContain('w-64')
     expect(button.attributes('aria-expanded')).toBe('true')
-    expect(wrapper.findAll(`a[href^="${rootPath}"]`)).toHaveLength(5)
+    expect(wrapper.findAll(`a[href^="${rootPath}"]`)).toHaveLength(6)
     expect(router.currentRoute.value.path).toBe('/admin/dashboard')
   })
 
@@ -243,7 +254,7 @@ describe('AppSidebar Smart Operations navigation', () => {
     const { wrapper } = await mountSidebar(rootPath)
 
     expect(smartOperationsButton(wrapper).attributes('aria-expanded')).toBe('true')
-    expect(wrapper.findAll(`a[href^="${rootPath}"]`)).toHaveLength(5)
+    expect(wrapper.findAll(`a[href^="${rootPath}"]`)).toHaveLength(6)
   })
 
   it('does not expose Smart Operations to regular users', async () => {

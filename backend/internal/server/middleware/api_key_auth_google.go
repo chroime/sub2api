@@ -130,6 +130,10 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 			abortWithGoogleError(c, 403, "API Key 所属专属分组不再允许当前用户使用")
 			return
 		}
+		c.Request = c.Request.WithContext(service.WithDownstreamUsageAdjustment(
+			c.Request.Context(),
+			service.TokenUsageAdjustmentForGroup(apiKey.Group),
+		))
 
 		// 简易模式：跳过余额和订阅检查
 		if cfg.RunMode == config.RunModeSimple {

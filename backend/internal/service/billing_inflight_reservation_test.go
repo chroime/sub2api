@@ -129,6 +129,93 @@ func TestInflightEstimate_GroupPerRequestPricing(t *testing.T) {
 	require.InDelta(t, (1000*in+500*out)*2, est, 1e-12)
 }
 
+func TestInflightEstimate_BillingAdjustmentMatchesCustomerTokenCharge(t *testing.T) {
+	groupID := int64(21)
+	group := &Group{
+		ID:                                   groupID,
+		Platform:                             PlatformAnthropic,
+		RateMultiplier:                       1,
+		BillingInputTokenMultiplier:          2,
+		BillingOutputTokenMultiplier:         3,
+		BillingTokenAdjustmentMinInputTokens: 100,
+	}
+	svc := newInflightEstimateGateway(t, nil)
+	apiKey := &APIKey{User: &User{ID: 1}, GroupID: &groupID, Group: group}
+
+	pricing, err := svc.billingService.GetModelPricing("claude-sonnet-4-5")
+	require.NoError(t, err)
+	// BodyBytes/4 estimates 200 input tokens; the 100-token threshold is met.
+	// The reservation must cover the same adjusted customer quantities that the
+	// final billing path will charge: 200*2 input and 50*3 output.
+	estimate, priced := svc.EstimateInflightReservation(context.Background(), apiKey, InflightEstimateRequest{
+		Model:     "claude-sonnet-4-5",
+		BodyBytes: 800,
+		MaxTokens: 50,
+	})
+	require.True(t, priced)
+	require.InDelta(t, 400*pricing.InputPricePerToken+150*pricing.OutputPricePerToken, estimate, 1e-12)
+
+	// Per-request image/video pricing does not use token multipliers. The
+	// adjusted and neutral groups therefore produce the same reservation.
+	perRequestImage := 0.5
+	perRequestVideo := 0.75
+	adjustedMediaGroup := &Group{
+		ID:                                   groupID,
+		Platform:                             PlatformOpenAI,
+		RateMultiplier:                       1,
+		BillingInputTokenMultiplier:          2,
+		BillingOutputTokenMultiplier:         3,
+		BillingTokenAdjustmentMinInputTokens: 100,
+		ModelPricing: []ChannelModelPricing{
+			{Models: []string{"image-adjustment"}, BillingMode: BillingModeImage, PerRequestPrice: &perRequestImage},
+			{Models: []string{"video-adjustment"}, BillingMode: BillingModeVideo, PerRequestPrice: &perRequestVideo},
+		},
+	}
+	neutralMediaGroup := *adjustedMediaGroup
+	neutralMediaGroup.BillingInputTokenMultiplier = 1
+	neutralMediaGroup.BillingOutputTokenMultiplier = 1
+	mediaKey := &APIKey{User: &User{ID: 1}, GroupID: &groupID, Group: adjustedMediaGroup}
+	neutralMediaKey := &APIKey{User: &User{ID: 1}, GroupID: &groupID, Group: &neutralMediaGroup}
+	for _, tc := range []struct {
+		name string
+		req  InflightEstimateRequest
+	}{
+		{name: "image", req: InflightEstimateRequest{Model: "image-adjustment", Kind: InflightEstimateImage, Units: 2}},
+		{name: "video", req: InflightEstimateRequest{Model: "video-adjustment", Kind: InflightEstimateVideo, Units: 2, VideoDurationSeconds: 4}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			adjusted, adjustedPriced := svc.EstimateInflightReservation(context.Background(), mediaKey, tc.req)
+			neutral, neutralPriced := svc.EstimateInflightReservation(context.Background(), neutralMediaKey, tc.req)
+			require.Equal(t, neutralPriced, adjustedPriced)
+			require.InDelta(t, neutral, adjusted, 1e-12)
+		})
+	}
+}
+
+func TestInflightEstimate_UnifiedMultiplierScalesInputAndOutput(t *testing.T) {
+	groupID := int64(22)
+	group := &Group{
+		ID:                                   groupID,
+		Platform:                             PlatformAnthropic,
+		RateMultiplier:                       1,
+		BillingUnifiedTokenMultiplier:        2,
+		BillingInputTokenMultiplier:          5,
+		BillingOutputTokenMultiplier:         7,
+		BillingTokenAdjustmentMinInputTokens: 100,
+	}
+	svc := newInflightEstimateGateway(t, nil)
+	apiKey := &APIKey{User: &User{ID: 1}, GroupID: &groupID, Group: group}
+	pricing, err := svc.billingService.GetModelPricing("claude-sonnet-4-5")
+	require.NoError(t, err)
+	estimate, priced := svc.EstimateInflightReservation(context.Background(), apiKey, InflightEstimateRequest{
+		Model:     "claude-sonnet-4-5",
+		BodyBytes: 800,
+		MaxTokens: 50,
+	})
+	require.True(t, priced)
+	require.InDelta(t, 400*pricing.InputPricePerToken+100*pricing.OutputPricePerToken, estimate, 1e-12)
+}
+
 func TestInflightEstimate_UnpricedIsReportedAndNonMeteredIsNot(t *testing.T) {
 	svc := newInflightEstimateGateway(t, nil)
 	apiKey := &APIKey{User: &User{ID: 1}}
@@ -160,6 +247,27 @@ func TestInflightEstimate_MediaKinds(t *testing.T) {
 	est, priced = svc.EstimateInflightReservation(context.Background(), apiKey, InflightEstimateRequest{Model: "realtime", Kind: InflightEstimateAudio, AudioMode: "realtime", AudioUnits: 1})
 	require.True(t, priced)
 	require.Greater(t, est, 0.0)
+}
+
+func TestInflightEstimate_AudioIndependentMultiplier(t *testing.T) {
+	groupID := int64(31)
+	price := 0.25
+	group := &Group{
+		ID: groupID, Platform: PlatformGrok, RateMultiplier: 7,
+		AudioRateIndependent: true, AudioRateMultiplier: 2,
+		AudioRealtimePricePerMin: &price,
+		ModelPricing: []ChannelModelPricing{{
+			Models: []string{"realtime"}, BillingMode: BillingModePerRequest, PerRequestPrice: &price,
+		}},
+	}
+	svc := newInflightEstimateGateway(t, nil)
+	apiKey := &APIKey{User: &User{ID: 1}, GroupID: &groupID, Group: group}
+
+	est, priced := svc.EstimateInflightReservation(context.Background(), apiKey, InflightEstimateRequest{
+		Model: "realtime", Kind: InflightEstimateAudio, AudioMode: "realtime", AudioUnits: 1,
+	})
+	require.True(t, priced)
+	require.InDelta(t, 0.5, est, 1e-12, "audio reservation must use the independent multiplier")
 }
 
 // ---------------------------------------------------------------------------

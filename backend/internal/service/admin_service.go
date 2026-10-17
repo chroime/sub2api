@@ -233,21 +233,23 @@ type AdminBoundAuthIdentityChannel struct {
 }
 
 type CreateGroupInput struct {
-	StreamingACKEnabled          bool
-	Name                         string
-	Description                  string
-	Platform                     string
-	RateMultiplier               float64
-	BillingInputTokenMultiplier  float64
-	BillingOutputTokenMultiplier float64
+	StreamingACKEnabled                  bool
+	Name                                 string
+	Description                          string
+	I18n                                 GroupI18n
+	Platform                             string
+	RateMultiplier                       float64
+	BillingInputTokenMultiplier          float64
+	BillingOutputTokenMultiplier         float64
+	BillingUnifiedTokenMultiplier        float64
 	BillingTokenAdjustmentMinInputTokens *int
-	IsExclusive                  bool
-	SubscriptionType             string   // standard/subscription
-	DailyLimitUSD                *float64 // 日限额 (USD)
-	WeeklyLimitUSD               *float64 // 周限额 (USD)
-	MonthlyLimitUSD              *float64 // 月限额 (USD)
-	LongContextPricingEnabled    bool
-	ModelPricing                 []ChannelModelPricing
+	IsExclusive                          bool
+	SubscriptionType                     string   // standard/subscription
+	DailyLimitUSD                        *float64 // 日限额 (USD)
+	WeeklyLimitUSD                       *float64 // 周限额 (USD)
+	MonthlyLimitUSD                      *float64 // 月限额 (USD)
+	LongContextPricingEnabled            bool
+	ModelPricing                         []ChannelModelPricing
 	// 图片生成计费配置（仅 antigravity 平台使用）
 	AllowImageGeneration         bool
 	AllowBatchImageGeneration    bool
@@ -278,6 +280,8 @@ type CreateGroupInput struct {
 	AudioRealtimePricePerMin     *float64
 	AudioTTSPricePerMillionChars *float64
 	AudioSTTPricePerHour         *float64
+	AudioRateIndependent         bool
+	AudioRateMultiplier          *float64
 	ClaudeCodeOnly               bool   // 仅允许 Claude Code 客户端
 	FallbackGroupID              *int64 // 降级分组 ID
 	// 无效请求兜底分组 ID（仅 anthropic 平台使用）
@@ -317,22 +321,24 @@ type CreateGroupInput struct {
 }
 
 type UpdateGroupInput struct {
-	StreamingACKEnabled          *bool // nil preserves the existing legacy or explicit policy
-	Name                         string
-	Description                  *string
-	Platform                     string
-	RateMultiplier               *float64 // 使用指针以支持设置为0
-	BillingInputTokenMultiplier  *float64
-	BillingOutputTokenMultiplier *float64
+	StreamingACKEnabled                  *bool // nil preserves the existing legacy or explicit policy
+	Name                                 string
+	Description                          *string
+	I18n                                 *GroupI18n
+	Platform                             string
+	RateMultiplier                       *float64 // 使用指针以支持设置为0
+	BillingInputTokenMultiplier          *float64
+	BillingOutputTokenMultiplier         *float64
+	BillingUnifiedTokenMultiplier        *float64
 	BillingTokenAdjustmentMinInputTokens *int
-	IsExclusive                  *bool
-	Status                       string
-	SubscriptionType             string   // standard/subscription
-	DailyLimitUSD                *float64 // 日限额 (USD)
-	WeeklyLimitUSD               *float64 // 周限额 (USD)
-	MonthlyLimitUSD              *float64 // 月限额 (USD)
-	LongContextPricingEnabled    *bool
-	ModelPricing                 *[]ChannelModelPricing
+	IsExclusive                          *bool
+	Status                               string
+	SubscriptionType                     string   // standard/subscription
+	DailyLimitUSD                        *float64 // 日限额 (USD)
+	WeeklyLimitUSD                       *float64 // 周限额 (USD)
+	MonthlyLimitUSD                      *float64 // 月限额 (USD)
+	LongContextPricingEnabled            *bool
+	ModelPricing                         *[]ChannelModelPricing
 	// 图片生成计费配置（仅 antigravity 平台使用）
 	AllowImageGeneration         *bool
 	AllowBatchImageGeneration    *bool
@@ -363,6 +369,8 @@ type UpdateGroupInput struct {
 	AudioRealtimePricePerMin     *float64
 	AudioTTSPricePerMillionChars *float64
 	AudioSTTPricePerHour         *float64
+	AudioRateIndependent         *bool
+	AudioRateMultiplier          *float64
 	ClaudeCodeOnly               *bool  // 仅允许 Claude Code 客户端
 	FallbackGroupID              *int64 // 降级分组 ID
 	// 无效请求兜底分组 ID（仅 anthropic 平台使用）

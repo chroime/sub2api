@@ -301,7 +301,7 @@ func (s *Service) refreshSiteSession(ctx context.Context, id int64) error {
 		return err
 	}
 	defer free()
-	site, release, err := s.siteLock(ctx, id)
+	site, release, err := s.remoteSiteLock(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -353,7 +353,7 @@ func (s *Service) ImportBrowserSession(ctx context.Context, id, expectedVersion 
 		return nil, err
 	}
 	defer free()
-	site, release, err := s.siteLock(ctx, id)
+	site, release, err := s.remoteSiteLock(ctx, id)
 	if err != nil {
 		return nil, err
 	}

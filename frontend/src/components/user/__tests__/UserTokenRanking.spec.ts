@@ -13,19 +13,24 @@ vi.mock('@/api', () => ({
 
 vi.mock('vue-i18n', () => ({
   useI18n: () => ({
-    t: (key: string) => ({
-      'usage.ranking.title': '总 Token 用量排行',
+    t: (key: string, params?: { rank?: number }) => {
+      if (key === 'usage.ranking.rank') return `第${params?.rank ?? 1}名`
+      return ({
+      'usage.ranking.title': '用量排行榜',
       'usage.ranking.subtitle': '按所选时间范围统计全部用户的总 Token 用量',
       'usage.ranking.periods.today': '今天',
       'usage.ranking.periods.yesterday': '昨天',
       'usage.ranking.periods.7d': '近 7 天',
       'usage.ranking.periods.30d': '近 30 天',
-      'usage.ranking.total': '总 Token',
+      'usage.ranking.total': '总TOKEN',
+      'usage.ranking.rank': '第{rank}名',
+      'usage.ranking.rankLabel': '排名',
       'usage.ranking.user': '用户',
       'usage.ranking.requests': '请求数',
       'usage.ranking.empty': '暂无排行数据',
       'usage.ranking.loadFailed': '排行榜加载失败',
-    }[key] ?? key),
+      }[key] ?? key)
+    },
   }),
 }))
 
@@ -65,9 +70,13 @@ describe('UserTokenRanking', () => {
     await flushPromises()
 
     expect(getTokenRanking).toHaveBeenCalledWith('today')
-    expect(wrapper.text()).toContain('总 Token 用量排行')
+    expect(wrapper.text()).toContain('用量排行榜')
     expect(wrapper.text()).toContain('a***@g***.com')
     expect(wrapper.text()).toContain('123456')
+    expect(wrapper.text()).toContain('第1名')
+    expect(wrapper.text()).toContain('第2名')
+    expect(wrapper.text()).toContain('第3名')
+    expect(wrapper.text()).toContain('排名')
     expect(wrapper.find('[data-rank="1"]').classes()).toContain('rank-gold')
     expect(wrapper.find('[data-rank="2"]').classes()).toContain('rank-silver')
     expect(wrapper.find('[data-rank="3"]').classes()).toContain('rank-bronze')

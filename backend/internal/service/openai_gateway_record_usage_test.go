@@ -3492,3 +3492,125 @@ func TestOpenAIGatewayServiceRecordUsage_ServiceTierNeverRaisedByUpstreamRespons
 	require.NoError(t, calcErr)
 	require.InDelta(t, baseCost.TotalCost, usageRepo.lastLog.TotalCost, 1e-10)
 }
+
+func TestOpenAIGatewayServiceRecordUsage_GroupTokenAdjustmentKeepsUpstreamUsage(t *testing.T) {
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	userRepo := &openAIRecordUsageUserRepoStub{}
+	svc := newOpenAIRecordUsageServiceForTest(usageRepo, userRepo, &openAIRecordUsageSubRepoStub{}, nil)
+	groupID := int64(1019)
+	group := &Group{
+		ID:                                   groupID,
+		Platform:                             PlatformOpenAI,
+		RateMultiplier:                       1,
+		BillingInputTokenMultiplier:          2,
+		BillingOutputTokenMultiplier:         3,
+		BillingTokenAdjustmentMinInputTokens: 100,
+	}
+
+	err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
+		Result: &OpenAIForwardResult{
+			RequestID: "openai_group_token_adjustment_raw_usage",
+			Model:     "gpt-5.4",
+			Usage: OpenAIUsage{
+				InputTokens:              1000,
+				CacheReadInputTokens:     600,
+				CacheCreationInputTokens: 200,
+				OutputTokens:             50,
+			},
+			Duration: time.Second,
+		},
+		APIKey:  &APIKey{ID: 1019, GroupID: &groupID, Group: group},
+		User:    &User{ID: 2019},
+		Account: &Account{ID: 3019, Platform: PlatformOpenAI, Type: AccountTypeAPIKey},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, usageRepo.lastLog)
+	require.Equal(t, 2000, usageRepo.lastLog.InputTokens)
+	require.Equal(t, 150, usageRepo.lastLog.OutputTokens)
+	require.Equal(t, 200, usageRepo.lastLog.UpstreamInputTokens)
+	require.Equal(t, 50, usageRepo.lastLog.UpstreamOutputTokens)
+	require.Equal(t, 0, usageRepo.lastLog.CacheReadTokens)
+	require.Equal(t, 0, usageRepo.lastLog.CacheCreationTokens)
+}
+
+func TestOpenAIGatewayServiceRecordUsage_UnifiedMultiplierScalesCacheBuckets(t *testing.T) {
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	userRepo := &openAIRecordUsageUserRepoStub{}
+	svc := newOpenAIRecordUsageServiceForTest(usageRepo, userRepo, &openAIRecordUsageSubRepoStub{}, nil)
+	groupID := int64(1022)
+	group := &Group{
+		ID:                                   groupID,
+		Platform:                             PlatformOpenAI,
+		RateMultiplier:                       1,
+		BillingUnifiedTokenMultiplier:        2,
+		BillingTokenAdjustmentMinInputTokens: 0,
+	}
+
+	require.NoError(t, svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
+		Result: &OpenAIForwardResult{
+			RequestID: "openai_unified_cache",
+			Model:     "gpt-5.4",
+			Usage: OpenAIUsage{
+				InputTokens:              1000,
+				CacheReadInputTokens:     600,
+				CacheCreationInputTokens: 200,
+				OutputTokens:             50,
+			},
+		},
+		APIKey:  &APIKey{ID: 1022, GroupID: &groupID, Group: group},
+		User:    &User{ID: 2022},
+		Account: &Account{ID: 3022, Platform: PlatformOpenAI, Type: AccountTypeAPIKey},
+	}))
+	require.Equal(t, 400, usageRepo.lastLog.InputTokens)
+	require.Equal(t, 100, usageRepo.lastLog.OutputTokens)
+	require.Equal(t, 1200, usageRepo.lastLog.CacheReadTokens)
+	require.Equal(t, 400, usageRepo.lastLog.CacheCreationTokens)
+	require.Equal(t, 200, usageRepo.lastLog.UpstreamInputTokens)
+	require.Equal(t, 50, usageRepo.lastLog.UpstreamOutputTokens)
+	require.Equal(t, 600, usageRepo.lastLog.UpstreamCacheReadTokens)
+	require.Equal(t, 200, usageRepo.lastLog.UpstreamCacheCreationTokens)
+	want := 400*2.5e-6 + 100*15e-6 + 1200*0.25e-6 + 400*2.5e-6
+	require.InDelta(t, want, usageRepo.lastLog.ActualCost, 1e-12)
+}
+
+func TestOpenAIGatewayServiceRecordUsage_GroupTokenAdjustmentKeepsCacheNeutralCharge(t *testing.T) {
+	groupID := int64(1020)
+	group := &Group{
+		ID:                                   groupID,
+		Platform:                             PlatformOpenAI,
+		RateMultiplier:                       1,
+		BillingInputTokenMultiplier:          2,
+		BillingOutputTokenMultiplier:         3,
+		BillingTokenAdjustmentMinInputTokens: 100,
+	}
+	newService := func(repo *openAIRecordUsageLogRepoStub, userRepo *openAIRecordUsageUserRepoStub) *OpenAIGatewayService {
+		return newOpenAIRecordUsageServiceForTest(repo, userRepo, &openAIRecordUsageSubRepoStub{}, nil)
+	}
+
+	missRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	missUser := &openAIRecordUsageUserRepoStub{}
+	miss := newService(missRepo, missUser)
+	require.NoError(t, miss.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
+		Result:  &OpenAIForwardResult{RequestID: "openai_cache_neutral_miss", Model: "gpt-5.4", Usage: OpenAIUsage{InputTokens: 1000, OutputTokens: 50}},
+		APIKey:  &APIKey{ID: 1020, GroupID: &groupID, Group: group},
+		User:    &User{ID: 2020},
+		Account: &Account{ID: 3020, Platform: PlatformOpenAI, Type: AccountTypeAPIKey},
+	}))
+
+	hitRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	hitUser := &openAIRecordUsageUserRepoStub{}
+	hit := newService(hitRepo, hitUser)
+	require.NoError(t, hit.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
+		Result: &OpenAIForwardResult{RequestID: "openai_cache_neutral_hit", Model: "gpt-5.4", Usage: OpenAIUsage{
+			InputTokens:          1000,
+			CacheReadInputTokens: 800,
+			OutputTokens:         50,
+		}},
+		APIKey:  &APIKey{ID: 1021, GroupID: &groupID, Group: group},
+		User:    &User{ID: 2021},
+		Account: &Account{ID: 3021, Platform: PlatformOpenAI, Type: AccountTypeAPIKey},
+	}))
+
+	require.InDelta(t, missRepo.lastLog.ActualCost, hitRepo.lastLog.ActualCost, 1e-12)
+}

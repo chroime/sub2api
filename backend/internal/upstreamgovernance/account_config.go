@@ -11,7 +11,7 @@ import (
 func NormalizeAccountConfig(input *AccountConfig, platform string, models []string) (*AccountConfig, error) {
 	config := AccountConfig{
 		Concurrency: 5000, UpstreamBillingRateSyncEnabled: true,
-		QuotaDailyLimit: 10000, QuotaWeeklyLimit: 700000, QuotaLimit: 10000000,
+		QuotaDailyLimit: 100000, QuotaWeeklyLimit: 700000, QuotaLimit: 10000000,
 		OpenAILongContextBillingEnabled: platform == "openai",
 	}
 	if input != nil {

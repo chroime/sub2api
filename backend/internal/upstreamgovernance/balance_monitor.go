@@ -104,7 +104,7 @@ func (s *Service) ConfigureBalanceMonitor(ctx context.Context, id, version int64
 		return nil, err
 	}
 	config.Recipients = recipients
-	site, release, err := s.siteLock(ctx, id)
+	site, release, err := s.remoteSiteLock(ctx, id)
 	if err != nil {
 		return nil, err
 	}

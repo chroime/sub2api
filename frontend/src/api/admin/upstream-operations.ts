@@ -4,7 +4,7 @@ export type OperationsSeverity = 'critical' | 'warning' | 'info'
 export type WorkbenchKind = 'authorization' | 'key' | 'balance' | 'collection' | 'fast_observation' | 'pricing' | 'notification'
 export type TimelineKind = 'event' | 'pricing' | 'notification'
 export type TimelineFilter = 'all' | TimelineKind
-export type OperationsSection = 'overview' | 'import' | 'models' | 'monitor' | 'history'
+export type OperationsSection = 'overview' | 'import' | 'models' | 'local-monitor' | 'monitor' | 'history'
 
 export interface WorkbenchItem {
   id: string

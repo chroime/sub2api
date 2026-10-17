@@ -19,6 +19,7 @@ func TestDefaultModelMappingExcludesCrossClientWildcards(t *testing.T) {
 	require.Equal(t, DefaultImagineImageQualityModel, mapping["grok-imagine-edit"])
 	require.Equal(t, DefaultImagineVideo15Model, mapping["grok-imagine-video-1.5"])
 	require.Equal(t, DefaultImagineVideo15Model, mapping["grok-imagine-video-1.5-preview"])
+	require.Equal(t, DefaultImagineVideo15LiteModel, mapping["grok-imagine-video-1.5-lite"])
 	require.Equal(t, "grok-4.6", mapping["xai/grok"])
 
 	// Cross-vendor wildcards must stay opt-in.
@@ -45,6 +46,7 @@ func TestCanonicalImagineVideoModel(t *testing.T) {
 	require.Equal(t, DefaultImagineVideoModel, CanonicalImagineVideoModel("grok-imagine-video"))
 	require.Equal(t, DefaultImagineVideo15Model, CanonicalImagineVideoModel("grok-imagine-video-1.5"))
 	require.Equal(t, DefaultImagineVideo15Model, CanonicalImagineVideoModel("grok-imagine-video-1.5-preview"))
+	require.Equal(t, DefaultImagineVideo15Model, CanonicalImagineVideoModel("grok-imagine-video-1.5-lite"))
 	require.Equal(t, DefaultImagineVideo15Model, CanonicalImagineVideoModel("xai/grok-video-1.5"))
 	require.Equal(t, "grok-imagine-video-2", CanonicalImagineVideoModel("grok-imagine-video-2"))
 }
@@ -72,13 +74,26 @@ func TestDefaultModelsIncludesGrok46And47(t *testing.T) {
 	t.Parallel()
 	ids := DefaultModelIDs()
 	require.Contains(t, ids, "grok-4.7")
+	require.Contains(t, ids, "grok-4.7-build-fast")
+	require.Contains(t, ids, "grok-imagine-video-1.5-lite")
 	require.Equal(t, "grok-4.7", ResolveGrokTextResponsesModelID("grok-4.7"))
 	require.Equal(t, "grok-4.7", ResolveGrokTextResponsesModelID("grok-4.7-latest"))
+	require.Equal(t, "grok-4.7-build-fast", ResolveGrokTextResponsesModelID("grok-4.7-build-fast"))
+	require.Equal(t, "grok-4.7-build-fast", ResolveGrokTextResponsesModelID("grok-4.7-build-fast-latest"))
+	require.True(t, IsGrokTextResponsesModelID("grok-4.7-build-fast"))
+	require.True(t, IsGrokTextResponsesModelID("xai/grok-4.7-build-fast"))
 
 	// Keep the existing assertions for the previous current model as well.
 	require.Contains(t, ids, "grok-4.6")
 	require.Equal(t, "grok-4.6", ResolveGrokTextResponsesModelID("grok-4.6"))
 	require.Equal(t, "grok-4.6", ResolveGrokTextResponsesModelID("grok-4.6-latest"))
+}
+
+func TestDefaultModelsIncludeGrokVoiceAliases(t *testing.T) {
+	ids := DefaultModelIDs()
+	require.Contains(t, ids, "grok-voice-tts")
+	require.Contains(t, ids, "grok-voice-stt")
+	require.Contains(t, ids, "grok-voice-realtime")
 }
 
 func TestResolveGrokTextResponsesModelID(t *testing.T) {

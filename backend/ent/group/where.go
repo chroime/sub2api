@@ -95,6 +95,11 @@ func BillingOutputTokenMultiplier(v float64) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldBillingOutputTokenMultiplier, v))
 }
 
+// BillingUnifiedTokenMultiplier applies equality check predicate on the "billing_unified_token_multiplier" field. It's identical to BillingUnifiedTokenMultiplierEQ.
+func BillingUnifiedTokenMultiplier(v float64) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldBillingUnifiedTokenMultiplier, v))
+}
+
 // BillingTokenAdjustmentMinInputTokens applies equality check predicate on the "billing_token_adjustment_min_input_tokens" field. It's identical to BillingTokenAdjustmentMinInputTokensEQ.
 func BillingTokenAdjustmentMinInputTokens(v int) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldBillingTokenAdjustmentMinInputTokens, v))
@@ -263,6 +268,16 @@ func AudioTtsPricePerMillionChars(v float64) predicate.Group {
 // AudioSttPricePerHour applies equality check predicate on the "audio_stt_price_per_hour" field. It's identical to AudioSttPricePerHourEQ.
 func AudioSttPricePerHour(v float64) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldAudioSttPricePerHour, v))
+}
+
+// AudioRateIndependent applies equality check predicate on the "audio_rate_independent" field. It's identical to AudioRateIndependentEQ.
+func AudioRateIndependent(v bool) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldAudioRateIndependent, v))
+}
+
+// AudioRateMultiplier applies equality check predicate on the "audio_rate_multiplier" field. It's identical to AudioRateMultiplierEQ.
+func AudioRateMultiplier(v float64) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldAudioRateMultiplier, v))
 }
 
 // LongContextPricingEnabled applies equality check predicate on the "long_context_pricing_enabled" field. It's identical to LongContextPricingEnabledEQ.
@@ -753,6 +768,46 @@ func BillingOutputTokenMultiplierLT(v float64) predicate.Group {
 // BillingOutputTokenMultiplierLTE applies the LTE predicate on the "billing_output_token_multiplier" field.
 func BillingOutputTokenMultiplierLTE(v float64) predicate.Group {
 	return predicate.Group(sql.FieldLTE(FieldBillingOutputTokenMultiplier, v))
+}
+
+// BillingUnifiedTokenMultiplierEQ applies the EQ predicate on the "billing_unified_token_multiplier" field.
+func BillingUnifiedTokenMultiplierEQ(v float64) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldBillingUnifiedTokenMultiplier, v))
+}
+
+// BillingUnifiedTokenMultiplierNEQ applies the NEQ predicate on the "billing_unified_token_multiplier" field.
+func BillingUnifiedTokenMultiplierNEQ(v float64) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldBillingUnifiedTokenMultiplier, v))
+}
+
+// BillingUnifiedTokenMultiplierIn applies the In predicate on the "billing_unified_token_multiplier" field.
+func BillingUnifiedTokenMultiplierIn(vs ...float64) predicate.Group {
+	return predicate.Group(sql.FieldIn(FieldBillingUnifiedTokenMultiplier, vs...))
+}
+
+// BillingUnifiedTokenMultiplierNotIn applies the NotIn predicate on the "billing_unified_token_multiplier" field.
+func BillingUnifiedTokenMultiplierNotIn(vs ...float64) predicate.Group {
+	return predicate.Group(sql.FieldNotIn(FieldBillingUnifiedTokenMultiplier, vs...))
+}
+
+// BillingUnifiedTokenMultiplierGT applies the GT predicate on the "billing_unified_token_multiplier" field.
+func BillingUnifiedTokenMultiplierGT(v float64) predicate.Group {
+	return predicate.Group(sql.FieldGT(FieldBillingUnifiedTokenMultiplier, v))
+}
+
+// BillingUnifiedTokenMultiplierGTE applies the GTE predicate on the "billing_unified_token_multiplier" field.
+func BillingUnifiedTokenMultiplierGTE(v float64) predicate.Group {
+	return predicate.Group(sql.FieldGTE(FieldBillingUnifiedTokenMultiplier, v))
+}
+
+// BillingUnifiedTokenMultiplierLT applies the LT predicate on the "billing_unified_token_multiplier" field.
+func BillingUnifiedTokenMultiplierLT(v float64) predicate.Group {
+	return predicate.Group(sql.FieldLT(FieldBillingUnifiedTokenMultiplier, v))
+}
+
+// BillingUnifiedTokenMultiplierLTE applies the LTE predicate on the "billing_unified_token_multiplier" field.
+func BillingUnifiedTokenMultiplierLTE(v float64) predicate.Group {
+	return predicate.Group(sql.FieldLTE(FieldBillingUnifiedTokenMultiplier, v))
 }
 
 // BillingTokenAdjustmentMinInputTokensEQ applies the EQ predicate on the "billing_token_adjustment_min_input_tokens" field.
@@ -2223,6 +2278,56 @@ func AudioSttPricePerHourIsNil() predicate.Group {
 // AudioSttPricePerHourNotNil applies the NotNil predicate on the "audio_stt_price_per_hour" field.
 func AudioSttPricePerHourNotNil() predicate.Group {
 	return predicate.Group(sql.FieldNotNull(FieldAudioSttPricePerHour))
+}
+
+// AudioRateIndependentEQ applies the EQ predicate on the "audio_rate_independent" field.
+func AudioRateIndependentEQ(v bool) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldAudioRateIndependent, v))
+}
+
+// AudioRateIndependentNEQ applies the NEQ predicate on the "audio_rate_independent" field.
+func AudioRateIndependentNEQ(v bool) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldAudioRateIndependent, v))
+}
+
+// AudioRateMultiplierEQ applies the EQ predicate on the "audio_rate_multiplier" field.
+func AudioRateMultiplierEQ(v float64) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldAudioRateMultiplier, v))
+}
+
+// AudioRateMultiplierNEQ applies the NEQ predicate on the "audio_rate_multiplier" field.
+func AudioRateMultiplierNEQ(v float64) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldAudioRateMultiplier, v))
+}
+
+// AudioRateMultiplierIn applies the In predicate on the "audio_rate_multiplier" field.
+func AudioRateMultiplierIn(vs ...float64) predicate.Group {
+	return predicate.Group(sql.FieldIn(FieldAudioRateMultiplier, vs...))
+}
+
+// AudioRateMultiplierNotIn applies the NotIn predicate on the "audio_rate_multiplier" field.
+func AudioRateMultiplierNotIn(vs ...float64) predicate.Group {
+	return predicate.Group(sql.FieldNotIn(FieldAudioRateMultiplier, vs...))
+}
+
+// AudioRateMultiplierGT applies the GT predicate on the "audio_rate_multiplier" field.
+func AudioRateMultiplierGT(v float64) predicate.Group {
+	return predicate.Group(sql.FieldGT(FieldAudioRateMultiplier, v))
+}
+
+// AudioRateMultiplierGTE applies the GTE predicate on the "audio_rate_multiplier" field.
+func AudioRateMultiplierGTE(v float64) predicate.Group {
+	return predicate.Group(sql.FieldGTE(FieldAudioRateMultiplier, v))
+}
+
+// AudioRateMultiplierLT applies the LT predicate on the "audio_rate_multiplier" field.
+func AudioRateMultiplierLT(v float64) predicate.Group {
+	return predicate.Group(sql.FieldLT(FieldAudioRateMultiplier, v))
+}
+
+// AudioRateMultiplierLTE applies the LTE predicate on the "audio_rate_multiplier" field.
+func AudioRateMultiplierLTE(v float64) predicate.Group {
+	return predicate.Group(sql.FieldLTE(FieldAudioRateMultiplier, v))
 }
 
 // LongContextPricingEnabledEQ applies the EQ predicate on the "long_context_pricing_enabled" field.

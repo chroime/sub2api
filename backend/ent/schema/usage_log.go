@@ -80,6 +80,12 @@ func (UsageLog) Fields() []ent.Field {
 			Default(0),
 		field.Int("output_tokens").
 			Default(0),
+		// Raw non-cache counts returned by the upstream before customer billing
+		// adjustment. These are administrator-only audit fields.
+		field.Int("upstream_input_tokens").
+			Default(0),
+		field.Int("upstream_output_tokens").
+			Default(0),
 		field.Int("cache_creation_tokens").
 			Default(0),
 		field.Int("cache_read_tokens").
@@ -190,6 +196,16 @@ func (UsageLog) Fields() []ent.Field {
 			Default(time.Now).
 			Immutable().
 			SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
+		// Raw cache buckets returned by the upstream before customer billing
+		// adjustment. Appended after existing fields so generated ent indices stay stable.
+		field.Int("upstream_cache_read_tokens").
+			Default(0),
+		field.Int("upstream_cache_creation_tokens").
+			Default(0),
+		field.Int("upstream_cache_creation_5m_tokens").
+			Default(0),
+		field.Int("upstream_cache_creation_1h_tokens").
+			Default(0),
 	}
 }
 

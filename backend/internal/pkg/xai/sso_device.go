@@ -1,6 +1,7 @@
 package xai
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -14,6 +15,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"golang.org/x/net/html"
 )
 
 const (
@@ -27,13 +30,14 @@ const (
 
 	ssoMaxAuthBody     = 2 << 20
 	ssoMaxTokenLength  = 16 << 10
-	ssoDefaultUA       = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+	ssoDefaultUA       = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 	ssoDefaultTokenTTL = 6 * time.Hour
 )
 
 var (
 	ErrSSOUnauthorized        = errors.New("xai sso unauthorized")
 	ErrSSOAuthorizationDenied = errors.New("xai device authorization denied")
+	ErrSSOBrowserRequired     = errors.New("xai device approval requires browser verification")
 )
 
 type SSOHTTPError struct{ Status int }
@@ -51,10 +55,11 @@ type SSODeviceOptions struct {
 }
 
 type ssoDeviceFlow struct {
-	client    SSODeviceHTTPClient
-	userAgent string
-	cookieJar http.CookieJar
-	sleep     func(context.Context, time.Duration) error
+	client              SSODeviceHTTPClient
+	userAgent           string
+	cookieJar           http.CookieJar
+	sleep               func(context.Context, time.Duration) error
+	lastResponseHeaders http.Header
 }
 
 func ConvertSSOToBuild(ctx context.Context, ssoToken string, opts *SSODeviceOptions) (*TokenResponse, error) {
@@ -147,7 +152,7 @@ func (f *ssoDeviceFlow) convert(ctx context.Context) (*TokenResponse, error) {
 		return nil, fmt.Errorf("open xAI device verification page: %w", SSOHTTPError{Status: status})
 	}
 
-	status, finalURL, _, err = f.do(ctx, http.MethodPost, SSOVerifyURL, url.Values{"user_code": {device.UserCode}})
+	status, finalURL, body, err = f.do(ctx, http.MethodPost, SSOVerifyURL, url.Values{"user_code": {device.UserCode}})
 	if err != nil {
 		return nil, err
 	}
@@ -158,14 +163,25 @@ func (f *ssoDeviceFlow) convert(ctx context.Context) (*TokenResponse, error) {
 		return nil, errors.New("xAI device verification did not reach consent page")
 	}
 
-	status, finalURL, _, err = f.do(ctx, http.MethodPost, SSOApproveURL, url.Values{
+	approval := url.Values{
 		"user_code":      {device.UserCode},
 		"action":         {"allow"},
 		"principal_type": {"User"},
 		"principal_id":   {""},
+	}
+	if consentToken := ssoConsentToken(body); consentToken != "" {
+		approval.Set("consent_token", consentToken)
+	}
+	consentURL, _ := url.Parse(finalURL) // f.do only returns validated xAI URLs.
+	status, finalURL, approvalBody, err := f.do(ctx, http.MethodPost, SSOApproveURL, approval, http.Header{
+		"Origin":  {consentURL.Scheme + "://" + consentURL.Host},
+		"Referer": {finalURL},
 	})
 	if err != nil {
 		return nil, err
+	}
+	if status == http.StatusForbidden && ssoApprovalNeedsBrowser(approvalBody, f.lastResponseHeaders) {
+		return nil, fmt.Errorf("approve xAI device code: %w", ErrSSOBrowserRequired)
 	}
 	if status < 200 || status >= 400 {
 		return nil, fmt.Errorf("approve xAI device code: %w", SSOHTTPError{Status: status})
@@ -175,6 +191,63 @@ func (f *ssoDeviceFlow) convert(ctx context.Context) (*TokenResponse, error) {
 	}
 
 	return f.pollToken(ctx, device.DeviceCode, time.Duration(device.Interval)*time.Second, time.Duration(device.ExpiresIn)*time.Second)
+}
+
+// xAI's web authorization page now enables Castle. A plain HTTP client can
+// complete the device flow up to the consent page, but the final approval is
+// rejected with 403 when the browser-minted request token is missing. Keep
+// this classification separate from an invalid SSO cookie so callers can
+// offer a browser authorization path instead of retrying the same request.
+func ssoApprovalNeedsBrowser(body []byte, headers http.Header) bool {
+	if strings.TrimSpace(headers.Get("cf-mitigated")) != "" ||
+		(strings.EqualFold(headers.Get("server"), "cloudflare") && strings.TrimSpace(headers.Get("cf-ray")) != "") {
+		return true
+	}
+	lower := strings.ToLower(string(body))
+	for _, marker := range []string{
+		"castle",
+		"request token required",
+		"couldn't verify this request",
+		"could not verify this request",
+		"cf-mitigated",
+		"cf-chl-",
+	} {
+		if strings.Contains(lower, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+// xAI binds device approval to a hidden token on the consent page. Keep it in
+// this flow only; older consent pages without the field remain supported.
+func ssoConsentToken(body []byte) string {
+	tokenizer := html.NewTokenizer(bytes.NewReader(body))
+	for {
+		switch tokenizer.Next() {
+		case html.ErrorToken:
+			return ""
+		case html.StartTagToken, html.SelfClosingTagToken:
+			token := tokenizer.Token()
+			if token.Data != "input" {
+				continue
+			}
+			var name, value, inputType string
+			for _, attr := range token.Attr {
+				switch attr.Key {
+				case "name":
+					name = attr.Val
+				case "value":
+					value = attr.Val
+				case "type":
+					inputType = attr.Val
+				}
+			}
+			if name == "consent_token" && strings.EqualFold(inputType, "hidden") {
+				return value
+			}
+		}
+	}
 }
 
 func (f *ssoDeviceFlow) pollToken(ctx context.Context, deviceCode string, interval, expiresIn time.Duration) (*TokenResponse, error) {
@@ -241,7 +314,7 @@ func (f *ssoDeviceFlow) pollToken(ctx context.Context, deviceCode string, interv
 	return nil, errors.New("xAI device flow token polling timed out")
 }
 
-func (f *ssoDeviceFlow) do(ctx context.Context, method, endpoint string, form url.Values) (int, string, []byte, error) {
+func (f *ssoDeviceFlow) do(ctx context.Context, method, endpoint string, form url.Values, headers ...http.Header) (int, string, []byte, error) {
 	if !safeXAIAuthURL(endpoint) {
 		return 0, "", nil, errors.New("xAI OAuth URL is not trusted")
 	}
@@ -260,6 +333,28 @@ func (f *ssoDeviceFlow) do(ctx context.Context, method, endpoint string, form ur
 		request.Header.Set("Accept", "application/json, text/html;q=0.9, */*;q=0.8")
 		request.Header.Set("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
 		request.Header.Set("User-Agent", f.userAgent)
+		if isSSODevicePageRequest(request.URL) {
+			request.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
+			request.Header.Set("Cache-Control", "no-cache")
+			request.Header.Set("Pragma", "no-cache")
+			request.Header.Set("Upgrade-Insecure-Requests", "1")
+			request.Header.Set("Sec-Fetch-Site", "same-origin")
+			request.Header.Set("Sec-Fetch-Mode", "navigate")
+			request.Header.Set("Sec-Fetch-User", "?1")
+			request.Header.Set("Sec-Fetch-Dest", "document")
+			request.Header.Set("Sec-CH-UA", `"Not_A Brand";v="99", "Chromium";v="120", "Google Chrome";v="120"`)
+			request.Header.Set("Sec-CH-UA-Mobile", "?0")
+			request.Header.Set("Sec-CH-UA-Platform", `"macOS"`)
+		}
+		if redirects == 0 {
+			for _, header := range headers {
+				for name, values := range header {
+					for _, value := range values {
+						request.Header.Add(name, value)
+					}
+				}
+			}
+		}
 		if cookie := f.cookieHeader(request.URL); cookie != "" {
 			request.Header.Set("Cookie", cookie)
 		}
@@ -271,6 +366,7 @@ func (f *ssoDeviceFlow) do(ctx context.Context, method, endpoint string, form ur
 		if err != nil {
 			return 0, currentURL, nil, err
 		}
+		f.lastResponseHeaders = response.Header.Clone()
 		f.captureCookies(request.URL, response)
 		data, readErr := io.ReadAll(io.LimitReader(response.Body, ssoMaxAuthBody+1))
 		_ = response.Body.Close()
@@ -303,6 +399,19 @@ func (f *ssoDeviceFlow) do(ctx context.Context, method, endpoint string, form ur
 		}
 	}
 	return 0, currentURL, nil, errors.New("xAI OAuth redirected too many times")
+}
+
+func isSSODevicePageRequest(target *url.URL) bool {
+	if target == nil {
+		return false
+	}
+	host := strings.ToLower(target.Hostname())
+	if host != "auth.x.ai" && host != "accounts.x.ai" {
+		return false
+	}
+	path := strings.TrimRight(target.Path, "/")
+	return strings.HasPrefix(path, "/oauth2/device/") &&
+		path != "/oauth2/device/code" && path != "/oauth2/token"
 }
 
 func seedSSOCookies(jar http.CookieJar, token string) {

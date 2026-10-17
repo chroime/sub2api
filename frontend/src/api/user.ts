@@ -19,21 +19,6 @@ import type {
   PlatformQuotasResponse,
 } from '@/types'
 
-export interface IQCandyResult {
-  id: string
-  site_name: string
-  group_name: string
-  account_label: string
-  model: string
-  effort: string
-  answer?: number | null
-  verdict: string
-  status: string
-  duration_ms: number
-  created_at: string
-  template_version?: string
-}
-
 export interface IQPelicanWork {
   id: string
   site_name: string
@@ -53,15 +38,16 @@ export interface IQTimelinePoint {
 }
 
 export interface IQDashboard {
-  candy_results: IQCandyResult[]
   pelican_works: IQPelicanWork[]
+  pelican_page: number
+  pelican_page_size: number
+  pelican_has_more: boolean
   timeline: IQTimelinePoint[]
-  standard_answer: number
   window_hours: number
   generated_at: string
 }
 
-export async function getIQDetection(params: { hours?: number; limit?: number } = {}): Promise<IQDashboard> {
+export async function getIQDetection(params: { hours?: number; limit?: number; pelican_page?: number; pelican_page_size?: number } = {}): Promise<IQDashboard> {
   const { data } = await apiClient.get<IQDashboard>('/user/iq-detection', { params })
   return data
 }

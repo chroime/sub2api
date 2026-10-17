@@ -59,17 +59,19 @@ func TestUserIQDetectionRouteReturnsSafeEmptyProjectionForAuthenticatedUser(t *t
 	}
 	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &envelope))
 	require.Zero(t, envelope.Code)
-	require.Equal(t, 21, envelope.Data.StandardAnswer)
 	require.Equal(t, 24, envelope.Data.WindowHours)
-	require.NotNil(t, envelope.Data.CandyResults)
 	require.NotNil(t, envelope.Data.PelicanWorks)
 	require.NotNil(t, envelope.Data.Timeline)
+	require.Equal(t, 1, envelope.Data.PelicanPage)
+	require.Equal(t, 8, envelope.Data.PelicanPageSize)
 	require.NotContains(t, recorder.Body.String(), "request_body")
+	require.NotContains(t, recorder.Body.String(), "candy_results")
+	require.NotContains(t, recorder.Body.String(), "standard_answer")
 }
 
 func TestUserIQDetectionRouteRejectsInvalidQueryParameters(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	for _, query := range []string{"?hours=", "?hours=1&hours=2", "?hours=abc", "?hours=0", "?hours=-1", "?hours=169", "?hours=1.5", "?hours=999999999999999999999999999999999999", "?limit=", "?limit=1&limit=2", "?limit=abc", "?limit=0", "?limit=-1", "?limit=21"} {
+	for _, query := range []string{"?hours=", "?hours=1&hours=2", "?hours=abc", "?hours=0", "?hours=-1", "?hours=169", "?hours=1.5", "?hours=999999999999999999999999999999999999", "?limit=", "?limit=1&limit=2", "?limit=abc", "?limit=0", "?limit=-1", "?limit=21", "?pelican_page=", "?pelican_page=1&pelican_page=2", "?pelican_page=abc", "?pelican_page=0", "?pelican_page=-1", "?pelican_page=1000001", "?pelican_page=999999999999999999999999999999999999", "?pelican_page_size=", "?pelican_page_size=1&pelican_page_size=2", "?pelican_page_size=abc", "?pelican_page_size=0", "?pelican_page_size=-1", "?pelican_page_size=21"} {
 		router := gin.New()
 		handlers := &handler.Handlers{User: handler.NewUserHandler(nil, nil, nil, nil, nil, nil)}
 		passThroughAuth := servermiddleware.JWTAuthMiddleware(func(c *gin.Context) {
