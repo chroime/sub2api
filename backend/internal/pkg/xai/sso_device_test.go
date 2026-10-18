@@ -21,6 +21,7 @@ type ssoDeviceFakeClient struct {
 	cookieHeaders []string
 	approveStatus int
 	approveBody   string
+	tokenPending  bool
 }
 
 func (c *ssoDeviceFakeClient) Do(req *http.Request) (*http.Response, error) {
@@ -76,6 +77,9 @@ func (c *ssoDeviceFakeClient) Do(req *http.Request) (*http.Response, error) {
 		values := readSSODeviceForm(c.t, req)
 		require.Equal(c.t, "urn:ietf:params:oauth:grant-type:device_code", values.Get("grant_type"))
 		require.Equal(c.t, "device-1", values.Get("device_code"))
+		if c.tokenPending {
+			return ssoDeviceResponse(http.StatusBadRequest, nil, `{"error":"authorization_pending"}`), nil
+		}
 		return ssoDeviceResponse(http.StatusOK, nil, `{"access_token":"access-token","refresh_token":"refresh-token","id_token":"id-token","token_type":"Bearer","expires_in":3600,"scope":"`+SSOBuildScope+`"}`), nil
 	default:
 		c.t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
@@ -122,6 +126,82 @@ func TestConvertSSOToBuildClassifiesCastleApprovalChallenge(t *testing.T) {
 		},
 	})
 	require.ErrorIs(t, err, ErrSSOBrowserRequired)
+}
+
+func TestConvertSSOToBuildUsesBrowserApprovalThenPollsToken(t *testing.T) {
+	t.Setenv(EnvClientID, "")
+	client := &ssoDeviceFakeClient{
+		t:             t,
+		approveStatus: http.StatusForbidden,
+		approveBody:   `<html><title>Castle request token required</title></html>`,
+	}
+	var browserApproval SSOBrowserApproval
+	token, err := ConvertSSOToBuild(context.Background(), "sso=sso-token", &SSODeviceOptions{
+		HTTPClient: client,
+		Sleep:      func(context.Context, time.Duration) error { return nil },
+		BrowserApprove: func(_ context.Context, approval SSOBrowserApproval) error {
+			browserApproval = approval
+			return nil
+		},
+	})
+	require.NoError(t, err)
+	require.Equal(t, "access-token", token.AccessToken)
+	require.Equal(t, "refresh-token", token.RefreshToken)
+	require.Equal(t, "sso-token", browserApproval.SSOToken)
+	require.Equal(t, "USER-1", browserApproval.UserCode)
+	require.Equal(t, "https://auth.x.ai/oauth2/device/complete", browserApproval.VerificationURL)
+	require.Equal(t, "https://auth.x.ai/oauth2/device/consent", browserApproval.ConsentURL)
+}
+
+func TestConvertSSOToBuildTokenWinsWhileBrowserStillRunning(t *testing.T) {
+	t.Setenv(EnvClientID, "")
+	client := &ssoDeviceFakeClient{
+		t:             t,
+		approveStatus: http.StatusForbidden,
+		approveBody:   `<html><title>Castle request token required</title></html>`,
+	}
+	browserCanceled := make(chan struct{})
+	token, err := ConvertSSOToBuild(context.Background(), "sso=sso-token", &SSODeviceOptions{
+		HTTPClient: client,
+		Sleep:      func(context.Context, time.Duration) error { return nil },
+		BrowserApprove: func(ctx context.Context, _ SSOBrowserApproval) error {
+			// Page never reports success; the token endpoint is authoritative.
+			<-ctx.Done()
+			close(browserCanceled)
+			return ctx.Err()
+		},
+	})
+	require.NoError(t, err)
+	require.Equal(t, "access-token", token.AccessToken)
+	select {
+	case <-browserCanceled:
+	case <-time.After(2 * time.Second):
+		t.Fatal("browser approval was not canceled after token issuance")
+	}
+}
+
+func TestConvertSSOToBuildReportsBrowserFailureAfterFinalPoll(t *testing.T) {
+	t.Setenv(EnvClientID, "")
+	client := &ssoDeviceFakeClient{
+		t:             t,
+		approveStatus: http.StatusForbidden,
+		approveBody:   `<html><title>Castle request token required</title></html>`,
+		tokenPending:  true,
+	}
+	browserReturned := make(chan struct{})
+	_, err := ConvertSSOToBuild(context.Background(), "sso=sso-token", &SSODeviceOptions{
+		HTTPClient: client,
+		Sleep: func(context.Context, time.Duration) error {
+			<-browserReturned
+			return nil
+		},
+		BrowserApprove: func(context.Context, SSOBrowserApproval) error {
+			defer close(browserReturned)
+			return ErrSSOBrowserApproval
+		},
+	})
+	require.ErrorIs(t, err, ErrSSOBrowserApproval)
+	require.GreaterOrEqual(t, client.tokenCalls, 1, "a final token poll must run before reporting browser failure")
 }
 
 func TestConvertSSOToBuildKeepsGenericApprovalForbidden(t *testing.T) {

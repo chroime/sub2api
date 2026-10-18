@@ -45,6 +45,12 @@ type Input struct {
 	ProxyURL string `json:"-"`
 	Username string `json:"username"`
 	Password string `json:"password"`
+	// Grok SSO approval only. SSOToken is ephemeral; it crosses only the
+	// backend-to-helper stdin boundary and is never returned to an administrator.
+	SSOToken        string `json:"sso_token,omitempty"`
+	UserCode        string `json:"user_code,omitempty"`
+	VerificationURL string `json:"verification_url,omitempty"`
+	ConsentURL      string `json:"consent_url,omitempty"`
 }
 
 type Driver interface {

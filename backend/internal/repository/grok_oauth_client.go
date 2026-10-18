@@ -16,6 +16,7 @@ import (
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/Wei-Shaw/sub2api/internal/upstreambrowser"
 	"github.com/Wei-Shaw/sub2api/internal/util/logredact"
 	"github.com/imroc/req/v3"
 )
@@ -143,11 +144,104 @@ func (c *grokOAuthClient) ConvertSSOToBuild(ctx context.Context, ssoToken, proxy
 
 	requestCtx, cancel := context.WithTimeout(ctx, xai.SSOConversionTimeout)
 	defer cancel()
-	tokenResp, err := xai.ConvertSSOToBuild(requestCtx, ssoToken, &xai.SSODeviceOptions{HTTPClient: client})
+	tokenResp, err := xai.ConvertSSOToBuild(requestCtx, ssoToken, &xai.SSODeviceOptions{
+		HTTPClient: client,
+		BrowserApprove: func(browserCtx context.Context, approval xai.SSOBrowserApproval) error {
+			return approveGrokSSOInBrowser(browserCtx, approval, proxyURL)
+		},
+	})
 	if err != nil {
 		return nil, grokSSOConversionError(err)
 	}
 	return tokenResp, nil
+}
+
+// approveGrokSSOInBrowser completes the final xAI device consent in an
+// isolated Playwright session. The helper receives the ephemeral SSO cookie
+// over its private stdin channel, injects it into the x.ai cookie jar, opens
+// the official verification page, and clicks the page's Allow control. No
+// browser credentials or cookies are returned to the API client or logs.
+func approveGrokSSOInBrowser(ctx context.Context, approval xai.SSOBrowserApproval, proxyURL string) error {
+	manager := upstreambrowser.New(upstreambrowser.Options{
+		NodePath:       firstNonEmptyEnv("GROK_SSO_BROWSER_NODE", "GOVERNANCE_BROWSER_NODE"),
+		ScriptPath:     firstNonEmptyEnv("GROK_SSO_BROWSER_SCRIPT", "GOVERNANCE_BROWSER_SCRIPT"),
+		ExecutablePath: firstNonEmptyEnv("GROK_SSO_BROWSER_EXECUTABLE", "GOVERNANCE_BROWSER_EXECUTABLE"),
+		TempDir:        firstNonEmptyEnv("GROK_SSO_BROWSER_TEMP_DIR", "GOVERNANCE_BROWSER_TEMP_DIR"),
+	})
+	if available, code := manager.Available(); !available {
+		return fmt.Errorf("%s: %w", code, xai.ErrSSOBrowserUnavailable)
+	}
+	driver, err := manager.Start(ctx, upstreambrowser.Input{
+		BaseURL:         xai.SSOAccountsURL,
+		Platform:        "grok-sso",
+		ProxyURL:        proxyURL,
+		SSOToken:        approval.SSOToken,
+		UserCode:        approval.UserCode,
+		VerificationURL: approval.VerificationURL,
+		ConsentURL:      approval.ConsentURL,
+	})
+	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return err
+		}
+		// Only bounded helper codes reach the error text; never URLs or cookies.
+		if errors.Is(err, upstreambrowser.ErrUnavailable) {
+			return fmt.Errorf("%s: %w", upstreambrowser.Code(err), xai.ErrSSOBrowserUnavailable)
+		}
+		return fmt.Errorf("%s: %w", upstreambrowser.Code(err), xai.ErrSSOBrowserApproval)
+	}
+	defer func() { _ = driver.Close() }()
+
+	// The caller polls the token endpoint concurrently and cancels ctx once
+	// xAI issues tokens, so this loop only has to keep the page alive and
+	// surface a terminal browser failure early.
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	for {
+		view, snapshotErr := driver.Snapshot(ctx)
+		if snapshotErr != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			return fmt.Errorf("%s: %w", upstreambrowser.Code(snapshotErr), xai.ErrSSOBrowserApproval)
+		}
+		switch view.Status {
+		case "ready":
+			// Keep the page open until the token poll confirms or ctx ends;
+			// closing early could interrupt a consent POST still in flight.
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(10 * time.Second):
+				return nil
+			}
+		case "failed":
+			return fmt.Errorf("%s: %w", firstNonEmptyString(view.ErrorCode, "browser_sso_approval_failed"), xai.ErrSSOBrowserApproval)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+		}
+	}
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func firstNonEmptyEnv(names ...string) string {
+	for _, name := range names {
+		if value := strings.TrimSpace(os.Getenv(name)); value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func createGrokReqClient(proxyURL string) (*req.Client, error) {
@@ -174,12 +268,35 @@ func createGrokSSOHTTPClient(proxyURL string) (*http.Client, error) {
 	return &clone, nil
 }
 
+// grokBrowserDiagnostic exposes only a fixed browser helper code, never the
+// wrapped error text, so URLs, cookies and tokens cannot leak to the admin.
+func grokBrowserDiagnostic(err error) string {
+	text := err.Error()
+	for _, code := range []string{
+		"browser_node_missing", "browser_script_missing", "browser_executable_missing",
+		"browser_launch_failed", "browser_dependency_missing", "browser_navigation_failed",
+		"browser_page_closed", "browser_sso_approval_failed", "browser_timeout", "browser_protocol_error",
+		"browser_closed", "browser_unavailable",
+	} {
+		if strings.Contains(text, code) {
+			return " (" + code + ")"
+		}
+	}
+	return ""
+}
+
 func grokSSOConversionError(err error) error {
 	if errors.Is(err, xai.ErrSSOUnauthorized) {
 		return infraerrors.New(http.StatusUnauthorized, "GROK_SSO_UNAUTHORIZED", "Grok Web SSO cookie is invalid or expired")
 	}
 	if errors.Is(err, xai.ErrSSOBrowserRequired) {
 		return infraerrors.New(http.StatusForbidden, "GROK_SSO_BROWSER_REQUIRED", "xAI requires browser verification to approve this device")
+	}
+	if errors.Is(err, xai.ErrSSOBrowserUnavailable) {
+		return infraerrors.New(http.StatusServiceUnavailable, "GROK_SSO_BROWSER_UNAVAILABLE", "xAI browser verification is not available on this server"+grokBrowserDiagnostic(err))
+	}
+	if errors.Is(err, xai.ErrSSOBrowserApproval) {
+		return infraerrors.New(http.StatusBadGateway, "GROK_SSO_BROWSER_APPROVAL_FAILED", "xAI browser verification did not complete"+grokBrowserDiagnostic(err))
 	}
 	if errors.Is(err, xai.ErrSSOAuthorizationDenied) {
 		return infraerrors.New(http.StatusForbidden, "GROK_SSO_AUTHORIZATION_DENIED", "xAI device authorization was denied or expired")

@@ -26,7 +26,12 @@ const (
 	SSOVerifyURL         = OAuthIssuer + "/oauth2/device/verify"
 	SSOApproveURL        = OAuthIssuer + "/oauth2/device/approve"
 	SSOTokenURL          = OAuthIssuer + "/oauth2/token"
-	SSOConversionTimeout = 90 * time.Second
+	SSOConversionTimeout = 180 * time.Second
+	// SSOBrowserApprovalTimeout bounds the browser fallback: Chromium launch,
+	// the device page's Castle/Cloudflare checks, the consent click, and the
+	// concurrent token polling. It must fit inside SSOConversionTimeout after
+	// the HTTP steps that precede the consent POST.
+	SSOBrowserApprovalTimeout = 140 * time.Second
 
 	ssoMaxAuthBody     = 2 << 20
 	ssoMaxTokenLength  = 16 << 10
@@ -38,6 +43,8 @@ var (
 	ErrSSOUnauthorized        = errors.New("xai sso unauthorized")
 	ErrSSOAuthorizationDenied = errors.New("xai device authorization denied")
 	ErrSSOBrowserRequired     = errors.New("xai device approval requires browser verification")
+	ErrSSOBrowserUnavailable  = errors.New("xai sso browser verifier unavailable")
+	ErrSSOBrowserApproval     = errors.New("xai sso browser approval failed")
 )
 
 type SSOHTTPError struct{ Status int }
@@ -52,6 +59,26 @@ type SSODeviceOptions struct {
 	HTTPClient SSODeviceHTTPClient
 	UserAgent  string
 	Sleep      func(context.Context, time.Duration) error
+	// BrowserApprove is called only when xAI rejects the plain HTTP consent
+	// POST with a browser verification challenge. The callback owns an
+	// isolated browser session, injects the SSO cookie, and returns only after
+	// the device approval page has completed.
+	BrowserApprove func(context.Context, SSOBrowserApproval) error
+}
+
+// SSOBrowserApproval contains the minimum device-flow data required by the
+// browser verifier. SSOToken is ephemeral and must never be persisted or
+// logged; it is passed only to the local browser helper for cookie injection.
+//
+// Cookies minted for the HTTP client are intentionally not forwarded: xAI's
+// edge and Castle bind them to the HTTP client's TLS and User-Agent identity,
+// so replaying them inside a real Chromium makes the approval look forged.
+// The browser re-enters the device flow from the verification URL instead.
+type SSOBrowserApproval struct {
+	SSOToken        string
+	UserCode        string
+	VerificationURL string
+	ConsentURL      string
 }
 
 type ssoDeviceFlow struct {
@@ -59,6 +86,8 @@ type ssoDeviceFlow struct {
 	userAgent           string
 	cookieJar           http.CookieJar
 	sleep               func(context.Context, time.Duration) error
+	ssoToken            string
+	browserApprove      func(context.Context, SSOBrowserApproval) error
 	lastResponseHeaders http.Header
 }
 
@@ -94,10 +123,12 @@ func ConvertSSOToBuild(ctx context.Context, ssoToken string, opts *SSODeviceOpti
 	seedSSOCookies(jar, ssoToken)
 
 	flow := &ssoDeviceFlow{
-		client:    client,
-		userAgent: userAgent,
-		cookieJar: jar,
-		sleep:     sleep,
+		client:         client,
+		userAgent:      userAgent,
+		cookieJar:      jar,
+		sleep:          sleep,
+		ssoToken:       ssoToken,
+		browserApprove: opts.BrowserApprove,
 	}
 	return flow.convert(ctx)
 }
@@ -172,16 +203,25 @@ func (f *ssoDeviceFlow) convert(ctx context.Context) (*TokenResponse, error) {
 	if consentToken := ssoConsentToken(body); consentToken != "" {
 		approval.Set("consent_token", consentToken)
 	}
-	consentURL, _ := url.Parse(finalURL) // f.do only returns validated xAI URLs.
+	consentPageURL := finalURL
+	consentURL, _ := url.Parse(consentPageURL) // f.do only returns validated xAI URLs.
 	status, finalURL, approvalBody, err := f.do(ctx, http.MethodPost, SSOApproveURL, approval, http.Header{
 		"Origin":  {consentURL.Scheme + "://" + consentURL.Host},
-		"Referer": {finalURL},
+		"Referer": {consentPageURL},
 	})
 	if err != nil {
 		return nil, err
 	}
 	if status == http.StatusForbidden && ssoApprovalNeedsBrowser(approvalBody, f.lastResponseHeaders) {
-		return nil, fmt.Errorf("approve xAI device code: %w", ErrSSOBrowserRequired)
+		if f.browserApprove == nil {
+			return nil, fmt.Errorf("approve xAI device code: %w", ErrSSOBrowserRequired)
+		}
+		return f.approveInBrowser(ctx, SSOBrowserApproval{
+			SSOToken:        f.ssoToken,
+			UserCode:        device.UserCode,
+			VerificationURL: device.VerificationURIComplete,
+			ConsentURL:      consentPageURL,
+		}, device.DeviceCode, time.Duration(device.Interval)*time.Second, time.Duration(device.ExpiresIn)*time.Second)
 	}
 	if status < 200 || status >= 400 {
 		return nil, fmt.Errorf("approve xAI device code: %w", SSOHTTPError{Status: status})
@@ -250,14 +290,45 @@ func ssoConsentToken(body []byte) string {
 	}
 }
 
+// approveInBrowser runs the browser verifier and token polling concurrently.
+// The token endpoint is the only authoritative approval signal: page text and
+// URLs are heuristics, so the browser is kept alive until a token arrives, the
+// browser reports a terminal failure, or the approval budget is exhausted.
+func (f *ssoDeviceFlow) approveInBrowser(ctx context.Context, approval SSOBrowserApproval, deviceCode string, interval, expiresIn time.Duration) (*TokenResponse, error) {
+	browserCtx, cancelBrowser := context.WithCancel(ctx)
+	browserDone := make(chan error, 1)
+	go func() { browserDone <- f.browserApprove(browserCtx, approval) }()
+	token, err := f.pollTokenWithBrowser(ctx, deviceCode, interval, minDuration(expiresIn, SSOBrowserApprovalTimeout), browserDone)
+	cancelBrowser()
+	if token != nil {
+		return token, nil
+	}
+	return nil, err
+}
+
 func (f *ssoDeviceFlow) pollToken(ctx context.Context, deviceCode string, interval, expiresIn time.Duration) (*TokenResponse, error) {
+	return f.pollTokenWithBrowser(ctx, deviceCode, interval, minDuration(expiresIn, 75*time.Second), nil)
+}
+
+func (f *ssoDeviceFlow) pollTokenWithBrowser(ctx context.Context, deviceCode string, interval, budget time.Duration, browserDone <-chan error) (*TokenResponse, error) {
 	if interval < time.Second {
 		interval = time.Second
 	}
-	deadline := time.Now().Add(minDuration(expiresIn, 75*time.Second))
+	var browserErr error
+	browserFailed := false
+	deadline := time.Now().Add(budget)
 	for time.Now().Before(deadline) {
 		if err := f.sleep(ctx, interval); err != nil {
 			return nil, err
+		}
+		if browserDone != nil {
+			select {
+			case browserErr = <-browserDone:
+				// A browser failure still gets one final poll: the approval
+				// may have landed just before the page reported an error.
+				browserDone, browserFailed = nil, browserErr != nil
+			default:
+			}
 		}
 		status, _, body, err := f.do(ctx, http.MethodPost, SSOTokenURL, url.Values{
 			"grant_type":  {"urn:ietf:params:oauth:grant-type:device_code"},
@@ -297,10 +368,13 @@ func (f *ssoDeviceFlow) pollToken(ctx context.Context, deviceCode string, interv
 			}, nil
 		}
 		switch payload.Error {
-		case "authorization_pending":
-			continue
-		case "slow_down":
-			interval += 5 * time.Second
+		case "authorization_pending", "slow_down":
+			if payload.Error == "slow_down" {
+				interval += 5 * time.Second
+			}
+			if browserFailed {
+				return nil, fmt.Errorf("approve xAI device code in browser: %w", browserErr)
+			}
 			continue
 		case "access_denied", "expired_token":
 			return nil, ErrSSOAuthorizationDenied
@@ -310,6 +384,12 @@ func (f *ssoDeviceFlow) pollToken(ctx context.Context, deviceCode string, interv
 			}
 			return nil, fmt.Errorf("xAI token polling failed: %s", firstNonEmpty(payload.ErrorDescription, payload.Error, strconv.Itoa(status)))
 		}
+	}
+	if browserErr != nil {
+		return nil, fmt.Errorf("approve xAI device code in browser: %w", browserErr)
+	}
+	if browserDone != nil {
+		return nil, fmt.Errorf("approve xAI device code in browser: %w", ErrSSOBrowserApproval)
 	}
 	return nil, errors.New("xAI device flow token polling timed out")
 }

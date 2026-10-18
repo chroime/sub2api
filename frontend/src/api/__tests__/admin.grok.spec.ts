@@ -17,10 +17,10 @@ describe('admin Grok SSO import API', () => {
   })
 
   it.each([
-    [1, 180_000],
-    [3, 180_000],
-    [4, 270_000],
-    [7, 360_000],
+    [1, 270_000],
+    [3, 270_000],
+    [4, 450_000],
+    [7, 630_000],
   ])('uses a timeout sized for %i keys', async (keyCount, expectedTimeout) => {
     expect(getGrokSSOImportTimeout(keyCount)).toBe(expectedTimeout)
 

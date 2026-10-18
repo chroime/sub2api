@@ -18,12 +18,40 @@ const endpointURL = (value) => {
 export function validateInput(input) {
   if (!object(input)) return false;
   const url = endpointURL(input.base_url);
-  return Boolean(url && url.protocol === 'https:' && (!url.port || url.port === '443') &&
-    (url.pathname === '/' || url.pathname === '') && !url.search &&
-    ['sub2api', 'newapi'].includes(input.platform) &&
-    typeof input.username === 'string' && Buffer.byteLength(input.username) <= 512 &&
-    typeof input.password === 'string' && Buffer.byteLength(input.password) <= 4096 &&
-    !/[\x00-\x1f\x7f]/.test(input.username + input.password));
+  if (!url || url.protocol !== 'https:' || (url.port && url.port !== '443') ||
+    (url.pathname !== '/' && url.pathname !== '') || url.search ||
+    (typeof input.platform !== 'string')) return false;
+  if (['sub2api', 'newapi'].includes(input.platform)) {
+    return typeof input.username === 'string' && Buffer.byteLength(input.username) <= 512 &&
+      typeof input.password === 'string' && Buffer.byteLength(input.password) <= 4096 &&
+      !/[\x00-\x1f\x7f]/.test(input.username + input.password);
+  }
+  if (input.platform !== 'grok-sso') return false;
+  const trusted = (raw) => {
+    try {
+      const target = new URL(raw);
+      const host = target.hostname.toLowerCase();
+      return target.protocol === 'https:' && !target.username && !target.password && !target.hash &&
+        (host === 'x.ai' || host.endsWith('.x.ai'));
+    } catch { return false; }
+  };
+  return trusted(input.verification_url) && trusted(input.consent_url) &&
+    typeof input.sso_token === 'string' && input.sso_token.length > 0 && Buffer.byteLength(input.sso_token) <= 16384 &&
+    typeof input.user_code === 'string' && input.user_code.length > 0 && Buffer.byteLength(input.user_code) <= 256 &&
+    !/[\x00-\x1f\x7f]/.test(input.sso_token + input.user_code);
+}
+
+export function allowedSSORequest(request) {
+  if (!request?.pageMatches) return false;
+  let url;
+  try { url = new URL(request.url); } catch { return false; }
+  if (!['https:'].includes(url.protocol)) return false;
+  // Subresources may be hosted by the challenge provider. Main-frame
+  // navigation stays restricted to xAI so the injected cookie cannot be
+  // carried to an unrelated origin.
+  if (!request.isNavigation || !request.isMainFrame) return true;
+  const host = url.hostname.toLowerCase();
+  return host === 'x.ai' || host.endsWith('.x.ai') || host === 'challenges.cloudflare.com' || host.endsWith('.cloudflare.com');
 }
 
 export function allowedRequest(request, origin) {

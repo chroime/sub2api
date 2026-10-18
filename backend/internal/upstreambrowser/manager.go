@@ -428,10 +428,25 @@ func cleanString(value string, max int, allowSpace bool) bool {
 
 func validInput(input Input) bool {
 	u, err := url.Parse(input.BaseURL)
-	return err == nil && u.Scheme == "https" && u.Hostname() != "" && u.User == nil && u.RawQuery == "" && u.Fragment == "" &&
-		(u.Path == "" || u.Path == "/") && (u.Port() == "" || u.Port() == "443") &&
-		(input.Platform == "sub2api" || input.Platform == "newapi") &&
+	if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" ||
+		(u.Path != "" && u.Path != "/") || (u.Port() != "" && u.Port() != "443") {
+		return false
+	}
+	if input.Platform == "grok-sso" {
+		return trustedXAIURL(input.BaseURL) && trustedXAIURL(input.VerificationURL) && trustedXAIURL(input.ConsentURL) &&
+			cleanString(input.SSOToken, 16<<10, false) && cleanString(input.UserCode, 256, false)
+	}
+	return (input.Platform == "sub2api" || input.Platform == "newapi") &&
 		(input.Username == "" || cleanString(input.Username, 512, true)) && (input.Password == "" || cleanString(input.Password, 4096, true))
+}
+
+func trustedXAIURL(raw string) bool {
+	target, err := url.Parse(raw)
+	if err != nil || target.Scheme != "https" || target.User != nil || target.Hostname() == "" || target.Fragment != "" {
+		return false
+	}
+	host := strings.ToLower(target.Hostname())
+	return host == "x.ai" || strings.HasSuffix(host, ".x.ai")
 }
 
 func validAction(action Action) bool {
@@ -464,7 +479,7 @@ func decodeView(raw json.RawMessage) (View, error) {
 		return View{}, ErrProtocol
 	}
 	switch view.ErrorCode {
-	case "", "browser_navigation_failed", "browser_render_failed", "browser_page_closed", "browser_timeout", "browser_unsupported_route":
+	case "", "browser_navigation_failed", "browser_render_failed", "browser_page_closed", "browser_timeout", "browser_unsupported_route", "browser_sso_approval_failed":
 	default:
 		return View{}, ErrProtocol
 	}
