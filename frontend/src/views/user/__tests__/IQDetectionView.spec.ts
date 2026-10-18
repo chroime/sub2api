@@ -81,6 +81,34 @@ describe('IQDetectionView', () => {
     expect(wrapper.get('[data-test="pelican-work-preview-frame"]').attributes('style')).toContain('scale(0.5)')
   })
 
+  it('fits an opened work inside the responsive dialog viewport', async () => {
+    getIQDetection.mockResolvedValueOnce({
+      window_hours: 24,
+      generated_at: '2026-10-02T12:00:00Z',
+      timeline: [],
+      pelican_works: [{ id: 'pelican-dialog', site_name: 'fixture', group_name: 'GPT Lite', account_label: 'GPT Lite', model: 'gpt-6-astra', effort: 'low', html: '<html><body><svg /></body></html>', status: 'succeeded', duration_ms: 50, created_at: '2026-10-02T12:00:00Z' }],
+    })
+    const wrapper = mount(IQDetectionView, { global: { stubs: { Icon: true } } })
+    await flushPromises()
+
+    await wrapper.get('[data-test="pelican-work-view"]').trigger('click')
+    await flushPromises()
+    const preview = document.body.querySelectorAll('[data-test="pelican-work-dialog-preview"]')[document.body.querySelectorAll('[data-test="pelican-work-dialog-preview"]').length - 1] as HTMLElement
+    vi.spyOn(preview, 'getBoundingClientRect').mockReturnValue({ width: 440, height: 384 } as DOMRect)
+    ;(wrapper.vm as any).updateDialogPreviewViewport()
+    ;(wrapper.vm as any).handlePreviewMessage(new MessageEvent('message', {
+      data: { type: 'pelican-preview-size', id: 'pelican-dialog', surface: 'dialog', width: 320, height: 200 },
+    }))
+    await nextTick()
+
+    const frames = document.body.querySelectorAll('[data-test="pelican-work-dialog-frame"]')
+    const frame = frames[frames.length - 1] as HTMLIFrameElement
+    expect(frame).not.toBeNull()
+    expect(frame.getAttribute('style')).toContain('width: 320px')
+    expect(frame.getAttribute('style')).toContain('height: 200px')
+    expect(frame.getAttribute('style')).toContain('scale(1.375)')
+  })
+
   it('paginates pelican works with a next-page request', async () => {
     const page = (id: string, pelican_page: number, pelican_has_more: boolean) => ({
       window_hours: 24,
