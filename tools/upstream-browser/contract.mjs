@@ -35,6 +35,21 @@ export function validateInput(input) {
         (host === 'x.ai' || host.endsWith('.x.ai'));
     } catch { return false; }
   };
+  const trustedCookieURL = (raw) => {
+    try {
+      const target = new URL(raw);
+      return trusted(raw) && (!target.port || target.port === '443') &&
+        (target.pathname === '' || target.pathname === '/') && !target.search;
+    } catch { return false; }
+  };
+  const cookies = input.cookies ?? [];
+  if (!Array.isArray(cookies) || cookies.length > 100 || cookies.some((cookie) =>
+    !object(cookie) || Object.keys(cookie).some((key) => !['name', 'value', 'url'].includes(key)) ||
+    typeof cookie.name !== 'string' || cookie.name.length === 0 || cookie.name.length > 128 ||
+    /[\x00-\x20\x7f]/.test(cookie.name) || typeof cookie.value !== 'string' ||
+    cookie.value.length === 0 || Buffer.byteLength(cookie.value) > 16384 ||
+    /[\x00-\x1f\x7f]/.test(cookie.value) || !trustedCookieURL(cookie.url)
+  )) return false;
   return trusted(input.verification_url) && trusted(input.consent_url) &&
     typeof input.sso_token === 'string' && input.sso_token.length > 0 && Buffer.byteLength(input.sso_token) <= 16384 &&
     typeof input.user_code === 'string' && input.user_code.length > 0 && Buffer.byteLength(input.user_code) <= 256 &&

@@ -42,7 +42,7 @@
         <div v-if="dashboard.pelican_works.length" class="grid grid-cols-1 items-start gap-5 md:grid-cols-2 lg:grid-cols-4" data-test="pelican-work-grid">
           <article v-for="work in dashboard.pelican_works" :key="work.id" class="group flex h-[620px] min-w-0 flex-col overflow-hidden rounded-[1.35rem] border border-gray-200/90 bg-white shadow-sm ring-1 ring-black/[0.02] transition duration-300 hover:-translate-y-0.5 hover:shadow-lg dark:border-dark-700 dark:bg-dark-800 dark:ring-white/[0.03]" data-test="pelican-work-card">
             <div class="iq-pelican-preview relative h-[420px] shrink-0 overflow-hidden bg-slate-100 dark:bg-dark-900" data-test="pelican-work-preview">
-              <iframe :key="`${work.id}:${replayNonce[work.id] || 0}`" :srcdoc="preview(work.html, work.id, 'card')" :title="`${t('iqDetection.pelicanTitle')} ${work.model}`" :data-pelican-preview-id="work.id" data-pelican-preview-surface="card" :style="previewFrameStyle(work.id)" data-test="pelican-work-preview-frame" sandbox="allow-scripts" scrolling="no" referrerpolicy="no-referrer" class="pointer-events-none absolute left-1/2 top-0 block w-full select-none border-0" />
+              <iframe :key="`${work.id}:${replayNonce[work.id] || 0}`" :srcdoc="preview(work.html, work.id, 'card')" :title="`${t('iqDetection.pelicanTitle')} ${work.model}`" :data-pelican-preview-id="work.id" data-pelican-preview-surface="card" :style="previewFrameStyle(work.id)" data-test="pelican-work-preview-frame" sandbox="allow-scripts" scrolling="no" referrerpolicy="no-referrer" class="absolute left-1/2 top-0 block w-full select-none border-0" />
               <div class="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/25 via-black/5 to-transparent" />
               <button type="button" class="absolute bottom-3 right-3 inline-flex items-center gap-1.5 rounded-full bg-white/95 px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-lg ring-1 ring-black/5 transition hover:bg-white dark:bg-dark-800/95 dark:text-dark-100 dark:ring-white/10 dark:hover:bg-dark-800" @click="replay(work.id)"><Icon name="play" size="xs" />{{ t('iqDetection.replay') }}</button>
             </div>
@@ -74,7 +74,7 @@
       </section>
       <BaseDialog v-if="selectedWork" :show="true" :title="`${t('iqDetection.pelicanTitle')} · ${selectedWork.model}`" width="wide" @close="selectedWork = null">
         <div ref="dialogPreviewRef" class="relative aspect-[6/5] min-h-[24rem] overflow-hidden rounded-xl bg-slate-50 dark:bg-dark-900" data-test="pelican-work-dialog-preview">
-          <iframe :srcdoc="preview(selectedWork.html, selectedWork.id, 'dialog')" :title="selectedWork.model" :data-pelican-preview-id="selectedWork.id" data-pelican-preview-surface="dialog" :style="previewDialogFrameStyle(selectedWork.id)" data-test="pelican-work-dialog-frame" sandbox="allow-scripts" scrolling="no" referrerpolicy="no-referrer" class="pointer-events-none absolute left-1/2 top-0 block select-none border-0" />
+          <iframe :srcdoc="preview(selectedWork.html, selectedWork.id, 'dialog')" :title="selectedWork.model" :data-pelican-preview-id="selectedWork.id" data-pelican-preview-surface="dialog" :style="previewDialogFrameStyle(selectedWork.id)" data-test="pelican-work-dialog-frame" sandbox="allow-scripts" scrolling="no" referrerpolicy="no-referrer" class="absolute left-1/2 top-0 block select-none border-0" />
         </div>
       </BaseDialog>
     </template>
@@ -112,7 +112,7 @@ const pelicanPreviewStyle = '<style data-pelican-preview-style>html,body{width:1
 function pelicanPreviewScript(id: string, surface: PreviewSurface) {
   const serializedID = JSON.stringify(id)
   const serializedSurface = JSON.stringify(surface)
-  return `<script data-pelican-preview-size>(function(){const id=${serializedID},surface=${serializedSurface};let raf=0,last='';const send=function(){raf=0;const root=document.documentElement,body=document.body;if(!root)return;const width=Math.max(root.scrollWidth||0,root.clientWidth||0,body?.scrollWidth||0);const height=Math.ceil(Math.max(root.scrollHeight||0,root.offsetHeight||0,body?.scrollHeight||0,body?.offsetHeight||0));if(!width||!height)return;const key=width+':'+height;if(key===last)return;last=key;window.parent.postMessage({type:'pelican-preview-size',id,surface,width,height},'*')};const schedule=function(){if(!raf)raf=window.requestAnimationFrame(send)};const start=function(){schedule();if(window.ResizeObserver){const observer=new ResizeObserver(schedule);observer.observe(document.documentElement);if(document.body)observer.observe(document.body)}if(window.MutationObserver){new MutationObserver(schedule).observe(document.documentElement,{childList:true,subtree:true})}window.addEventListener('load',schedule,{once:true});window.setTimeout(schedule,80);window.setTimeout(schedule,300)};if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start()})();<\/script>`
+  return `<script data-pelican-preview-size>(function(){const id=${serializedID},surface=${serializedSurface};let raf=0,last='';const send=function(){raf=0;const root=document.documentElement,body=document.body;if(!root)return;const width=Math.max(root.scrollWidth||0,root.clientWidth||0,body?.scrollWidth||0);const height=Math.ceil(Math.max(root.scrollHeight||0,root.offsetHeight||0,body?.scrollHeight||0,body?.offsetHeight||0));if(!width||!height)return;const key=width+':'+height;if(key===last)return;last=key;window.parent.postMessage({type:'pelican-preview-size',id,surface,width,height},'*')};const forwardWheel=function(event){window.parent.postMessage({type:'pelican-preview-wheel',id,deltaX:Number(event.deltaX)||0,deltaY:Number(event.deltaY)||0},'*')};const schedule=function(){if(!raf)raf=window.requestAnimationFrame(send)};const start=function(){schedule();window.addEventListener('wheel',forwardWheel,{passive:true});if(window.ResizeObserver){const observer=new ResizeObserver(schedule);observer.observe(document.documentElement);if(document.body)observer.observe(document.body)}if(window.MutationObserver){new MutationObserver(schedule).observe(document.documentElement,{childList:true,subtree:true})}window.addEventListener('load',schedule,{once:true});window.setTimeout(schedule,80);window.setTimeout(schedule,300)};if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start()})();<\/script>`
 }
 
 async function fetchDashboard(page = 1) {
@@ -168,11 +168,18 @@ function previewDialogFrameStyle(id: string) {
 }
 function handlePreviewMessage(event: MessageEvent) {
   const data = event.data
-  if (!data || data.type !== 'pelican-preview-size' || typeof data.id !== 'string') return
+  if (!data || typeof data.id !== 'string' || !['pelican-preview-size', 'pelican-preview-wheel'].includes(data.type)) return
   if (!dashboard.value.pelican_works.some((work) => work.id === data.id)) return
   const frames = Array.from(document.querySelectorAll<HTMLIFrameElement>('iframe[data-pelican-preview-id]'))
   const sourceFrame = frames.find((frame) => frame.dataset.pelicanPreviewId === data.id && frame.contentWindow === event.source)
   if (frames.length && event.source != null && !sourceFrame) return
+  if (data.type === 'pelican-preview-wheel') {
+    const deltaX = Number(data.deltaX)
+    const deltaY = Number(data.deltaY)
+    if (!Number.isFinite(deltaX) || !Number.isFinite(deltaY) || Math.abs(deltaX) > 2000 || Math.abs(deltaY) > 2000) return
+    window.scrollBy({ left: deltaX, top: deltaY, behavior: 'auto' })
+    return
+  }
   const surface: PreviewSurface = data.surface === 'dialog' ? 'dialog' : 'card'
   const measuredWidth = Number(data.width)
   const measuredHeight = Number(data.height)

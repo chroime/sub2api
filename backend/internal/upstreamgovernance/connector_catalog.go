@@ -59,6 +59,7 @@ func (c *platformConnector) subCatalog(ctx context.Context, s Site, session Sess
 	var groups []struct {
 		ID          int64    `json:"id"`
 		Name        string   `json:"name"`
+		Description string   `json:"description"`
 		Platform    string   `json:"platform"`
 		Rate        *float64 `json:"rate_multiplier"`
 		PeakEnabled bool     `json:"peak_rate_enabled"`
@@ -97,7 +98,10 @@ func (c *platformConnector) subCatalog(ctx context.Context, s Site, session Sess
 		if _, ok := indexes[id]; ok {
 			return Catalog{}, ErrUnsupported
 		}
-		r := RemoteGroup{ID: id, Name: g.Name, Platform: g.Platform, RateMultiplier: g.Rate, ResolvedRateMultiplier: g.Rate, PeakRateEnabled: g.PeakEnabled, PeakStart: g.PeakStart, PeakEnd: g.PeakEnd, PeakRateMultiplier: g.PeakRate, Models: []string{}, Prices: []RemotePrice{}, Source: "sub2api:user-visible-groups"}
+		if len(g.Description) > 300 {
+			return Catalog{}, ErrUnsupported
+		}
+		r := RemoteGroup{ID: id, Name: g.Name, Description: g.Description, Platform: g.Platform, RateMultiplier: g.Rate, ResolvedRateMultiplier: g.Rate, PeakRateEnabled: g.PeakEnabled, PeakStart: g.PeakStart, PeakEnd: g.PeakEnd, PeakRateMultiplier: g.PeakRate, Models: []string{}, Prices: []RemotePrice{}, Source: "sub2api:user-visible-groups"}
 		if override, ok := rates[id]; ok {
 			if override == nil || !connectorValidRate(override) {
 				return Catalog{}, ErrUnsupported
@@ -215,8 +219,9 @@ func (c *platformConnector) subCatalog(ctx context.Context, s Site, session Sess
 func (c *platformConnector) newCatalog(ctx context.Context, s Site, session Session) (Catalog, error) {
 	catalog := Catalog{Groups: []RemoteGroup{}, Channels: []RemoteChannel{}, Warnings: []string{"newapi_channels_not_exposed"}}
 	var groups map[string]struct {
-		Ratio json.RawMessage `json:"ratio"`
-		Desc  string          `json:"desc"`
+		Ratio       json.RawMessage `json:"ratio"`
+		Desc        string          `json:"desc"`
+		Description string          `json:"description"`
 	}
 	if e := c.data(ctx, s, session, "GET", "/api/user/self/groups", nil, &groups); e != nil {
 		return Catalog{}, e
@@ -235,7 +240,7 @@ func (c *platformConnector) newCatalog(ctx context.Context, s Site, session Sess
 	sort.Strings(ids)
 	for _, id := range ids {
 		g := groups[id]
-		if id == "" || len(id) > 128 {
+		if id == "" || len(id) > 128 || len(g.Description) > 300 {
 			return Catalog{}, ErrUnsupported
 		}
 		var rate *float64
@@ -266,7 +271,7 @@ func (c *platformConnector) newCatalog(ctx context.Context, s Site, session Sess
 		if name == "" {
 			name = id
 		}
-		catalog.Groups = append(catalog.Groups, RemoteGroup{ID: id, Name: name, Platform: "unknown", ResolvedRateMultiplier: rate, UserRateMultiplier: rate, Models: models, Prices: []RemotePrice{}, Source: "newapi:user-self-groups"})
+		catalog.Groups = append(catalog.Groups, RemoteGroup{ID: id, Name: name, Description: g.Description, Platform: "unknown", ResolvedRateMultiplier: rate, UserRateMultiplier: rate, Models: models, Prices: []RemotePrice{}, Source: "newapi:user-self-groups"})
 	}
 	var prices []map[string]json.RawMessage
 	pricingResponse, pricingRaw, e := c.request(ctx, s, session, "GET", "/api/pricing", nil, nil, true)

@@ -103,7 +103,7 @@ func renderCatalogChangeNotice(site Site, event Event, catalog Catalog) ChangeNo
 		notice.Body = fmt.Sprintf("上游名称：%s\n站点URL：%s\n分组名称：%s\n上游不再提供此可见分组。", site.Name, site.BaseURL, groupName)
 	case "group_changed":
 		notice.Kind = "group_change"
-		notice.Body = fmt.Sprintf("上游名称：%s\n站点URL：%s\n分组名称：%s\n上游分组名称或协议发生变化。", site.Name, site.BaseURL, groupName)
+		notice.Body = fmt.Sprintf("上游名称：%s\n站点URL：%s\n分组名称：%s\n上游分组名称、描述或协议发生变化。", site.Name, site.BaseURL, groupName)
 	case "price_changed":
 		notice.Kind, notice.Severity = "rate_change", "warning"
 		notice.Subject = fmt.Sprintf("上游价格变更：%s - %s", site.Name, groupName)

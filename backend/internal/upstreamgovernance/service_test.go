@@ -486,6 +486,16 @@ func TestDiffRenameDoesNotEmitRateChangeWhenMultiplierIsUnchanged(t *testing.T) 
 	require.NotContains(t, string(mustJSON(events)), "rate_changed")
 }
 
+func TestDiffDescriptionChangeEmitsGroupChanged(t *testing.T) {
+	rate := 0.8
+	before := Catalog{Groups: []RemoteGroup{{ID: "g", Name: "名称", Description: "旧说明", Platform: "openai", ResolvedRateMultiplier: &rate}}}
+	after := Catalog{Groups: []RemoteGroup{{ID: "g", Name: "名称", Description: "新说明", Platform: "openai", ResolvedRateMultiplier: &rate}}}
+
+	events := DiffCatalog(1, before, after)
+	require.Len(t, events, 1)
+	require.Equal(t, "group_changed", events[0].Kind)
+}
+
 func mustJSON(value any) []byte {
 	raw, err := json.Marshal(value)
 	if err != nil {

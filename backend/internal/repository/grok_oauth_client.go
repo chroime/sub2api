@@ -157,10 +157,10 @@ func (c *grokOAuthClient) ConvertSSOToBuild(ctx context.Context, ssoToken, proxy
 }
 
 // approveGrokSSOInBrowser completes the final xAI device consent in an
-// isolated Playwright session. The helper receives the ephemeral SSO cookie
-// over its private stdin channel, injects it into the x.ai cookie jar, opens
-// the official verification page, and clicks the page's Allow control. No
-// browser credentials or cookies are returned to the API client or logs.
+// isolated Playwright session. The helper receives the ephemeral device-flow
+// cookies over its private stdin channel, resumes the official consent page,
+// and clicks the page's Allow control. No browser credentials or cookies are
+// returned to the API client or logs.
 func approveGrokSSOInBrowser(ctx context.Context, approval xai.SSOBrowserApproval, proxyURL string) error {
 	manager := upstreambrowser.New(upstreambrowser.Options{
 		NodePath:       firstNonEmptyEnv("GROK_SSO_BROWSER_NODE", "GOVERNANCE_BROWSER_NODE"),
@@ -179,6 +179,7 @@ func approveGrokSSOInBrowser(ctx context.Context, approval xai.SSOBrowserApprova
 		UserCode:        approval.UserCode,
 		VerificationURL: approval.VerificationURL,
 		ConsentURL:      approval.ConsentURL,
+		Cookies:         convertGrokBrowserCookies(approval.Cookies),
 	})
 	if err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
@@ -224,6 +225,14 @@ func approveGrokSSOInBrowser(ctx context.Context, approval xai.SSOBrowserApprova
 		case <-ticker.C:
 		}
 	}
+}
+
+func convertGrokBrowserCookies(cookies []xai.SSOBrowserCookie) []upstreambrowser.Cookie {
+	result := make([]upstreambrowser.Cookie, 0, len(cookies))
+	for _, cookie := range cookies {
+		result = append(result, upstreambrowser.Cookie{Name: cookie.Name, Value: cookie.Value, URL: cookie.URL})
+	}
+	return result
 }
 
 func firstNonEmptyString(values ...string) string {
@@ -275,7 +284,8 @@ func grokBrowserDiagnostic(err error) string {
 	for _, code := range []string{
 		"browser_node_missing", "browser_script_missing", "browser_executable_missing",
 		"browser_launch_failed", "browser_dependency_missing", "browser_navigation_failed",
-		"browser_page_closed", "browser_sso_approval_failed", "browser_timeout", "browser_protocol_error",
+		"browser_page_closed", "browser_sso_verification_rejected", "browser_sso_control_missing",
+		"browser_sso_approval_failed", "browser_timeout", "browser_protocol_error",
 		"browser_closed", "browser_unavailable",
 	} {
 		if strings.Contains(text, code) {

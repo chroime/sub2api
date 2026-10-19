@@ -903,6 +903,13 @@ func (s *Service) Preview(ctx context.Context, id int64, selections []Selection)
 		if len(selection.AccountName) > 100 {
 			return nil, ErrInvalid
 		}
+		selection.Description = strings.TrimSpace(selection.Description)
+		if selection.Description == "" {
+			selection.Description = strings.TrimSpace(g.Description)
+		}
+		if len(selection.Description) > 300 {
+			return nil, ErrInvalid
+		}
 		selection.AccountConfig, e = NormalizeAccountConfig(selection.AccountConfig, selection.Platform, g.Models)
 		if e != nil {
 			return nil, e
@@ -1236,8 +1243,8 @@ func DiffCatalog(siteID int64, before, after Catalog) []Event {
 			}
 			add("models_changed", g.ID, sortedStrings(prior.Models), sortedStrings(g.Models))
 			add("price_changed", g.ID, prices(prior), prices(g))
-			if prior.Name != g.Name || prior.Platform != g.Platform {
-				add("group_changed", g.ID, []string{prior.Name, prior.Platform}, []string{g.Name, g.Platform})
+			if prior.Name != g.Name || prior.Description != g.Description || prior.Platform != g.Platform {
+				add("group_changed", g.ID, []string{prior.Name, prior.Description, prior.Platform}, []string{g.Name, g.Description, g.Platform})
 			}
 		}
 		delete(old, g.ID)

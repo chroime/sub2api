@@ -103,14 +103,33 @@ RUN --mount=type=cache,id=sub2api-gomod,target=/go/pkg/mod \
     ./cmd/server
 
 # -----------------------------------------------------------------------------
-# Stage 3: PostgreSQL Client (version-matched with docker-compose)
+# Stage 3: Upstream Browser Helper (Grok SSO approval / upstream governance)
+# -----------------------------------------------------------------------------
+# playwright-core is pure JavaScript and never downloads a browser
+# (--ignore-scripts), so it is installed on the build host arch and copied
+# into the runtime image, which supplies the system Chromium.
+FROM --platform=${BUILDPLATFORM} ${NODE_IMAGE} AS browser-helper
+ARG NPM_CONFIG_REGISTRY
+WORKDIR /opt/upstream-browser
+COPY tools/upstream-browser/package.json tools/upstream-browser/package-lock.json ./
+RUN if [ -n "${NPM_CONFIG_REGISTRY}" ]; then npm config set registry "${NPM_CONFIG_REGISTRY}"; fi && \
+    npm ci --omit=dev --ignore-scripts --no-audit --no-fund
+COPY tools/upstream-browser/main.mjs tools/upstream-browser/runtime.mjs tools/upstream-browser/contract.mjs ./
+
+# -----------------------------------------------------------------------------
+# Stage 4: PostgreSQL Client (version-matched with docker-compose)
 # -----------------------------------------------------------------------------
 FROM ${POSTGRES_IMAGE} AS pg-client
 
 # -----------------------------------------------------------------------------
-# Stage 4: Final Runtime Image
+# Stage 5: Final Runtime Image
 # -----------------------------------------------------------------------------
 FROM ${ALPINE_IMAGE}
+
+# Set INSTALL_UPSTREAM_BROWSER=false to build a slim image without Node,
+# Chromium and Xvfb (~300 MB). Grok SSO import then reports
+# GROK_SSO_BROWSER_UNAVAILABLE when xAI requires browser verification.
+ARG INSTALL_UPSTREAM_BROWSER=true
 
 # Labels
 LABEL maintainer="Wei-Shaw <github.com/Wei-Shaw>"
@@ -130,6 +149,18 @@ RUN apk add --no-cache \
     libedit \
     && rm -rf /var/cache/apk/*
 
+# Upstream browser runtime: Node for the helper, system Chromium (Playwright
+# never downloads one), and Xvfb so the browser runs headed on a virtual
+# display; xAI's device page is far less likely to accept a headless browser.
+# /usr/local/bin/sub2api-chromium is a stable path across Alpine releases.
+RUN if [ "${INSTALL_UPSTREAM_BROWSER}" = "true" ]; then \
+        apk add --no-cache nodejs chromium xvfb ttf-freefont font-noto && \
+        CHROMIUM_BIN="$(command -v chromium-browser || command -v chromium)" && \
+        test -n "${CHROMIUM_BIN}" && ln -s "${CHROMIUM_BIN}" /usr/local/bin/sub2api-chromium && \
+        mkdir -p /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix && \
+        rm -rf /var/cache/apk/*; \
+    fi
+
 # Copy pg_dump and psql from the same postgres image used in docker-compose
 # This ensures version consistency between backup tools and the database server
 COPY --from=pg-client /usr/local/bin/pg_dump /usr/local/bin/pg_dump
@@ -146,6 +177,12 @@ WORKDIR /app
 # Copy binary/resources with ownership to avoid extra full-layer chown copy
 COPY --from=backend-builder --chown=sub2api:sub2api /app/sub2api /app/sub2api
 COPY --from=backend-builder --chown=sub2api:sub2api /app/backend/resources /app/resources
+
+# Browser helper is read-only to the service user, as the helper README requires.
+COPY --from=browser-helper /opt/upstream-browser /app/upstream-browser
+ENV GOVERNANCE_BROWSER_NODE=/usr/bin/node \
+    GOVERNANCE_BROWSER_SCRIPT=/app/upstream-browser/main.mjs \
+    GOVERNANCE_BROWSER_EXECUTABLE=/usr/local/bin/sub2api-chromium
 
 # Create data directory
 RUN mkdir -p /app/data && chown sub2api:sub2api /app/data

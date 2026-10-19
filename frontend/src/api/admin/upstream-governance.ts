@@ -396,6 +396,7 @@ export interface RemotePrice {
 export interface RemoteGroup {
   id: string
   name: string
+  description?: string
   platform: string
   rate_multiplier: number | null
   user_rate_multiplier: number | null
@@ -426,6 +427,7 @@ export interface Selection {
   local_group_id?: number
   local_group_ids?: number[]
   account_name: string
+  description?: string
   cost_multiplier: number
   account_config?: ImportAccountConfig
 }

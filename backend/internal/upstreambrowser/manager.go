@@ -235,6 +235,10 @@ func childEnvironment(temp string) []string {
 	if os.Getenv("GOVERNANCE_BROWSER_HEADLESS") == "true" {
 		result = append(result, "GOVERNANCE_BROWSER_HEADLESS=true")
 	}
+	// Operator-only Grok SSO page diagnostics; must be an absolute path.
+	if dir := os.Getenv("GROK_SSO_BROWSER_DEBUG_DIR"); filepath.IsAbs(dir) {
+		result = append(result, "GROK_SSO_BROWSER_DEBUG_DIR="+dir)
+	}
 	return append(result, "TMP="+temp, "TEMP="+temp, "TMPDIR="+temp)
 }
 
@@ -433,11 +437,27 @@ func validInput(input Input) bool {
 		return false
 	}
 	if input.Platform == "grok-sso" {
-		return trustedXAIURL(input.BaseURL) && trustedXAIURL(input.VerificationURL) && trustedXAIURL(input.ConsentURL) &&
-			cleanString(input.SSOToken, 16<<10, false) && cleanString(input.UserCode, 256, false)
+		if !trustedXAIURL(input.BaseURL) || !trustedXAIURL(input.VerificationURL) || !trustedXAIURL(input.ConsentURL) ||
+			!cleanString(input.SSOToken, 16<<10, false) || !cleanString(input.UserCode, 256, false) || len(input.Cookies) > 100 {
+			return false
+		}
+		for _, cookie := range input.Cookies {
+			if !validBrowserCookie(cookie) {
+				return false
+			}
+		}
+		return true
 	}
 	return (input.Platform == "sub2api" || input.Platform == "newapi") &&
 		(input.Username == "" || cleanString(input.Username, 512, true)) && (input.Password == "" || cleanString(input.Password, 4096, true))
+}
+
+func validBrowserCookie(cookie Cookie) bool {
+	parsed, err := url.Parse(cookie.URL)
+	if err != nil || !trustedXAIURL(cookie.URL) || parsed.RawQuery != "" || parsed.ForceQuery || parsed.Path != "" && parsed.Path != "/" {
+		return false
+	}
+	return cleanString(cookie.Name, 128, false) && cleanString(cookie.Value, 16<<10, false)
 }
 
 func trustedXAIURL(raw string) bool {
@@ -479,7 +499,8 @@ func decodeView(raw json.RawMessage) (View, error) {
 		return View{}, ErrProtocol
 	}
 	switch view.ErrorCode {
-	case "", "browser_navigation_failed", "browser_render_failed", "browser_page_closed", "browser_timeout", "browser_unsupported_route", "browser_sso_approval_failed":
+	case "", "browser_navigation_failed", "browser_render_failed", "browser_page_closed", "browser_timeout", "browser_unsupported_route",
+		"browser_sso_approval_failed", "browser_sso_verification_rejected", "browser_sso_control_missing":
 	default:
 		return View{}, ErrProtocol
 	}

@@ -3,10 +3,38 @@ package upstreamgovernance
 import (
 	"encoding/json"
 	"math"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
+
+func TestPreviewFreezesRemoteAndEditedDescription(t *testing.T) {
+	s, _, connector, _ := setupEngine(t)
+	connector.catalog.Groups[0].Description = "Upstream description"
+	_, err := s.Sync(t.Context(), 1)
+	require.NoError(t, err)
+
+	preview, err := s.Preview(t.Context(), 1, selections())
+	require.NoError(t, err)
+	require.Equal(t, "Upstream description", preview.Rows[0].Selection.Description)
+
+	edited := selections()
+	edited[0].Description = "  Reviewed by admin  "
+	preview, err = s.Preview(t.Context(), 1, edited)
+	require.NoError(t, err)
+	require.Equal(t, "Reviewed by admin", preview.Rows[0].Selection.Description)
+}
+
+func TestPreviewRejectsOverlongDescription(t *testing.T) {
+	s, _, _, _ := setupEngine(t)
+	_, err := s.Sync(t.Context(), 1)
+	require.NoError(t, err)
+	selected := selections()
+	selected[0].Description = strings.Repeat("x", 301)
+	_, err = s.Preview(t.Context(), 1, selected)
+	require.ErrorIs(t, err, ErrInvalid)
+}
 
 func TestPreviewFreezesAccountImportDefaults(t *testing.T) {
 	s, _, _, local := setupEngine(t)

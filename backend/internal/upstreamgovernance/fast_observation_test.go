@@ -2,6 +2,7 @@ package upstreamgovernance
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"testing"
 	"time"
@@ -15,7 +16,7 @@ func TestFastObservationConnectorReadsOnlyCompleteGroupsAndRates(t *testing.T) {
 		case "/api/v1/user/profile":
 			return 200, `{"code":0,"data":{"id":42}}`
 		case "/api/v1/groups/available":
-			return 200, `{"code":0,"data":[{"id":7,"name":"VIP","platform":"openai","rate_multiplier":2}]}`
+			return 200, `{"code":0,"data":[{"id":7,"name":"VIP","description":"Production access","platform":"openai","rate_multiplier":2}]}`
 		case "/api/v1/groups/rates":
 			return 200, `{"code":0,"data":{"7":0.8}}`
 		default:
@@ -31,6 +32,11 @@ func TestFastObservationConnectorReadsOnlyCompleteGroupsAndRates(t *testing.T) {
 	require.Equal(t, int64(42), got.SourceUserID)
 	require.Len(t, got.Groups, 1)
 	require.Equal(t, "VIP", got.Groups[0].Name)
+	encoded, err := json.Marshal(got.Groups[0])
+	require.NoError(t, err)
+	var payload map[string]any
+	require.NoError(t, json.Unmarshal(encoded, &payload))
+	require.Equal(t, "Production access", payload["description"])
 	require.NotNil(t, got.Groups[0].ResolvedRateMultiplier)
 	require.InDelta(t, .8, *got.Groups[0].ResolvedRateMultiplier, .0001)
 	require.Empty(t, got.Groups[0].Models, "fast observation must not expand models")
@@ -90,4 +96,13 @@ func TestFastObservationFallsBackToGroupRateWhenNoUserOverrideExists(t *testing.
 	require.Nil(t, got.Groups[0].UserRateMultiplier)
 	require.NotNil(t, got.Groups[0].ResolvedRateMultiplier)
 	require.InDelta(t, 2, *got.Groups[0].ResolvedRateMultiplier, .0001)
+}
+
+func TestFastObservationFingerprintIncludesDescription(t *testing.T) {
+	rate := 1.0
+	before, err := groupObservationFingerprint(GroupObservation{GroupsComplete: true, Groups: []RemoteGroup{{ID: "7", Name: "VIP", Description: "old", ResolvedRateMultiplier: &rate}}})
+	require.NoError(t, err)
+	after, err := groupObservationFingerprint(GroupObservation{GroupsComplete: true, Groups: []RemoteGroup{{ID: "7", Name: "VIP", Description: "new", ResolvedRateMultiplier: &rate}}})
+	require.NoError(t, err)
+	require.NotEqual(t, before, after)
 }

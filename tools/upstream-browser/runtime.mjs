@@ -1,11 +1,11 @@
 import path from 'node:path';
 import { LoginCapture, WIDTH, HEIGHT, MAX_RESPONSE_BYTES, allowedRequest, allowedSSORequest, validateAction, validateInput } from './contract.mjs';
 
-const startFields = ['base_url', 'platform', 'username', 'password', 'sso_token', 'user_code', 'verification_url', 'consent_url', 'proxy_server', 'proxy_username', 'proxy_password', 'executable_path', 'profile_dir'];
+const startFields = ['base_url', 'platform', 'username', 'password', 'sso_token', 'user_code', 'verification_url', 'consent_url', 'cookies', 'proxy_server', 'proxy_username', 'proxy_password', 'executable_path', 'profile_dir'];
 // Grok SSO approval pacing. The backend keeps polling the token endpoint, so
 // these only bound how long the page is driven before reporting failure.
 export const SSO_APPROVAL_MS = 110000;
-export const SSO_SETTLE_MS = 1500;
+export const SSO_SETTLE_MS = 5000;
 export const SSO_RECLICK_MS = 6000;
 export const SSO_MAX_CLICKS = 3;
 const loginPage = (value, origin) => {
@@ -33,6 +33,14 @@ export function validateStart(input) {
 export function launchOptions(input) {
   const headless = process.env.GOVERNANCE_BROWSER_HEADLESS === 'true';
   const args = ['--proxy-bypass-list=<-loopback>'];
+  const ignoreDefaultArgs = input.platform === 'grok-sso' ? ['--enable-automation'] : undefined;
+  if (input.platform === 'grok-sso') args.push('--disable-blink-features=AutomationControlled');
+  if (!headless && process.platform === 'linux') {
+    // Headed Chromium on a GPU-less server (Xvfb) hangs initialising the GPU
+    // process via Vulkan/ANGLE and never finishes launching. Pin X11 and use
+    // software compositing; this does not alter the browser's identity.
+    args.push('--ozone-platform=x11', '--disable-gpu');
+  }
   if (input.platform !== 'grok-sso') {
     args.push(
       '--disable-quic',
@@ -49,6 +57,7 @@ export function launchOptions(input) {
     // default. Tests or deployments without a display may explicitly opt in
     // to headless mode; neither mode guarantees upstream challenge acceptance.
     headless,
+    ignoreDefaultArgs,
     chromiumSandbox: true,
     serviceWorkers: input.platform === 'grok-sso' ? 'allow' : 'block',
     acceptDownloads: false,
@@ -83,6 +92,8 @@ export class BrowserRuntime {
     this.ssoApprovalResponse = false;
     this.ssoClicks = new Map();
     this.ssoVisibleSince = 0;
+    this.ssoSawControl = false;
+    this.ssoBlockedSeen = false;
     this.ssoTask = null;
     this.closed = false;
     this.observedSession = '';
@@ -188,28 +199,36 @@ export class BrowserRuntime {
   }
 
   async startGrokSSO(input) {
-    // Only the SSO cookie is injected. Device-flow cookies minted by the Go
-    // HTTP client are bound to its TLS/User-Agent identity and would make this
-    // browser session look forged to xAI's edge, so the page mints its own.
-    await this.context.addCookies([
-      { name: 'sso', value: input.sso_token, domain: '.x.ai', path: '/', secure: true, httpOnly: true },
-      { name: 'sso-rw', value: input.sso_token, domain: '.x.ai', path: '/', secure: true, httpOnly: true }
-    ]);
+    // Carry the cookies minted by the HTTP device flow into the real browser
+    // session. Castle binds the consent page to this state; replaying only the
+    // raw SSO token starts a fresh, unverifiable session and returns `block`.
+    const cookies = Array.isArray(input.cookies) && input.cookies.length
+      ? input.cookies.map((cookie) => ({ name: cookie.name, value: cookie.value, url: cookie.url, secure: true, httpOnly: true }))
+      : [
+        { name: 'sso', value: input.sso_token, domain: '.x.ai', path: '/', secure: true, httpOnly: true },
+        { name: 'sso-rw', value: input.sso_token, domain: '.x.ai', path: '/', secure: true, httpOnly: true }
+      ];
+    await this.context.addCookies(cookies);
     this.status = 'waiting';
     // Approval runs in the background so the start RPC returns promptly; the
     // backend observes progress through snapshot() and the token endpoint.
-    this.ssoTask = this.runGrokSSO(input.verification_url).catch(() => {}).finally(() => {
+    this.ssoTask = this.runGrokSSO(input.consent_url || input.verification_url).catch(() => {}).finally(async () => {
       if (this.status === 'waiting' && !this.closed) {
+        await this.writeGrokSSODebug('failed');
         this.status = 'failed';
-        this.errorCode = 'browser_sso_approval_failed';
+        // Distinguish xAI's explicit browser-verification rejection from a
+        // page that never offered an approval control.
+        this.errorCode = this.ssoBlockedSeen ? 'browser_sso_verification_rejected'
+          : this.ssoSawControl ? 'browser_sso_approval_failed' : 'browser_sso_control_missing';
       }
     });
     return { browser_pid: this.browserPID };
   }
 
   async runGrokSSO(verificationURL) {
-    try { await this.page.goto(verificationURL, { waitUntil: 'load', timeout: 30000 }); }
+    try { await this.page.goto(verificationURL, { waitUntil: 'domcontentloaded', timeout: 30000 }); }
     catch { if (!/^https:\/\/([a-z0-9-]+\.)*x\.ai\//i.test(this.page.url())) return; }
+    await this.writeGrokSSODebug('loaded');
     const deadline = Date.now() + SSO_APPROVAL_MS;
     let reloads = 0;
     while (!this.closed && Date.now() < deadline) {
@@ -219,6 +238,7 @@ export class BrowserRuntime {
         return;
       }
       if (await this.grokSSOBlocked()) {
+        await this.writeGrokSSODebug(`blocked-${reloads}`);
         // Castle rejected this attempt. Reload once so the page mints a fresh
         // request token; a second rejection is terminal.
         if (reloads++ >= 1) return;
@@ -244,7 +264,9 @@ export class BrowserRuntime {
         const label = (element) => (element.innerText || element.value || element.getAttribute('aria-label') || '').trim();
         const allowed = /^(allow|approve|authorize|accept|continue|confirm)(\s+.*)?$|^(同意|允许|授权|继续|确认)/i;
         const candidates = Array.from(document.querySelectorAll('button, input[type="submit"], a, [role="button"]'));
-        const target = candidates.find((element) => visible(element) && enabled(element) && allowed.test(label(element)));
+        const target = candidates.find((element) => visible(element) && enabled(element) &&
+          element.matches('button[name="action"][value="allow"]')) ||
+          candidates.find((element) => visible(element) && enabled(element) && allowed.test(label(element)));
         if (!target) return null;
         const rect = target.getBoundingClientRect();
         return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, key: `${location.href}|${label(target)}`,
@@ -254,6 +276,7 @@ export class BrowserRuntime {
         this.ssoVisibleSince = 0;
         return;
       }
+      this.ssoSawControl = true;
       const now = Date.now();
       // The page's verification script initialises after the control renders.
       // Let the control stay visible briefly before the first click.
@@ -274,9 +297,37 @@ export class BrowserRuntime {
 
   async grokSSOBlocked() {
     try {
-      return await this.page.evaluate(() =>
-        /couldn.t verify this request|could not verify this request|request token required|access denied/i.test(document.body?.innerText || ''));
+      const blocked = await this.page.evaluate(() =>
+        /couldn.t verify this request|could not verify this request|request could not be verified|could not verify this browser|request token required|access denied/i
+          .test(document.body?.innerText || ''));
+      if (blocked) this.ssoBlockedSeen = true;
+      return blocked;
     } catch { return false; }
+  }
+
+  // Optional operator diagnostics. When GROK_SSO_BROWSER_DEBUG_DIR is an
+  // absolute path, each notable stage writes a viewport JPEG and a small JSON
+  // summary (path without query, title, visible button labels, leading page
+  // text). Cookies, tokens and the user code are never written.
+  async writeGrokSSODebug(stage) {
+    const dir = process.env.GROK_SSO_BROWSER_DEBUG_DIR;
+    if (!dir || !path.isAbsolute(dir) || !this.page || this.page.isClosed()) return;
+    try {
+      const { mkdir, writeFile } = await import('node:fs/promises');
+      await mkdir(dir, { recursive: true, mode: 0o700 });
+      const prefix = path.join(dir, `${new Date().toISOString().replace(/[:.]/g, '-')}-${stage}`);
+      const summary = await this.page.evaluate(() => ({
+        title: document.title,
+        buttons: Array.from(document.querySelectorAll('button, input[type="submit"], a, [role="button"]'))
+          .map((element) => (element.innerText || element.value || element.getAttribute('aria-label') || '').trim())
+          .filter(Boolean).slice(0, 20),
+        text: (document.body?.innerText || '').replace(/\s+/g, ' ').slice(0, 800)
+      })).catch(() => ({}));
+      let location = '';
+      try { const url = new URL(this.page.url()); location = url.origin + url.pathname; } catch {}
+      await writeFile(`${prefix}.json`, JSON.stringify({ stage, location, ...summary }, null, 2), { mode: 0o600 });
+      await this.page.screenshot({ path: `${prefix}.jpg`, type: 'jpeg', quality: 70, timeout: 5000 }).catch(() => {});
+    } catch {}
   }
 
   async grokSSODone() {

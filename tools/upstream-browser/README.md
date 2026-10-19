@@ -61,6 +61,34 @@ did not approve), each with a bounded `(browser_*)` diagnostic code. Headed
 mode on a real or virtual display (for example Xvfb) is considerably more
 reliable than `GOVERNANCE_BROWSER_HEADLESS=true` for this page.
 
+### Docker image
+
+The root `Dockerfile` installs this helper at `/app/upstream-browser`, plus
+Node, Alpine's Chromium and Xvfb, and presets `GOVERNANCE_BROWSER_NODE`,
+`GOVERNANCE_BROWSER_SCRIPT` and `GOVERNANCE_BROWSER_EXECUTABLE`. The entrypoint
+starts a private Xvfb display unless `DISPLAY` is set or
+`GOVERNANCE_BROWSER_HEADLESS=true`. Build with
+`--build-arg INSTALL_UPSTREAM_BROWSER=false` for a slim image without it.
+
+Chromium's sandbox needs user namespaces, which Docker's default seccomp
+profile denies to unprivileged processes. Without an adjustment Start fails
+with `browser_launch_failed`. Grant the container a seccomp profile that
+permits Chromium's sandbox (Docker's default profile plus `clone`/`unshare`
+namespace flags; Google publishes one as `chrome.json`), and give Chromium
+enough shared memory:
+
+```yaml
+    shm_size: "1gb"
+    security_opt:
+      - no-new-privileges:true
+      - seccomp=./chrome-seccomp.json
+```
+
+`seccomp=unconfined` also works but removes the syscall filter entirely. Hosts
+that restrict unprivileged user namespaces (for example Ubuntu 24.04's
+`kernel.apparmor_restrict_unprivileged_userns=1`) need that policy relaxed for
+the container as well.
+
 `Available()` checks prerequisite paths, not an actual browser launch or display.
 Missing dependencies, incompatible browsers, an unavailable display, or
 unavailable sandbox support still fail at Start. Linux must allow Chromium's

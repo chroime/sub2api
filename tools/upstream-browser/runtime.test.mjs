@@ -58,8 +58,44 @@ test('Grok SSO keeps browser challenge capabilities enabled', () => {
   assert.equal(validateStart(ssoInput), true);
   const options = launchOptions(ssoInput);
   assert.equal(options.serviceWorkers, 'allow');
+  assert.deepEqual(options.ignoreDefaultArgs, ['--enable-automation']);
+  assert.ok(options.args.includes('--disable-blink-features=AutomationControlled'));
   assert.ok(!options.args.some((arg) => arg.includes('WebTransport') || arg === '--disable-quic'));
-  assert.equal(validateStart({ ...ssoInput, cookies: [] }), false, 'HTTP-client cookies are no longer accepted');
+  assert.equal(validateStart({ ...ssoInput, cookies: [{ name: 'session', value: 'session-cookie', url: 'https://auth.x.ai/' }] }), true);
+  assert.equal(validateStart({ ...ssoInput, cookies: [{ name: 'session', value: 'secret', url: 'https://evil.example/' }] }), false);
+});
+
+test('Grok SSO browser carries consent cookies and opens the consent page', async () => {
+  const runtime = new BrowserRuntime();
+  const added = [];
+  const opened = [];
+  runtime.context = { addCookies: async (cookies) => { added.push(...cookies); } };
+  runtime.runGrokSSO = async (url) => { opened.push(url); runtime.ssoApproved = true; };
+  const input = {
+    ...ssoInput,
+    cookies: [{ name: 'session', value: 'session-cookie', url: 'https://auth.x.ai/' }]
+  };
+  await runtime.startGrokSSO(input);
+  await runtime.ssoTask;
+  assert.deepEqual(added, [
+    { name: 'session', value: 'session-cookie', url: 'https://auth.x.ai/', httpOnly: true, secure: true }
+  ]);
+  assert.deepEqual(opened, [input.consent_url]);
+});
+
+test('headed Linux launch uses software compositing so GPU-less Xvfb hosts can start', () => {
+  const previous = process.env.GOVERNANCE_BROWSER_HEADLESS;
+  try {
+    delete process.env.GOVERNANCE_BROWSER_HEADLESS;
+    const headed = launchOptions(ssoInput).args;
+    assert.equal(headed.includes('--disable-gpu'), process.platform === 'linux');
+    assert.ok(!headed.some((arg) => arg.includes('no-sandbox')));
+    process.env.GOVERNANCE_BROWSER_HEADLESS = 'true';
+    assert.ok(!launchOptions(ssoInput).args.includes('--disable-gpu'), 'headless keeps its default GPU path');
+  } finally {
+    if (previous === undefined) delete process.env.GOVERNANCE_BROWSER_HEADLESS;
+    else process.env.GOVERNANCE_BROWSER_HEADLESS = previous;
+  }
 });
 
 function ssoClickFixture(point) {

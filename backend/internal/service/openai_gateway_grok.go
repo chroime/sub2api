@@ -2073,9 +2073,17 @@ func (s *OpenAIGatewayService) handleGrokAccountUpstreamError(ctx context.Contex
 		}
 		if isGrokAccountAccessRejection(responseBody) {
 			s.tempUnscheduleGrok(ctx, account, 30*time.Minute, "grok access or entitlement denied")
+			return
 		}
-		// Ambiguous 403s still fail over for this request, but must not remove
-		// an otherwise healthy account from the entire scheduling pool.
+		// An unclassified 403 from an account whose billing already shows an
+		// exhausted window is a quota refusal. Briefly cool it so subsequent
+		// requests are not routed into the same rejection.
+		if grokBillingWindowExhausted(account) {
+			s.tempUnscheduleGrok(ctx, account, grokExhaustedForbiddenCooldown, "grok usage exhausted (403)")
+			return
+		}
+		// Other ambiguous 403s still fail over for this request, but must not
+		// remove an otherwise healthy account from the entire scheduling pool.
 	case http.StatusTooManyRequests:
 		// updateGrokUsageSnapshot installs rate-limit state for non-pool accounts.
 		// Free-usage 429 was already cooled above via body classification.
