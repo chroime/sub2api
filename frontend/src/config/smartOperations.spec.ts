@@ -4,7 +4,7 @@ import Icon from '@/components/icons/Icon.vue'
 import { resolveSmartOperationsSection, SMART_OPERATIONS_SECTIONS } from './smartOperations'
 
 describe('resolveSmartOperationsSection', () => {
-  it.each(['overview', 'import', 'models', 'local-monitor', 'monitor', 'history'])(
+  it.each(['overview', 'import', 'models', 'local-monitor', 'monitor', 'history', 'settings'])(
     'accepts the supported %s section',
     (section) => expect(resolveSmartOperationsSection(section)).toBe(section),
   )
@@ -17,7 +17,7 @@ describe('resolveSmartOperationsSection', () => {
 
 describe('shared Smart Operations section icons', () => {
   it('provides renderable icons for every sidebar and top-tab section', () => {
-    expect(SMART_OPERATIONS_SECTIONS).toHaveLength(6)
+    expect(SMART_OPERATIONS_SECTIONS).toHaveLength(7)
     for (const section of SMART_OPERATIONS_SECTIONS) {
       const icon = mount(Icon, { props: { name: section.icon } })
       expect(icon.get('path').attributes('d'), section.id).toBeTruthy()

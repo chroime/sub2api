@@ -71,6 +71,17 @@ describe('site edit dialog', () => {
     await flushPromises()
     expect(api.update).toHaveBeenCalledWith(site.id, expect.objectContaining({ interval_minutes: minutes }))
   })
+  it('exposes independent second-based fast and full collection intervals', async () => {
+    const wrapper = setup()
+    await flushPromises()
+    expect(wrapper.get('#governance-edit-fast-interval-seconds').exists()).toBe(true)
+    expect(wrapper.get('#governance-edit-full-interval-seconds').exists()).toBe(true)
+    await wrapper.get('#governance-edit-fast-interval-seconds').setValue('15')
+    await wrapper.get('#governance-edit-full-interval-seconds').setValue('900')
+    await wrapper.get('#governance-edit-form').trigger('submit')
+    await flushPromises()
+    expect(api.update).toHaveBeenCalledWith(site.id, expect.objectContaining({ fast_interval_seconds: 15, full_interval_seconds: 900 }))
+  })
   it.each(['', '0', '-1', '1.5', 'Infinity', '1e309', '2147483648'])('rejects invalid collection interval %j before saving', async minutes => {
     const wrapper = setup()
     await flushPromises()

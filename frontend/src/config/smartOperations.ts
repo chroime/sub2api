@@ -41,6 +41,13 @@ export const SMART_OPERATIONS_SECTIONS = [
     descriptionKey: 'governance.smartOperations.descriptions.history',
     icon: 'clock',
   },
+  {
+    id: 'settings',
+    path: '/admin/upstream-governance/settings',
+    labelKey: 'governance.smartOperations.sections.settings',
+    descriptionKey: 'governance.smartOperations.descriptions.settings',
+    icon: 'cog',
+  },
 ] as const
 
 export type SmartOperationsSection = (typeof SMART_OPERATIONS_SECTIONS)[number]['id']

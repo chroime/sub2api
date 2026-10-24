@@ -49,6 +49,8 @@ vi.mock('@/api/admin/upstream-governance', () => ({
     reconciliation: vi.fn().mockResolvedValue({ snapshot_id: 0, observed_at: null, rows: [] }),
     reconcilePreview: vi.fn(),
     rechargePlan: vi.fn().mockResolvedValue({ version: 0, policy: { mode: 'disabled', threshold: 10, unit: 'usd', amount_minor: 1000, currency: 'USD', daily_budget_minor: 10000, cooldown_minutes: 1440 }, capability: { available: false, reason: 'provider_unavailable' }, status: 'disabled', evaluation: null }),
+    globalSettings: vi.fn().mockResolvedValue({ version: 0, notifications: { enabled: false, recipients: [], events: { upstream_group_change: true, upstream_rate_change: true, pricing_change: true, protection_change: true, local_group_change: false, health_change: true } }, local_monitor: { enabled: false, interval_seconds: 60 }, defaults: { fast_interval_seconds: 900, full_interval_seconds: 900 }, astrbot: { enabled: false, base_url: '', endpoint_path: '/api/v1/im/message', api_key: '', events: { upstream_group_change: false, upstream_rate_change: false, pricing_change: false, protection_change: false, local_group_change: true, health_change: false }, targets: [], timeout_seconds: 10 } }),
+    saveGlobalSettings: vi.fn(),
     revealKey: vi.fn(),
   },
 }))
@@ -166,7 +168,7 @@ describe('governance page', () => {
     setupNavigationSites()
     const wrapper = mount(View)
     await flushPromises()
-    expect(wrapper.findAll('[role=tab]')).toHaveLength(6)
+    expect(wrapper.findAll('[role=tab]')).toHaveLength(7)
     expect(wrapper.get('[data-test=smart-operations-site-rail]').isVisible()).toBe(true)
     await wrapper.get('#governance-models-tab').trigger('click')
     await flushPromises()
@@ -174,6 +176,17 @@ describe('governance page', () => {
     expect(wrapper.get('[data-test=sites-overview-compact]').isVisible()).toBe(true)
     expect(api.catalog).not.toHaveBeenCalled()
     expect(modelAPI.policies).not.toHaveBeenCalled()
+  })
+  it('opens global settings without selecting an upstream or loading site details', async () => {
+    setupNavigationSites()
+    await router.push('/admin/upstream-governance/settings')
+    const wrapper = mount(View)
+    await flushPromises()
+    expect(wrapper.get('[data-test=global-settings]').isVisible()).toBe(true)
+    expect(api.globalSettings).toHaveBeenCalledTimes(1)
+    expect(api.catalog).not.toHaveBeenCalled()
+    expect(wrapper.find('[data-test=smart-operations-site-rail]').exists()).toBe(false)
+    expect(wrapper.find('[data-test=active-site-workspace]').exists()).toBe(false)
   })
   it('does not create or load the local workspace on the default governance page', async () => {
     setupNavigationSites()
@@ -997,7 +1010,7 @@ describe('governance page', () => {
     await wrapper.get('form').trigger('submit')
     await flushPromises()
     expect(api.detect).toHaveBeenCalledWith({ base_url: site.base_url, proxy_id: null })
-    expect(api.create).toHaveBeenCalledWith({ name: 'Detected site', platform: 'sub2api', base_url: site.base_url, proxy_id: null, enabled: true, interval_minutes: 15 })
+    expect(api.create).toHaveBeenCalledWith({ name: 'Detected site', platform: 'sub2api', base_url: site.base_url, proxy_id: null, enabled: true, interval_minutes: 15, fast_interval_seconds: 900, full_interval_seconds: 900 })
     expect(api.connect).toHaveBeenCalledWith(8, expect.objectContaining({ username: 'fixture-user', password: 'fixture-password' }))
     expect(api.sync).toHaveBeenCalledWith(8)
     expect(wrapper.text()).toContain('governance.emptyCatalog')

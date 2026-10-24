@@ -1,11 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { enableAutoUnmount, flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import ProfileBalanceNotifyCard from '../ProfileBalanceNotifyCard.vue'
+import zhDashboard from '@/i18n/locales/zh/dashboard'
+import enDashboard from '@/i18n/locales/en/dashboard'
 
-const { sendNotifyEmailCode, verifyNotifyEmail, getProfile } = vi.hoisted(() => ({
+const { sendNotifyEmailCode, verifyNotifyEmail, getProfile, translate } = vi.hoisted(() => ({
   sendNotifyEmailCode: vi.fn(),
   verifyNotifyEmail: vi.fn(),
-  getProfile: vi.fn()
+  getProfile: vi.fn(),
+  translate: vi.fn()
 }))
 
 vi.mock('@/api', () => ({
@@ -15,7 +18,7 @@ vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ user: null }) }))
 vi.mock('@/stores/app', () => ({
   useAppStore: () => ({ showSuccess: vi.fn(), showError: vi.fn() })
 }))
-vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
+vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: translate }) }))
 
 enableAutoUnmount(afterEach)
 
@@ -35,6 +38,7 @@ describe('ProfileBalanceNotifyCard', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.resetAllMocks()
+    translate.mockImplementation((key: string) => key)
     sendNotifyEmailCode.mockResolvedValue({})
     getProfile.mockResolvedValue({ balance_notify_extra_emails: [] })
   })
@@ -42,6 +46,21 @@ describe('ProfileBalanceNotifyCard', () => {
   afterEach(() => {
     vi.clearAllTimers()
     vi.useRealTimers()
+  })
+
+  it.each([
+    ['zh', '未配置已验证且启用的通知邮箱时', '默认发送到您的注册邮箱'],
+    ['en', 'If no verified and enabled notification email is configured', 'sent to your registered email address']
+  ])('shows the registration-email fallback when no notification address is configured in %s', (language, condition, recipient) => {
+    const dictionary = language === 'zh' ? zhDashboard : enDashboard
+    translate.mockImplementation((key: string) => key === 'profile.balanceNotify.extraEmailsHint'
+      ? dictionary.profile.balanceNotify.extraEmailsHint : key)
+    const wrapper = mount(ProfileBalanceNotifyCard, {
+      props: { enabled: true, threshold: null, extraEmails: [], systemDefaultThreshold: 5, userEmail: 'registered@example.com' }
+    })
+    expect(wrapper.text()).toContain(condition)
+    expect(wrapper.text()).toContain(recipient)
+    expect(sendNotifyEmailCode).not.toHaveBeenCalled()
   })
 
   it.each(['remove', 'unmount'])('does not start a pending email timer after %s', async (action) => {

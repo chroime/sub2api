@@ -80,10 +80,17 @@
   }
 
   .btn-primary {
+    /* Keep a solid fallback when the gradient layer is reset by a theme or UA rule. */
+    background-color: #0d9488;
     @apply bg-gradient-to-r from-primary-500 to-primary-600;
     @apply text-white shadow-md shadow-primary-500/25;
     @apply hover:from-primary-600 hover:to-primary-700 hover:shadow-lg hover:shadow-primary-500/30;
     @apply dark:shadow-primary-500/20;
+  }
+
+  .btn-primary:disabled {
+    background-color: #5eead4;
+    background-image: linear-gradient(to right, #2dd4bf, #14b8a6);
   }
 
   .btn-secondary {

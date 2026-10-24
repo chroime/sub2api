@@ -7,6 +7,9 @@ export interface SiteInput {
   proxy_id: number | null
   enabled: boolean
   interval_minutes: number
+  /** Optional second-based cadence; takes precedence over the legacy minute alias. */
+  fast_interval_seconds?: number
+  full_interval_seconds?: number
 }
 export interface Site extends SiteInput {
   id: number
@@ -44,6 +47,66 @@ export interface AutomationPolicy {
 export interface AutomationConfiguration {
   version: number
   policy: AutomationPolicy
+}
+
+export interface GlobalNotificationEvents {
+  group_online: boolean
+  group_offline: boolean
+  group_name_change: boolean
+  group_description_change: boolean
+  group_rate_change: boolean
+  upstream_group_change?: boolean
+  upstream_rate_change?: boolean
+  pricing_change?: boolean
+  protection_change?: boolean
+  local_group_change?: boolean
+  health_change?: boolean
+}
+
+export interface GlobalSettings {
+  version: number
+  notifications: {
+    enabled: boolean
+    recipients: string[]
+    events: GlobalNotificationEvents
+  }
+  local_monitor: {
+    enabled: boolean
+    interval_seconds: number
+  }
+  defaults: {
+    fast_interval_seconds: number
+    full_interval_seconds: number
+  }
+  astrbot: {
+    enabled: boolean
+    base_url: string
+    endpoint_path: string
+    api_key: string
+    api_key_configured?: boolean
+    clear_api_key?: boolean
+    events: GlobalNotificationEvents
+    targets: { umo: string; label: string; enabled: boolean }[]
+    timeout_seconds: number
+  }
+}
+
+export interface AstrBotGroup {
+  umo: string
+  group_id: string
+  group_name: string
+  bot_id: string
+}
+
+export interface AstrBotGroupsInput {
+  base_url: string
+  api_key?: string
+  timeout_seconds: number
+}
+
+export interface AstrBotGroupsResult {
+  groups: AstrBotGroup[]
+  complete: true
 }
 
 /**
@@ -541,6 +604,15 @@ const api = {
   },
   async saveObservationPolicy(id: number, input: { version: number; policy: ObservationPolicy['policy'] }) {
     return (await apiClient.put<ObservationPolicy>(`${site(id)}/observation-policy`, input)).data
+  },
+  async globalSettings() {
+    return (await apiClient.get<GlobalSettings>('/admin/upstream-governance/global-settings')).data
+  },
+  async saveGlobalSettings(input: GlobalSettings) {
+    return (await apiClient.put<GlobalSettings>('/admin/upstream-governance/global-settings', input)).data
+  },
+  async astrbotGroups(input: AstrBotGroupsInput) {
+    return (await apiClient.post<AstrBotGroupsResult>('/admin/upstream-governance/global-settings/astrbot-groups', input)).data
   },
   async pricingPolicies(id: number) {
     return (await apiClient.get<PricingPoliciesConfiguration>(`${site(id)}/pricing-policies`)).data

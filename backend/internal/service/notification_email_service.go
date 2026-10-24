@@ -33,6 +33,7 @@ const (
 	NotificationEmailEventCyberPolicyNotice           = "content_moderation.cyber_policy_notice"
 	NotificationEmailEventOpsAlert                    = "ops.alert"
 	NotificationEmailEventOpsScheduledReport          = "ops.scheduled_report"
+	NotificationEmailEventSystemHealthSnapshot        = "system.health_snapshot"
 
 	notificationEmailTemplateKeyPrefix    = "notification_email_template:"
 	notificationEmailPreferenceKeyPrefix  = "notification_email_preference:"
@@ -369,66 +370,104 @@ func (s *NotificationEmailService) PreviewTemplate(ctx context.Context, input No
 	for key, value := range input.Variables {
 		variables[key] = value
 	}
-	return renderNotificationEmail(normalizedEvent, subject, htmlBody, variables, nil)
+	var sampleHTML map[string]string
+	if normalizedEvent == NotificationEmailEventSystemHealthSnapshot {
+		// Only the built-in illustrative table is trusted in editor previews.
+		// Request-supplied variables still pass through normal HTML escaping.
+		if _, overridden := input.Variables["group_summary_html"]; !overridden {
+			sampleHTML = map[string]string{"group_summary_html": variables["group_summary_html"]}
+		}
+	}
+	return renderNotificationEmail(normalizedEvent, subject, htmlBody, variables, sampleHTML)
 }
 
 func (s *NotificationEmailService) Send(ctx context.Context, input NotificationEmailSendInput) error {
+	_, err := s.SendDelivered(ctx, input)
+	return err
+}
+
+// SendDelivered reports whether SMTP accepted a new message. Suppressed and
+// deduplicated notices remain successful no-ops for existing Send callers, but
+// must not be counted as delivered by administrator batch operations.
+func (s *NotificationEmailService) SendDelivered(ctx context.Context, input NotificationEmailSendInput) (bool, error) {
 	info, normalizedEvent, err := s.eventInfo(input.Event)
 	if err != nil {
-		return notificationEmailTemplateErr(err)
+		return false, notificationEmailTemplateErr(err)
 	}
 	recipient := strings.TrimSpace(input.RecipientEmail)
 	if recipient == "" {
-		return nil
+		return false, nil
 	}
 	if info.Optional {
 		unsubscribed, err := s.IsUnsubscribed(ctx, recipient, normalizedEvent)
 		if err != nil {
-			return err
+			return false, err
 		}
 		if unsubscribed {
 			slog.Info("notification email suppressed by unsubscribe preference", "event", normalizedEvent, "recipient_hash", notificationEmailHash(recipient))
-			return nil
+			return false, nil
 		}
 	}
 
-	locale := normalizeNotificationLocale(input.Locale)
-	if strings.TrimSpace(input.Locale) == "" {
-		locale = s.ResolveRecipientLocale(ctx, input.UserID, recipient)
-	}
-	tmpl, err := s.GetTemplate(ctx, normalizedEvent, locale)
+	rendered, err := s.PreviewSend(ctx, input)
 	if err != nil {
-		return notificationEmailTemplateErr(err)
-	}
-	variables := s.runtimeVariables(ctx, normalizedEvent, locale, input)
-	rendered, err := renderNotificationEmail(normalizedEvent, tmpl.Subject, tmpl.HTML, variables, input.RawHTMLVariables)
-	if err != nil {
-		return notificationEmailTemplateErr(err)
+		return false, notificationEmailTemplateErr(err)
 	}
 
 	deliveryKey := notificationEmailDeliveryKey(normalizedEvent, input.SourceType, input.SourceID, recipient, input.ReminderKey)
 	if deliveryKey != "" {
 		sent, err := s.deliveryExists(ctx, deliveryKey, legacyNotificationEmailDeliveryKey(normalizedEvent, input.SourceType, input.SourceID, recipient, input.ReminderKey))
 		if err != nil {
-			return err
+			return false, err
 		}
 		if sent {
-			return nil
+			return false, nil
 		}
 	}
 
 	if s.emailService == nil {
-		return notificationEmailConfigErr(errors.New("email service is not configured"))
+		return false, notificationEmailConfigErr(errors.New("email service is not configured"))
 	}
 	if err := s.emailService.SendEmail(ctx, recipient, rendered.Subject, rendered.HTML); err != nil {
-		return notificationEmailDeliveryErr(err)
+		return false, notificationEmailDeliveryErr(err)
 	}
 	if deliveryKey != "" {
 		if err := s.settingRepo.Set(ctx, deliveryKey, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
-			return err
+			return true, err
 		}
 	}
-	return nil
+	return true, nil
+}
+
+// PreviewSend renders the exact runtime message without sending it or changing
+// delivery records. Unlike the template editor preview, missing live health
+// values never inherit illustrative sample data.
+func (s *NotificationEmailService) PreviewSend(ctx context.Context, input NotificationEmailSendInput) (NotificationEmailPreview, error) {
+	_, event, err := s.eventInfo(input.Event)
+	if err != nil {
+		return NotificationEmailPreview{}, err
+	}
+	locale := normalizeNotificationLocale(input.Locale)
+	if strings.TrimSpace(input.Locale) == "" {
+		locale = s.ResolveRecipientLocale(ctx, input.UserID, input.RecipientEmail)
+	}
+	tmpl, err := s.GetTemplate(ctx, event, locale)
+	if err != nil {
+		return NotificationEmailPreview{}, err
+	}
+	variables := s.runtimeVariables(ctx, event, locale, input)
+	if event == NotificationEmailEventSystemHealthSnapshot {
+		links, err := s.ResolveServiceLinks(ctx)
+		if err != nil {
+			return NotificationEmailPreview{}, err
+		}
+		for key, value := range links.Variables() {
+			if _, supplied := input.Variables[key]; !supplied {
+				variables[key] = value
+			}
+		}
+	}
+	return renderNotificationEmail(event, tmpl.Subject, tmpl.HTML, variables, input.RawHTMLVariables)
 }
 
 func (s *NotificationEmailService) RememberRecipientLocale(ctx context.Context, userID int64, email, acceptLanguage string) {
@@ -528,6 +567,13 @@ func (s *NotificationEmailService) runtimeVariables(ctx context.Context, event, 
 	variables := s.sampleVariables(ctx, event, locale)
 	for key, value := range input.Variables {
 		variables[key] = value
+	}
+	if event == NotificationEmailEventSystemHealthSnapshot {
+		for _, placeholder := range []string{"health_status", "health_status_detail", "health_checked_at", "active_group_count", "group_summary_html", "platform_url", "docs_url", "model_plaza_url", "canvas_url"} {
+			if _, exists := input.Variables[placeholder]; !exists {
+				variables[placeholder] = ""
+			}
+		}
 	}
 	if event == NotificationEmailEventOpsScheduledReport {
 		// Scheduled reports may be sent by integrations that only provide report_html.
@@ -722,6 +768,9 @@ func renderNotificationEmail(event, subject, htmlBody string, variables map[stri
 	if err != nil {
 		return NotificationEmailPreview{}, err
 	}
+	if event == NotificationEmailEventSystemHealthSnapshot {
+		renderedHTML = groupUpdateEmailLayout(renderedHTML)
+	}
 	return NotificationEmailPreview{Subject: sanitizeEmailHeader(renderedSubject), HTML: renderedHTML}, nil
 }
 
@@ -764,7 +813,8 @@ func renderNotificationEmailString(event, raw string, variables map[string]strin
 }
 
 func notificationEmailRawHTMLAllowed(event, placeholder string) bool {
-	return event == NotificationEmailEventOpsScheduledReport && placeholder == "report_html"
+	return (event == NotificationEmailEventOpsScheduledReport && placeholder == "report_html") ||
+		(event == NotificationEmailEventSystemHealthSnapshot && placeholder == "group_summary_html")
 }
 
 func notificationEmailAllowedPlaceholderSet(event string) map[string]struct{} {
@@ -898,97 +948,115 @@ func isSafeNotificationEmailURL(raw string) bool {
 func notificationEmailSampleVariables(locale string) map[string]string {
 	if normalizeNotificationLocale(locale) == notificationEmailLocaleChinese {
 		variables := map[string]string{
-			"site_name":           defaultSiteName,
-			"recipient_name":      "张三",
-			"recipient_email":     "user@example.com",
-			"verification_code":   "123456",
-			"expires_in_minutes":  "15",
-			"reset_url":           "https://example.com/reset-password?token=preview",
-			"subscription_group":  "Claude Pro",
-			"subscription_days":   "30",
-			"expiry_time":         "2026-06-18 12:00",
-			"days_remaining":      "3",
-			"current_balance":     "12.34",
-			"threshold":           "20.00",
-			"recharge_url":        "https://example.com/recharge",
-			"recharge_amount":     "50.00",
-			"order_id":            "1024",
-			"unsubscribe_url":     "https://example.com/unsubscribe",
-			"account_id":          "1001",
-			"account_name":        "openai-main",
-			"platform":            "openai",
-			"quota_dimension":     "每日额度",
-			"quota_used":          "80.00",
-			"quota_limit":         "100.00",
-			"quota_remaining":     "20.00",
-			"quota_threshold":     "20%",
-			"triggered_at":        "2026-05-20 12:00:00",
-			"group_name":          "默认分组",
-			"moderation_category": "violence",
-			"moderation_score":    "0.982",
-			"violation_count":     "2",
-			"ban_threshold":       "3",
-			"rule_name":           "错误率过高",
-			"severity":            "critical",
-			"alert_status":        "firing",
-			"metric_type":         "error_rate",
-			"operator":            ">=",
-			"metric_value":        "12.50",
-			"threshold_value":     "10.00",
-			"alert_description":   "最近 10 分钟错误率超过阈值",
-			"report_name":         "日报",
-			"report_type":         "daily_summary",
-			"report_start_time":   "2026-07-18T01:00:26Z",
-			"report_end_time":     "2026-07-19T01:00:26Z",
-			"report_html":         "<h2>日报</h2><p>请求量：2,374</p>",
+			"site_name":            defaultSiteName,
+			"recipient_name":       "张三",
+			"recipient_email":      "user@example.com",
+			"verification_code":    "123456",
+			"expires_in_minutes":   "15",
+			"reset_url":            "https://example.com/reset-password?token=preview",
+			"subscription_group":   "Claude Pro",
+			"subscription_days":    "30",
+			"expiry_time":          "2026-06-18 12:00",
+			"days_remaining":       "3",
+			"current_balance":      "12.34",
+			"threshold":            "20.00",
+			"recharge_url":         "https://example.com/recharge",
+			"recharge_amount":      "50.00",
+			"order_id":             "1024",
+			"unsubscribe_url":      "https://example.com/unsubscribe",
+			"account_id":           "1001",
+			"account_name":         "openai-main",
+			"platform":             "openai",
+			"quota_dimension":      "每日额度",
+			"quota_used":           "80.00",
+			"quota_limit":          "100.00",
+			"quota_remaining":      "20.00",
+			"quota_threshold":      "20%",
+			"triggered_at":         "2026-05-20 12:00:00",
+			"group_name":           "默认分组",
+			"health_status":        "健康",
+			"health_status_detail": "所有主要分组均可用",
+			"health_checked_at":    "2026-10-22 12:00:00",
+			"active_group_count":   "1",
+			"group_summary_html":   groupUpdateEmailSampleTable(locale),
+			"platform_url":         "https://example.com",
+			"docs_url":             "https://example.com/docs",
+			"model_plaza_url":      "https://example.com/model-plaza",
+			"canvas_url":           "https://canvas.example.com",
+			"moderation_category":  "violence",
+			"moderation_score":     "0.982",
+			"violation_count":      "2",
+			"ban_threshold":        "3",
+			"rule_name":            "错误率过高",
+			"severity":             "critical",
+			"alert_status":         "firing",
+			"metric_type":          "error_rate",
+			"operator":             ">=",
+			"metric_value":         "12.50",
+			"threshold_value":      "10.00",
+			"alert_description":    "最近 10 分钟错误率超过阈值",
+			"report_name":          "日报",
+			"report_type":          "daily_summary",
+			"report_start_time":    "2026-07-18T01:00:26Z",
+			"report_end_time":      "2026-07-19T01:00:26Z",
+			"report_html":          "<h2>日报</h2><p>请求量：2,374</p>",
 		}
 		addNotificationEmailOpsSummarySampleVariables(variables)
 		return variables
 	}
 	variables := map[string]string{
-		"site_name":           defaultSiteName,
-		"recipient_name":      "Alex",
-		"recipient_email":     "user@example.com",
-		"verification_code":   "123456",
-		"expires_in_minutes":  "15",
-		"reset_url":           "https://example.com/reset-password?token=preview",
-		"subscription_group":  "Claude Pro",
-		"subscription_days":   "30",
-		"expiry_time":         "2026-06-18 12:00",
-		"days_remaining":      "3",
-		"current_balance":     "12.34",
-		"threshold":           "20.00",
-		"recharge_url":        "https://example.com/recharge",
-		"recharge_amount":     "50.00",
-		"order_id":            "1024",
-		"unsubscribe_url":     "https://example.com/unsubscribe",
-		"account_id":          "1001",
-		"account_name":        "openai-main",
-		"platform":            "openai",
-		"quota_dimension":     "Daily quota",
-		"quota_used":          "80.00",
-		"quota_limit":         "100.00",
-		"quota_remaining":     "20.00",
-		"quota_threshold":     "20%",
-		"triggered_at":        "2026-05-20 12:00:00",
-		"group_name":          "Default group",
-		"moderation_category": "violence",
-		"moderation_score":    "0.982",
-		"violation_count":     "2",
-		"ban_threshold":       "3",
-		"rule_name":           "High error rate",
-		"severity":            "critical",
-		"alert_status":        "firing",
-		"metric_type":         "error_rate",
-		"operator":            ">=",
-		"metric_value":        "12.50",
-		"threshold_value":     "10.00",
-		"alert_description":   "Error rate exceeded threshold in the last 10 minutes.",
-		"report_name":         "Daily summary",
-		"report_type":         "daily_summary",
-		"report_start_time":   "2026-07-18T01:00:26Z",
-		"report_end_time":     "2026-07-19T01:00:26Z",
-		"report_html":         "<h2>Daily summary</h2><p>Requests: 2,374</p>",
+		"site_name":            defaultSiteName,
+		"recipient_name":       "Alex",
+		"recipient_email":      "user@example.com",
+		"verification_code":    "123456",
+		"expires_in_minutes":   "15",
+		"reset_url":            "https://example.com/reset-password?token=preview",
+		"subscription_group":   "Claude Pro",
+		"subscription_days":    "30",
+		"expiry_time":          "2026-06-18 12:00",
+		"days_remaining":       "3",
+		"current_balance":      "12.34",
+		"threshold":            "20.00",
+		"recharge_url":         "https://example.com/recharge",
+		"recharge_amount":      "50.00",
+		"order_id":             "1024",
+		"unsubscribe_url":      "https://example.com/unsubscribe",
+		"account_id":           "1001",
+		"account_name":         "openai-main",
+		"platform":             "openai",
+		"quota_dimension":      "Daily quota",
+		"quota_used":           "80.00",
+		"quota_limit":          "100.00",
+		"quota_remaining":      "20.00",
+		"quota_threshold":      "20%",
+		"triggered_at":         "2026-05-20 12:00:00",
+		"group_name":           "Default group",
+		"health_status":        "Healthy",
+		"health_status_detail": "All main groups are available",
+		"health_checked_at":    "2026-10-22 12:00:00",
+		"active_group_count":   "1",
+		"group_summary_html":   groupUpdateEmailSampleTable(locale),
+		"platform_url":         "https://example.com",
+		"docs_url":             "https://example.com/docs",
+		"model_plaza_url":      "https://example.com/model-plaza",
+		"canvas_url":           "https://canvas.example.com",
+		"moderation_category":  "violence",
+		"moderation_score":     "0.982",
+		"violation_count":      "2",
+		"ban_threshold":        "3",
+		"rule_name":            "High error rate",
+		"severity":             "critical",
+		"alert_status":         "firing",
+		"metric_type":          "error_rate",
+		"operator":             ">=",
+		"metric_value":         "12.50",
+		"threshold_value":      "10.00",
+		"alert_description":    "Error rate exceeded threshold in the last 10 minutes.",
+		"report_name":          "Daily summary",
+		"report_type":          "daily_summary",
+		"report_start_time":    "2026-07-18T01:00:26Z",
+		"report_end_time":      "2026-07-19T01:00:26Z",
+		"report_html":          "<h2>Daily summary</h2><p>Requests: 2,374</p>",
 	}
 	addNotificationEmailOpsSummarySampleVariables(variables)
 	return variables
@@ -1034,6 +1102,7 @@ var notificationEmailEventOrder = []string{
 	NotificationEmailEventCyberPolicyNotice,
 	NotificationEmailEventOpsAlert,
 	NotificationEmailEventOpsScheduledReport,
+	NotificationEmailEventSystemHealthSnapshot,
 }
 
 var notificationEmailEventDefinitions = map[string]NotificationEmailEventInfo{
@@ -1151,6 +1220,15 @@ var notificationEmailEventDefinitions = map[string]NotificationEmailEventInfo{
 			),
 			append(append([]string{}, notificationEmailOpsSummaryPlaceholders...), "report_detail_display", "report_html")...,
 		),
+	},
+	NotificationEmailEventSystemHealthSnapshot: {
+		Event:       NotificationEmailEventSystemHealthSnapshot,
+		Label:       "Groups and rates update",
+		Description: "Invite registered users back with their available groups, descriptions, current multipliers, and website, docs, model plaza and canvas links.",
+		Category:    "ops",
+		Optional:    true,
+		Placeholders: append(append([]string{}, notificationEmailCommonPlaceholders...),
+			"health_status", "health_status_detail", "health_checked_at", "active_group_count", "group_summary_html", "platform_url", "docs_url", "model_plaza_url", "canvas_url", "unsubscribe_url"),
 	},
 }
 
@@ -1434,6 +1512,40 @@ var notificationEmailOfficialTemplates = map[string]map[string]notificationEmail
 		notificationEmailLocaleChinese: {
 			Subject: "[运维报表] {{report_name}}",
 			HTML:    notificationEmailOpsScheduledReportTemplate(notificationEmailLocaleChinese),
+		},
+	},
+	NotificationEmailEventSystemHealthSnapshot: {
+		notificationEmailDefaultLocale: {
+			Subject: "[{{site_name}}] Explore our current groups and rates",
+			HTML: notificationEmailCard("#0f766e", "Your next project starts here", `
+<p>Hello {{recipient_name}},</p>
+<p>Ready to build something new? Here is a snapshot of the groups and current rates available to your account on <strong>{{site_name}}</strong>. Sign in to explore models, connect your applications, or create on the canvas.</p>
+<p>Available groups: <strong>{{active_group_count}}</strong> · Updated: {{health_checked_at}}</p>
+<h2 style="font-size:18px;margin-top:24px;">Groups and current rates</h2>
+{{group_summary_html}}
+<p class="muted">Availability: {{health_status}}. {{health_status_detail}}</p>
+<p><a class="button" href="{{platform_url}}">Return to {{site_name}}</a></p>
+<h2 style="font-size:18px;margin-top:28px;">Quick links</h2>
+<p>Platform: <a href="{{platform_url}}">{{platform_url}}</a><br>
+Documentation: <a href="{{docs_url}}">{{docs_url}}</a><br>
+Model plaza: <a href="{{model_plaza_url}}">{{model_plaza_url}}</a><br>
+Canvas: <a href="{{canvas_url}}">{{canvas_url}}</a></p>`),
+		},
+		notificationEmailLocaleChinese: {
+			Subject: "[{{site_name}}] 当前分组与倍率一览，欢迎回来体验",
+			HTML: notificationEmailCard("#0f766e", "看看现在有哪些分组值得体验", `
+<p>{{recipient_name}}，您好：</p>
+<p>好久不见！这里为您整理了 <strong>{{site_name}}</strong> 当前可用的分组与倍率。欢迎重新登录，挑选适合的模型接入应用，也可以打开独立画布开始创作。</p>
+<p>您可访问的启用分组：<strong>{{active_group_count}}</strong> 个 · 更新时间：{{health_checked_at}}</p>
+<h2 style="font-size:18px;margin-top:24px;">当前分组与倍率</h2>
+{{group_summary_html}}
+<p class="muted">可用状态：{{health_status}}。{{health_status_detail}}</p>
+<p><a class="button" href="{{platform_url}}">返回 {{site_name}} 开始使用</a></p>
+<h2 style="font-size:18px;margin-top:28px;">快捷入口</h2>
+<p>平台地址：<a href="{{platform_url}}">{{platform_url}}</a><br>
+文档地址：<a href="{{docs_url}}">{{docs_url}}</a><br>
+模型广场：<a href="{{model_plaza_url}}">{{model_plaza_url}}</a><br>
+Canvas 画布：<a href="{{canvas_url}}">{{canvas_url}}</a></p>`),
 		},
 	},
 }

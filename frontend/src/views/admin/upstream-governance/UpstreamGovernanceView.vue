@@ -25,6 +25,7 @@ import RechargePlanPanel from './RechargePlanPanel.vue'
 import ManagedKeysPanel from './ManagedKeysPanel.vue'
 import ModelMonitorPanel from './ModelMonitorPanel.vue'
 import ObservationPricingPanel from './ObservationPricingPanel.vue'
+import GlobalSettingsView from './GlobalSettingsView.vue'
 import Icon from '@/components/icons/Icon.vue'
 import api, {
   type Site,
@@ -52,7 +53,7 @@ const tab = computed({
     if (navigationLocked.value) return
     const entry = SMART_OPERATIONS_SECTIONS.find(item => item.id === section)!
     const query = { ...route.query }
-    if (section === 'local-monitor') delete query.site
+    if (section === 'local-monitor' || section === 'settings') delete query.site
     void router.push({ path: entry.path, query })
   },
 })
@@ -133,6 +134,13 @@ function navigateFromWorkbench(target: { siteId: number; section: SmartOperation
 }
 function restoreLocation() {
   if (!sitesLoaded) return
+  if (tab.value === 'settings') {
+    generation++
+    active.value = null
+    siteNotFound.value = false
+    showOverview.value = true
+    return
+  }
   const value = route.query.site
   if (value === undefined) {
     siteNotFound.value = false
@@ -607,15 +615,14 @@ onUnmounted(() => {
       <header class="flex flex-wrap items-end justify-between gap-4">
         <div class="min-w-0">
           <h2 class="text-2xl font-semibold tracking-tight">{{ t('governance.smartOperations.title') }}</h2>
-          <p class="mt-1.5 max-w-3xl text-sm leading-relaxed text-gray-500 dark:text-dark-300">{{ t('governance.smartOperations.workspaceHint') }}</p>
         </div>
         <div class="flex flex-wrap gap-2">
           <button class="btn btn-secondary" :disabled="working || navigationLocked" @click="load"><Icon name="refresh" size="sm" class="mr-2" />{{ t('common.refresh') }}</button>
           <button id="governance-add-site" class="btn btn-primary" :disabled="working || navigationLocked" @click="onboarding = true"><Icon name="plus" size="sm" class="mr-2" />{{ t('governance.add') }}</button>
         </div>
       </header>
-      <div class="grid min-w-0 items-start gap-5 xl:grid-cols-[17.5rem_minmax(0,1fr)]" data-test="smart-operations-workspace">
-      <aside class="min-w-0 space-y-3 xl:sticky xl:top-24" data-test="smart-operations-site-rail" :aria-label="t('governance.upstreamSites')">
+      <div class="grid min-w-0 items-start gap-5" :class="tab === 'settings' ? 'grid-cols-1' : 'xl:grid-cols-[17.5rem_minmax(0,1fr)]'" data-test="smart-operations-workspace">
+      <aside v-if="tab !== 'settings'" class="min-w-0 space-y-3 xl:sticky xl:top-24" data-test="smart-operations-site-rail" :aria-label="t('governance.upstreamSites')">
         <button id="governance-all-sites" class="flex min-h-11 w-full items-center gap-2 rounded-xl border px-4 py-3 text-left text-sm font-medium transition-colors disabled:opacity-50" :class="showOverview && tab === 'overview' ? 'border-primary-200 bg-primary-50 text-primary-800 dark:border-primary-800 dark:bg-primary-900/20 dark:text-primary-200' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-200'" type="button" :disabled="navigationLocked" :aria-current="showOverview && tab === 'overview' ? 'page' : undefined" @click="showAllSiteTasks"><Icon name="globe" size="sm" />{{ t('governance.workbench.allSitesEntry') }}</button>
         <GovernanceSitesOverview compact :sites="sites" :selected-site-id="showOverview ? null : active?.id" :disabled="navigationLocked" @select="chooseSite" />
       </aside>
@@ -624,7 +631,8 @@ onUnmounted(() => {
       <div :id="`governance-${tab}-panel`" role="tabpanel" :aria-labelledby="`governance-${tab}-tab`" tabindex="0" class="min-w-0 space-y-5 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500">
       <p v-if="error" role="alert" class="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-600 dark:border-red-900 dark:bg-red-900/10">{{ error }}</p>
       <p v-if="siteNotFound" role="status" class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-300">{{ t('governance.smartOperations.siteNotFound') }}</p>
-      <GovernanceWorkbench v-if="tab === 'overview' && !siteNotFound && (showOverview || active)" :site-id="showOverview ? undefined : active?.id" :disabled="navigationLocked" @navigate="navigateFromWorkbench" />
+      <GlobalSettingsView v-if="tab === 'settings'" />
+      <GovernanceWorkbench v-else-if="tab === 'overview' && !siteNotFound && (showOverview || active)" :site-id="showOverview ? undefined : active?.id" :disabled="navigationLocked" @navigate="navigateFromWorkbench" />
       <section v-if="tab === 'local-monitor' && showOverview && localWorkspaceLoading" data-test="local-model-workspace-loading" class="min-w-0 rounded-xl border border-dashed border-gray-200 bg-white p-8 text-center text-sm text-gray-500 dark:border-dark-600 dark:bg-dark-800">{{ t('governance.modelMonitoring.localWorkspaceLoading') }}</section>
       <section v-else-if="tab === 'local-monitor' && showOverview && localWorkspaceError" data-test="local-model-workspace-error" class="min-w-0 rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-300">
         <p>{{ localWorkspaceError }}</p><p class="mt-2 text-xs">{{ t('governance.modelMonitoring.localWorkspaceUnavailableHint') }}</p><div class="mt-4 flex flex-wrap gap-3"><button type="button" class="btn btn-secondary text-sm" data-test="local-workspace-retry" :disabled="navigationLocked" @click="retryLocalWorkspace">{{ t('governance.modelMonitoring.retry') }}</button><button type="button" class="btn btn-secondary text-sm" data-test="local-workspace-manage-keys" :disabled="navigationLocked" @click="openLocalKeys">{{ t('governance.viewKeys') }}</button></div>
@@ -633,13 +641,13 @@ onUnmounted(() => {
         <div><h3 class="text-lg font-semibold">{{ t('governance.modelMonitoring.localWorkspace') }}</h3><p class="mt-1 text-sm leading-relaxed text-gray-500 dark:text-dark-300">{{ t('governance.modelMonitoring.localWorkspaceHint') }}</p></div>
         <ModelMonitorPanel :key="`local-${localWorkspace.site.id}`" :site-id="localWorkspace.site.id" :remote-groups="[]" :managed-keys="[]" :local-only="true" :local-targets="localWorkspace.targets || []" :disabled="working" @busy="modelBusy = $event" @manage-keys="openLocalKeys" />
       </section>
-      <div v-if="showOverview && sites.length && tab !== 'overview' && tab !== 'local-monitor'" data-test="site-selection-empty" class="flex min-h-64 flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-gray-200 bg-white p-8 text-center dark:border-dark-600 dark:bg-dark-800">
+      <div v-if="showOverview && sites.length && tab !== 'overview' && tab !== 'local-monitor' && tab !== 'settings'" data-test="site-selection-empty" class="flex min-h-64 flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-gray-200 bg-white p-8 text-center dark:border-dark-600 dark:bg-dark-800">
         <span class="rounded-2xl bg-gray-100 p-4 dark:bg-dark-700"><Icon name="server" size="lg" class="text-gray-500" /></span>
         <div><h3 class="text-base font-semibold">{{ t('governance.smartOperations.chooseSite') }}</h3><p class="mt-2 max-w-sm text-sm leading-relaxed text-gray-500 dark:text-dark-300">{{ t('governance.smartOperations.chooseSiteHint') }}</p></div>
       </div>
       <p v-if="busy && !active" role="status" class="p-8 text-center text-sm text-gray-500">{{ t('common.loading') }}</p>
-      <p v-if="!busy && !sites.length && tab !== 'local-monitor'" class="rounded-xl border border-dashed border-gray-200 p-8 text-center text-sm text-gray-500 dark:border-dark-600">{{ t('governance.empty') }}</p>
-      <section v-if="active" v-show="!showOverview" data-test="active-site-workspace" class="min-w-0 space-y-4">
+      <p v-if="!busy && !sites.length && tab !== 'local-monitor' && tab !== 'settings'" class="rounded-xl border border-dashed border-gray-200 p-8 text-center text-sm text-gray-500 dark:border-dark-600">{{ t('governance.empty') }}</p>
+      <section v-if="active && tab !== 'settings'" v-show="!showOverview" data-test="active-site-workspace" class="min-w-0 space-y-4">
         <div class="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-dark-600 dark:bg-dark-800">
           <div class="flex flex-wrap items-center gap-3 p-4 sm:p-5">
             <span class="hidden rounded-xl bg-gray-100 p-3 text-gray-600 dark:bg-dark-700 dark:text-dark-200 sm:block"><Icon name="server" size="md" /></span>

@@ -322,10 +322,29 @@ func filterVerifiedEmails(entries []NotifyEmailEntry) []string {
 	return recipients
 }
 
-// collectBalanceNotifyRecipients returns verified, non-disabled email recipients.
-// Only emails with verified=true and disabled=false are included.
+// collectBalanceNotifyRecipients returns verified, non-disabled extra email
+// recipients. When none are configured, the user's registered email is the
+// default destination for a personal low-balance alert.
 func (s *BalanceNotifyService) collectBalanceNotifyRecipients(user *User) []string {
-	return filterVerifiedEmails(user.BalanceNotifyExtraEmails)
+	if user == nil {
+		return nil
+	}
+	if recipients := filterVerifiedEmails(user.BalanceNotifyExtraEmails); len(recipients) > 0 {
+		return recipients
+	}
+	email := strings.TrimSpace(user.Email)
+	if email == "" || isReservedEmail(email) {
+		return nil
+	}
+	address, err := parseSMTPAddress(email, "recipient")
+	if err != nil || address.Address != email {
+		return nil
+	}
+	domain := strings.ToLower(strings.TrimSuffix(email[strings.LastIndexByte(email, '@')+1:], "."))
+	if !strings.Contains(domain, ".") || strings.HasSuffix(domain, ".invalid") || strings.HasSuffix(domain, ".localhost") {
+		return nil
+	}
+	return []string{email}
 }
 
 // sendEmails sends an email to all recipients with shared timeout and error logging.

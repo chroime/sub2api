@@ -65,6 +65,7 @@ const sectionCases = [
   ['/local-monitor', 'localMonitor'],
   ['/monitor', 'monitor'],
   ['/history', 'history'],
+  ['/settings', 'settings'],
 ] as const
 
 async function mountSidebar(path = '/admin/dashboard') {
@@ -142,6 +143,7 @@ describe('AppSidebar Smart Operations navigation', () => {
       ['governance.smartOperations.sections.localMonitor', `${rootPath}/local-monitor`],
       ['governance.smartOperations.sections.monitor', `${rootPath}/monitor`],
       ['governance.smartOperations.sections.history', `${rootPath}/history`],
+      ['governance.smartOperations.sections.settings', `${rootPath}/settings`],
     ])
     expect(router.currentRoute.value.path).toBe('/admin/dashboard')
   })
@@ -197,7 +199,7 @@ describe('AppSidebar Smart Operations navigation', () => {
 
     expect(wrapper.get('aside').classes()).toContain('w-64')
     expect(button.attributes('aria-expanded')).toBe('true')
-    expect(wrapper.findAll(`a[href^="${rootPath}"]`)).toHaveLength(6)
+    expect(wrapper.findAll(`a[href^="${rootPath}"]`)).toHaveLength(7)
     expect(router.currentRoute.value.path).toBe('/admin/dashboard')
   })
 
@@ -254,7 +256,7 @@ describe('AppSidebar Smart Operations navigation', () => {
     const { wrapper } = await mountSidebar(rootPath)
 
     expect(smartOperationsButton(wrapper).attributes('aria-expanded')).toBe('true')
-    expect(wrapper.findAll(`a[href^="${rootPath}"]`)).toHaveLength(6)
+    expect(wrapper.findAll(`a[href^="${rootPath}"]`)).toHaveLength(7)
   })
 
   it('does not expose Smart Operations to regular users', async () => {

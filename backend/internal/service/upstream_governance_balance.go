@@ -21,9 +21,10 @@ type governanceBalanceAdminReader interface {
 // The adapter deliberately has no SMTP settings of its own. EmailService reads
 // the system SMTP transport and From address again for every delivery.
 type governanceBalanceNotifier struct {
-	mail     governanceBalanceMail
-	settings SettingRepository
-	admins   governanceBalanceAdminReader
+	mail                  governanceBalanceMail
+	settings              SettingRepository
+	admins                governanceBalanceAdminReader
+	runtimeGlobalSettings func(context.Context) (gov.GlobalSettings, error)
 }
 
 func (n *governanceBalanceNotifier) Recipients(ctx context.Context, override []string) ([]string, error) {
@@ -31,6 +32,17 @@ func (n *governanceBalanceNotifier) Recipients(ctx context.Context, override []s
 		return append([]string{}, override...), nil
 	}
 	if n.settings != nil {
+		// Governance global settings are the default recipient source for all
+		// operational notices. Site-level overrides still arrive through the
+		// explicit override argument above.
+		if raw, globalErr := n.settings.GetValue(ctx, gov.GlobalSettingsKey); globalErr == nil {
+			if global, parseErr := gov.ParseGlobalSettings(raw); parseErr == nil && global.Notifications.Enabled {
+				recipients := normalizeGlobalEmailRecipients(global.Notifications.Recipients)
+				if len(recipients) > 0 {
+					return recipients, nil
+				}
+			}
+		}
 		raw, err := n.settings.GetValue(ctx, SettingKeyAccountQuotaNotifyEmails)
 		if err != nil && !errors.Is(err, ErrSettingNotFound) {
 			return nil, err
@@ -49,6 +61,55 @@ func (n *governanceBalanceNotifier) Recipients(ctx context.Context, override []s
 		}
 	}
 	return nil, errors.New("no administrator notification recipient configured")
+}
+
+func (n *governanceBalanceNotifier) AstrBotRecipients(ctx context.Context) ([]string, error) {
+	if n == nil || n.settings == nil {
+		return nil, nil
+	}
+	raw, err := n.settings.GetValue(ctx, gov.GlobalSettingsKey)
+	if err != nil {
+		return nil, err
+	}
+	settings, err := gov.ParseGlobalSettings(raw)
+	if err != nil {
+		return nil, err
+	}
+	return globalNotificationChannelRecipients(settings), nil
+}
+
+// globalNotificationChannelRecipients encodes non-email transports as
+// recipient references understood by the durable governance queue. Keeping
+// them in the same queue gives AstrBot the same retry and deduplication
+// guarantees as SMTP delivery.
+func globalNotificationChannelRecipients(settings gov.GlobalSettings) []string {
+	result := make([]string, 0, len(settings.AstrBot.Targets))
+	if settings.AstrBot.Enabled && strings.TrimSpace(settings.AstrBot.BaseURL) != "" && (settings.AstrBot.APIKeyConfigured || strings.TrimSpace(settings.AstrBot.APIKey) != "") {
+		for _, target := range settings.AstrBot.Targets {
+			if target.Enabled && strings.TrimSpace(target.UMO) != "" {
+				result = append(result, "qq:"+strings.TrimSpace(target.UMO))
+			}
+		}
+	}
+	return result
+}
+
+func normalizeGlobalEmailRecipients(values []string) []string {
+	result := make([]string, 0, len(values))
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" || !strings.Contains(value, "@") {
+			continue
+		}
+		key := strings.ToLower(value)
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		result = append(result, value)
+	}
+	return result
 }
 
 func (n *governanceBalanceNotifier) Send(ctx context.Context, recipient string, notice gov.BalanceNotice) error {

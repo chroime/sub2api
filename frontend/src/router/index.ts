@@ -19,7 +19,7 @@ import { resolveRouteDocumentTitle } from './title'
  */
 const routes: RouteRecordRaw[] = [
   {
-    path: '/admin/upstream-governance/:section(overview|import|models|local-monitor|monitor|history)?',
+    path: '/admin/upstream-governance/:section(overview|import|models|local-monitor|monitor|history|settings)?',
     name: 'AdminUpstreamGovernance',
     component: () => import('@/views/admin/upstream-governance/UpstreamGovernanceView.vue'),
     meta: {

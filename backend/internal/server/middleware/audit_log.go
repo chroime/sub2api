@@ -119,6 +119,7 @@ var auditSensitiveReads = map[string]string{
 	"GET /api/v1/admin/backups/s3-config":                               "admin.backups.s3_config.read",
 	"GET /api/v1/admin/data-management/s3/config":                       "admin.data_management.s3_config.read",
 	"GET /api/v1/admin/upstream-governance/sites/:id/login-credentials": "admin.upstream_governance.login_credentials.read",
+	"GET /api/v1/admin/upstream-governance/global-settings":             "admin.upstream_governance.global_settings.read",
 }
 
 // auditActionOverrides 变更类请求的动作名精确映射（未命中时自动推导）。
@@ -152,6 +153,8 @@ var auditBodyOmittedRoutes = map[string]struct{}{
 	"POST /api/v1/admin/upstream-governance/sites/:id/browser-auth/:job_id/actions": {},
 	"POST /api/v1/admin/upstream-governance/sites/:id/connect":                      {},
 	"PUT /api/v1/admin/upstream-governance/sites/:id":                               {},
+	"PUT /api/v1/admin/upstream-governance/global-settings":                         {},
+	"POST /api/v1/admin/upstream-governance/global-settings/astrbot-groups":          {},
 	"POST /api/v1/auth/passkey/login/finish":                                        {},
 	"POST /api/v1/user/passkeys/register/finish":                                    {},
 	"POST /api/v1/admin/accounts/import/codex-session":                              {},

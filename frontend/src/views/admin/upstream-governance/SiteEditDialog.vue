@@ -13,7 +13,16 @@ const emit = defineEmits<{ close: []; saved: [site: Site]; busy: [value: boolean
 const { t } = useI18n()
 const source = ref(props.site)
 function siteInput(site: Site): SiteInput {
-  return { name: site.name, platform: site.platform, base_url: site.base_url, proxy_id: site.proxy_id, enabled: site.enabled, interval_minutes: site.interval_minutes }
+  return {
+    name: site.name,
+    platform: site.platform,
+    base_url: site.base_url,
+    proxy_id: site.proxy_id,
+    enabled: site.enabled,
+    interval_minutes: site.interval_minutes,
+    fast_interval_seconds: site.fast_interval_seconds ?? site.interval_minutes * 60,
+    full_interval_seconds: site.full_interval_seconds ?? site.interval_minutes * 60,
+  }
 }
 const form = ref(siteInput(props.site))
 const login = ref<LoginCredentials>({ username: '', password: '' })
@@ -83,6 +92,9 @@ async function save() {
   if (locked.value) return
   const intervalError = intervalValidationKey(form.value.interval_minutes)
   if (intervalError) { error.value = t(intervalError); return }
+  const fastIntervalError = intervalValidationKey(form.value.fast_interval_seconds)
+  const fullIntervalError = intervalValidationKey(form.value.full_interval_seconds)
+  if (fastIntervalError || fullIntervalError) { error.value = t('governance.intervalPositiveInteger'); return }
   const username = login.value.username.trim()
   if (!!username !== !!login.value.password) { error.value = t('governance.loginPairRequired'); return }
   const request = generation
@@ -91,8 +103,13 @@ async function save() {
   emit('busy', true)
   try {
     const changed = username !== savedLogin.value.username || login.value.password !== savedLogin.value.password
+    const fastChanged = form.value.fast_interval_seconds !== (source.value.fast_interval_seconds ?? source.value.interval_minutes * 60)
+    const fullChanged = form.value.full_interval_seconds !== (source.value.full_interval_seconds ?? source.value.interval_minutes * 60)
+    const { fast_interval_seconds: fastIntervalSeconds, full_interval_seconds: fullIntervalSeconds, ...legacyForm } = form.value
     const site = await api.update(source.value.id, {
-      ...form.value, version: source.value.version,
+      ...legacyForm,
+      ...(fastChanged || fullChanged ? { fast_interval_seconds: fastIntervalSeconds, full_interval_seconds: fullIntervalSeconds } : {}),
+      version: source.value.version,
       ...(changed ? { login_credentials: { username, password: login.value.password } } : {}),
     })
     if (request !== generation) return
@@ -162,11 +179,13 @@ onUnmounted(() => { generation++; clearLogin(); emit('busy', false) })
               <template #option="{ option }"><span class="flex min-w-0 items-center gap-2"><Icon name="globe" size="sm" class="shrink-0 text-gray-400" /><span class="truncate">{{ option.label }}</span></span></template>
             </Select>
           </div>
-          <div class="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-gray-50 p-3 dark:bg-dark-900">
+          <div class="grid grid-cols-1 gap-3 rounded-xl bg-gray-50 p-3 dark:bg-dark-900 sm:grid-cols-2">
             <label class="flex cursor-pointer items-center gap-2 text-sm"><input id="governance-edit-enabled" v-model="form.enabled" type="checkbox" />{{ t('governance.autoOn') }}</label>
-            <div class="flex items-center gap-2">
+            <label class="block text-sm"><span class="mb-1 block text-xs text-gray-500">{{ t('governance.fastIntervalSeconds') }}</span><input id="governance-edit-fast-interval-seconds" v-model.number="form.fast_interval_seconds" class="input w-full text-sm" type="number" min="1" step="1" required /></label>
+            <label class="block text-sm"><span class="mb-1 block text-xs text-gray-500">{{ t('governance.fullIntervalSeconds') }}</span><input id="governance-edit-full-interval-seconds" v-model.number="form.full_interval_seconds" class="input w-full text-sm" type="number" min="1" step="1" required /></label>
+            <div class="flex items-center gap-2 sm:col-span-2">
               <label for="governance-edit-interval" class="text-xs text-gray-500">{{ t('governance.interval') }}</label>
-              <input id="governance-edit-interval" v-model.number="form.interval_minutes" class="input w-24 text-sm" type="number" min="1" step="1" required />
+              <input id="governance-edit-interval" v-model.number="form.interval_minutes" class="input w-24 text-sm" type="number" min="1" step="1" required aria-label="legacy minutes" />
             </div>
           </div>
         </section>

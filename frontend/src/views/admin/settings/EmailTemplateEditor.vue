@@ -1,5 +1,5 @@
 <template>
-  <div class="card">
+  <div class="card min-w-0">
     <div
       class="flex flex-col gap-3 border-b border-gray-100 px-6 py-4 dark:border-dark-700 lg:flex-row lg:items-start lg:justify-between"
     >
@@ -56,39 +56,25 @@
             <label class="input-label" for="email-template-event">
               {{ t("admin.settings.emailTemplates.event") }}
             </label>
-            <select
+            <Select
               id="email-template-event"
               v-model="selectedEvent"
-              class="input"
+              :options="eventSelectOptions"
+              :aria-label="t('admin.settings.emailTemplates.event')"
               :disabled="loadingTemplate || eventOptions.length === 0"
-            >
-              <option
-                v-for="option in eventOptions"
-                :key="option.value"
-                :value="option.value"
-              >
-                {{ formatEventOptionLabel(option) }}
-              </option>
-            </select>
+            />
           </div>
           <div>
             <label class="input-label" for="email-template-locale">
               {{ t("admin.settings.emailTemplates.locale") }}
             </label>
-            <select
+            <Select
               id="email-template-locale"
               v-model="selectedLocale"
-              class="input"
+              :options="localeSelectOptions"
+              :aria-label="t('admin.settings.emailTemplates.locale')"
               :disabled="loadingTemplate || localeOptions.length === 0"
-            >
-              <option
-                v-for="localeOption in localeOptions"
-                :key="localeOption"
-                :value="localeOption"
-              >
-                {{ formatLocale(localeOption) }}
-              </option>
-            </select>
+            />
           </div>
         </div>
 
@@ -134,8 +120,8 @@
           {{ t("admin.settings.emailTemplates.empty") }}
         </div>
 
-        <div v-else class="grid grid-cols-1 gap-6 xl:grid-cols-2">
-          <div class="space-y-4">
+        <div v-else class="grid min-w-0 grid-cols-1 gap-6">
+          <div class="min-w-0 space-y-4">
             <div>
               <label class="input-label" for="email-template-subject">
                 {{ t("admin.settings.emailTemplates.subject") }}
@@ -187,7 +173,7 @@
             </div>
           </div>
 
-          <div class="space-y-4">
+          <div class="min-w-0 space-y-4">
             <div
               class="rounded-lg border border-gray-200 bg-white dark:border-dark-700 dark:bg-dark-800"
             >
@@ -239,12 +225,17 @@ import type {
 } from "@/api/admin/settings";
 import { useAppStore } from "@/stores";
 import { extractApiErrorMessage } from "@/utils/apiError";
+import Select from "@/components/common/Select.vue";
 
 const { t, locale } = useI18n();
 const appStore = useAppStore();
 
 const fallbackPlaceholders = [
   "{{site_name}}",
+  "{{platform_url}}",
+  "{{docs_url}}",
+  "{{model_plaza_url}}",
+  "{{canvas_url}}",
   "{{recipient_name}}",
   "{{recipient_email}}",
   "{{verification_code}}",
@@ -333,6 +324,7 @@ interface EventDisplayMeta {
   label: string;
   timing: string;
   categoryLabel: string;
+  description?: string;
 }
 
 function localText(zh: string, en: string): string {
@@ -340,6 +332,12 @@ function localText(zh: string, en: string): string {
 }
 
 const eventDisplayMeta: Record<string, EventDisplayMeta> = {
+  "system.health_snapshot": {
+    label: "分组与倍率更新",
+    timing: "管理员在用户管理中选择此模板，预览后向选中用户或全部用户批量发送。",
+    categoryLabel: "平台动态",
+    description: "展示当前用户有权限访问的主要分组、描述和当前倍率，并附平台、文档、模型广场和画布入口，方便用户重新登录使用。可用状态为账号可调度状态快照，非上游实测。",
+  },
   "auth.verify_code": {
     label: "邮箱验证码",
     timing: "注册、绑定邮箱、OAuth 补全邮箱或 TOTP 邮箱校验时发送。",
@@ -403,6 +401,12 @@ const eventDisplayMeta: Record<string, EventDisplayMeta> = {
 };
 
 const eventDisplayMetaEn: Record<string, EventDisplayMeta> = {
+  "system.health_snapshot": {
+    label: "Groups and Rates Update",
+    timing: "Sent from User Management after an administrator previews this template and confirms selected or all recipients.",
+    categoryLabel: "Platform Updates",
+    description: "Shows the main groups the current user is authorized to access, their descriptions, and current rates, with platform, documentation, model plaza, and canvas links to help users return. Availability is an account scheduling snapshot, not a live upstream test.",
+  },
   "auth.verify_code": {
     label: "Email Verification Code",
     timing: "Sent for registration, email binding, OAuth pending email completion, or TOTP email verification.",
@@ -487,6 +491,7 @@ function eventMetaFor(option?: EmailTemplateOption | null) {
     label,
     timing,
     categoryLabel,
+    description: displayMeta?.description || option.description || "",
     optional: option.optional === true,
   };
 }
@@ -496,6 +501,16 @@ function formatEventOptionLabel(option: EmailTemplateOption): string {
   if (!meta) return option.label || option.value;
   return meta.label;
 }
+
+const eventSelectOptions = computed(() => eventOptions.value.map(option => ({
+  value: option.value,
+  label: formatEventOptionLabel(option),
+})));
+
+const localeSelectOptions = computed(() => localeOptions.value.map(value => ({
+  value,
+  label: formatLocale(value),
+})));
 
 function formatCategory(category: string): string {
   const normalized = category.trim().toLowerCase();
@@ -523,7 +538,7 @@ const selectedEventMeta = computed(() => eventMetaFor(selectedEventOption.value)
 
 const selectedEventDescription = computed(() => {
   return (
-    selectedEventOption.value?.description || ""
+    selectedEventMeta.value?.description || ""
   );
 });
 

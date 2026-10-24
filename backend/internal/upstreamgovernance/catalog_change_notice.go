@@ -7,34 +7,59 @@ import (
 	"fmt"
 	"math"
 	"strconv"
+	"strings"
+	"time"
 )
 
+// catalogChangeNoticeDedupKey hashes only user-visible event details. Full
+// and fast observations often differ in models/prices or rate metadata even
+// when the visible group change is the same.
 func catalogChangeNoticeDedupKey(siteID int64, event Event) string {
-	digest := sha256.Sum256([]byte(event.Kind + "\x00" + event.Resource + "\x00" + event.Before + "\x00" + event.After))
-	return fmt.Sprintf("site:%d:event:%s", siteID, hex.EncodeToString(digest[:]))
+	details := catalogEventDetails(event, Catalog{})
+	return catalogDetailsDedupKey(siteID, event.Resource, details)
+}
+
+func catalogDetailsDedupKey(siteID int64, resource string, details []GroupChangeDetail) string {
+	if len(details) == 0 {
+		return ""
+	}
+	parts := append([]GroupChangeDetail(nil), details...)
+	// DiffCatalog already uses a stable kind/resource ordering. For one group,
+	// sort explicitly so full and fast collectors have the same signature.
+	for i := 0; i < len(parts); i++ {
+		for j := i + 1; j < len(parts); j++ {
+			if parts[j].Kind < parts[i].Kind || parts[j].Kind == parts[i].Kind && parts[j].Text < parts[i].Text {
+				parts[i], parts[j] = parts[j], parts[i]
+			}
+		}
+	}
+	var signature strings.Builder
+	fmt.Fprintf(&signature, "%d\x00%s", siteID, resource)
+	for _, part := range parts {
+		fmt.Fprintf(&signature, "\x00%s\x00%s", part.Kind, part.Text)
+	}
+	digest := sha256.Sum256([]byte(signature.String()))
+	return fmt.Sprintf("site:%d:group-change:%s", siteID, hex.EncodeToString(digest[:]))
 }
 
 type catalogRateNoticeValue struct {
-	Name     string   `json:"Name"`
-	Resolved *float64 `json:"Resolved"`
+	Name     string   `json:"name"`
+	Resolved *float64 `json:"resolved"`
 }
 
 func catalogGroupName(catalog Catalog, id string) string {
 	for _, group := range catalog.Groups {
 		if group.ID == id && group.Name != "" {
-			return group.Name
+			return singleLineGroupValue(group.Name)
 		}
 	}
-	return id
+	return singleLineGroupValue(id)
 }
 
 func formatNoticeRate(value *float64) string {
 	if value == nil || math.IsNaN(*value) || math.IsInf(*value, 0) {
 		return "未知"
 	}
-	// Rates are decimal values, but subtraction can expose binary floating
-	// point noise (for example 0.030000000000000027). Keep six meaningful
-	// decimal places while preserving ordinary values such as 0.93.
 	rounded := math.Round(*value*1_000_000) / 1_000_000
 	if rounded == 0 {
 		rounded = 0
@@ -43,8 +68,6 @@ func formatNoticeRate(value *float64) string {
 }
 
 func formatNoticePercent(before, delta float64) string {
-	// A zero or invalid baseline has no meaningful percentage denominator.
-	// Keep the absolute change in the notice, but never expose +/-Inf or NaN.
 	if before <= 0 || math.IsNaN(before) || math.IsInf(before, 0) || math.IsNaN(delta) || math.IsInf(delta, 0) {
 		return "无法计算"
 	}
@@ -52,64 +75,162 @@ func formatNoticePercent(before, delta float64) string {
 	return strconv.FormatFloat(percent, 'f', -1, 64) + "%"
 }
 
-func renderCatalogChangeNotice(site Site, event Event, catalog Catalog) ChangeNotice {
-	groupName := catalogGroupName(catalog, event.Resource)
-	notice := ChangeNotice{
-		SiteID: site.ID, SiteName: site.Name, BaseURL: site.BaseURL,
-		Kind: "catalog_change", Severity: "info",
-		DedupKey:   fmt.Sprintf("site:%d:event:%s:%s", site.ID, event.Kind, event.Resource),
-		Subject:    fmt.Sprintf("上游变更：%s - %s", site.Name, groupName),
-		ObservedAt: event.CreatedAt,
+func catalogGroupFromJSON(raw string) RemoteGroup {
+	var group RemoteGroup
+	_ = json.Unmarshal([]byte(raw), &group)
+	return group
+}
+
+func catalogGroupDescriptionChange(name, before, after string) GroupChangeDetail {
+	text := fmt.Sprintf("分组描述调整：%s，原描述「%s」更改为「%s」", singleLineGroupValue(name), groupNoticeDescription(before), groupNoticeDescription(after))
+	if strings.TrimSpace(after) == "" {
+		text = fmt.Sprintf("分组描述调整：%s，原描述「%s」，描述已清空", singleLineGroupValue(name), groupNoticeDescription(before))
 	}
+	return GroupChangeDetail{Kind: GroupEventDescriptionChange, GroupName: singleLineGroupValue(name), Text: text}
+}
+
+func groupRate(group RemoteGroup) *float64 {
+	if group.ResolvedRateMultiplier != nil {
+		return group.ResolvedRateMultiplier
+	}
+	if group.RateMultiplier != nil {
+		return group.RateMultiplier
+	}
+	return group.UserRateMultiplier
+}
+
+// catalogEventDetails maps audit diffs to the five user-facing group events.
+// Protocol, model, pricing and peak-only changes remain in audit history but
+// are deliberately not described as one of these events.
+func catalogEventDetails(event Event, catalog Catalog) []GroupChangeDetail {
+	name := catalogGroupName(catalog, event.Resource)
 	switch event.Kind {
+	case "group_added":
+		group := catalogGroupFromJSON(event.After)
+		if group.Name != "" {
+			name = singleLineGroupValue(group.Name)
+		}
+		detail := GroupChangeDetail{Kind: GroupEventOnline, GroupName: name, Text: fmt.Sprintf("分组上线：%s 上线，描述：%s", name, groupNoticeDescription(group.Description))}
+		if rate := groupRate(group); rate != nil && !math.IsNaN(*rate) && !math.IsInf(*rate, 0) {
+			detail.Text += "，倍率" + formatNoticeRate(rate) + "x"
+		}
+		return []GroupChangeDetail{detail}
+	case "group_removed":
+		group := catalogGroupFromJSON(event.Before)
+		if group.Name != "" {
+			name = singleLineGroupValue(group.Name)
+		}
+		return []GroupChangeDetail{{Kind: GroupEventOffline, GroupName: name, Text: fmt.Sprintf("分组下线：%s 下线", name)}}
+	case "group_changed":
+		var before, after []string
+		if json.Unmarshal([]byte(event.Before), &before) != nil || json.Unmarshal([]byte(event.After), &after) != nil || len(before) < 3 || len(after) < 3 {
+			return nil
+		}
+		details := make([]GroupChangeDetail, 0, 2)
+		oldName, newName := singleLineGroupValue(before[0]), singleLineGroupValue(after[0])
+		if oldName == "" {
+			oldName = singleLineGroupValue(event.Resource)
+		}
+		if newName == "" {
+			newName = singleLineGroupValue(event.Resource)
+		}
+		if before[0] != after[0] {
+			details = append(details, GroupChangeDetail{Kind: GroupEventNameChange, GroupName: newName, Text: fmt.Sprintf("分组名称调整：%s 更改为 %s", oldName, newName)})
+		}
+		if before[1] != after[1] {
+			details = append(details, catalogGroupDescriptionChange(newName, before[1], after[1]))
+		}
+		return details
 	case "rate_changed":
 		var before, after catalogRateNoticeValue
-		if json.Unmarshal([]byte(event.Before), &before) == nil && json.Unmarshal([]byte(event.After), &after) == nil && before.Resolved != nil && after.Resolved != nil {
-			if after.Name != "" {
-				groupName = after.Name
-			} else if before.Name != "" {
-				groupName = before.Name
-			}
-			delta := *after.Resolved - *before.Resolved
-			verb := "倍率未变化"
-			change := ""
-			if delta > 0 {
-				verb = "倍率上调"
-				change = fmt.Sprintf("，上调%s，上调幅度为%s", formatNoticeRate(&delta), formatNoticePercent(*before.Resolved, delta))
-			} else if delta < 0 {
-				down := -delta
-				verb = "倍率下调"
-				change = fmt.Sprintf("，下调%s，下调幅度为%s", formatNoticeRate(&down), formatNoticePercent(*before.Resolved, down))
-			}
-			notice.Kind, notice.Severity = "rate_change", "warning"
-			notice.Subject = fmt.Sprintf("上游倍率变更：%s - %s", site.Name, groupName)
-			notice.Body = fmt.Sprintf("上游名称：%s\n站点URL：%s\n分组名称：%s\n倍率：%s -> %s，%s%s。", site.Name, site.BaseURL, groupName, formatNoticeRate(before.Resolved), formatNoticeRate(after.Resolved), verb, change)
-			return notice
+		if json.Unmarshal([]byte(event.Before), &before) != nil || json.Unmarshal([]byte(event.After), &after) != nil {
+			return nil
 		}
-		notice.Kind, notice.Severity = "rate_change", "warning"
-		notice.Subject = fmt.Sprintf("上游倍率变更：%s - %s", site.Name, groupName)
-		notice.Body = fmt.Sprintf("上游名称：%s\n站点URL：%s\n分组名称：%s\n倍率发生变化，但前后数值暂时无法完整核对。", site.Name, site.BaseURL, groupName)
-	case "group_added":
-		notice.Kind = "group_change"
-		notice.Body = fmt.Sprintf("上游名称：%s\n站点URL：%s\n分组名称：%s\n上游新增了此可见分组。", site.Name, site.BaseURL, groupName)
-	case "group_removed":
-		notice.Kind = "group_change"
-		var before struct {
-			Name string `json:"Name"`
+		if after.Name != "" {
+			name = singleLineGroupValue(after.Name)
+		} else if before.Name != "" {
+			name = singleLineGroupValue(before.Name)
 		}
-		if json.Unmarshal([]byte(event.Before), &before) == nil && before.Name != "" {
-			groupName = before.Name
+		if detail := renderGroupRateChange(name, before.Resolved, after.Resolved); detail != "" {
+			return []GroupChangeDetail{{Kind: GroupEventRateChange, GroupName: name, Text: detail}}
 		}
-		notice.Body = fmt.Sprintf("上游名称：%s\n站点URL：%s\n分组名称：%s\n上游不再提供此可见分组。", site.Name, site.BaseURL, groupName)
-	case "group_changed":
-		notice.Kind = "group_change"
-		notice.Body = fmt.Sprintf("上游名称：%s\n站点URL：%s\n分组名称：%s\n上游分组名称、描述或协议发生变化。", site.Name, site.BaseURL, groupName)
-	case "price_changed":
-		notice.Kind, notice.Severity = "rate_change", "warning"
-		notice.Subject = fmt.Sprintf("上游价格变更：%s - %s", site.Name, groupName)
-		notice.Body = fmt.Sprintf("上游名称：%s\n站点URL：%s\n分组名称：%s\n该分组的模型或计价规则发生变化，请检查成本口径。", site.Name, site.BaseURL, groupName)
-	default:
-		notice.Body = fmt.Sprintf("上游名称：%s\n站点URL：%s\n分组名称：%s\n该分组的上游目录发生变化。", site.Name, site.BaseURL, groupName)
 	}
-	return notice
+	return nil
+}
+
+func renderCatalogChangeNotice(site Site, event Event, catalog Catalog) ChangeNotice {
+	return renderCatalogGroupNotice(site, event.Resource, catalogEventDetails(event, catalog), event.CreatedAt)
+}
+
+func renderCatalogGroupNotice(site Site, resource string, details []GroupChangeDetail, observedAt time.Time) ChangeNotice {
+	if len(details) == 0 {
+		return ChangeNotice{SiteID: site.ID, SiteName: site.Name, BaseURL: site.BaseURL, ObservedAt: observedAt}
+	}
+	name := ""
+	for _, detail := range details {
+		if detail.Kind == GroupEventNameChange && detail.GroupName != "" {
+			name = singleLineGroupValue(detail.GroupName)
+			break
+		}
+	}
+	if name == "" {
+		for _, detail := range details {
+			if groupName := singleLineGroupValue(detail.GroupName); groupName != "" {
+				name = groupName
+				break
+			}
+		}
+	}
+	if name == "" {
+		name = singleLineGroupValue(resource)
+	}
+	subjectPrefix := "上游分组变化"
+	if len(details) == 1 {
+		switch details[0].Kind {
+		case GroupEventOnline:
+			subjectPrefix = "上游分组上线"
+		case GroupEventOffline:
+			subjectPrefix = "上游分组下线"
+		case GroupEventNameChange:
+			subjectPrefix = "上游分组名称调整"
+		case GroupEventDescriptionChange:
+			subjectPrefix = "上游分组描述调整"
+		case GroupEventRateChange:
+			subjectPrefix = "上游倍率变更"
+		}
+	}
+	return ChangeNotice{
+		SiteID: site.ID, SiteName: site.Name, BaseURL: site.BaseURL,
+		Kind: "group_changes", Severity: "info", GroupChanges: details, GroupResource: resource,
+		DedupKey:    catalogDetailsDedupKey(site.ID, resource, details),
+		Subject:     fmt.Sprintf("%s：%s - %s", subjectPrefix, singleLineGroupValue(site.Name), singleLineGroupValue(name)),
+		Body:        renderGroupChangeMessage(details, observedAt, "上游名称："+singleLineGroupValue(site.Name), "站点URL："+singleLineGroupValue(site.BaseURL)),
+		AstrBotText: renderGroupChangeMessage(details, observedAt), ObservedAt: observedAt,
+	}
+}
+
+func renderCatalogChangeNotices(site Site, events []Event, catalog Catalog, observedAt time.Time, completeBaseline bool) []ChangeNotice {
+	if !completeBaseline || !catalog.GroupsComplete {
+		return nil
+	}
+	byResource := make(map[string][]GroupChangeDetail)
+	resources := make([]string, 0)
+	for _, event := range events {
+		if event.Kind != "group_added" && event.Kind != "group_removed" && event.Kind != "group_changed" && event.Kind != "rate_changed" {
+			continue
+		}
+		details := catalogEventDetails(event, catalog)
+		if len(details) == 0 {
+			continue
+		}
+		if _, exists := byResource[event.Resource]; !exists {
+			resources = append(resources, event.Resource)
+		}
+		byResource[event.Resource] = append(byResource[event.Resource], details...)
+	}
+	notices := make([]ChangeNotice, 0, len(resources))
+	for _, resource := range resources {
+		notices = append(notices, renderCatalogGroupNotice(site, resource, byResource[resource], observedAt))
+	}
+	return notices
 }

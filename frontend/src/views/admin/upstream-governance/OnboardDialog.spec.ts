@@ -4,7 +4,7 @@ import OnboardDialog from './OnboardDialog.vue'
 import api, { type Site, type Snapshot } from '@/api/admin/upstream-governance'
 import Select from '@/components/common/Select.vue'
 
-vi.mock('@/api/admin/upstream-governance', () => ({ default: { detect: vi.fn(), create: vi.fn(), connect: vi.fn(), sync: vi.fn(), authStatus: vi.fn(), loginCredentials: vi.fn() } }))
+vi.mock('@/api/admin/upstream-governance', () => ({ default: { detect: vi.fn(), create: vi.fn(), connect: vi.fn(), sync: vi.fn(), authStatus: vi.fn(), loginCredentials: vi.fn(), globalSettings: vi.fn() } }))
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
 const site: Site = { id: 8, name: 'Detected', platform: 'sub2api', base_url: 'https://fixture.example', proxy_id: null, enabled: true, interval_minutes: 15, version: 1, has_credential: false, status: 'disconnected', last_error: '', last_sync_at: null }
 const snapshot: Snapshot = { id: 10, site_id: 8, site_version: 2, created_at: 'now', catalog: { groups: [], channels: [], warnings: [] } }
@@ -38,6 +38,7 @@ describe('native onboarding continuation', () => {
     vi.mocked(api.create).mockResolvedValue(site)
     vi.mocked(api.connect).mockResolvedValue({ site: { ...site, has_credential: true } })
     vi.mocked(api.sync).mockResolvedValue(snapshot)
+    vi.mocked(api.globalSettings).mockResolvedValue({ defaults: { fast_interval_seconds: 900, full_interval_seconds: 900 } } as Awaited<ReturnType<typeof api.globalSettings>>)
   })
   it('reloads authorization after a successful login advances the site version but collection requires reauthorization', async () => {
     const updated={...site,version:2,has_credential:true,status:'connected'}
