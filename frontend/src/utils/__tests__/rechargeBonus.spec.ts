@@ -120,6 +120,18 @@ describe('rechargeBonus helpers', () => {
     expect(isRechargeBonusPercentValidForMode(99.99, 'discount')).toBe(true)
   })
 
+  it.each([
+    { percent: 0.85, payBase: 9.92, matchedPercent: 0.85 },
+    { percent: 1.75, payBase: 9.83, matchedPercent: 1.75 },
+    { percent: 0.05, payBase: 10, matchedPercent: 0 },
+  ])('rounds a $percent% discount on 10 like the server at a half-cent boundary', ({ percent, payBase, matchedPercent }) => {
+    expect(quoteRechargeBonus([{ min_amount: 10, bonus_percent: percent }], 10, { mode: 'discount' })).toMatchObject({
+      payBase,
+      percent: matchedPercent,
+      credited: 10,
+    })
+  })
+
   it('describes intervals with an implicit no-bonus head segment', () => {
     expect(describeRechargeBonusIntervals(tiers)).toEqual([
       { from: 0, to: 100, percent: 0 },

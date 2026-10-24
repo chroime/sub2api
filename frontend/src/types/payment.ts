@@ -71,6 +71,8 @@ export interface CheckoutInfoResponse {
   methods: Record<string, MethodLimit>
   global_min: number
   global_max: number
+  /** Allowed balance recharge presets, already filtered by configured amount limits. Empty means none. */
+  recharge_amounts: number[]
   plans: SubscriptionPlan[]
   balance_disabled: boolean
   balance_recharge_multiplier: number

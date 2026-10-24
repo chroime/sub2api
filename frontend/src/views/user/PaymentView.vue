@@ -59,9 +59,7 @@
               ></div>
               <AmountInput
                 v-model="amount"
-                :amounts="[10, 20, 50, 100, 200, 500, 1000, 2000, 5000]"
-                :min="globalMinAmount"
-                :max="globalMaxAmount"
+                :amounts="rechargeAmounts"
                 :bonus-tiers="rechargeBonusTiers"
                 :bonus-mode="rechargeBonusMode"
                 :multiplier="balanceRechargeMultiplier"
@@ -530,6 +528,7 @@ function onPaymentSettled() {
 // All checkout data from single API call
 const checkout = ref<CheckoutInfoResponse>({
   methods: {}, global_min: 0, global_max: 0,
+  recharge_amounts: [],
   plans: [], balance_disabled: false, balance_recharge_multiplier: 1, subscription_usd_to_cny_rate: 0, recharge_fee_rate: 0, help_text: '', help_image_url: '', stripe_publishable_key: '',
   recharge_bonus_tiers: [], recharge_bonus_mode: 'bonus', recharge_bonus_notice: '',
 })
@@ -567,7 +566,6 @@ watch(tabs, (available) => {
 
 const visibleMethods = computed(() => getVisibleMethods(checkout.value.methods))
 const enabledMethods = computed(() => Object.keys(visibleMethods.value))
-const validAmount = computed(() => amount.value ?? 0)
 const balanceRechargeMultiplier = computed(() => {
   const multiplier = checkout.value.balance_recharge_multiplier
   return Number.isFinite(multiplier) && multiplier > 0 ? multiplier : 1
@@ -596,20 +594,6 @@ function amountFitsMethod(amt: number, methodType: string): boolean {
   if (ml.single_max > 0 && amt > ml.single_max) return false
   return true
 }
-
-// Visible methods decide the amount range shown to users.
-const globalMinAmount = computed(() => {
-  const limits = Object.values(visibleMethods.value)
-  if (limits.length === 0) return 0
-  if (limits.some(limit => limit.single_min <= 0)) return 0
-  return Math.min(...limits.map(limit => limit.single_min))
-})
-const globalMaxAmount = computed(() => {
-  const limits = Object.values(visibleMethods.value)
-  if (limits.length === 0) return 0
-  if (limits.some(limit => limit.single_max <= 0)) return 0
-  return Math.max(...limits.map(limit => limit.single_max))
-})
 
 // Selected method's limits (for validation and error messages)
 const selectedLimit = computed(() => visibleMethods.value[selectedMethod.value])
@@ -660,13 +644,60 @@ function formatSelectedSubscriptionPaymentAmount(value: number): string {
   return formatSelectedPaymentAmount(subscriptionPaymentAmountForCurrency(value, selectedCurrency.value))
 }
 
-// 充值优惠：阈值按输入金额命中；赠金模式按到账基数（输入 × 倍率）加赠送，折扣模式按百分比减实付。
-// 与后端 quoteRechargeBonus 一致；渠道限额、手续费、实付都按折后基数（payBaseAmount）计算，提交仍发送输入金额。
-const bonusQuote = computed(() => quoteRechargeBonus(rechargeBonusTiers.value, validAmount.value, {
-  multiplier: balanceRechargeMultiplier.value,
-  mode: rechargeBonusMode.value,
-  currencyDigits: currencyFractionDigits(selectedCurrency.value),
-}))
+const feeRate = computed(() => checkout.value?.recharge_fee_rate ?? 0)
+
+function rechargeQuoteForCurrency(value: number, currency: string) {
+  return quoteRechargeBonus(rechargeBonusTiers.value, value, {
+    multiplier: balanceRechargeMultiplier.value,
+    mode: rechargeBonusMode.value,
+    currencyDigits: currencyFractionDigits(currency),
+  })
+}
+
+function rechargeFeeAmountForCurrency(payBase: number, currency: string): number {
+  if (feeRate.value <= 0 || payBase <= 0) return 0
+  const factor = 10 ** currencyFractionDigits(currency)
+  // Fee rates have at most two decimal places. Work in minor units and basis
+  // points so floating point noise cannot round an exact fee up by a whole unit.
+  const amountMinor = Math.round(payBase * factor)
+  const feeBasisPoints = Math.round(feeRate.value * 100)
+  return Math.ceil((amountMinor * feeBasisPoints) / 10_000) / factor
+}
+
+function rechargeTotalAmountForCurrency(value: number, currency: string): number {
+  const payBase = rechargeQuoteForCurrency(value, currency).payBase
+  const fee = rechargeFeeAmountForCurrency(payBase, currency)
+  return roundPaymentAmount(payBase + fee, currency)
+}
+
+function rechargeAmountFitsMethod(value: number, methodType: string): boolean {
+  const currency = normalizePaymentCurrency(visibleMethods.value[methodType]?.currency)
+  return amountFitsMethod(rechargeTotalAmountForCurrency(value, currency), methodType)
+}
+
+// Configured limits are applied by the server. Provider limits apply to the actual
+// discounted payment including fees, which can differ from the preset's face value.
+const rechargeAmounts = computed(() => {
+  const presets = checkout.value.recharge_amounts
+  if (!Array.isArray(presets)) return []
+  return [...new Set(presets)].filter(value =>
+    Number.isFinite(value) && value > 0
+      && enabledMethods.value.some(method => rechargeAmountFitsMethod(value, method)),
+  )
+})
+
+function isRechargeAmount(value: number | null): value is number {
+  return value !== null && Number.isFinite(value) && rechargeAmounts.value.includes(value)
+}
+
+const validAmount = computed(() => isRechargeAmount(amount.value) ? amount.value : 0)
+
+watch(rechargeAmounts, () => {
+  if (amount.value !== null && !isRechargeAmount(amount.value)) amount.value = null
+})
+
+// Tier thresholds and submitted amounts use the preset's face value.
+const bonusQuote = computed(() => rechargeQuoteForCurrency(validAmount.value, selectedCurrency.value))
 const payBaseAmount = computed(() => bonusQuote.value.payBase)
 const discountAmount = computed(() => roundPaymentAmount(validAmount.value - payBaseAmount.value, selectedCurrency.value))
 const creditedAmount = computed(() => bonusQuote.value.credited)
@@ -680,42 +711,36 @@ const methodOptions = computed<PaymentMethodOption[]>(() =>
       type,
       display_name: ml?.display_name,
       fee_rate: ml?.fee_rate ?? 0,
-      available: ml?.available !== false && amountFitsMethod(payBaseAmount.value, type),
+      available: ml?.available !== false && rechargeAmountFitsMethod(validAmount.value, type),
     }
   })
 )
 
-const feeRate = computed(() => checkout.value?.recharge_fee_rate ?? 0)
-const feeAmount = computed(() =>
-  feeRate.value > 0 && payBaseAmount.value > 0
-    ? Math.ceil(((payBaseAmount.value * feeRate.value) / 100) * 100) / 100
-    : 0
-)
+const feeAmount = computed(() => rechargeFeeAmountForCurrency(payBaseAmount.value, selectedCurrency.value))
 const totalAmount = computed(() =>
-  feeRate.value > 0 && payBaseAmount.value > 0
-    ? Math.round((payBaseAmount.value + feeAmount.value) * 100) / 100
-    : payBaseAmount.value
+  rechargeTotalAmountForCurrency(validAmount.value, selectedCurrency.value)
 )
 const showActualPay = computed(() => feeRate.value > 0 || discountAmount.value > 0)
 
 const amountError = computed(() => {
   if (validAmount.value <= 0) return ''
   // No method can handle this amount
-  if (!enabledMethods.value.some((m) => amountFitsMethod(payBaseAmount.value, m))) {
+  if (!enabledMethods.value.some((m) => rechargeAmountFitsMethod(validAmount.value, m))) {
     return t('payment.amountNoMethod')
   }
   // Selected method can't handle this amount (but others can)
   const ml = selectedLimit.value
   if (ml) {
-    if (ml.single_min > 0 && payBaseAmount.value < ml.single_min) return t('payment.amountTooLow', { min: formatSelectedPaymentAmount(ml.single_min) })
-    if (ml.single_max > 0 && payBaseAmount.value > ml.single_max) return t('payment.amountTooHigh', { max: formatSelectedPaymentAmount(ml.single_max) })
+    if (ml.single_min > 0 && totalAmount.value < ml.single_min) return t('payment.amountTooLow', { min: formatSelectedPaymentAmount(ml.single_min) })
+    if (ml.single_max > 0 && totalAmount.value > ml.single_max) return t('payment.amountTooHigh', { max: formatSelectedPaymentAmount(ml.single_max) })
   }
   return ''
 })
 
 const canSubmit = computed(() =>
   validAmount.value > 0
-    && amountFitsMethod(payBaseAmount.value, selectedMethod.value)
+    && isRechargeAmount(validAmount.value)
+    && rechargeAmountFitsMethod(validAmount.value, selectedMethod.value)
     && selectedLimit.value?.available !== false
 )
 
@@ -763,9 +788,9 @@ const canSubmitSubscription = computed(() =>
 )
 
 // Auto-switch to first available method when current selection can't handle the amount
-watch(() => [payBaseAmount.value, selectedMethod.value] as const, ([amt, method]) => {
-  if (amt <= 0 || amountFitsMethod(amt, method)) return
-  const available = enabledMethods.value.find((m) => amountFitsMethod(amt, m))
+watch(() => [validAmount.value, selectedMethod.value] as const, ([amt, method]) => {
+  if (amt <= 0 || rechargeAmountFitsMethod(amt, method)) return
+  const available = enabledMethods.value.find((m) => rechargeAmountFitsMethod(amt, m))
   if (available) selectedMethod.value = available
 })
 
@@ -833,6 +858,8 @@ async function confirmSubscribe() {
 }
 
 async function createOrder(orderAmount: number, orderType: OrderType, planId?: number, options: CreateOrderOptions = {}) {
+  // Token-only WeChat resumes send zero; the server restores and validates the signed amount.
+  if (orderType === 'balance' && !options.wechatResumeToken && !isRechargeAmount(orderAmount)) return
   submitting.value = true
   errorMessage.value = ''
   errorHintMessage.value = ''
@@ -1059,6 +1086,9 @@ function shouldFallbackToDesktopQr(err: unknown, paymentMethod: string, attempte
 }
 
 async function attemptMobileQrFallback(err: unknown, context: MobileQrFallbackContext): Promise<boolean> {
+  if (context.orderType === 'balance' && !isRechargeAmount(context.orderAmount)) {
+    return false
+  }
   if (!shouldFallbackToDesktopQr(err, context.paymentType, context.attempted)) {
     return false
   }
@@ -1131,6 +1161,11 @@ function applyScenarioError(err: unknown, paymentMethod: string): boolean {
 async function resumeWechatPaymentFromQuery() {
   const resume = parseWechatResumeRoute(route.query, checkout.value.plans, validAmount.value)
   if (!resume) {
+    return
+  }
+
+  if (resume.orderType === 'balance' && !resume.wechatResumeToken && !isRechargeAmount(resume.orderAmount)) {
+    await router.replace({ path: route.path, query: stripWechatResumeQuery(route.query) })
     return
   }
 

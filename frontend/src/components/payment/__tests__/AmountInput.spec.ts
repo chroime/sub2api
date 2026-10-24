@@ -10,34 +10,48 @@ vi.mock('vue-i18n', () => ({
 }))
 enableAutoUnmount(afterEach)
 
-function mountInput(value: number | null = null) {
-  return mount(AmountInput, { props: { modelValue: value } })
-}
+describe('recharge amount selection', () => {
+  it('offers only the supplied preset buttons without a custom amount field', async () => {
+    const wrapper = mount(AmountInput, { props: { modelValue: null, amounts: [20, 100] } })
 
-describe('recharge amount input', () => {
-  it.each(['10abc', '10.555', '-10', '1e2'])('restores the accepted amount after rejecting %s', async (value) => {
-    const wrapper = mountInput(10)
-    const input = wrapper.get('input')
-    await input.setValue(value)
-    expect((input.element as HTMLInputElement).value).toBe('10')
+    expect(wrapper.find('input').exists()).toBe(false)
+    expect(wrapper.findAll('button').map(button => button.text())).toEqual(['20', '100'])
+    await wrapper.get('[data-testid="quick-amount-20"]').trigger('click')
+    await wrapper.get('[data-testid="quick-amount-100"]').trigger('click')
+    expect(wrapper.emitted('update:modelValue')).toEqual([[20], [100]])
+  })
+
+  it('has no fallback amounts when presets are missing or explicitly empty', () => {
+    const missing = mount(AmountInput, { props: { modelValue: null } })
+    const empty = mount(AmountInput, { props: { modelValue: null, amounts: [] } })
+
+    expect(missing.findAll('button')).toHaveLength(0)
+    expect(empty.findAll('button')).toHaveLength(0)
+    expect(missing.find('input').exists()).toBe(false)
+    expect(empty.find('input').exists()).toBe(false)
+  })
+
+  it('only displays finite positive presets within the supplied range', () => {
+    const wrapper = mount(AmountInput, {
+      props: { modelValue: null, amounts: [0, -10, NaN, Infinity, 10, 20, 50, 100], min: 20, max: 50 },
+    })
+
+    expect(wrapper.findAll('button').map(button => button.text())).toEqual(['20', '50'])
+    const unlimited = mount(AmountInput, { props: { modelValue: null, amounts: [0, -10, NaN, Infinity, 10] } })
+    expect(unlimited.findAll('button').map(button => button.text())).toEqual(['10'])
+  })
+
+  it('does not select or re-emit a programmatic amount outside the visible presets', async () => {
+    const wrapper = mount(AmountInput, { props: { modelValue: 15, amounts: [20, 100] } })
+
+    expect(wrapper.find('.border-primary-500').exists()).toBe(false)
+    expect(wrapper.find('input').exists()).toBe(false)
+    await wrapper.setProps({ modelValue: 20 })
+    expect(wrapper.get('[data-testid="quick-amount-20"]').classes()).toContain('border-primary-500')
+    await wrapper.setProps({ min: 50 })
+    expect(wrapper.find('[data-testid="quick-amount-20"]').exists()).toBe(false)
+    expect(wrapper.find('.border-primary-500').exists()).toBe(false)
     expect(wrapper.emitted('update:modelValue')).toBeUndefined()
-  })
-
-  it('restores the last typed amount rather than a stale prop', async () => {
-    const wrapper = mountInput()
-    const input = wrapper.get('input')
-    await input.setValue('12.50')
-    await input.setValue('12.500')
-    expect((input.element as HTMLInputElement).value).toBe('12.50')
-    expect(wrapper.emitted('update:modelValue')).toEqual([[12.5]])
-  })
-
-  it('preserves decimal editing and allows clearing the amount', async () => {
-    const wrapper = mountInput()
-    const input = wrapper.get('input')
-    for (const value of ['0', '0.', '0.5', '0.50', '']) await input.setValue(value)
-    expect(wrapper.emitted('update:modelValue')).toEqual([[null], [null], [0.5], [0.5], [null]])
-    expect((input.element as HTMLInputElement).value).toBe('')
   })
 })
 
@@ -88,5 +102,19 @@ describe('recharge bonus hints on quick amounts', () => {
     expect(hit.get('[data-testid="quick-amount-bonus-badge"]').text()).toBe('30% OFF')
     // 500 × (1 − 30%) = 350
     expect(hit.get('[data-testid="quick-amount-credited"]').text()).toContain('350.00')
+  })
+
+  it('shows the server-rounded discount price at a half-cent boundary', () => {
+    const wrapper = mount(AmountInput, {
+      props: {
+        modelValue: null,
+        amounts: [10],
+        bonusTiers: [{ min_amount: 10, bonus_percent: 0.85 }],
+        bonusMode: 'discount',
+        currency: 'USD',
+      },
+    })
+
+    expect(wrapper.get('[data-testid="quick-amount-credited"]').text()).toContain('9.92')
   })
 })

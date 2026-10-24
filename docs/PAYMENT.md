@@ -217,12 +217,14 @@ When adding a provider, the system auto-generates callback URLs from your site d
 
 ## Payment Flow
 
+Balance top-ups use fixed amounts: `10, 20, 50, 100, 200, 500, 1000, 2000, 5000`. The `recharge_amounts` field in `GET /api/v1/payment/checkout-info` lists the amounts allowed by the global recharge limits. The purchase page filters these options by payment-method limits and provides no custom amount field. `POST /api/v1/payment/orders` validates the original selected amount before creating a balance order and returns `INVALID_AMOUNT` for amounts outside the allowed options. Bonuses, discounts, balance multipliers, and fees are calculated after this validation. Subscription orders continue to use the server-side plan price.
+
 ```
 User selects amount and payment method
        │
        ▼
   Create Order (PENDING)
-  ├─ Validate amount range, pending order count, daily limit
+  ├─ Validate recharge option, amount range, pending order count, daily limit
   ├─ Load balance to select provider instance
   └─ Call provider to get payment info
        │
