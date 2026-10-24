@@ -977,10 +977,24 @@ func (s *BillingService) initFallbackPricing() {
 		LongContextInputMultiplier:    2,
 		LongContextOutputMultiplier:   2,
 	}
-	// xAI's build-fast variant uses the Grok 4.7 token card unless an operator
-	// explicitly overrides the concrete model in group/channel pricing.
-	s.fallbackPrices["grok-4.7-build-fast"] = s.fallbackPrices["grok-4.7"]
-	s.fallbackPrices["grok-4.7-build-fast-latest"] = s.fallbackPrices["grok-4.7"]
+	// xAI Grok 4.7 Fast (Cursor and Grok Build only): the same model on faster
+	// infrastructure at $4 input / $1 cached input / $12 output below 200k;
+	// long-context rates are $6 / $1.50 / $18 (1.5x of the Fast base card).
+	s.fallbackPrices["grok-4.7-fast"] = &ModelPricing{
+		InputPricePerToken:            4e-6,
+		OutputPricePerToken:           12e-6,
+		CacheReadPricePerToken:        1e-6,
+		SupportsCacheBreakdown:        false,
+		LongContextInputThreshold:     200000,
+		LongContextThresholdInclusive: true,
+		LongContextInputMultiplier:    1.5,
+		LongContextOutputMultiplier:   1.5,
+	}
+	// Explicit group/channel pricing still takes precedence over these
+	// fallback aliases, including the provider-prefixed model names.
+	s.fallbackPrices["grok-4.7-build-fast"] = s.fallbackPrices["grok-4.7-fast"]
+	s.fallbackPrices["grok-4.7-build-fast-latest"] = s.fallbackPrices["grok-4.7-fast"]
+	s.fallbackPrices["grok-4.7-fast-latest"] = s.fallbackPrices["grok-4.7-fast"]
 
 	// xAI Grok 4.3: $1.25 input / $0.20 cached / $2.50 output below 200k;
 	// long-context rates are $2.50 / $0.40 / $5.
@@ -1277,8 +1291,13 @@ func (s *BillingService) getFallbackPricing(model string) *ModelPricing {
 	switch grokModelLower {
 	case "grok", "grok-latest", "grok-4.6", "grok-4.6-latest":
 		return s.fallbackPrices["grok-4.6"]
-	case "grok-4.7", "grok-4.7-latest", "grok-4.7-build-fast", "grok-4.7-build-fast-latest":
+	case "grok-4.7", "grok-4.7-latest":
 		return s.fallbackPrices["grok-4.7"]
+	// Grok 4.7 Fast IDs (grok-4.7-fast, and the Grok Build ID
+	// grok-4.7-build-fast). Without these cases both fall into the unknown-Grok
+	// family card and bill at the standard 4.7 rate (#8119).
+	case "grok-4.7-fast", "grok-4.7-fast-latest", "grok-4.7-build-fast", "grok-4.7-build-fast-latest":
+		return s.fallbackPrices["grok-4.7-fast"]
 	case "grok-4.5", "grok-4.5-latest":
 		return s.fallbackPrices["grok-4.5"]
 	case "grok-3-mini":

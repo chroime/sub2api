@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/domain"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/antigravity"
@@ -328,6 +329,7 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 		googleError(c, http.StatusBadRequest, "Invalid model in URL")
 		return
 	}
+	urlModel := modelName
 	if resolvedModel, ok := service.ResolvedUpstreamModelFromContext(c.Request.Context()); ok && strings.TrimSpace(resolvedModel) != "" {
 		modelName = strings.TrimSpace(resolvedModel)
 	}
@@ -358,14 +360,19 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 	pricingCtx, pricingAt := service.WithGatewayTokenRequestPricing(c.Request.Context())
 	c.Request = c.Request.WithContext(pricingCtx)
 
-	if decision := h.checkSecurityAudit(c, reqLog, apiKey, authSubject, service.ContentModerationProtocolGemini, modelName, body); decision != nil && !decision.AllowNextStage {
+	// 解析渠道级模型映射
+	channelMapping, _ := h.gatewayService.ResolveChannelMappingAndRestrict(c.Request.Context(), apiKey.GroupID, modelName)
+	reqModel := modelName // 保存映射前的原始模型名
+	if action != "countTokens" && geminiImageGenerationRejected(c, apiKey, body, urlModel, reqModel, channelMapping.MappedModel) {
+		googleError(c, http.StatusBadRequest, service.ImageGenerationPermissionMessage())
+		return
+	}
+
+	if decision := h.checkSecurityAudit(c, reqLog, apiKey, authSubject, service.ContentModerationProtocolGemini, reqModel, body); decision != nil && !decision.AllowNextStage {
 		googleSecurityAuditError(c, decision)
 		return
 	}
 
-	// 解析渠道级模型映射
-	channelMapping, _ := h.gatewayService.ResolveChannelMappingAndRestrict(c.Request.Context(), apiKey.GroupID, modelName)
-	reqModel := modelName // 保存映射前的原始模型名
 	if channelMapping.Mapped {
 		modelName = channelMapping.MappedModel
 	}
@@ -384,6 +391,12 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 
 	// 1) user concurrency slot
 	streamStarted := false
+	var stopStreamingACK func()
+	defer func() {
+		if stopStreamingACK != nil {
+			stopStreamingACK()
+		}
+	}()
 	if h.errorPassthroughService != nil {
 		service.BindErrorPassthroughService(c, h.errorPassthroughService)
 	}
@@ -546,12 +559,9 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 	}
 	fs := NewFailoverState(maxAccountSwitches, hasBoundSession)
 
-	// 单账号分组提前设置 SingleAccountRetry 标记，让 Service 层首次 503 就不设模型限流标记。
-	// 避免单账号分组收到 503 (MODEL_CAPACITY_EXHAUSTED) 时设 29s 限流，导致后续请求连续快速失败。
-	if h.gatewayService.IsSingleAntigravityAccountGroup(c.Request.Context(), apiKey.GroupID) {
-		ctx := service.WithSingleAccountRetry(c.Request.Context(), true, h.metadataBridgeEnabled())
-		c.Request = c.Request.WithContext(ctx)
-	}
+	// 单账号分组首次 503 就不设模型限流标记，避免设 29s 限流导致后续请求连续快速失败；
+	// 是否单账号分组在 antigravity 账号遇到 503 或模型限流预检查时才判定。
+	c.Request = c.Request.WithContext(h.gatewayService.WithSingleAntigravityAccountGroupProbe(c.Request.Context(), apiKey.GroupID))
 
 	for {
 		excludedAccountIDs := fs.FailedAccountIDs
@@ -718,6 +728,10 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 		accountReleaseFunc = wrapReleaseOnDone(c.Request.Context(), accountReleaseFunc)
 
 		// 5) forward (根据平台分流)
+		if stopStreamingACK == nil && !streamStarted && account.SupportsStreamingACK() {
+			stopStreamingACK = h.startStreamingACK(c, geminiStreamingACKEligible(c, stream), time.Now(), account, apiKey.GroupID)
+		}
+		writerSizeBeforeForward := service.OpenAICompactKeepaliveAdjustedWrittenSize(c)
 		var result *service.ForwardResult
 		requestCtx := c.Request.Context()
 		if fs.SwitchCount > 0 {
@@ -738,6 +752,13 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 			)
 		} else {
 			result, err = h.geminiCompatService.ForwardNative(requestCtx, c, account, modelName, action, stream, body)
+		}
+		service.ApplyStreamingACKResult(c, result)
+		if service.StreamingACKCommitted(c) {
+			streamStarted = true
+		}
+		if err != nil {
+			resetSyntheticFirstResponseForRetry(c, &stopStreamingACK, writerSizeBeforeForward)
 		}
 		if accountReleaseFunc != nil {
 			accountReleaseFunc()
@@ -930,13 +951,35 @@ func googlePlatformError(c *gin.Context, status int, message string) {
 // 与 Claude / OpenAI 格式错误同口径分类；errType 为空时不登记。
 func googleErrorWithType(c *gin.Context, status int, errType, code, message string) {
 	service.SetOpsLocalErrorType(c, errType, code)
-	c.JSON(status, gin.H{
+	payload := gin.H{
 		"error": gin.H{
 			"code":    status,
 			"message": message,
 			"status":  googleapi.HTTPStatusToGoogleStatus(status),
 		},
-	})
+	}
+	data, _ := json.Marshal(payload)
+	writeGoogleErrorBody(c, status, errType, code, message, data)
+}
+
+// writeGoogleErrorBody preserves a valid JSON error body across both HTTP and
+// already-started SSE responses, including errors from a bound cache account.
+func writeGoogleErrorBody(c *gin.Context, status int, errType, code, message string, body []byte) {
+	if service.StopStreamingACKCommitted(c) || gatewaySSEAlreadyStarted(c) {
+		service.MarkOpsStreamErrorValue(c, service.OpsStreamError{
+			ErrType: errType, Code: code, Message: message, IntendedStatus: status,
+		})
+		service.MarkResponseCommitted(c)
+		c.Header("Content-Type", "text/event-stream")
+		data, _ := json.Marshal(json.RawMessage(body))
+		if _, err := c.Writer.WriteString("data: " + string(data) + "\n\n"); err != nil {
+			_ = c.Error(err)
+		}
+		c.Writer.Flush()
+		return
+	}
+	c.Header("Content-Type", "application/json; charset=utf-8")
+	c.Data(status, "application/json; charset=utf-8", body)
 }
 
 // googleClientErrorType 返回客户端请求类 4xx 状态码对应的 ops 错误类型；其余状态码返回空串。

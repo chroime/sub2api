@@ -7,7 +7,8 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),
-      'vue-i18n': 'vue-i18n/dist/vue-i18n.runtime.esm-bundler.js'
+      // Component tests also create i18n instances from uncompiled locale strings.
+      'vue-i18n': 'vue-i18n/dist/vue-i18n.esm-bundler.js'
     }
   },
   test: {

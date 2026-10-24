@@ -393,6 +393,7 @@ func TestAPIContracts(t *testing.T) {
 						"fallback_group_id_on_invalid_request": null,
 						"require_oauth_only": false,
 						"require_privacy_set": false,
+						"model_allowlist": {"enabled": false},
 						"max_reasoning_effort": "",
 						"max_reasoning_effort_over_limit": "",
 						"reasoning_effort_mappings": null,
