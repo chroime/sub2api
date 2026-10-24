@@ -426,9 +426,13 @@ func grokSameAccountRetryMetadata(account *Account, statusCode int, responseBody
 // marking them would hide healthy sibling credentials while the bounded
 // same-account retry is still in progress. Ordinary 429s and free-usage
 // exhaustion retain the existing quota/team isolation behavior.
-func shouldMarkGrokTeamModelRateLimit(statusCode int, responseBody []byte) bool {
+func shouldMarkGrokTeamModelRateLimit(statusCode int, responseBody []byte, headers ...http.Header) bool {
 	decision := classifyGrokUpstreamFailure(statusCode, responseBody, "")
 	if decision.Class == GrokFailureModelCapacity {
+		return false
+	}
+	if decision.Class == GrokFailureRateLimit && len(headers) > 0 &&
+		grok429HasAvailableQuota(parseGrokQuotaSnapshot(headers[0], statusCode, time.Now())) {
 		return false
 	}
 	return statusCode == http.StatusTooManyRequests || decision.Class == GrokFailureFreeUsage

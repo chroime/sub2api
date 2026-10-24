@@ -182,7 +182,14 @@ func (s *GrokQuotaService) probeUsage(ctx context.Context, accountID int64) (*Gr
 
 	snapshot := xai.ObserveQuotaHeaders(resp.Header, resp.StatusCode, "active_probe")
 	stampGrokQuotaSnapshotForPlan(account, snapshot, probeModel)
+	var responseBody []byte
+	if resp.StatusCode == http.StatusTooManyRequests {
+		responseBody, _ = io.ReadAll(io.LimitReader(resp.Body, 4<<10))
+	}
+	modelThrottle := applyGrokAvailableQuotaModelThrottle(account, snapshot,
+		classifyGrokUpstreamFailure(resp.StatusCode, responseBody, probeModel), time.Now())
 	resetAt, limited := grokRateLimitResetAtForAccount(account, snapshot, time.Now())
+	limited = limited && !modelThrottle
 	if limited {
 		normalizeGrokExhaustedWindowResets(snapshot, resetAt, time.Now())
 	}

@@ -1170,8 +1170,11 @@ func (s *AccountTestService) observeGrokTestResponse(ctx context.Context, accoun
 	}
 	snapshot := parseGrokQuotaSnapshot(resp.Header, resp.StatusCode, now)
 	stampGrokQuotaSnapshotForPlan(account, snapshot, grokRequestedModelFromCtx(ctx))
+	decision := classifyGrokUpstreamFailure(resp.StatusCode, responseBody, grokRequestedModelFromCtx(ctx))
+	modelThrottle := applyGrokAvailableQuotaModelThrottle(account, snapshot, decision, now)
 	if snapshot != nil && s.accountRepo != nil {
 		resetAt, limited := grokRateLimitResetAtForAccount(account, snapshot, now)
+		limited = limited && !modelThrottle
 		if limited {
 			normalizeGrokExhaustedWindowResets(snapshot, resetAt, now)
 		}
@@ -1197,7 +1200,6 @@ func (s *AccountTestService) observeGrokTestResponse(ctx context.Context, accoun
 	if isGrokContentPolicyRejection(resp.StatusCode, responseBody) {
 		return
 	}
-	decision := classifyGrokUpstreamFailure(resp.StatusCode, responseBody, "")
 	if decision.Class == GrokFailureFreeUsage {
 		if resetAt, limited := grokRateLimitResetAtForAccount(account, snapshot, now); limited && resetAt.After(now) {
 			persistGrokRateLimit(ctx, s.accountRepo, account, resetAt)
