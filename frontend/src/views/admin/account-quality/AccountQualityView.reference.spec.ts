@@ -69,4 +69,13 @@ describe('account quality reference layout integration', () => {
     expect(wrapper.findAllComponents(Cell)).toHaveLength(2)
     expect(api.control).not.toHaveBeenCalled()
   })
+
+  it('uses themed listbox filters instead of browser-native option popups', async () => {
+    const wrapper = mount(AccountQualityView, options)
+    await flushPromises()
+
+    expect(wrapper.findAll('select')).toHaveLength(0)
+    expect(wrapper.get('[data-test="quality-state-filter"] .select-trigger').attributes('aria-haspopup')).toBe('true')
+    expect(wrapper.get('[data-test="quality-policy-filter"] .select-trigger').attributes('aria-haspopup')).toBe('true')
+  })
 })

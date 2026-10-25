@@ -305,3 +305,36 @@ describe('UsageFilters — native compaction filter', () => {
     expect(wrapper.emitted('change')).toBeTruthy()
   })
 })
+
+describe('UsageFilters — cleanup action', () => {
+  it('keeps a visible, accessible cleanup action in the usage toolbar', async () => {
+    const wrapper = mount(UsageFilters, {
+      props: {
+        modelValue: defaultFilters(),
+        exporting: false,
+        startDate: '2026-05-01',
+        endDate: '2026-05-28',
+        showActions: true,
+        mode: 'usage',
+        modelOptions: [],
+      },
+      global: { stubs: { Select: true, Teleport: true } },
+    })
+    await flushPromises()
+
+    const cleanup = wrapper.get('[data-testid="usage-cleanup"]')
+    expect(cleanup.classes()).toEqual(expect.arrayContaining([
+      'btn',
+      'btn-danger',
+      'bg-red-500',
+      'text-white',
+    ]))
+    expect(cleanup.text()).toContain('Cleanup')
+    expect(cleanup.find('svg').exists()).toBe(true)
+    expect(cleanup.get('svg').find('path').attributes('d')).toBeTruthy()
+    expect(cleanup.attributes('aria-label')).toBe('Cleanup')
+
+    await cleanup.trigger('click')
+    expect(wrapper.emitted('cleanup')).toHaveLength(1)
+  })
+})

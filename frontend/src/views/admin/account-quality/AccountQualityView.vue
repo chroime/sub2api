@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import Icon from '@/components/icons/Icon.vue'
+import Select from '@/components/common/Select.vue'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import AccountQualityCell from '@/components/admin/account/AccountQualityCell.vue'
 import AccountQualityDetail from '@/components/admin/account/AccountQualityDetail.vue'
@@ -27,6 +28,14 @@ watch(mutationBusy, value => emit('busy', value))
 const label = (kind: string, value?: string) => { const key = `accountQuality.${kind}_${value}`; const result = t(key); return result === key ? value || '—' : result }
 const filtered = computed(() => overview.value.bindings.filter(binding => (!state.value || binding.state === state.value) && (!policyFilter.value || binding.policy_id === Number(policyFilter.value)) && (!search.value.trim() || `${binding.account_name} ${binding.account_id} ${binding.model} ${binding.platform}`.toLowerCase().includes(search.value.trim().toLowerCase()))))
 const states = computed(() => [...new Set(overview.value.bindings.map(binding => binding.state))])
+const stateOptions = computed(() => [
+  { value: '', label: t('accountQuality.allStates') },
+  ...states.value.map(item => ({ value: item, label: label('state', item) })),
+])
+const policyOptions = computed(() => [
+  { value: '', label: t('accountQuality.allPolicies') },
+  ...overview.value.policies.map(policy => ({ value: String(policy.id), label: policy.name })),
+])
 const counters = computed(() => [
   { label: 'assigned', value: new Set(overview.value.bindings.map(binding => binding.account_id)).size, tone: 'bg-primary-500', text: 'text-gray-900 dark:text-dark-50' },
   { label: 'state_healthy', value: overview.value.bindings.filter(binding => binding.state === 'healthy').length, tone: 'bg-emerald-500', text: 'text-emerald-700 dark:text-emerald-400' },
@@ -114,8 +123,8 @@ onUnmounted(() => { generation++; historyGeneration++; emit('busy', false) })
             <Icon name="search" size="sm" class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" aria-hidden="true" />
             <input v-model="search" class="input w-full pl-9 text-sm" :placeholder="t('accountQuality.search')" :aria-label="t('accountQuality.search')" />
           </div>
-          <select v-model="state" class="input w-full text-sm sm:w-40" :aria-label="t('accountQuality.state')"><option value="">{{ t('accountQuality.allStates') }}</option><option v-for="item in states" :key="item" :value="item">{{ label('state', item) }}</option></select>
-          <select v-model="policyFilter" class="input w-full text-sm sm:w-48" :aria-label="t('accountQuality.policy')"><option value="">{{ t('accountQuality.allPolicies') }}</option><option v-for="policy in overview.policies" :key="policy.id" :value="String(policy.id)">{{ policy.name }}</option></select>
+          <Select v-model="state" data-test="quality-state-filter" class="w-full text-sm sm:w-40" :options="stateOptions" :aria-label="t('accountQuality.state')" />
+          <Select v-model="policyFilter" data-test="quality-policy-filter" class="w-full text-sm sm:w-48" :options="policyOptions" :aria-label="t('accountQuality.policy')" />
           <button v-if="selected.length" type="button" class="btn btn-secondary btn-sm" :disabled="queueing" @click="queue(overview.bindings.filter(binding => selected.includes(binding.id)))">{{ t('accountQuality.queueAll') }} · {{ selected.length }}</button>
           <p class="ml-auto text-xs tabular-nums text-gray-400 dark:text-dark-300">{{ t('accountQuality.monitoredCount', { count: filtered.length }) }}</p>
         </div>
