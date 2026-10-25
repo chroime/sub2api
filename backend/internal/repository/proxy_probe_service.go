@@ -57,6 +57,31 @@ const (
 	defaultProxyProbeResponseMaxBytes = int64(1024 * 1024)
 )
 
+// formatProxyConnectionError turns the opaque errors emitted by the SOCKS5
+// dialer into an actionable message while preserving the original error for
+// logs and support diagnostics. A TCP port can accept connections and still
+// immediately close the SOCKS greeting when the protocol, credentials, or
+// source-IP allowlist is wrong.
+func formatProxyConnectionError(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	message := strings.ToLower(err.Error())
+	isSOCKSConnection := strings.Contains(message, "socks connect")
+	closedDuringNegotiation := strings.Contains(message, "eof") ||
+		strings.Contains(message, "connection reset") ||
+		strings.Contains(message, "connection closed")
+	if isSOCKSConnection && closedDuringNegotiation {
+		return fmt.Errorf(
+			"proxy connection failed: SOCKS5 proxy closed the connection during handshake or upstream connection; verify protocol, port, credentials, or IP allowlist: %w",
+			err,
+		)
+	}
+
+	return fmt.Errorf("proxy connection failed: %w", err)
+}
+
 // probeURLs 按优先级排列的内置探测 URL 列表。
 // 某些 AI API 专用代理只允许访问特定域名，因此需要多个备选。
 var probeURLs = []struct {
@@ -64,7 +89,9 @@ var probeURLs = []struct {
 	parser string
 }{
 	{"http://ip-api.com/json/?lang=zh-CN", "ip-api"},
-	{"http://api64.ipify.org?format=json", "ipify"},
+	// Use HTTPS for the fallback so SOCKS proxies that only permit CONNECT/443
+	// are not rejected solely because the probe target uses port 80.
+	{"https://api64.ipify.org?format=json", "ipify"},
 }
 
 type configuredProbeTarget struct {
@@ -124,7 +151,7 @@ func (s *proxyProbeService) probeWithURL(ctx context.Context, client *http.Clien
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, 0, fmt.Errorf("proxy connection failed: %w", err)
+		return nil, 0, formatProxyConnectionError(err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 

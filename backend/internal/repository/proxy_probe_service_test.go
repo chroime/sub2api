@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -72,6 +73,10 @@ func (s *ProxyProbeServiceSuite) TestProbeProxy_Success_IPAPI() {
 }
 
 func (s *ProxyProbeServiceSuite) TestProbeProxy_Success_IPifyFallback() {
+	s.prober.configuredProbeURLs = []configuredProbeTarget{
+		{url: "http://ip-api.com/json/?lang=zh-CN", parser: "ip-api"},
+		{url: "http://api64.ipify.org?format=json", parser: "ipify"},
+	}
 	s.setupProxyServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// ip-api 失败
 		if strings.Contains(r.RequestURI, "ip-api.com") {
@@ -130,6 +135,24 @@ func (s *ProxyProbeServiceSuite) TestProbeProxy_ProxyServerClosed() {
 
 	_, _, err := s.prober.ProbeProxy(s.ctx, s.proxySrv.URL)
 	require.Error(s.T(), err, "expected error when proxy server is closed")
+}
+
+func (s *ProxyProbeServiceSuite) TestFormatProxyConnectionError_ClassifiesSOCKSHandshakeEOF() {
+	err := formatProxyConnectionError(fmt.Errorf("socks connect tcp 69.3.213.195:6716->api64.ipify.org:80: EOF"))
+	require.Error(s.T(), err)
+	require.ErrorContains(s.T(), err, "SOCKS5 proxy closed the connection during handshake or upstream connection")
+	require.ErrorContains(s.T(), err, "protocol, port, credentials, or IP allowlist")
+	require.ErrorContains(s.T(), err, "api64.ipify.org:80: EOF")
+}
+
+func TestDefaultProxyProbeUsesHTTPSForIPifyFallback(t *testing.T) {
+	for _, target := range probeURLs {
+		if target.parser == "ipify" {
+			require.Equal(t, "https", strings.SplitN(target.url, "://", 2)[0])
+			return
+		}
+	}
+	t.Fatal("default probe URLs do not include an ipify fallback")
 }
 
 func (s *ProxyProbeServiceSuite) TestParseIPAPI_Success() {
