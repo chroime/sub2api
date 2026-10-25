@@ -94,11 +94,18 @@ log "Snapshotting Redis"
 REDIS_RDB_PATH="/tmp/sub2api-pre-update-$$.rdb"
 REDIS_LOG_PATH="/tmp/sub2api-pre-update-$$.log"
 if docker exec "$REDIS_CONTAINER" sh -c 'test -n "${REDISCLI_AUTH:-}" || test -n "${REDIS_PASSWORD:-}"'; then
-  REDIS_COMMAND="if [ -z \"\${REDISCLI_AUTH:-}\" ]; then export REDISCLI_AUTH=\"\${REDIS_PASSWORD:-}\"; fi; redis-cli --rdb $REDIS_RDB_PATH"
+  if ! docker exec "$REDIS_CONTAINER" sh -c "set -eu; rm -f '$REDIS_RDB_PATH' '$REDIS_LOG_PATH'; if [ -z \"\${REDISCLI_AUTH:-}\" ]; then export REDISCLI_AUTH=\"\${REDIS_PASSWORD:-}\"; fi; if ! redis-cli --rdb '$REDIS_RDB_PATH' > '$REDIS_LOG_PATH' 2>&1; then cat '$REDIS_LOG_PATH' >&2; exit 1; fi; test -s '$REDIS_RDB_PATH'"; then
+    docker exec "$REDIS_CONTAINER" rm -f "$REDIS_RDB_PATH" "$REDIS_LOG_PATH" >/dev/null 2>&1 || true
+    fail "Redis RDB export failed"
+  fi
 else
-  REDIS_COMMAND="unset REDISCLI_AUTH REDIS_PASSWORD; redis-cli --rdb $REDIS_RDB_PATH"
+  if ! docker exec "$REDIS_CONTAINER" sh -c "set -eu; rm -f '$REDIS_RDB_PATH' '$REDIS_LOG_PATH'; unset REDISCLI_AUTH REDIS_PASSWORD; if ! redis-cli --rdb '$REDIS_RDB_PATH' > '$REDIS_LOG_PATH' 2>&1; then cat '$REDIS_LOG_PATH' >&2; exit 1; fi; test -s '$REDIS_RDB_PATH'"; then
+    docker exec "$REDIS_CONTAINER" rm -f "$REDIS_RDB_PATH" "$REDIS_LOG_PATH" >/dev/null 2>&1 || true
+    fail "Redis RDB export failed"
+  fi
 fi
-docker exec "$REDIS_CONTAINER" sh -c "set -e; rm -f '$REDIS_RDB_PATH' '$REDIS_LOG_PATH'; if ! $REDIS_COMMAND > '$REDIS_LOG_PATH' 2>&1; then cat '$REDIS_LOG_PATH' >&2; rm -f '$REDIS_RDB_PATH' '$REDIS_LOG_PATH'; exit 1; fi; cat '$REDIS_RDB_PATH'; rm -f '$REDIS_RDB_PATH' '$REDIS_LOG_PATH'" > "$BACKUP_DIR/redis.rdb"
+docker cp "$REDIS_CONTAINER:$REDIS_RDB_PATH" "$BACKUP_DIR/redis.rdb" >/dev/null
+docker exec "$REDIS_CONTAINER" rm -f "$REDIS_RDB_PATH" "$REDIS_LOG_PATH" >/dev/null
 
 log "Archiving application data"
 tar --xattrs --acls --numeric-owner -czf "$BACKUP_DIR/data-app.tar.gz" -C "$DATA_DIR" app
