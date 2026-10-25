@@ -548,6 +548,46 @@
           </p>
         </div>
 
+        <section class="space-y-3 rounded-xl border border-gray-200 bg-gray-50/70 p-4 dark:border-dark-600 dark:bg-dark-800/60">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <h4 class="text-sm font-semibold text-gray-900 dark:text-white">{{ t('admin.proxies.namingTitle') }}</h4>
+            <span v-if="!batchNamingInvalid" data-testid="proxy-naming-example" class="font-mono text-xs text-primary-700 dark:text-primary-300">{{ batchNameExamples.join(' · ') }}</span>
+          </div>
+          <div class="grid grid-cols-2 gap-3 lg:grid-cols-[minmax(0,2fr)_1fr_1fr_1fr]">
+            <div class="col-span-2 lg:col-span-1">
+              <label for="proxy-naming-country" class="input-label">{{ t('admin.proxies.namingCountry') }}</label>
+              <Select
+                id="proxy-naming-country"
+                v-model="batchNamingRule.country"
+                data-testid="proxy-naming-country"
+                :options="countryOptions"
+                :searchable="true"
+                :disabled="submitting"
+                :aria-label="t('admin.proxies.namingCountry')"
+              />
+            </div>
+            <div>
+              <label for="proxy-naming-start" class="input-label">{{ t('admin.proxies.namingStart') }}</label>
+              <input id="proxy-naming-start" v-model="batchNamingRule.start" data-testid="proxy-naming-start" type="number" min="1" max="999999999" step="1" class="input" :disabled="submitting" />
+            </div>
+            <div>
+              <label for="proxy-naming-digits" class="input-label">{{ t('admin.proxies.namingDigits') }}</label>
+              <Select id="proxy-naming-digits" v-model="batchNamingRule.digits" data-testid="proxy-naming-digits" :options="[1, 2, 3, 4, 5, 6, 7, 8, 9].map(value => ({ value, label: t('admin.proxies.namingDigitsOption', { count: value }) }))" :disabled="submitting" :aria-label="t('admin.proxies.namingDigits')" />
+            </div>
+            <div>
+              <label for="proxy-naming-separator" class="input-label">{{ t('admin.proxies.namingSeparator') }}</label>
+              <Select id="proxy-naming-separator" v-model="batchNamingRule.separator" data-testid="proxy-naming-separator" :options="[{ value: '', label: t('admin.proxies.namingNoSeparator') }, { value: '-', label: '-' }, { value: '_', label: '_' }]" :disabled="submitting" :aria-label="t('admin.proxies.namingSeparator')" />
+            </div>
+          </div>
+          <p class="text-xs text-gray-500 dark:text-dark-400">{{ t('admin.proxies.namingHint') }}</p>
+          <p v-if="batchNamingInvalid" class="text-xs text-red-600 dark:text-red-400">{{ t('admin.proxies.namingInvalid') }}</p>
+          <p v-if="batchNamesLoading" class="text-xs text-gray-500 dark:text-dark-400" role="status">{{ t('admin.proxies.namingLoading') }}</p>
+          <div v-if="batchNamesLoadFailed" class="flex items-center gap-3 text-xs text-red-600 dark:text-red-400" role="alert">
+            <span>{{ t('admin.proxies.namingLoadFailed') }}</span>
+            <button type="button" class="underline" :disabled="submitting" @click="loadBatchExistingNames">{{ t('common.tryAgain') }}</button>
+          </div>
+        </section>
+
         <!-- Parse Result -->
         <section v-if="batchParseResult.total > 0" class="min-w-0 space-y-3">
           <div class="flex flex-wrap items-center justify-between gap-3">
@@ -604,10 +644,12 @@
             </div>
           </div>
           <div class="max-h-80 overflow-auto rounded-xl border border-gray-200 dark:border-dark-600">
-            <table class="w-full min-w-[940px] table-fixed text-left text-xs">
+            <table class="w-full min-w-[1320px] table-fixed text-left text-xs">
               <thead class="sticky top-0 z-10 bg-gray-50 text-gray-500 dark:bg-dark-800 dark:text-dark-300">
                 <tr>
                   <th class="w-16 px-2 py-3 font-medium">{{ t('admin.proxies.previewLine') }}</th>
+                  <th class="w-48 px-2 py-3 font-medium">{{ t('admin.proxies.name') }}</th>
+                  <th class="w-40 px-2 py-3 font-medium">{{ t('admin.proxies.namingCountry') }}</th>
                   <th class="w-36 px-2 py-3 font-medium">{{ t('admin.proxies.protocol') }}</th>
                   <th class="px-2 py-3 font-medium">{{ t('admin.proxies.host') }}</th>
                   <th class="w-24 px-2 py-3 font-medium">{{ t('admin.proxies.port') }}</th>
@@ -629,6 +671,34 @@
                         class="mt-1 block text-[10px]"
                         :class="entry.error ? 'text-red-600 dark:text-red-400' : entry.duplicate ? 'text-amber-600 dark:text-amber-400' : 'text-primary-600 dark:text-primary-400'"
                       >{{ entry.error ? t('admin.proxies.previewInvalid') : entry.duplicate ? t('admin.proxies.previewDuplicate') : t('admin.proxies.previewReady') }}</span>
+                    </td>
+                    <td class="px-2 py-2">
+                      <div class="flex items-center gap-1">
+                        <input
+                          :value="entry.row.manualName ? entry.row.name : entry.name"
+                          data-field="name"
+                          type="text"
+                          :disabled="submitting"
+                          :aria-invalid="entry.error === 'name' || entry.error === 'duplicateName' || entry.error === 'existingName'"
+                          :aria-label="t('admin.proxies.previewFieldLabel', { line: entry.row.line, field: t('admin.proxies.name') })"
+                          class="input min-w-0 font-mono !px-2 !py-2 text-xs"
+                          :class="['name', 'duplicateName', 'existingName'].includes(entry.error || '') ? 'border-red-400' : ''"
+                          @input="editBatchName(entry.row, $event)"
+                        />
+                        <button
+                          v-if="entry.row.manualName"
+                          data-action="auto-name"
+                          type="button"
+                          :disabled="submitting"
+                          :title="t('admin.proxies.namingRestoreAuto')"
+                          :aria-label="t('admin.proxies.previewFieldLabel', { line: entry.row.line, field: t('admin.proxies.namingRestoreAuto') })"
+                          class="shrink-0 rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-dark-700 dark:hover:text-primary-400"
+                          @click="entry.row.manualName = false"
+                        ><Icon name="refresh" size="sm" /></button>
+                      </div>
+                    </td>
+                    <td class="px-2 py-2">
+                      <Select v-model="entry.row.country" data-field="country" :options="rowCountryOptions" :searchable="true" :disabled="submitting" :aria-label="t('admin.proxies.previewFieldLabel', { line: entry.row.line, field: t('admin.proxies.namingCountry') })" />
                     </td>
                     <td class="px-2 py-2">
                       <Select
@@ -706,7 +776,7 @@
                     </td>
                   </tr>
                   <tr v-if="entry.error">
-                    <td colspan="7" class="bg-red-50/50 px-3 pb-2 text-xs text-red-600 dark:bg-red-950/20 dark:text-red-400">
+                    <td colspan="9" class="bg-red-50/50 px-3 pb-2 text-xs text-red-600 dark:bg-red-950/20 dark:text-red-400">
                       {{ batchRowErrorMessage(entry.error) }}
                     </td>
                   </tr>
@@ -758,7 +828,7 @@
             data-testid="proxy-batch-import"
             @click="handleBatchCreate"
             type="button"
-            :disabled="submitting || batchParseResult.valid === 0 || batchParseResult.invalid > 0"
+            :disabled="submitting || !batchNamesReady || batchNamingInvalid || batchParseResult.valid === 0 || batchParseResult.invalid > 0"
             class="btn btn-primary"
           >
             <svg
@@ -1095,7 +1165,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { adminAPI } from '@/api/admin'
@@ -1126,8 +1196,15 @@ import {
   type ProxyImportDraft,
   type ProxyImportFields
 } from '@/utils/proxyImport'
+import {
+  DEFAULT_PROXY_NAMING_RULE,
+  PROXY_NAMING_COUNTRIES,
+  generateProxyNames,
+  proxyNamingRuleError,
+  type ProxyNamingRule
+} from '@/utils/proxyNaming'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const appStore = useAppStore()
 const { copyToClipboard } = useClipboard()
 
@@ -1246,29 +1323,62 @@ const qualityReport = ref<ProxyQualityCheckResult | null>(null)
 const createMode = ref<'standard' | 'batch'>('standard')
 const batchInput = ref('')
 const batchPasswordsVisible = ref(false)
-type BatchProxyRow = ProxyImportDraft & { id: number; line: number; source: string }
+const batchNamingRule = reactive<ProxyNamingRule>({ ...DEFAULT_PROXY_NAMING_RULE })
+const batchNamingInvalid = computed(() => proxyNamingRuleError(batchNamingRule))
+const batchExistingNames = ref<string[]>([])
+const batchNamesReady = ref(false)
+const batchNamesLoading = ref(false)
+const batchNamesLoadFailed = ref(false)
+let batchNamesGeneration = 0
+const countryOptions = computed(() => {
+  let names: Intl.DisplayNames | undefined
+  try { names = new Intl.DisplayNames([locale?.value || 'zh-CN'], { type: 'region' }) } catch { /* Use ISO codes as a fallback. */ }
+  const preferred = ['us', 'jp', 'sg', 'hk', 'tw', 'kr', 'gb', 'de', 'ca', 'au']
+  const codes = [...preferred, ...PROXY_NAMING_COUNTRIES.filter(code => !preferred.includes(code))]
+  return [
+    ...codes.map(code => ({ value: code, label: `${names?.of(code.toUpperCase()) || code.toUpperCase()} · ${code}` })),
+    { value: 'proxy', label: t('admin.proxies.namingGeneric') }
+  ]
+})
+const rowCountryOptions = computed(() => [
+  { value: '', label: t('admin.proxies.namingInherit') }, ...countryOptions.value
+])
+type BatchProxyRow = ProxyImportDraft & {
+  id: number; line: number; source: string; country: string; name: string; manualName: boolean
+}
+type BatchRowError = NonNullable<ReturnType<typeof proxyImportValidationError>> | 'name' | 'duplicateName' | 'existingName'
 const batchRows = ref<BatchProxyRow[]>([])
+const batchGeneratedNames = computed(() => generateProxyNames(batchRows.value, batchNamingRule, batchExistingNames.value))
+const batchNameExamples = computed(() => generateProxyNames([{}, {}, {}], batchNamingRule, batchExistingNames.value))
 const batchParseResult = computed(() => {
   const seen = new Set<string>()
-  const proxies: ProxyImportFields[] = []
+  const seenNames = new Set<string>()
+  const existingNames = new Set(batchExistingNames.value.map(name => name.trim().toLowerCase()))
+  const proxies: Array<ProxyImportFields & { name: string }> = []
   let invalid = 0
   let duplicate = 0
-  const entries = batchRows.value.map((row) => {
-    const error = proxyImportValidationError(row)
+  const entries = batchRows.value.map((row, index) => {
+    const name = batchGeneratedNames.value[index] || ''
+    const nameKey = name.toLowerCase()
+    let error: BatchRowError | null = proxyImportValidationError(row)
+    if (!error && (!name || Array.from(name).length > 100 || /\p{Cc}/u.test(name))) error = 'name'
+    if (!error && existingNames.has(nameKey)) error = 'existingName'
+    if (!error && seenNames.has(nameKey)) error = 'duplicateName'
     if (error) {
       invalid++
-      return { row, error, duplicate: false }
+      return { row, name, error, duplicate: false }
     }
     const proxy = normalizeProxyImportFields(row)
     // Match the server's identity check, including its credential trimming.
     const key = JSON.stringify([proxy.host, proxy.port, proxy.username.trim(), proxy.password.trim()])
     if (seen.has(key)) {
       duplicate++
-      return { row, error: null, duplicate: true }
+      return { row, name, error: null, duplicate: true }
     }
     seen.add(key)
-    proxies.push(proxy)
-    return { row, error: null, duplicate: false }
+    seenNames.add(nameKey)
+    proxies.push({ ...proxy, name })
+    return { row, name, error: null, duplicate: false }
   })
   return { total: entries.length, valid: proxies.length, invalid, duplicate, proxies, entries }
 })
@@ -1422,6 +1532,12 @@ const closeCreateModal = () => {
   batchInput.value = ''
   batchRows.value = []
   batchPasswordsVisible.value = false
+  Object.assign(batchNamingRule, DEFAULT_PROXY_NAMING_RULE)
+  batchNamesGeneration++
+  batchExistingNames.value = []
+  batchNamesReady.value = false
+  batchNamesLoading.value = false
+  batchNamesLoadFailed.value = false
 }
 
 const handleDataImported = () => {
@@ -1437,6 +1553,9 @@ const parseBatchInput = () => {
       id: index,
       line: index + 1,
       source,
+      country: '',
+      name: '',
+      manualName: false,
       ...(parsed ?? { protocol: 'socks5', host: '', port: '', username: '', password: '' })
     }]
   })
@@ -1446,16 +1565,51 @@ const removeBatchRow = (id: number) => {
   batchRows.value = batchRows.value.filter(row => row.id !== id)
 }
 
-const batchRowErrorMessage = (error: 'protocol' | 'host' | 'port' | 'credentials') => {
+const batchRowErrorMessage = (error: BatchRowError) => {
+  if (error === 'name') return t('admin.proxies.previewInvalidName')
+  if (error === 'duplicateName') return t('admin.proxies.previewDuplicateName')
+  if (error === 'existingName') return t('admin.proxies.previewExistingName')
   if (error === 'protocol') return t('admin.proxies.previewInvalidProtocol')
   if (error === 'port') return t('admin.proxies.previewInvalidPort')
   if (error === 'credentials') return t('admin.proxies.previewInvalidCredentials')
   return t('admin.proxies.previewInvalidHost')
 }
 
+const editBatchName = (row: BatchProxyRow, event: Event) => {
+  row.manualName = true
+  row.name = (event.target as HTMLInputElement).value
+}
+
+const loadBatchExistingNames = async () => {
+  const generation = ++batchNamesGeneration
+  batchNamesLoading.value = true
+  batchNamesReady.value = false
+  batchNamesLoadFailed.value = false
+  try {
+    const names: string[] = []
+    for (let page = 1; ; page++) {
+      const result = await adminAPI.proxies.list(page, 1000, { sort_by: 'name', sort_order: 'asc' })
+      if (generation !== batchNamesGeneration) return
+      names.push(...result.items.map(proxy => proxy.name))
+      if (result.items.length === 0 || page * 1000 >= result.total) break
+    }
+    batchExistingNames.value = names
+    batchNamesReady.value = true
+  } catch {
+    if (generation === batchNamesGeneration) batchNamesLoadFailed.value = true
+  } finally {
+    if (generation === batchNamesGeneration) batchNamesLoading.value = false
+  }
+}
+
+watch([showCreateModal, createMode], ([show, mode]) => {
+  if (show && mode === 'batch') void loadBatchExistingNames()
+  else batchNamesGeneration++
+})
+
 const handleBatchCreate = async () => {
   const reviewed = batchParseResult.value
-  if (submitting.value || reviewed.valid === 0 || reviewed.invalid > 0) return
+  if (submitting.value || !batchNamesReady.value || batchNamingInvalid.value || reviewed.valid === 0 || reviewed.invalid > 0) return
 
   submitting.value = true
   try {
@@ -1472,7 +1626,7 @@ const handleBatchCreate = async () => {
     closeCreateModal()
     loadProxies()
   } catch (error: any) {
-    appStore.showError(error.response?.data?.detail || t('admin.proxies.failedToImport'))
+    appStore.showError(error.message || error.response?.data?.detail || t('admin.proxies.failedToImport'))
     console.error('Error batch creating proxies:', error)
   } finally {
     submitting.value = false
@@ -2185,6 +2339,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  batchNamesGeneration++
   clearTimeout(searchTimeout)
   abortController?.abort()
   document.removeEventListener('click', closeCopyMenu)

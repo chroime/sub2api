@@ -44,6 +44,7 @@ async function openQuickAdd(input: string) {
   await wrapper.findAll('button').find(button => button.text() === 'admin.proxies.createProxy')!.trigger('click')
   await wrapper.findAll('button').find(button => button.text() === 'admin.proxies.batchAdd')!.trigger('click')
   await wrapper.get('[data-testid="proxy-batch-input"]').setValue(input)
+  await flushPromises()
   return wrapper
 }
 
@@ -67,8 +68,8 @@ describe('proxy quick-add recognition and review', () => {
 
     expect(batchCreate).toHaveBeenCalledTimes(1)
     expect(batchCreate).toHaveBeenCalledWith([
-      { protocol: 'http', host: '203.0.113.9', port: 8443, username: 'reviewed-user', password: 'reviewed:secret@value' },
-      { protocol: 'https', host: 'proxy.example.com', port: 443, username: 'other', password: 'secret' }
+      { name: 'us001', protocol: 'http', host: '203.0.113.9', port: 8443, username: 'reviewed-user', password: 'reviewed:secret@value' },
+      { name: 'us002', protocol: 'https', host: 'proxy.example.com', port: 443, username: 'other', password: 'secret' }
     ])
     expect(showError).not.toHaveBeenCalled()
   })
@@ -108,7 +109,7 @@ describe('proxy quick-add recognition and review', () => {
     await flushPromises()
     expect(batchCreate).toHaveBeenCalledTimes(1)
     expect(batchCreate).toHaveBeenCalledWith([
-      { protocol: 'socks5', host: '203.0.113.8', port: 1080, username: 'user', password: 'pass' }
+      { name: 'us001', protocol: 'socks5', host: '203.0.113.8', port: 1080, username: 'user', password: 'pass' }
     ])
   })
 
@@ -130,6 +131,94 @@ describe('proxy quick-add recognition and review', () => {
     expect(view.get('[data-testid="proxy-batch-import"]').attributes('disabled')).toBeDefined()
     await view.get('[data-field="password"]').setValue('repaired-secret')
     expect(view.get('[data-testid="proxy-batch-import"]').attributes('disabled')).toBeUndefined()
+    expect(batchCreate).not.toHaveBeenCalled()
+  })
+
+  it('previews country and sequence rules and saves names matching the preview', async () => {
+    const view = await openQuickAdd('203.0.113.8:1080\n203.0.113.9:1080')
+    const rows = view.findAll('[data-testid="proxy-preview-row"]')
+    expect((rows[0].get('[data-field="name"]').element as HTMLInputElement).value).toBe('us001')
+    await view.get('[data-testid="proxy-naming-country"]').setValue('jp')
+    await view.get('[data-testid="proxy-naming-start"]').setValue('8')
+    await view.get('[data-testid="proxy-naming-digits"]').setValue('4')
+    await view.get('[data-testid="proxy-naming-separator"]').setValue('-')
+    expect((rows[0].get('[data-field="name"]').element as HTMLInputElement).value).toBe('jp-0008')
+    expect((rows[1].get('[data-field="name"]').element as HTMLInputElement).value).toBe('jp-0009')
+    await rows[1].get('[data-field="country"]').setValue('us')
+    expect((rows[1].get('[data-field="name"]').element as HTMLInputElement).value).toBe('us-0009')
+    await view.get('[data-testid="proxy-batch-import"]').trigger('click')
+    await flushPromises()
+    expect(batchCreate.mock.calls[0][0].map((proxy: { name: string }) => proxy.name)).toEqual(['jp-0008', 'us-0009'])
+    expect(batchCreate.mock.calls[0][0][0]).not.toHaveProperty('country')
+    expect(batchCreate.mock.calls[0][0][0]).not.toHaveProperty('manualName')
+  })
+
+  it('preserves manual names when rules change and can restore automatic names', async () => {
+    const view = await openQuickAdd('203.0.113.8:1080\n203.0.113.9:1080')
+    const rows = view.findAll('[data-testid="proxy-preview-row"]')
+    await rows[0].get('[data-field="name"]').setValue('My ')
+    expect((rows[0].get('[data-field="name"]').element as HTMLInputElement).value).toBe('My ')
+    await rows[0].get('[data-field="name"]').setValue('My custom proxy')
+    await view.get('[data-testid="proxy-naming-country"]').setValue('jp')
+    expect((rows[0].get('[data-field="name"]').element as HTMLInputElement).value).toBe('My custom proxy')
+    expect((rows[1].get('[data-field="name"]').element as HTMLInputElement).value).toBe('jp001')
+    await rows[0].get('[data-action="auto-name"]').trigger('click')
+    expect((rows[0].get('[data-field="name"]').element as HTMLInputElement).value).toBe('jp001')
+    expect((rows[1].get('[data-field="name"]').element as HTMLInputElement).value).toBe('jp002')
+  })
+
+  it('blocks empty, duplicate and overlong names and invalid sequence settings', async () => {
+    const view = await openQuickAdd('203.0.113.8:1080\n203.0.113.9:1080')
+    const rows = view.findAll('[data-testid="proxy-preview-row"]')
+    const submit = () => view.get('[data-testid="proxy-batch-import"]')
+    await rows[0].get('[data-field="name"]').setValue(' ')
+    expect(submit().attributes('disabled')).toBeDefined()
+    await rows[0].get('[data-field="name"]').setValue('custom')
+    await rows[1].get('[data-field="name"]').setValue(' CUSTOM ')
+    expect(submit().attributes('disabled')).toBeDefined()
+    await rows[1].get('[data-field="name"]').setValue('x'.repeat(101))
+    expect(submit().attributes('disabled')).toBeDefined()
+    await rows[1].get('[data-field="name"]').setValue('another')
+    expect(submit().attributes('disabled')).toBeUndefined()
+    await view.get('[data-testid="proxy-naming-start"]').setValue('0')
+    expect(submit().attributes('disabled')).toBeDefined()
+    await submit().trigger('click')
+    expect(batchCreate).not.toHaveBeenCalled()
+  })
+
+  it('skips existing names across all statuses when allocating numbers', async () => {
+    list.mockImplementation((_page: number, _pageSize: number, filters?: { sort_by?: string }) => Promise.resolve({
+      items: filters?.sort_by === 'name' ? [{ name: 'US001', status: 'inactive' }, { name: 'us002', status: 'expired' }] : [],
+      total: filters?.sort_by === 'name' ? 2 : 0, pages: 1
+    }))
+    const view = await openQuickAdd('203.0.113.8:1080\n203.0.113.9:1080')
+    const rows = view.findAll('[data-testid="proxy-preview-row"]')
+    expect((rows[0].get('[data-field="name"]').element as HTMLInputElement).value).toBe('us003')
+    expect((rows[1].get('[data-field="name"]').element as HTMLInputElement).value).toBe('us004')
+    await rows[0].get('[data-field="name"]').setValue('US001')
+    expect(view.get('[data-testid="proxy-batch-import"]').attributes('disabled')).toBeDefined()
+    expect(view.text()).toContain('admin.proxies.previewExistingName')
+  })
+
+  it('resets naming rules and per-row changes after closing the import', async () => {
+    const view = await openQuickAdd('203.0.113.8:1080')
+    await view.get('[data-testid="proxy-naming-country"]').setValue('jp')
+    await view.get('[data-testid="proxy-naming-start"]').setValue('12')
+    await view.findAll('button').find(button => button.text() === 'common.cancel')!.trigger('click')
+    await view.findAll('button').find(button => button.text() === 'admin.proxies.createProxy')!.trigger('click')
+    await view.findAll('button').find(button => button.text() === 'admin.proxies.batchAdd')!.trigger('click')
+    await view.get('[data-testid="proxy-batch-input"]').setValue('203.0.113.8:1080')
+    await flushPromises()
+    expect((view.get('[data-field="name"]').element as HTMLInputElement).value).toBe('us001')
+  })
+
+  it('keeps import blocked when the existing name inventory cannot be loaded', async () => {
+    list.mockImplementation((_page: number, _pageSize: number, filters?: { sort_by?: string }) => (
+      filters?.sort_by === 'name' ? Promise.reject(new Error('unavailable')) : Promise.resolve({ items: [], total: 0, pages: 0 })
+    ))
+    const view = await openQuickAdd('203.0.113.8:1080')
+    expect(view.get('[data-testid="proxy-batch-import"]').attributes('disabled')).toBeDefined()
+    expect(view.text()).toContain('admin.proxies.namingLoadFailed')
     expect(batchCreate).not.toHaveBeenCalled()
   })
 })
