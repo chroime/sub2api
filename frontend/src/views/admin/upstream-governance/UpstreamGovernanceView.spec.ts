@@ -19,6 +19,8 @@ import GovernanceSitesOverview from './GovernanceSitesOverview.vue'
 import ModelMonitorPanel from './ModelMonitorPanel.vue'
 import modelAPI from '@/api/admin/upstream-model-monitoring'
 import operationsAPI from '@/api/admin/upstream-operations'
+import qualityAPI from '@/api/admin/account-quality'
+vi.mock('@/api/admin/account-quality', () => ({ default: { overview: vi.fn().mockResolvedValue({ policies: [], bindings: [], templates: [], capabilities: [], settings: { version: 1, concurrency: 2, daily_request_limit: 2000, daily_cost_limit_usd: 0, notifications: { email_enabled: false, email_recipients: [], qq_enabled: false, qq_targets: [], events: [], reminder_seconds: 3600 } } }), run: vi.fn(), control: vi.fn(), saveSettings: vi.fn() } }))
 import api, { type BalanceHealth, type ReadinessOverview, type Site, type Snapshot } from '@/api/admin/upstream-governance'
 vi.mock('@/api/admin/upstream-governance', () => ({
   default: {
@@ -107,6 +109,21 @@ describe('governance page', () => {
     expect(api.connect).not.toHaveBeenCalled()
     expect(api.check).not.toHaveBeenCalled()
   })
+  it('opens account quality independently of upstream sites and does not start checks or notifications', async () => {
+    await router.push('/admin/upstream-governance/account-quality?site=2')
+    const wrapper = mount(View)
+    await flushPromises()
+    expect(wrapper.find('[data-test=account-quality-view]').exists()).toBe(true)
+    expect(wrapper.find('[data-test=smart-operations-site-rail]').exists()).toBe(false)
+    expect(wrapper.find('[data-test=site-selection-empty]').exists()).toBe(false)
+    expect(router.currentRoute.value.query.site).toBeUndefined()
+    expect(qualityAPI.overview).toHaveBeenCalledOnce()
+    expect(api.list).not.toHaveBeenCalled()
+    expect(api.catalog).not.toHaveBeenCalled()
+    expect(qualityAPI.run).not.toHaveBeenCalled()
+    expect(qualityAPI.control).not.toHaveBeenCalled()
+    expect(qualityAPI.saveSettings).not.toHaveBeenCalled()
+  })
   it('scopes current tasks to the selected site and offers a route back to all-site overview', async () => {
     setupNavigationSites()
     await router.push('/admin/upstream-governance?site=2')
@@ -168,7 +185,7 @@ describe('governance page', () => {
     setupNavigationSites()
     const wrapper = mount(View)
     await flushPromises()
-    expect(wrapper.findAll('[role=tab]')).toHaveLength(7)
+    expect(wrapper.findAll('[role=tab]')).toHaveLength(8)
     expect(wrapper.get('[data-test=smart-operations-site-rail]').isVisible()).toBe(true)
     await wrapper.get('#governance-models-tab').trigger('click')
     await flushPromises()

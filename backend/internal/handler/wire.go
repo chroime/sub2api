@@ -19,6 +19,7 @@ func ProvideAdminUserHandler(adminService service.AdminService, concurrencyServi
 // ProvideAdminHandlers creates the AdminHandlers struct
 func ProvideAdminHandlers(
 	upstreamGovernance *admin.UpstreamGovernanceHandler,
+	accountQuality *admin.AccountQualityHandler,
 	dashboardHandler *admin.DashboardHandler,
 	userHandler *admin.UserHandler,
 	groupHandler *admin.GroupHandler,
@@ -65,6 +66,7 @@ func ProvideAdminHandlers(
 	accountHandler.SetOpenCodeGoUsageService(opencodeGoUsage)
 	accountHandler.SetClaudeResetCreditService(claudeResetCredits)
 	return &AdminHandlers{
+		AccountQuality:         accountQuality,
 		UpstreamGovernance:     upstreamGovernance,
 		Dashboard:              dashboardHandler,
 		User:                   userHandler,
@@ -261,6 +263,7 @@ func ProvideHandlers(
 
 // ProviderSet is the Wire provider set for all handlers
 var ProviderSet = wire.NewSet(
+	admin.NewAccountQualityHandler,
 	admin.NewUpstreamGovernanceHandler,
 	// Top-level handlers
 	NewAuthHandler,

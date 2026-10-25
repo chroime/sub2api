@@ -150,7 +150,7 @@ func governanceLocal(a *Account) *gov.LocalAccount {
 		extra[key] = value
 	}
 	// Runtime accounting and probe refreshes do not invalidate reviewed settings.
-	for _, key := range []string{"quota_used", "quota_daily_used", "quota_weekly_used", "quota_daily_start", "quota_weekly_start", "quota_daily_reset_at", "quota_weekly_reset_at", UpstreamBillingProbeExtraKey} {
+	for _, key := range []string{"quota_used", "quota_daily_used", "quota_weekly_used", "quota_daily_start", "quota_weekly_start", "quota_daily_reset_at", "quota_weekly_reset_at", UpstreamBillingProbeExtraKey, AccountQualityGatesExtraKey} {
 		delete(extra, key)
 	}
 	rate := a.BillingRateMultiplier()

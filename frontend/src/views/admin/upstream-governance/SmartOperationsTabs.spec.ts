@@ -17,7 +17,7 @@ function toRuntimeMessages(value: unknown): unknown {
   return value
 }
 
-function renderTabs(modelValue: 'overview' | 'import' | 'models' | 'local-monitor' | 'monitor' | 'history' | 'settings' = 'overview', disabled = false, locale = 'zh') {
+function renderTabs(modelValue: 'overview' | 'import' | 'models' | 'local-monitor' | 'account-quality' | 'monitor' | 'history' | 'settings' = 'overview', disabled = false, locale = 'zh') {
   return mount(SmartOperationsTabs, {
     props: { modelValue, disabled },
     attachTo: document.body,
@@ -54,15 +54,15 @@ describe('Smart Operations tabs', () => {
 
     expect(tablist.attributes('aria-label')).toBe('智能运维')
     expect(tablist.attributes('aria-orientation')).toBe('horizontal')
-    expect(tabs.map(tab => tab.text())).toEqual(['运维总览', '分组导入', '模型监测', '本地监测', '自动策略', '运行记录', '全局设置'])
+    expect(tabs.map(tab => tab.text())).toEqual(['运维总览', '分组导入', '模型监测', '本地监测', '账号质量', '自动策略', '运行记录', '全局设置'])
     expect(tabs.map(tab => tab.attributes('id'))).toEqual([
-      'governance-overview-tab', 'governance-import-tab', 'governance-models-tab', 'governance-local-monitor-tab', 'governance-monitor-tab', 'governance-history-tab', 'governance-settings-tab'
+      'governance-overview-tab', 'governance-import-tab', 'governance-models-tab', 'governance-local-monitor-tab', 'governance-account-quality-tab', 'governance-monitor-tab', 'governance-history-tab', 'governance-settings-tab'
     ])
     expect(tabs.map(tab => tab.attributes('aria-controls'))).toEqual([
-      undefined, undefined, 'governance-models-panel', undefined, undefined, undefined, undefined
+      undefined, undefined, 'governance-models-panel', undefined, undefined, undefined, undefined, undefined
     ])
-    expect(tabs.map(tab => tab.attributes('aria-selected'))).toEqual(['false', 'false', 'true', 'false', 'false', 'false', 'false'])
-    expect(tabs.map(tab => tab.attributes('tabindex'))).toEqual(['-1', '-1', '0', '-1', '-1', '-1', '-1'])
+    expect(tabs.map(tab => tab.attributes('aria-selected'))).toEqual(['false', 'false', 'true', 'false', 'false', 'false', 'false', 'false'])
+    expect(tabs.map(tab => tab.attributes('tabindex'))).toEqual(['-1', '-1', '0', '-1', '-1', '-1', '-1', '-1'])
     expect(tabs.every(tab => tab.get('svg').attributes('aria-hidden') === 'true')).toBe(true)
   })
 
@@ -192,7 +192,7 @@ describe('Smart Operations tabs', () => {
   it('prevents pointer and keyboard activation while disabled and restores the tab stop', async () => {
     const wrapper = renderTabs('models', true)
     const tabs = wrapper.findAll<HTMLButtonElement>('[role="tab"]')
-    expect(tabs).toHaveLength(7)
+    expect(tabs).toHaveLength(8)
     expect(tabs.every(tab => tab.element.disabled && tab.attributes('tabindex') === '-1')).toBe(true)
 
     await wrapper.get('#governance-import-tab').trigger('click')
@@ -209,7 +209,7 @@ describe('Smart Operations tabs', () => {
     const wrapper = renderTabs('overview', false, 'en')
     expect(wrapper.get('[role="tablist"]').attributes('aria-label')).toBe('Smart Operations')
     expect(wrapper.findAll('[role="tab"]').map(tab => tab.text())).toEqual([
-      'Operations overview', 'Group import', 'Model monitoring', 'Local monitoring', 'Automation policies', 'Run history', 'Global settings'
+      'Operations overview', 'Group import', 'Model monitoring', 'Local monitoring', 'Account quality', 'Automation policies', 'Run history', 'Global settings'
     ])
   })
 })

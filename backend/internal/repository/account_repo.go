@@ -138,6 +138,7 @@ func createAccountRecord(ctx context.Context, client *dbent.Client, account *ser
 	if account == nil {
 		return service.ErrAccountNilInput
 	}
+	account.Extra = stripAccountQualityRuntimeExtra(account.Extra)
 
 	builder := client.Account.Create().
 		SetName(account.Name).
@@ -785,6 +786,7 @@ func lockAndMergeAccountProbeExtra(
 	}
 	extra := copyJSONMap(normalizeJSONMap(account.Extra))
 	service.MergeGovernanceRuntimeExtra(ctx, extra, currentExtra)
+	mergeAccountQualityRuntimeExtra(extra, currentExtra)
 	// Ordinary configuration edits carry a pre-transaction Account snapshot.
 	// Preserve the row-locked availability of governed accounts in both pause
 	// and restore races unless the administrator supplied an availability intent.
@@ -2795,6 +2797,7 @@ func (r *accountRepository) AutoPauseExpiredAccounts(ctx context.Context, now ti
 }
 
 func (r *accountRepository) UpdateExtra(ctx context.Context, id int64, updates map[string]any) error {
+	updates = stripAccountQualityRuntimeExtra(updates)
 	updates = stripGovernanceRuntimeExtra(updates)
 	updates = stripCodexFingerprintSeedFromExtraUpdate(updates)
 	if len(updates) == 0 {
@@ -3077,6 +3080,7 @@ func (r *accountRepository) BulkUpdate(ctx context.Context, ids []int64, updates
 	}
 	updates.Extra = stripCodexFingerprintSeedFromExtraUpdate(updates.Extra)
 	updates.Extra = stripGovernanceRuntimeExtra(updates.Extra)
+	updates.Extra = stripAccountQualityRuntimeExtra(updates.Extra)
 
 	setClauses := make([]string, 0, 8)
 	args := make([]any, 0, 8)

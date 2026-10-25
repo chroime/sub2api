@@ -46,6 +46,7 @@ func RegisterAdminRoutes(
 		// 账号管理
 		registerAccountRoutes(admin, h, stepUpAuth)
 		registerUpstreamGovernanceRoutes(admin, h)
+		registerAccountQualityRoutes(admin, h)
 
 		// 公告管理
 		registerAnnouncementRoutes(admin, h)

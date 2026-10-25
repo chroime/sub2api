@@ -1273,6 +1273,7 @@ func filterSchedulerExtra(extra map[string]any) map[string]any {
 		return nil
 	}
 	keys := []string{
+		service.AccountQualityGatesExtraKey,
 		// Candidate admission must retain the governance import's explicit model
 		// policy, rather than restoring a provider's implicit default allowlist.
 		"upstream_governance_marker",

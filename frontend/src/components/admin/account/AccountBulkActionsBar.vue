@@ -42,8 +42,10 @@
         </button>
       </template>
     </div>
-    <div class="flex gap-2">
+    <div class="flex flex-wrap gap-2">
       <template v-if="selectedIds.length > 0">
+        <button @click="$emit('assign-quality')" class="btn btn-secondary btn-sm">{{ t('accountQuality.assignment') }}</button>
+        <button @click="$emit('run-quality')" class="btn btn-secondary btn-sm">{{ t('accountQuality.queueAll') }}</button>
         <button @click="$emit('delete')" class="btn btn-danger btn-sm">{{ t('admin.accounts.bulkActions.delete') }}</button>
         <button @click="$emit('reset-status')" class="btn btn-secondary btn-sm">{{ t('admin.accounts.bulkActions.resetStatus') }}</button>
         <button @click="$emit('refresh-token')" class="btn btn-secondary btn-sm">{{ t('admin.accounts.bulkActions.refreshToken') }}</button>
@@ -79,7 +81,9 @@ defineEmits([
   'toggle-schedulable',
   'reset-status',
   'refresh-token',
-  'probe-upstream-billing'
+  'probe-upstream-billing',
+  'assign-quality',
+  'run-quality'
 ])
 
 const { t } = useI18n()

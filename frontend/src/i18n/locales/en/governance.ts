@@ -255,6 +255,7 @@ export default {
     title: "Smart Operations",
     description: "Manage upstream connections, group imports, model monitoring, and automation in one place.",
     sections: {
+      accountQuality: "Account quality",
       overview: "Operations overview",
       import: "Group import",
       models: "Model monitoring",
@@ -264,6 +265,7 @@ export default {
       settings: "Global settings",
     },
     descriptions: {
+      accountQuality: "Check fixed accounts, review evidence and manage independent quality gates.",
       overview: "Review current tasks and manage upstream connections, authorization, and collection status.",
       import: "Import upstream groups and review account mappings and synchronization settings.",
       models: "Test upstream models and review availability, timing, and monitoring results.",

@@ -28,6 +28,13 @@ export const SMART_OPERATIONS_SECTIONS = [
     icon: 'beaker',
   },
   {
+    id: 'account-quality',
+    path: '/admin/upstream-governance/account-quality',
+    labelKey: 'governance.smartOperations.sections.accountQuality',
+    descriptionKey: 'governance.smartOperations.descriptions.accountQuality',
+    icon: 'shield',
+  },
+  {
     id: 'monitor',
     path: '/admin/upstream-governance/monitor',
     labelKey: 'governance.smartOperations.sections.monitor',

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/ent"
+	aq "github.com/Wei-Shaw/sub2api/internal/accountquality"
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/handler"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
@@ -130,6 +131,7 @@ func provideCleanup(
 	quotaFlusher *service.UserPlatformQuotaUsageFlusher,
 	upstreamBillingProbe *service.UpstreamBillingProbeService,
 	upstreamGovernance *gov.Service,
+	accountQuality *aq.Service,
 	ollamaCloudUsage *service.OllamaCloudUsageService,
 	opencodeGoUsage *service.OpenCodeGoUsageService,
 	auditLog *service.AuditLogService,
@@ -148,6 +150,12 @@ func provideCleanup(
 
 		// 应用层清理步骤可并行执行，基础设施资源（Redis/Ent）最后按顺序关闭。
 		parallelSteps := []cleanupStep{
+			{"AccountQuality", func() error {
+				if accountQuality != nil {
+					accountQuality.Stop()
+				}
+				return nil
+			}},
 			{"UpstreamGovernance", func() error {
 				if upstreamGovernance != nil {
 					upstreamGovernance.Stop()

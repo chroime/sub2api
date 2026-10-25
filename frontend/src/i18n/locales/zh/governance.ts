@@ -270,6 +270,7 @@ export default {
     title: "智能运维",
     description: "集中管理上游接入、分组导入、模型监测与自动化任务。",
     sections: {
+      accountQuality: "账号质量",
       overview: "运维总览",
       import: "分组导入",
       models: "模型监测",
@@ -279,6 +280,7 @@ export default {
       settings: "全局设置",
     },
     descriptions: {
+      accountQuality: "固定账号执行能力检测，查看原始证据并管理独立质量门。",
       overview: "查看当前待办，管理上游接入、授权状态与采集概况。",
       import: "导入上游分组，查看账号映射与同步设置。",
       models: "检测上游模型，查看可用性、响应耗时与监测结果。",

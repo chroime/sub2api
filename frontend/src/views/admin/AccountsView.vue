@@ -184,6 +184,8 @@
           @reset-status="handleBulkResetStatus"
           @refresh-token="handleBulkRefreshToken"
           @probe-upstream-billing="handleBulkProbeUpstreamBilling"
+          @assign-quality="openQualityAssignment"
+          @run-quality="runSelectedQuality"
           @edit-selected="openBulkEditSelected"
           @edit-filtered="openBulkEditFiltered"
           @clear="clearSelection"
@@ -295,6 +297,9 @@
             <button @click="handleToggleSchedulable(row)" :disabled="togglingSchedulable === row.id" class="relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:focus:ring-offset-dark-800" :class="[row.schedulable ? 'bg-primary-500 hover:bg-primary-600' : 'bg-gray-200 hover:bg-gray-300 dark:bg-dark-600 dark:hover:bg-dark-500']" :title="row.schedulable ? t('admin.accounts.schedulableEnabled') : t('admin.accounts.schedulableDisabled')">
               <span class="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out" :class="[row.schedulable ? 'translate-x-4' : 'translate-x-0']" />
             </button>
+          </template>
+          <template #cell-quality="{ row }">
+            <AccountQualityCell :bindings="qualityByAccount[String(row.id)] || []" :loading="qualityLoading" :error="qualityError" :disabled="qualityBusy" @details="openAccountQualityDetails(row.id)" @run="runAccountQuality" @evidence="qualityEvidenceId = $event.id" @control="(binding, action) => openAccountQualityDetails(row.id, binding.id, action)" />
           </template>
           <template #cell-today_stats="{ row }">
             <AccountTodayStatsCell
@@ -459,8 +464,11 @@
     <ReAuthAccountModal :show="showReAuth" :account="reAuthAcc" @close="closeReAuthModal" @reauthorized="handleAccountUpdated" />
     <AccountTestModal :show="showTest" :account="testingAcc" @close="closeTestModal" />
     <AccountStatsModal :show="showStats" :account="statsAcc" @close="closeStatsModal" />
+    <AccountQualityDetail v-if="qualityAccountId" :account-id="qualityAccountId" :initial-binding-id="qualityInitialBindingId" :initial-action="qualityInitialAction" @close="qualityAccountId = 0" @changed="refreshQualitySummaries" />
+    <AccountQualityRunDetail v-if="qualityEvidenceId" :run-id="qualityEvidenceId" @close="qualityEvidenceId = ''" @changed="refreshQualitySummaries" />
+    <QualityAssignmentDialog v-if="showQualityAssignment" :policies="qualityPolicies" :account-ids="qualityAssignmentIds" @close="showQualityAssignment = false" @saved="qualityAssigned" />
     <ScheduledTestsPanel :show="showSchedulePanel" :account-id="scheduleAcc?.id ?? null" :model-options="scheduleModelOptions" @close="closeSchedulePanel" />
-    <AccountActionMenu :show="menu.show" :account="menu.acc" :anchor-rect="menu.anchorRect" @close="menu.show = false" @test="handleTest" @stats="handleViewStats" @schedule="handleSchedule" @duplicate="handleDuplicateAccount" @reauth="handleReAuth" @refresh-token="handleRefresh" @recover-state="handleRecoverState" @reset-quota="handleResetQuota" @set-privacy="handleSetPrivacy" @create-spark-shadow="handleCreateSparkShadow" />
+    <AccountActionMenu :show="menu.show" :account="menu.acc" :anchor-rect="menu.anchorRect" @close="menu.show = false" @test="handleTest" @stats="handleViewStats" @schedule="handleSchedule" @duplicate="handleDuplicateAccount" @reauth="handleReAuth" @refresh-token="handleRefresh" @recover-state="handleRecoverState" @reset-quota="handleResetQuota" @set-privacy="handleSetPrivacy" @create-spark-shadow="handleCreateSparkShadow" @quality="openAccountQualityDetails($event.id)" @assign-quality="openAccountQualityAssignment" />
     <SyncFromCrsModal :show="showSync" @close="showSync = false" @synced="reload" />
     <ImportDataModal :show="showImportData" @close="showImportData = false" @imported="handleDataImported" />
     <BulkEditAccountModal
@@ -517,6 +525,12 @@ import ImportDataModal from '@/components/admin/account/ImportDataModal.vue'
 import ReAuthAccountModal from '@/components/admin/account/ReAuthAccountModal.vue'
 import AccountTestModal from '@/components/admin/account/AccountTestModal.vue'
 import AccountStatsModal from '@/components/admin/account/AccountStatsModal.vue'
+import AccountQualityCell from '@/components/admin/account/AccountQualityCell.vue'
+import AccountQualityDetail from '@/components/admin/account/AccountQualityDetail.vue'
+import AccountQualityRunDetail from '@/components/admin/account/AccountQualityRunDetail.vue'
+import QualityAssignmentDialog from '@/views/admin/account-quality/QualityAssignmentDialog.vue'
+import accountQualityAPI, { type Binding as QualityBinding, type Policy as QualityPolicy, type ControlAction as QualityControlAction } from '@/api/admin/account-quality'
+import { qualityError as qualityErrorMessage, queueChecks as queueQualityChecks, requestId as qualityRequestId } from '@/views/admin/account-quality/quality'
 import ScheduledTestsPanel from '@/components/admin/account/ScheduledTestsPanel.vue'
 import type { SelectOption } from '@/components/common/Select.vue'
 import AccountStatusIndicator from '@/components/account/AccountStatusIndicator.vue'
@@ -607,6 +621,14 @@ const showCreateShadowDialog = ref(false)
 const showReAuth = ref(false)
 const showTest = ref(false)
 const showStats = ref(false)
+const qualityAccountId = ref(0), qualityEvidenceId = ref(''), showQualityAssignment = ref(false), qualityBusy = ref(false)
+const qualityInitialBindingId = ref(0), qualityInitialAction = ref<QualityControlAction>()
+function openAccountQualityDetails(id: number, bindingId = 0, action?: QualityControlAction) {
+  qualityInitialBindingId.value = bindingId; qualityInitialAction.value = action; qualityAccountId.value = id
+}
+const qualityByAccount = ref<Record<string, QualityBinding[]>>({}), qualityLoading = ref(false), qualityError = ref(false)
+const qualityPolicies = ref<QualityPolicy[]>([]), qualityAssignmentIds = ref<number[]>([])
+let qualityGeneration = 0
 const showErrorPassthrough = ref(false)
 const showTLSFingerprintProfiles = ref(false)
 const edAcc = ref<Account | null>(null)
@@ -648,11 +670,12 @@ const accountToolsDropdownStyle = computed(() => ({
   width: `${accountToolsDropdownPosition.width}px`
 }))
 const hiddenColumns = reactive<Set<string>>(new Set())
-const DEFAULT_HIDDEN_COLUMNS = ['today_stats', 'proxy', 'notes', 'scheduler_score', 'rate_multiplier']
+const DEFAULT_HIDDEN_COLUMNS = ['today_stats', 'proxy', 'notes', 'scheduler_score', 'rate_multiplier', 'quality']
 const HIDDEN_COLUMNS_KEY = 'account-hidden-columns'
 // One-time migration: hide scheduler score for existing admins too, because showing it opt-ins to heavy backend scoring.
 const HIDDEN_COLUMNS_VERSION_KEY = 'account-hidden-columns-version'
 const HIDDEN_COLUMNS_CURRENT_VERSION = 'scheduler-score-hidden-by-default'
+const QUALITY_COLUMN_VERSION_KEY = 'account-quality-column-version'
 
 // Account filter settings
 const ACCOUNT_FILTER_STORAGE_KEY = 'account-filter-values'
@@ -996,6 +1019,11 @@ const loadSavedColumns = () => {
       })
       localStorage.setItem(HIDDEN_COLUMNS_VERSION_KEY, HIDDEN_COLUMNS_CURRENT_VERSION)
     }
+    if (localStorage.getItem(QUALITY_COLUMN_VERSION_KEY) !== '1') {
+      hiddenColumns.add('quality')
+      localStorage.setItem(QUALITY_COLUMN_VERSION_KEY, '1')
+      localStorage.setItem(HIDDEN_COLUMNS_KEY, JSON.stringify([...hiddenColumns]))
+    }
   } catch (e) {
     console.error('Failed to load saved columns:', e)
     DEFAULT_HIDDEN_COLUMNS.forEach(key => {
@@ -1121,6 +1149,55 @@ const {
     sort_order: sortState.sort_order
   }
 })
+
+const refreshQualitySummaries = async () => {
+  const request = ++qualityGeneration
+  if (!isColumnVisible('quality') || !accounts.value.length) { qualityByAccount.value = {}; qualityLoading.value = false; return }
+  qualityLoading.value = true; qualityError.value = false
+  try { const value = await accountQualityAPI.summaries(accounts.value.map(account => account.id)); if (request === qualityGeneration) qualityByAccount.value = value || {} }
+  catch { if (request === qualityGeneration) qualityError.value = true }
+  finally { if (request === qualityGeneration) qualityLoading.value = false }
+}
+watch(() => isColumnVisible('quality'), () => { void refreshQualitySummaries() })
+const runQualityBindings = async (bindings: QualityBinding[]) => {
+  if (qualityBusy.value || !bindings.length) return
+  qualityBusy.value = true
+  try {
+    const { success, failed } = await queueQualityChecks(bindings, binding => accountQualityAPI.run(binding.id, { version: binding.version, request_id: qualityRequestId() }))
+    if (failed) appStore.showError(t('accountQuality.partial', { success, failed }))
+    else appStore.showSuccess(t('accountQuality.queued'))
+    await refreshQualitySummaries()
+  } finally { qualityBusy.value = false }
+}
+const runAccountQuality = (binding: QualityBinding) => runQualityBindings([binding])
+const openQualityAssignmentFor = async (accountIds: number[], platform?: AccountPlatform) => {
+  if (!accountIds.length || qualityBusy.value) return
+  qualityBusy.value = true
+  try {
+    const policies = await accountQualityAPI.policies()
+    qualityPolicies.value = platform ? policies.filter(policy => policy.platform === platform) : policies
+    if (!qualityPolicies.value.length) { appStore.showError(t('accountQuality.noPolicies')); return }
+    qualityAssignmentIds.value = [...accountIds]
+    showQualityAssignment.value = true
+  } catch (cause) { appStore.showError(qualityErrorMessage(cause) || t('accountQuality.loadFailed')) }
+  finally { qualityBusy.value = false }
+}
+const openQualityAssignment = () => openQualityAssignmentFor([...selIds.value])
+const openAccountQualityAssignment = (account: Pick<AccountListItem, 'id' | 'platform'>) => openQualityAssignmentFor([account.id], account.platform)
+const runSelectedQuality = async () => {
+  if (!selIds.value.length || qualityBusy.value) return
+  try {
+    const summaries = await accountQualityAPI.summaries([...selIds.value])
+    const bindings = Object.values(summaries).flat()
+    if (!bindings.length) { appStore.showError(t('accountQuality.empty')); return }
+    await runQualityBindings(bindings)
+  } catch (cause) { appStore.showError(qualityErrorMessage(cause) || t('accountQuality.loadFailed')) }
+}
+const qualityAssigned = async (count: number) => {
+  showQualityAssignment.value = false
+  appStore.showSuccess(t('accountQuality.assignedSuccess', { count }))
+  await refreshQualitySummaries()
+}
 
 const {
   selectedSet,
@@ -1381,6 +1458,7 @@ watch(loading, (isLoading, wasLoading) => {
 })
 
 watch(accounts, (rows) => {
+  void refreshQualitySummaries()
   const visibleIDs = new Set(rows.map((row) => String(row.id)))
   usageBatchByAccountId.value = Object.fromEntries(
     Object.entries(usageBatchByAccountId.value).filter(([key]) => visibleIDs.has(key))
@@ -1409,6 +1487,7 @@ const isAnyModalOpen = computed(() => {
     showReAuth.value ||
     showTest.value ||
     showStats.value ||
+    qualityAccountId.value > 0 || qualityEvidenceId.value !== '' || showQualityAssignment.value || qualityBusy.value ||
     showSchedulePanel.value ||
     showErrorPassthrough.value ||
     showTLSFingerprintProfiles.value
@@ -1830,6 +1909,7 @@ const allColumns = computed(() => {
     { key: 'capacity', label: t('admin.accounts.columns.capacity'), sortable: false },
     { key: 'status', label: t('admin.accounts.columns.status'), sortable: true },
     { key: 'schedulable', label: t('admin.accounts.columns.schedulable'), sortable: true },
+    { key: 'quality', label: t('accountQuality.title'), sortable: false },
     { key: 'today_stats', label: t('admin.accounts.columns.todayStats'), sortable: false }
   ]
   if (!authStore.isSimpleMode) {
