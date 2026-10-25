@@ -43,6 +43,8 @@ export default {
   platform: 'Platform',
   account: 'Account',
   model: 'Model',
+  chooseModel: 'Choose a GPT-6 model',
+  modelUnavailable: 'Saved model (unavailable)',
   protocol: 'Protocol',
   effort: 'Reasoning effort',
   effortUnspecified: 'Unspecified',

@@ -43,6 +43,8 @@ export default {
   platform: '平台',
   account: '账号',
   model: '模型',
+  chooseModel: '请选择 GPT-6 模型',
+  modelUnavailable: '已保存模型（不可选）',
   protocol: '协议',
   effort: '推理强度',
   effortUnspecified: '不指定',

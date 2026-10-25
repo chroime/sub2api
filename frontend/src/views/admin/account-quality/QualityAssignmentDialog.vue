@@ -20,10 +20,23 @@ const policyId = ref(props.policyId || props.policies[0]?.id || 0), mode = ref<'
 const groups = ref<AdminGroup[]>([]), saving = ref(false), error = ref(''), custom = ref(false)
 const selectedPolicy = computed(() => props.policies.find(policy => policy.id === policyId.value))
 const policyOptions = computed<SelectOption[]>(() => props.policies.map(policy => ({ value: policy.id, label: `${policy.name} · ${policy.model} · ${policy.platform}` })))
+const modeOptions = computed<SelectOption[]>(() => [
+  { value: 'single', label: t('accountQuality.singleAccount') },
+  { value: 'selected', label: t('accountQuality.selectedAccounts') },
+  { value: 'group', label: t('accountQuality.group') },
+  { value: 'platform', label: t('accountQuality.platform') }
+])
+const groupOptions = computed<SelectOption[]>(() => [{ value: '', label: '—', disabled: true }, ...groups.value.map(item => ({ value: String(item.id), label: item.name }))])
+const scopeOptions = computed<SelectOption[]>(() => [
+  { value: '', label: t('accountQuality.policyDefaults') },
+  { value: 'model', label: t('accountQuality.scope_model') },
+  { value: 'account', label: t('accountQuality.scope_account') }
+])
 const directSelection = computed(() => mode.value === 'single' || mode.value === 'selected')
 const selection = ref({ valid: false, pending: false, platform: '', accountIds: [] as number[] })
 const selectionReady = computed(() => selection.value.valid && !selection.value.pending && selection.value.platform === selectedPolicy.value?.platform && selection.value.accountIds.join(',') === chosenIds.value.join(',') && (mode.value !== 'single' || chosenIds.value.length === 1))
 const platformOptions = computed(() => CONCRETE_PLATFORM_OPTIONS.filter(item => item.value === selectedPolicy.value?.platform))
+const targetPlatformOptions = computed<SelectOption[]>(() => [{ value: '', label: '—', disabled: true }, ...platformOptions.value])
 const overrides = ref<{ interval_seconds: number | ''; failure_threshold: number | ''; recovery_threshold: number | ''; isolation_scope: '' | 'model' | 'account' }>({ interval_seconds: '', failure_threshold: '', recovery_threshold: '', isolation_scope: '' })
 onMounted(async () => { try { groups.value = await groupsAPI.getAll() } catch { /* Direct account selection remains available. */ } })
 watch(() => selectedPolicy.value?.platform, value => { platform.value = value || ''; error.value = '' }, { immediate: true })
@@ -75,15 +88,15 @@ async function save() {
       <p v-if="error" role="alert" class="text-sm text-red-600">{{ error }}</p>
       <div class="text-sm"><label for="quality-assignment-policy" class="mb-1 block">{{ t('accountQuality.policy') }}</label><Select id="quality-assignment-policy" data-test="quality-assignment-policy" :model-value="policyId || null" :options="policyOptions" searchable :disabled="saving || !policies.length" :aria-label="t('accountQuality.policy')" :placeholder="t('accountQuality.choosePolicy')" :search-placeholder="t('accountQuality.searchPolicy')" @update:model-value="policyId = typeof $event === 'number' ? $event : 0" /></div>
       <p class="text-xs text-gray-500">{{ t('accountQuality.assignmentPlatformHint') }}</p>
-      <label class="block text-sm"><span class="mb-1 block">{{ t('accountQuality.assignmentMode') }}</span><select v-model="mode" data-test="quality-assignment-mode" :disabled="saving" class="input w-full"><option value="single">{{ t('accountQuality.singleAccount') }}</option><option value="selected">{{ t('accountQuality.selectedAccounts') }}</option><option value="group">{{ t('accountQuality.group') }}</option><option value="platform">{{ t('accountQuality.platform') }}</option></select></label>
+      <label class="block text-sm"><span class="mb-1 block">{{ t('accountQuality.assignmentMode') }}</span><Select v-model="mode" data-test="quality-assignment-mode" :options="modeOptions" :searchable="false" :disabled="saving" /></label>
       <div v-if="directSelection" class="text-sm"><p class="mb-1">{{ t(mode === 'single' ? 'accountQuality.singleAccount' : 'accountQuality.selectedAccounts') }}</p><QualityAccountSelector v-model="chosenIds" :platform="selectedPolicy?.platform || ''" :multiple="mode === 'selected'" :disabled="saving" @validation="selection = $event" /></div>
-      <label v-else-if="mode === 'group'" class="block text-sm"><span class="mb-1 block">{{ t('accountQuality.group') }}</span><select v-model="group" data-test="quality-assignment-group" :disabled="saving" class="input w-full" required><option value="" disabled>—</option><option v-for="item in groups" :key="item.id" :value="String(item.id)">{{ item.name }}</option></select></label>
-      <label v-else class="block text-sm"><span class="mb-1 block">{{ t('accountQuality.platform') }}</span><select v-model="platform" data-test="quality-assignment-platform" :disabled="saving" class="input w-full" required><option value="" disabled>—</option><option v-for="item in platformOptions" :key="item.value" :value="item.value">{{ item.label }}</option></select></label>
+      <label v-else-if="mode === 'group'" class="block text-sm"><span class="mb-1 block">{{ t('accountQuality.group') }}</span><Select v-model="group" data-test="quality-assignment-group" :options="groupOptions" :searchable="false" :disabled="saving" /></label>
+      <label v-else class="block text-sm"><span class="mb-1 block">{{ t('accountQuality.platform') }}</span><Select v-model="platform" data-test="quality-assignment-platform" :options="targetPlatformOptions" :searchable="false" :disabled="saving" /></label>
       <label class="flex items-center gap-2 text-sm"><input v-model="custom" :disabled="saving" type="checkbox" class="rounded" />{{ t('accountQuality.overrides') }}</label>
       <div v-if="custom" class="grid gap-3 rounded-lg bg-gray-50 p-3 dark:bg-dark-900 sm:grid-cols-2">
         <p class="text-xs text-gray-500 sm:col-span-2">{{ t('accountQuality.overrideHint') }}</p>
         <label v-for="field in [{ key: 'interval_seconds', label: 'interval' }, { key: 'failure_threshold', label: 'failureThreshold' }, { key: 'recovery_threshold', label: 'recoveryThreshold' }] as const" :key="field.key" class="text-sm"><span class="mb-1 block">{{ t(`accountQuality.${field.label}`) }}</span><input v-model.number="overrides[field.key]" class="input w-full" type="number" min="1" step="1" /></label>
-        <label class="text-sm"><span class="mb-1 block">{{ t('accountQuality.scope') }}</span><select v-model="overrides.isolation_scope" class="input w-full"><option value="">{{ t('accountQuality.policyDefaults') }}</option><option value="model">{{ t('accountQuality.scope_model') }}</option><option value="account">{{ t('accountQuality.scope_account') }}</option></select></label>
+        <label class="text-sm"><span class="mb-1 block">{{ t('accountQuality.scope') }}</span><Select v-model="overrides.isolation_scope" :options="scopeOptions" :searchable="false" :disabled="saving" /></label>
       </div>
       <p class="text-xs text-gray-500">{{ t('accountQuality.automatic') }}: {{ t('accountQuality.off') }}</p>
     </form>

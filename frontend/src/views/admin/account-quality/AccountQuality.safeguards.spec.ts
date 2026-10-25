@@ -15,6 +15,13 @@ enableAutoUnmount(afterEach)
 const binding: Binding = { id: 4, version: 7, account_id: 12, account_name: 'Diagnostic account', account_type: 'oauth', platform: 'openai', policy_id: 2, policy_name: 'Reasoning', policy_version: 3, model: 'reasoning-model', auto_isolate: false, auto_control_eligible: false, state: 'pending_review', failures: 1, recovery_passes: 0, isolated: false }
 const rawRun: Run = { id: 'evidence-original', binding_id: 4, account_id: 12, policy_id: 2, policy_version: 3, binding_version: 7, model: 'reasoning-model', template: 'logic', template_version: 'v1', execution_status: 'completed', quality_verdict: 'fail', prompt: 'Original question', response_text: '<script>window.evidenceExecuted = true</script>Original wrong answer' }
 const mountOptions = { global: { stubs: { teleport: true } } }
+async function choose(wrapper: ReturnType<typeof mount>, selector: string, text: string) {
+  const control = wrapper.get(selector)
+  await control.get('button.select-trigger').trigger('click')
+  const option = control.findAll('[role=option]').find(item => item.text().includes(text))
+  if (!option) throw new Error(`missing option ${text}`)
+  await option.trigger('click')
+}
 
 beforeEach(() => {
   vi.resetAllMocks()
@@ -26,6 +33,13 @@ beforeEach(() => {
 })
 
 describe('account quality administrator safeguards', () => {
+  it('uses themed Select controls in the account detail action form', async () => {
+    const wrapper = mount(AccountQualityDetail, { ...mountOptions, props: { accountId: 12 } })
+    await flushPromises()
+    expect(wrapper.findAll('select')).toHaveLength(0)
+    expect(wrapper.get('[data-test=quality-control-action] button.select-trigger').exists()).toBe(true)
+  })
+
   it('opens the workspace through reads without queueing checks, enabling policies or saving notification settings', async () => {
     mount(AccountQualityView)
     await flushPromises()
@@ -39,10 +53,13 @@ describe('account quality administrator safeguards', () => {
   it('creates a paused record-and-notify policy and disables automatic control for unverified adapters', async () => {
     const wrapper = mount(QualityPolicyDialog, { ...mountOptions, props: { templates: [{ id: 'logic', name: 'Logic', version: 'v1' }], capabilities: [{ platform: 'openai', api_mode: 'responses', account_types: ['oauth'], automatic_control: false }] } })
     expect((wrapper.get('[data-test=quality-policy-enabled]').element as HTMLInputElement).checked).toBe(false)
-    expect((wrapper.get('[data-test=quality-policy-mode]').element as HTMLSelectElement).value).toBe('record_notify')
-    expect(wrapper.get('option[value="auto_quarantine"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-test=quality-policy-mode] .select-value').text()).toBe('记录并通知')
+    await wrapper.get('[data-test=quality-policy-mode] button.select-trigger').trigger('click')
+    const autoOption = wrapper.get('[data-test=quality-policy-mode]').findAll('[role=option]').find(item => item.text().includes('自动质量隔离'))
+    expect(autoOption).toBeDefined()
+    expect(autoOption?.attributes('aria-disabled')).toBe('true')
     await wrapper.get('[data-test=quality-policy-name]').setValue('Reasoning monitor')
-    await wrapper.get('[data-test=quality-policy-model]').setValue('reasoning-model')
+    await choose(wrapper, '[data-test=quality-policy-model]', 'gpt-6-astra')
     await wrapper.get('form').trigger('submit')
     await flushPromises()
     expect(api.savePolicy).toHaveBeenCalledWith(expect.objectContaining({ enabled: false, control_mode: 'record_notify', isolation_scope: 'model' }))
@@ -72,7 +89,7 @@ describe('account quality administrator safeguards', () => {
   it('prevents enabling automatic isolation for an ineligible OAuth account', async () => {
     const wrapper = mount(AccountQualityDetail, { ...mountOptions, props: { accountId: 12 } })
     await flushPromises()
-    await wrapper.get('[data-test=quality-control-action]').setValue('set_auto')
+    await choose(wrapper, '[data-test=quality-control-action]', '设置自动隔离')
     expect(wrapper.get('[data-test=quality-control-auto]').attributes('disabled')).toBeDefined()
     expect(api.control).not.toHaveBeenCalled()
   })
@@ -81,7 +98,7 @@ describe('account quality administrator safeguards', () => {
     vi.mocked(api.account).mockResolvedValue({ bindings: [{ ...binding, account_type: 'apikey', auto_control_eligible: true, control_mode: 'record_notify' }], runs: [], actions: [] })
     const wrapper = mount(AccountQualityDetail, { ...mountOptions, props: { accountId: 12 } })
     await flushPromises()
-    await wrapper.get('[data-test=quality-control-action]').setValue('set_auto')
+    await choose(wrapper, '[data-test=quality-control-action]', '设置自动隔离')
     expect(wrapper.get('[data-test=quality-control-auto]').attributes('disabled')).toBeDefined()
     expect(api.control).not.toHaveBeenCalled()
   })
@@ -91,8 +108,8 @@ describe('account quality administrator safeguards', () => {
     vi.mocked(api.account).mockResolvedValue({ bindings: [binding, requested], runs: [structuredClone(rawRun)], actions: [] })
     const wrapper = mount(AccountQualityDetail, { ...mountOptions, props: { accountId: 12, initialBindingId: 19, initialAction: 'confirm_false_positive' } })
     await flushPromises()
-    expect(wrapper.get('[data-test=quality-control-action]').element).toHaveProperty('value', 'confirm_false_positive')
-    expect(wrapper.get('form select').element).toHaveProperty('value', '19')
+    expect(wrapper.get('[data-test=quality-control-action] .select-value').text()).toContain('确认误报')
+    expect(wrapper.get('form .select-value').text()).toContain('Secondary policy')
     expect(api.control).not.toHaveBeenCalled()
     await wrapper.get('form').trigger('submit')
     expect(api.control).not.toHaveBeenCalled()
@@ -116,7 +133,10 @@ describe('account quality administrator safeguards', () => {
     vi.mocked(api.account).mockResolvedValue({ bindings: [binding, second], runs: [], actions: [] })
     const wrapper = mount(AccountQualityDetail, { ...mountOptions, props: { accountId: 12 } })
     await flushPromises()
-    await wrapper.get('form select').setValue('19')
+    await wrapper.get('form .select-trigger').trigger('click')
+    const secondOption = wrapper.get('form').findAll('[role=option]').find(item => item.text().includes('Second policy'))
+    if (!secondOption) throw new Error('missing second policy option')
+    await secondOption.trigger('click')
     await wrapper.get('[data-test=quality-control-reason]').setValue('This reason is only for the second policy')
     vi.mocked(api.account).mockResolvedValue({ bindings: [binding], runs: [], actions: [] })
     await wrapper.findAll('button').find(button => button.text() === '刷新')!.trigger('click')

@@ -2,6 +2,7 @@
 import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseDialog from '@/components/common/BaseDialog.vue'
+import Select, { type SelectOption } from '@/components/common/Select.vue'
 import AccountQualityCell from './AccountQualityCell.vue'
 import AccountQualityRunDetail from './AccountQualityRunDetail.vue'
 import api, { type AccountDetail, type Binding, type ControlAction } from '@/api/admin/account-quality'
@@ -16,6 +17,8 @@ const controlForm = ref<HTMLFormElement | null>(null)
 const active = computed(() => selectedBinding.value ? detail.value.bindings.find(binding => binding.id === selectedBinding.value) : props.initialBindingId ? undefined : detail.value.bindings[0])
 const automaticAllowed = computed(() => Boolean(active.value?.auto_control_eligible && active.value.control_mode === 'auto_quarantine'))
 const actions: ControlAction[] = ['isolate', 'release', 'override', 'confirm_false_positive', 'set_auto']
+const bindingOptions = computed<SelectOption[]>(() => detail.value.bindings.map(binding => ({ value: binding.id, label: `${binding.policy_name} · ${binding.model}` })))
+const actionOptions = computed<SelectOption[]>(() => actions.map(action => ({ value: action, label: t(`accountQuality.action_${action}`) })))
 const label = (kind: string, value?: string) => { const key = `accountQuality.${kind}_${value}`; const result = t(key); return result === key ? value || '—' : result }
 let generation = 0, initialControlPending = true
 function selectBinding(id: number) { selectedBinding.value = id; reason.value = ''; error.value = '' }
@@ -88,7 +91,7 @@ onUnmounted(() => { generation++ })
         <form v-if="active" ref="controlForm" class="space-y-3 rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-dark-600 dark:bg-dark-900" @submit.prevent="control">
           <p class="text-sm font-semibold">{{ t(`accountQuality.action_${controlAction}`) }} · {{ active.account_name }} · {{ active.policy_name }}</p>
           <p class="text-xs leading-relaxed text-gray-500">{{ t('accountQuality.gateHint') }}</p>
-          <div class="grid gap-3 sm:grid-cols-2"><label class="text-sm"><span class="mb-1 block">{{ t('accountQuality.policy') }}</span><select v-model="selectedBinding" class="input w-full" @change="reason = ''; error = ''"><option v-for="binding in detail.bindings" :key="binding.id" :value="binding.id">{{ binding.policy_name }} · {{ binding.model }}</option></select></label><label class="text-sm"><span class="mb-1 block">{{ t('accountQuality.actions') }}</span><select v-model="controlAction" data-test="quality-control-action" class="input w-full"><option v-for="action in actions" :key="action" :value="action">{{ t(`accountQuality.action_${action}`) }}</option></select></label></div>
+          <div class="grid gap-3 sm:grid-cols-2"><label class="text-sm"><span class="mb-1 block">{{ t('accountQuality.policy') }}</span><Select v-model="selectedBinding" :options="bindingOptions" :searchable="false" @change="reason = ''; error = ''" /></label><label class="text-sm"><span class="mb-1 block">{{ t('accountQuality.actions') }}</span><Select v-model="controlAction" data-test="quality-control-action" :options="actionOptions" :searchable="false" /></label></div>
           <label v-if="controlAction === 'override'" class="block text-sm"><span class="mb-1 block">{{ t('accountQuality.durationMinutes') }}</span><input v-model.number="allowance" class="input w-full sm:w-40" type="number" min="1" max="10080" required /></label>
           <template v-if="controlAction === 'set_auto'"><label class="flex items-center gap-2 text-sm"><input v-model="automatic" data-test="quality-control-auto" type="checkbox" :disabled="!automaticAllowed && !active.auto_isolate" class="rounded" />{{ t('accountQuality.automatic') }}</label><p v-if="!automaticAllowed" class="text-xs text-amber-600">{{ t(active.control_mode && active.control_mode !== 'auto_quarantine' ? 'accountQuality.autoModeRequired' : 'accountQuality.autoUnsupported') }}</p></template>
           <label class="block text-sm"><span class="mb-1 block">{{ t('accountQuality.reason') }}</span><textarea v-model="reason" data-test="quality-control-reason" class="input w-full" rows="2" maxlength="2000" /></label>

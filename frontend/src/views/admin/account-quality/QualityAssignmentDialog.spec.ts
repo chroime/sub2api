@@ -48,10 +48,18 @@ beforeEach(() => {
 })
 
 describe('quality assignment account pickers', () => {
+  it('uses themed Select controls for every assignment dropdown', async () => {
+    const wrapper = render()
+    await flushPromises()
+    expect(wrapper.findAll('select')).toHaveLength(0)
+    expect(wrapper.find('[data-test=quality-assignment-policy] button.select-trigger').exists()).toBe(true)
+    expect(wrapper.find('[data-test=quality-assignment-mode] button.select-trigger').exists()).toBe(true)
+  })
+
   it('defaults to single-account selection and preserves a preselected account using only lite reads', async () => {
     const wrapper = render([39])
     await flushPromises()
-    expect((wrapper.get('[data-test=quality-assignment-mode]').element as HTMLSelectElement).value).toBe('single')
+    expect(wrapper.get('[data-test=quality-assignment-mode] .select-value').text()).toBe('单个账号')
     const picker = wrapper.get('[data-test=quality-account-picker]')
     expect(picker.get('button.select-trigger').text()).toContain('039 primary')
     expect(picker.text()).toContain('#39')
@@ -68,7 +76,7 @@ describe('quality assignment account pickers', () => {
   it('keeps batch preselection visible, adds an account from the dropdown and removes a chip', async () => {
     const wrapper = render([39, 40])
     await flushPromises()
-    expect((wrapper.get('[data-test=quality-assignment-mode]').element as HTMLSelectElement).value).toBe('selected')
+    expect(wrapper.get('[data-test=quality-assignment-mode] .select-value').text()).toBe('批量选择账号')
     expect(wrapper.get('[data-test=quality-account-chip-39]').text()).toContain('039 primary')
     expect(wrapper.get('[data-test=quality-account-chip-40]').text()).toContain('040 backup')
     await pick(wrapper, '[data-test=quality-account-picker]', '041 other')
@@ -203,13 +211,13 @@ describe('quality assignment account pickers', () => {
     vi.mocked(groupsAPI.getAll).mockResolvedValue([{ id: 7, name: 'Primary group', platform: 'openai' }] as Awaited<ReturnType<typeof groupsAPI.getAll>>)
     const wrapper = render([51])
     await flushPromises()
-    await wrapper.get('[data-test=quality-assignment-mode]').setValue('group')
-    await wrapper.get('[data-test=quality-assignment-group]').setValue('7')
+    await pick(wrapper, '[data-test=quality-assignment-mode]', '分组')
+    await pick(wrapper, '[data-test=quality-assignment-group]', 'Primary group')
     await wrapper.get('form').trigger('submit')
     await flushPromises()
     expect(accountsAPI.list).toHaveBeenCalledWith(1, 100, expect.objectContaining({ group: '7', platform: 'openai', lite: '1', include_scheduler_score: '0' }))
     expect(api.assign).toHaveBeenLastCalledWith(expect.objectContaining({ policy_id: 1, account_ids: [39, 40, 41], source: 'group:7' }))
-    await wrapper.get('[data-test=quality-assignment-mode]').setValue('platform')
+    await pick(wrapper, '[data-test=quality-assignment-mode]', '平台')
     await wrapper.get('form').trigger('submit')
     await flushPromises()
     expect(api.assign).toHaveBeenLastCalledWith(expect.objectContaining({ policy_id: 1, account_ids: [39, 40, 41], source: 'platform:openai' }))
