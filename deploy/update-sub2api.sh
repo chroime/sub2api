@@ -50,7 +50,7 @@ require_command() {
   command -v "$1" >/dev/null 2>&1 || fail "required command is missing: $1"
 }
 
-for command in git docker curl tar sha256sum head stat; do
+for command in git docker curl tar sha256sum head stat grep; do
   require_command "$command"
 done
 
@@ -193,7 +193,7 @@ DATA_MOUNT="$(docker inspect -f '{{range .Mounts}}{{println .Source .Destination
 [[ -f "$DATA_DIR/app/.installed" ]] || fail "installation marker disappeared after update"
 
 HEALTH_BODY="$(curl -fsS --max-time 10 "$HEALTH_URL")"
-[[ "$HEALTH_BODY" == *'"status":"ok"'* ]] || fail "health endpoint returned an unexpected response: $HEALTH_BODY"
+printf '%s' "$HEALTH_BODY" | grep -Eq '"status"[[:space:]]*:[[:space:]]*"ok"' || fail "health endpoint returned an unexpected response: $HEALTH_BODY"
 SETUP_BODY="$(curl -fsS --max-time 10 "$SETUP_STATUS_URL")"
 [[ "$SETUP_BODY" =~ "needs_setup"[[:space:]]*:[[:space:]]*false ]] || fail "setup status is not completed: $SETUP_BODY"
 
