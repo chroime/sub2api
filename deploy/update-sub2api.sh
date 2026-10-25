@@ -195,7 +195,7 @@ DATA_MOUNT="$(docker inspect -f '{{range .Mounts}}{{println .Source .Destination
 HEALTH_BODY="$(curl -fsS --max-time 10 "$HEALTH_URL")"
 printf '%s' "$HEALTH_BODY" | grep -Eq '"status"[[:space:]]*:[[:space:]]*"ok"' || fail "health endpoint returned an unexpected response: $HEALTH_BODY"
 SETUP_BODY="$(curl -fsS --max-time 10 "$SETUP_STATUS_URL")"
-[[ "$SETUP_BODY" =~ "needs_setup"[[:space:]]*:[[:space:]]*false ]] || fail "setup status is not completed: $SETUP_BODY"
+printf '%s' "$SETUP_BODY" | grep -Eq '"needs_setup"[[:space:]]*:[[:space:]]*false' || fail "setup status is not completed: $SETUP_BODY"
 
 log "Update complete: $(git -C "$APP_DIR" rev-parse HEAD)"
 (cd "$DEPLOY_DIR" && docker compose -f "$COMPOSE_FILE" ps "$SERVICE")
