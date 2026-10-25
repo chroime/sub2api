@@ -26,4 +26,15 @@ describe('shared button theme styles', () => {
     expect(block).toContain('background-color: #5eead4;')
     expect(block).toContain('background-image: linear-gradient')
   })
+
+  it.each([
+    ['danger', '#ef4444'],
+    ['success', '#10b981'],
+    ['warning', '#f59e0b'],
+  ])('keeps %s buttons visibly filled when the gradient image is unavailable', (variant, fallbackColor) => {
+    const block = styleBlock(`.btn-${variant}`)
+
+    expect(block).toContain(`background-color: ${fallbackColor};`)
+    expect(block).toContain('@apply bg-gradient-to-r')
+  })
 })
