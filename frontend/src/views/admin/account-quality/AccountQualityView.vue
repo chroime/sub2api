@@ -66,8 +66,36 @@ async function queue(bindings: Binding[]) {
 function toggle(id: number) { selected.value = selected.value.includes(id) ? selected.value.filter(value => value !== id) : [...selected.value, id] }
 function openPolicy(policy: Policy | null = null) { editPolicy.value = policy; policyDialog.value = true }
 function assign(policy = 0) { assignmentPolicy.value = policy; assignment.value = true }
+async function togglePolicy(policy: Policy) {
+  if (policyBusy.value) return
+  const enabled = !policy.enabled
+  policyBusy.value = true; error.value = ''; notice.value = ''
+  try {
+    await api.savePolicy({ ...policy, enabled, templates: [...policy.templates] })
+    notice.value = t(enabled ? 'accountQuality.policyEnabled' : 'accountQuality.policyDisabled')
+    await load()
+  } catch (cause) { error.value = qualityError(cause) || t('accountQuality.saveFailed') }
+  finally { policyBusy.value = false }
+}
 function showAccount(binding: Binding) { initialRun.value = ''; initialBindingId.value = 0; initialAction.value = undefined; accountId.value = binding.account_id }
-function showControl(binding: Binding, action: ControlAction) { initialRun.value = ''; initialBindingId.value = binding.id; initialAction.value = action; accountId.value = binding.account_id }
+async function toggleAutoIsolation(binding: Binding) {
+  if (detailBusy.value) return
+  const enabled = !binding.auto_isolate
+  detailBusy.value = true; error.value = ''; notice.value = ''
+  try {
+    await api.control(binding.id, { version: binding.version, action: 'set_auto', auto_isolate: enabled, reason: t(enabled ? 'accountQuality.autoEnableReason' : 'accountQuality.autoDisableReason') })
+    notice.value = t(enabled ? 'accountQuality.autoEnabled' : 'accountQuality.autoDisabled')
+    await load()
+  } catch (cause) { error.value = qualityError(cause) || t('accountQuality.saveFailed') }
+  finally { detailBusy.value = false }
+}
+function showControl(binding: Binding, action: ControlAction) {
+  if (action === 'set_auto') {
+    void toggleAutoIsolation(binding)
+    return
+  }
+  initialRun.value = ''; initialBindingId.value = binding.id; initialAction.value = action; accountId.value = binding.account_id
+}
 async function policySaved() { policyDialog.value = false; notice.value = t('accountQuality.saved'); await load() }
 async function assigned(count: number) { assignment.value = false; notice.value = t('accountQuality.assignedSuccess', { count }); await load() }
 async function removePolicy() {
@@ -145,7 +173,7 @@ onUnmounted(() => { generation++; historyGeneration++; emit('busy', false) })
                   <p class="mt-2 flex flex-wrap items-center gap-1 text-[10px] font-medium"><span class="rounded bg-gray-100 px-1.5 py-0.5 text-gray-600 dark:bg-dark-700 dark:text-dark-200">{{ binding.platform }}</span><span v-if="binding.account_type" class="rounded bg-gray-100 px-1.5 py-0.5 text-gray-600 dark:bg-dark-700 dark:text-dark-200">{{ binding.account_type }}</span></p>
                   <p class="mt-1.5 break-all text-[11px] text-gray-500 dark:text-dark-300">{{ binding.model }}</p>
                 </td>
-                <td class="px-4 py-4 align-middle"><AccountQualityCell :bindings="[binding]" :disabled="queueing" @details="showAccount(binding)" @run="queue([$event])" @evidence="evidence = $event.id" @control="showControl" /></td>
+                <td class="px-4 py-4 align-middle"><AccountQualityCell :bindings="[binding]" :disabled="queueing || detailBusy" @details="showAccount(binding)" @run="queue([$event])" @evidence="evidence = $event.id" @control="showControl" /></td>
                 <td class="px-4 py-4 align-middle">
                   <p class="break-words font-medium text-gray-700 dark:text-dark-100">{{ binding.policy_name }}</p>
                   <p class="mt-1 text-[11px] tabular-nums text-gray-400 dark:text-dark-300">v{{ binding.policy_version }}</p>
@@ -162,7 +190,7 @@ onUnmounted(() => { generation++; historyGeneration++; emit('busy', false) })
         <article v-for="policy in overview.policies" :key="policy.id" class="rounded-xl border border-gray-200 dark:border-dark-600">
           <div class="flex flex-wrap items-start justify-between gap-3 p-4">
             <div class="min-w-0 space-y-1.5">
-              <div class="flex flex-wrap items-center gap-2"><h4 class="break-words font-semibold text-gray-900 dark:text-dark-50">{{ policy.name }}</h4><span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium" :class="policy.enabled ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300' : 'bg-gray-100 text-gray-500 dark:bg-dark-700 dark:text-dark-300'"><span class="h-1 w-1 rounded-full bg-current" aria-hidden="true" />{{ t(policy.enabled ? 'accountQuality.active' : 'accountQuality.disabled') }}</span></div>
+              <div class="flex flex-wrap items-center gap-2"><h4 class="break-words font-semibold text-gray-900 dark:text-dark-50">{{ policy.name }}</h4><button type="button" role="switch" :data-test="`quality-policy-toggle-${policy.id}`" :aria-checked="policy.enabled" :aria-label="t(policy.enabled ? 'accountQuality.policyDisable' : 'accountQuality.policyEnable')" :title="t(policy.enabled ? 'accountQuality.policyDisable' : 'accountQuality.policyEnable')" :disabled="mutationBusy" class="relative inline-flex h-5 w-9 shrink-0 rounded-full border border-transparent transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500 disabled:cursor-not-allowed disabled:opacity-40" :class="policy.enabled ? 'bg-primary-500' : 'bg-gray-300 dark:bg-dark-500'" @click="togglePolicy(policy)"><span aria-hidden="true" class="mt-0.5 block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform" :class="policy.enabled ? 'translate-x-[1.125rem]' : 'translate-x-0.5'" /></button><span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium" :class="policy.enabled ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300' : 'bg-gray-100 text-gray-500 dark:bg-dark-700 dark:text-dark-300'"><span class="h-1 w-1 rounded-full bg-current" aria-hidden="true" />{{ t(policy.enabled ? 'accountQuality.active' : 'accountQuality.disabled') }}</span></div>
               <p class="break-all text-xs text-gray-500 dark:text-dark-300">{{ policy.platform }} · {{ policy.model }} · {{ policy.api_mode }}<span v-if="policy.effort"> · {{ policy.effort }}</span></p>
             </div>
             <div class="flex flex-wrap gap-2"><button type="button" class="btn btn-secondary btn-sm" :disabled="mutationBusy" @click="assign(policy.id)">{{ t('accountQuality.assignment') }}</button><button type="button" class="btn btn-secondary btn-sm" :disabled="mutationBusy" @click="openPolicy(policy)">{{ t('accountQuality.edit') }}</button><button type="button" class="btn btn-secondary btn-sm text-red-600 dark:text-red-400" :disabled="mutationBusy" @click="deleting = policy">{{ t('accountQuality.delete') }}</button></div>

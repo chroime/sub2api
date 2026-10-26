@@ -17,18 +17,31 @@ const options = { global: { stubs: { AccountQualityCell: Cell, AccountQualityDet
 
 beforeEach(() => {
   vi.resetAllMocks()
-  vi.mocked(api.overview).mockResolvedValue({ policies: [{ ...newPolicy(), id: 2, name: 'Reasoning' }, { ...newPolicy(), id: 3, name: 'Second policy' }], bindings: [structuredClone(primary), structuredClone(secondary)], templates: [], capabilities: [], settings: newSettings() })
+  vi.mocked(api.overview).mockResolvedValue({ policies: [{ ...newPolicy(), id: 2, version: 1, enabled: true, name: 'Reasoning' }, { ...newPolicy(), id: 3, version: 1, name: 'Second policy' }], bindings: [structuredClone(primary), structuredClone(secondary)], templates: [], capabilities: [], settings: newSettings() })
+  vi.mocked(api.control).mockResolvedValue(structuredClone(secondary))
+  vi.mocked(api.savePolicy).mockImplementation(async value => value)
 })
 
 describe('account quality reference layout integration', () => {
-  it('opens the audited control form with the exact account, binding and requested action without writes', async () => {
+  it('toggles a policy directly from its card without opening the editor', async () => {
+    const wrapper = mount(AccountQualityView, options)
+    await flushPromises()
+    await wrapper.get('[data-test="quality-tab-policies"]').trigger('click')
+    await wrapper.get('[data-test="quality-policy-toggle-2"]').trigger('click')
+    await flushPromises()
+
+    expect(api.savePolicy).toHaveBeenCalledWith(expect.objectContaining({ id: 2, version: 1, name: 'Reasoning', enabled: false }))
+    expect(wrapper.find('#account-quality-policy-form').exists()).toBe(false)
+  })
+
+  it('applies automatic isolation directly for the exact binding without opening the detail form', async () => {
     const wrapper = mount(AccountQualityView, options)
     await flushPromises()
     wrapper.findAllComponents(Cell)[1]!.vm.$emit('control', secondary, 'set_auto')
     await flushPromises()
 
-    expect(wrapper.getComponent(Detail).props()).toMatchObject({ accountId: 12, initialBindingId: 8, initialAction: 'set_auto', initialRunId: '' })
-    expect(api.control).not.toHaveBeenCalled()
+    expect(wrapper.findComponent(Detail).exists()).toBe(false)
+    expect(api.control).toHaveBeenCalledWith(8, { version: 11, action: 'set_auto', auto_isolate: true, reason: '启用账号质量自动隔离' })
     expect(api.run).not.toHaveBeenCalled()
     expect(api.savePolicy).not.toHaveBeenCalled()
     expect(api.saveSettings).not.toHaveBeenCalled()

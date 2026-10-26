@@ -24,13 +24,32 @@ function render(policy: Partial<Policy> = {}) {
 beforeEach(() => { vi.resetAllMocks(); vi.mocked(api.savePolicy).mockImplementation(async value => value) })
 
 describe('quality policy model configuration', () => {
-  it('uses themed controls and offers only GPT-6 models for a new OpenAI policy', async () => {
+  it('offers only the three selected GPT-6 models and defaults new policies to Astra', async () => {
     const wrapper = mount(QualityPolicyDialog, { props: { templates: [{ id: 'logic', name: 'Logic', version: 'v1' }], capabilities }, global: { stubs: { teleport: true } } })
     expect(wrapper.findAll('select')).toHaveLength(0)
     expect(wrapper.find('[data-test=quality-policy-model] button.select-trigger').exists()).toBe(true)
-    expect(wrapper.get('[data-test=quality-policy-model] .select-value').text()).toBe('gpt-6')
+    expect(wrapper.get('[data-test=quality-policy-model] .select-value').text()).toBe('gpt-6-astra')
     await wrapper.get('[data-test=quality-policy-model] button.select-trigger').trigger('click')
-    expect(wrapper.get('[data-test=quality-policy-model] [role=listbox]').findAll('[role=option]').map(option => option.text())).toEqual(['gpt-6', 'gpt-6-astra', 'gpt-6.1-sol', 'gpt-6-sol', 'gpt-6-luna'])
+    expect(wrapper.get('[data-test=quality-policy-model] [role=listbox]').findAll('[role=option]').map(option => option.text())).toEqual(['gpt-6-astra', 'gpt-6.1-sol', 'gpt-6-sol'])
+  })
+
+  it.each(['gpt-6-astra', 'gpt-6.1-sol', 'gpt-6-sol'])('saves the selected model %s', async model => {
+    const wrapper = render()
+    await wrapper.get('[data-test=quality-policy-model] button.select-trigger').trigger('click')
+    const option = wrapper.get('[data-test=quality-policy-model]').findAll('[role=option]').find(item => item.text() === model)
+    expect(option).toBeDefined()
+    await option!.trigger('click')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(api.savePolicy).toHaveBeenCalledWith(expect.objectContaining({ model }))
+  })
+
+  it.each(['gpt-6', 'gpt-6-luna'])('keeps saved %s visible without offering it in the dropdown', async model => {
+    const wrapper = render({ model })
+    expect(wrapper.get('[data-test=quality-policy-model] .select-value').text()).toContain(model)
+    await wrapper.get('[data-test=quality-policy-model] button.select-trigger').trigger('click')
+    expect(wrapper.get('[data-test=quality-policy-model]').findAll('[role=option]').map(option => option.text())).toEqual(['gpt-6-astra', 'gpt-6.1-sol', 'gpt-6-sol'])
+    expect(api.savePolicy).not.toHaveBeenCalled()
   })
   it('offers unspecified effort and sends an empty effort for a non-reasoning model', async () => {
     const wrapper = render()

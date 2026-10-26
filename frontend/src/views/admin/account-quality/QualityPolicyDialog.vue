@@ -4,24 +4,24 @@ import { useI18n } from 'vue-i18n'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import Select, { type SelectOption } from '@/components/common/Select.vue'
 import api, { type Capability, type Policy, type Template } from '@/api/admin/account-quality'
-import { getModelsByPlatform } from '@/composables/useModelWhitelist'
 import { newPolicy, qualityError } from './quality'
 
 const props = defineProps<{ policy?: Policy | null; templates: Template[]; capabilities: Capability[] }>()
 const emit = defineEmits<{ close: []; saved: [Policy]; busy: [boolean] }>()
 const { t } = useI18n()
-const draft = ref<Policy>(props.policy ? { ...props.policy, templates: [...props.policy.templates] } : { ...newPolicy(), model: 'gpt-6' })
+const draft = ref<Policy>(props.policy ? { ...props.policy, templates: [...props.policy.templates] } : { ...newPolicy(), model: 'gpt-6-astra' })
 if (!props.policy && props.templates.length) draft.value.templates = props.templates.slice(0, Math.min(2, props.templates.length)).map(item => item.id)
 const saving = ref(false), error = ref(''), unit = ref<'seconds' | 'minutes'>('minutes')
 if (draft.value.interval_seconds % 60 !== 0) unit.value = 'seconds'
 const intervalValue = computed({ get: () => draft.value.interval_seconds / (unit.value === 'minutes' ? 60 : 1), set: value => { draft.value.interval_seconds = Number(value) * (unit.value === 'minutes' ? 60 : 1) } })
 const platforms = computed(() => [...new Set(['openai', 'anthropic', 'gemini', ...props.capabilities.map(item => item.platform), draft.value.platform])])
-const gpt6Models = computed(() => draft.value.platform === 'openai' ? getModelsByPlatform('openai').filter(model => /^gpt-6(?:$|[.-])/.test(model)) : [])
-const modelOptions = computed<SelectOption[]>(() => {
+const gpt6Models = computed(() => draft.value.platform === 'openai' ? ['gpt-6-astra', 'gpt-6.1-sol', 'gpt-6-sol'] : [])
+const modelOptions = computed<SelectOption[]>(() => gpt6Models.value.map(model => ({ value: model, label: model })))
+const modelPlaceholder = computed(() => {
   const current = draft.value.model.trim()
-  const options: SelectOption[] = gpt6Models.value.map(model => ({ value: model, label: model }))
-  if (current && !gpt6Models.value.includes(current)) options.unshift({ value: current, label: `${current} · ${t('accountQuality.modelUnavailable')}`, disabled: true })
-  return options
+  return current && !gpt6Models.value.includes(current)
+    ? `${current} · ${t('accountQuality.modelUnavailable')}`
+    : t('accountQuality.chooseModel')
 })
 const platformOptions = computed<SelectOption[]>(() => props.policy
   ? platforms.value.map(platform => ({ value: platform, label: platform }))
@@ -94,7 +94,7 @@ async function save() {
         <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <label class="text-sm"><span class="mb-1 block">{{ t('accountQuality.platform') }}</span><Select v-model="draft.platform" data-test="quality-policy-platform" :options="platformOptions" :searchable="false" /></label>
           <label class="text-sm"><span class="mb-1 block">{{ t('accountQuality.protocol') }}</span><Select v-model="draft.api_mode" data-test="quality-policy-protocol" :options="protocolOptions" :searchable="false" :disabled="!supportedModes.length && !unavailableSavedMode" :placeholder="t('accountQuality.noProtocols')" required /></label>
-          <label class="text-sm"><span class="mb-1 block">{{ t('accountQuality.model') }}</span><Select v-model="draft.model" data-test="quality-policy-model" :options="modelOptions" :searchable="false" :placeholder="t('accountQuality.chooseModel')" /></label>
+          <label class="text-sm"><span class="mb-1 block">{{ t('accountQuality.model') }}</span><Select v-model="draft.model" data-test="quality-policy-model" :options="modelOptions" :searchable="false" :placeholder="modelPlaceholder" /></label>
           <label class="text-sm"><span class="mb-1 block">{{ t('accountQuality.effort') }}</span><Select v-model="draft.effort" data-test="quality-policy-effort" :options="effortOptions" :searchable="false" /></label>
           <label class="text-sm"><span class="mb-1 block">{{ t('accountQuality.outputTokens') }}</span><input v-model.number="draft.max_output_tokens" name="max_output_tokens" class="input w-full" type="number" :min="limits.max_output_tokens.min" :max="limits.max_output_tokens.max" step="1" required /></label>
           <label class="text-sm"><span class="mb-1 block">{{ t('accountQuality.timeout') }}</span><input v-model.number="draft.timeout_seconds" name="timeout_seconds" class="input w-full" type="number" :min="limits.timeout_seconds.min" :max="limits.timeout_seconds.max" step="1" required /></label>

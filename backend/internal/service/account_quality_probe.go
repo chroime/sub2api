@@ -40,7 +40,7 @@ func AccountQualityCapabilities() []accountquality.Capability {
 	return []accountquality.Capability{
 		{Platform: PlatformOpenAI, APIMode: "responses", AccountTypes: []string{AccountTypeAPIKey}, AutomaticControl: true, OutputLimitMode: "upstream"},
 		{Platform: PlatformOpenAI, APIMode: "chat_completions", AccountTypes: []string{AccountTypeAPIKey}, AutomaticControl: true, OutputLimitMode: "upstream"},
-		{Platform: PlatformOpenAI, APIMode: "responses", AccountTypes: []string{AccountTypeOAuth, AccountTypeSetupToken}, AutomaticControl: false, OutputLimitMode: "local", Reason: "Codex OAuth has no verified upstream token cap; diagnostics enforce a local text byte bound and timeout. Credential shadows and Agent Identity are not supported."},
+		{Platform: PlatformOpenAI, APIMode: "responses", AccountTypes: []string{AccountTypeOAuth, AccountTypeSetupToken}, AutomaticControl: true, OutputLimitMode: "local", Reason: "Codex OAuth uses a local text bound and timeout; completed, untruncated deterministic answers may participate in automatic quality control. Credential shadows and Agent Identity are not supported."},
 		{Platform: PlatformAnthropic, APIMode: "anthropic", AccountTypes: []string{AccountTypeAPIKey, AccountTypeOAuth}, AutomaticControl: true, OutputLimitMode: "upstream"},
 		{Platform: PlatformGemini, APIMode: "gemini", AccountTypes: []string{AccountTypeAPIKey, AccountTypeOAuth, AccountTypeServiceAccount}, AutomaticControl: true, OutputLimitMode: "upstream"},
 		{Platform: PlatformGrok, APIMode: "responses", AccountTypes: []string{AccountTypeAPIKey}, AutomaticControl: true, OutputLimitMode: "upstream"},
@@ -134,7 +134,7 @@ func (s *AccountTestService) ProbeAccountText(ctx context.Context, input account
 	defer slot.ReleaseFunc()
 	result.OutputLimitMode, result.AutoControlEligible = "upstream", true
 	if account.Platform == PlatformOpenAI && account.IsOpenAIOAuthLike() {
-		result.OutputLimitMode, result.AutoControlEligible = "local", false
+		result.OutputLimitMode = "local"
 	}
 	req, buildErr := s.buildAccountQualityRequest(ctx, account, input, result.MappedModel)
 	if buildErr != nil {

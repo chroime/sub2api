@@ -18,7 +18,7 @@
 
 已验证适配器包括 OpenAI API Key Responses/Chat Completions、Anthropic API Key/OAuth、原生 Gemini API Key/OAuth/服务账号、Grok API Key Responses/Chat Completions。具体可选组合由 capabilities 返回。
 
-OpenAI OAuth/setup-token Responses 可执行观测探针，明确使用本地输出字节上限及超时，自动管控关闭。其上游不支持统一输出 Token 上限，因此配置全局金额预算时会暂停这种探针，不将该上限视为可信消费预留。影子账号、Agent Identity 及尚未验证的协议会明确返回 unsupported。
+OpenAI OAuth/setup-token Responses 可执行观测探针，明确使用本地输出字节上限及超时；已完成且未截断的确定性答案可参与自动质量管控，传输异常和截断结果不会自动隔离。其上游不支持统一输出 Token 上限，因此配置全局金额预算时会暂停这种探针，不将该上限视为可信消费预留。影子账号、Agent Identity 及尚未验证的协议会明确返回 unsupported。
 
 请求预算包括同一账号在不同策略下的诊断请求。金额预算按实际映射模型的单价保守预留，记录返回的 Token 消耗；价格未知或输出上限不可验证时暂停。诊断流量不扣客户余额，不写入客户业务使用记录。
 

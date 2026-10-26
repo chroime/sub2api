@@ -22,10 +22,29 @@ const actionOptions = computed<SelectOption[]>(() => actions.map(action => ({ va
 const label = (kind: string, value?: string) => { const key = `accountQuality.${kind}_${value}`; const result = t(key); return result === key ? value || '—' : result }
 let generation = 0, initialControlPending = true
 function selectBinding(id: number) { selectedBinding.value = id; reason.value = ''; error.value = '' }
+async function toggleAutoIsolation(binding: Binding) {
+  if (busy.value) return
+  const enabled = !binding.auto_isolate
+  const bindingAutomaticAllowed = Boolean(binding.auto_control_eligible && binding.control_mode === 'auto_quarantine')
+  if (enabled && !bindingAutomaticAllowed) {
+    error.value = t(binding.control_mode && binding.control_mode !== 'auto_quarantine' ? 'accountQuality.autoModeRequired' : 'accountQuality.autoUnsupported')
+    return
+  }
+  busy.value = true; error.value = ''; notice.value = ''; emit('busy', true)
+  try {
+    await api.control(binding.id, { version: binding.version, action: 'set_auto', auto_isolate: enabled, reason: t(enabled ? 'accountQuality.autoEnableReason' : 'accountQuality.autoDisableReason') })
+    notice.value = t(enabled ? 'accountQuality.autoEnabled' : 'accountQuality.autoDisabled')
+    emit('changed'); await load()
+  } catch (cause) { error.value = qualityError(cause) || t('accountQuality.saveFailed') }
+  finally { busy.value = false; emit('busy', false) }
+}
 async function openControl(binding: Binding, action: ControlAction) {
+  if (action === 'set_auto') {
+    await toggleAutoIsolation(binding)
+    return
+  }
   selectedBinding.value = binding.id; controlAction.value = action; tab.value = 'summary'; reason.value = ''; error.value = ''
   await nextTick()
-  if (action === 'set_auto') automatic.value = binding.auto_isolate ? false : automaticAllowed.value
   controlForm.value?.scrollIntoView?.({ block: 'nearest', behavior: 'auto' })
 }
 async function load() {

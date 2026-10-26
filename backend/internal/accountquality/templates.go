@@ -5,8 +5,15 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 )
+
+var candyBareAnswer = regexp.MustCompile(`^\s*(\d+(?:\.\d+)?)\s*(?:颗糖果|个糖果|颗|个)?\s*[。.!！]?\s*$`)
+var candyExplicitAnswer = regexp.MustCompile(`(?:最终\s*)?(?:答案|结论)\s*(?:(?:是|为|就是)\s*[:：]?\s*|[:：]\s*)(\d+(?:\.\d+)?)`)
+var candyMinimumAnswer = regexp.MustCompile(`最少(?:需要)?(?:取出|取)\s*(\d+(?:\.\d+)?)`)
+var candyAlternative = regexp.MustCompile(`\d+(?:\.\d+)?\s*(?:颗糖果|个糖果|颗|个)?\s*(?:或(?:者)?|还是|和|、|/|至|到|[-~～])\s*\d+(?:\.\d+)?`)
 
 func Templates() []Template {
 	return []Template{{"logic", "确定性逻辑", "logic-20261025-v1", "计算随机数列的加权校验值，严格按 JSON 返回。"}, {"constraint", "精确指令", "constraint-20261025-v1", "只返回本次生成的唯一校验标记。"}, {"context", "上下文检索", "context-20261025-v1", "从独立文档中提取三个随机锚点。"}, {"candy", "糖果题（数值结论）", "candy-20261025-v1", "仅校验明确数值结论；证明完整性保留人工复核。"}}
@@ -64,17 +71,7 @@ func Judge(template, expected, text string) (string, string) {
 		return "needs_review", "回答包含额外内容，需要人工复核"
 	}
 	if template == "candy" {
-		last := strings.TrimSpace(text[strings.LastIndex(text, "\n")+1:])
-		last = strings.TrimPrefix(strings.TrimPrefix(last, "答案："), "答案:")
-		last = strings.TrimSpace(last)
-		if last == "21" {
-			return "pass", "明确数值结论为21；未自动判断证明完整性"
-		}
-		var n int
-		if _, e := fmt.Sscanf(last, "%d", &n); e == nil && fmt.Sprint(n) == last {
-			return "fail", "明确数值结论与21不符"
-		}
-		return "needs_review", "未提取到唯一明确数值结论"
+		return judgeCandy(expected, text)
 	}
 	var want, got map[string]json.RawMessage
 	if json.Unmarshal([]byte(expected), &want) != nil || json.Unmarshal([]byte(text), &got) != nil {
@@ -95,4 +92,66 @@ func Judge(template, expected, text string) (string, string) {
 		}
 	}
 	return "pass", "所有确定性结果及字段约束均符合标准"
+}
+
+func judgeCandy(expected, text string) (string, string) {
+	want, err := strconv.Atoi(strings.TrimSpace(expected))
+	if err != nil {
+		return "needs_review", "标准数值答案无效，无法判定"
+	}
+	if match := candyBareAnswer.FindStringSubmatch(strings.Trim(strings.ReplaceAll(text, "**", ""), "`")); len(match) == 2 {
+		return candyNumericVerdict(match[1], want)
+	}
+
+	values := make([]string, 0, 2)
+	ambiguous := false
+	for _, raw := range strings.Split(text, "\n") {
+		line := strings.TrimSpace(strings.ReplaceAll(raw, "**", ""))
+		if line == "" || strings.HasPrefix(line, "```") || strings.HasPrefix(line, "~~~") {
+			continue
+		}
+		if candyConditionalLine(line) {
+			continue
+		}
+		if candyAlternative.MatchString(line) {
+			ambiguous = true
+		}
+		for _, match := range candyExplicitAnswer.FindAllStringSubmatch(line, -1) {
+			values = append(values, match[1])
+		}
+		for _, match := range candyMinimumAnswer.FindAllStringSubmatch(line, -1) {
+			values = append(values, match[1])
+		}
+	}
+	if len(values) == 0 || ambiguous {
+		return "needs_review", "未提取到唯一明确数值结论"
+	}
+	unique := map[string]struct{}{}
+	for _, value := range values {
+		unique[value] = struct{}{}
+	}
+	if len(unique) != 1 {
+		return "needs_review", "回答包含多个不同数值结论，需要人工复核"
+	}
+	return candyNumericVerdict(values[0], want)
+}
+
+func candyConditionalLine(line string) bool {
+	for _, prefix := range []string{"如果", "若", "假如", "假设", "盲取时", "完全盲取时", "在盲取情况下", "在完全盲取情况下", "不能按形状选择时", "不区分形状时"} {
+		if strings.HasPrefix(line, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+func candyNumericVerdict(raw string, expected int) (string, string) {
+	n, err := strconv.Atoi(raw)
+	if err != nil {
+		return "needs_review", "数值结论不是唯一的整数，需要人工复核"
+	}
+	if n == expected {
+		return "pass", fmt.Sprintf("明确数值结论为%d；未自动判断证明完整性", expected)
+	}
+	return "fail", fmt.Sprintf("明确数值结论与%d不符", expected)
 }

@@ -9,10 +9,22 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/proxyutil"
 	"github.com/stretchr/testify/require"
 )
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func TestGetClientDoesNotReuseProxyClientAfterForwardConfigurationChanges(t *testing.T) {
+	opts := Options{ProxyURL: "socks5://fixture-cache-proxy.example:1080", Timeout: time.Second}
+	t.Setenv(proxyutil.ForwardProxyEnv, "")
+	first, err := GetClient(opts)
+	require.NoError(t, err)
+	require.NotNil(t, first)
+	t.Setenv(proxyutil.ForwardProxyEnv, "invalid-forward-proxy")
+	_, err = GetClient(opts)
+	require.Error(t, err)
+}
 
 func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
 	return f(req)

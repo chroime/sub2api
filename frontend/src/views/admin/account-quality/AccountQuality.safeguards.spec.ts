@@ -146,17 +146,15 @@ describe('account quality administrator safeguards', () => {
     expect(api.control).not.toHaveBeenCalled()
   })
 
-  it('opens an eligible automatic-isolation toggle as an unsaved draft for the same binding', async () => {
+  it('applies an eligible automatic-isolation toggle directly without asking for a reason', async () => {
     const eligible: Binding = { ...binding, auto_control_eligible: true, account_type: 'apikey', control_mode: 'auto_quarantine' }
     vi.mocked(api.account).mockResolvedValue({ bindings: [eligible], runs: [], actions: [] })
-    const wrapper = mount(AccountQualityDetail, { ...mountOptions, props: { accountId: 12, initialBindingId: binding.id, initialAction: 'set_auto' } })
+    const wrapper = mount(AccountQualityDetail, { ...mountOptions, props: { accountId: 12 } })
     await flushPromises()
-    expect(wrapper.get('[data-test=quality-control-auto]').element).toHaveProperty('checked', true)
-    expect(api.control).not.toHaveBeenCalled()
-    await wrapper.get('[data-test=quality-control-reason]').setValue('Enable quality isolation for this monitored model')
-    await wrapper.get('form').trigger('submit')
+    await wrapper.get('[role=switch]').trigger('click')
     await flushPromises()
-    expect(api.control).toHaveBeenCalledWith(binding.id, { version: binding.version, action: 'set_auto', auto_isolate: true, reason: 'Enable quality isolation for this monitored model' })
+    expect(wrapper.get('[data-test=quality-control-reason]').exists()).toBe(true)
+    expect(api.control).toHaveBeenCalledWith(binding.id, { version: binding.version, action: 'set_auto', auto_isolate: true, reason: '启用账号质量自动隔离' })
   })
 
   it('displays raw HTML output as text and keeps original automatic evidence visible', async () => {

@@ -299,7 +299,7 @@
             </button>
           </template>
           <template #cell-quality="{ row }">
-            <AccountQualityCell :bindings="qualityByAccount[String(row.id)] || []" :loading="qualityLoading" :error="qualityError" :disabled="qualityBusy" @details="openAccountQualityDetails(row.id)" @run="runAccountQuality" @evidence="qualityEvidenceId = $event.id" @control="(binding, action) => openAccountQualityDetails(row.id, binding.id, action)" />
+            <AccountQualityCell :bindings="qualityByAccount[String(row.id)] || []" :loading="qualityLoading" :error="qualityError" :disabled="qualityBusy" @details="openAccountQualityDetails(row.id)" @run="runAccountQuality" @evidence="qualityEvidenceId = $event.id" @control="(binding, action) => handleAccountQualityControl(row.id, binding, action)" />
           </template>
           <template #cell-today_stats="{ row }">
             <AccountTodayStatsCell
@@ -1170,6 +1170,30 @@ const runQualityBindings = async (bindings: QualityBinding[]) => {
   } finally { qualityBusy.value = false }
 }
 const runAccountQuality = (binding: QualityBinding) => runQualityBindings([binding])
+const toggleAccountQualityAutoIsolation = async (binding: QualityBinding) => {
+  if (qualityBusy.value) return
+  const enabled = !binding.auto_isolate
+  qualityBusy.value = true
+  try {
+    await accountQualityAPI.control(binding.id, {
+      version: binding.version,
+      action: 'set_auto',
+      auto_isolate: enabled,
+      reason: t(enabled ? 'accountQuality.autoEnableReason' : 'accountQuality.autoDisableReason')
+    })
+    appStore.showSuccess(t(enabled ? 'accountQuality.autoEnabled' : 'accountQuality.autoDisabled'))
+    await refreshQualitySummaries()
+  } catch (cause) {
+    appStore.showError(qualityErrorMessage(cause) || t('accountQuality.saveFailed'))
+  } finally { qualityBusy.value = false }
+}
+const handleAccountQualityControl = (accountId: number, binding: QualityBinding, action: QualityControlAction) => {
+  if (action === 'set_auto') {
+    void toggleAccountQualityAutoIsolation(binding)
+    return
+  }
+  openAccountQualityDetails(accountId, binding.id, action)
+}
 const openQualityAssignmentFor = async (accountIds: number[], platform?: AccountPlatform) => {
   if (!accountIds.length || qualityBusy.value) return
   qualityBusy.value = true

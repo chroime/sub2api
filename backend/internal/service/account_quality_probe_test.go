@@ -145,7 +145,7 @@ func TestAccountQualityProbeOAuthUsesActualPromptAndFreshLocallyBoundedSession(t
 	require.NoError(t, err)
 	require.Equal(t, "completed", first.ExecutionStatus)
 	require.Equal(t, "21", first.Text)
-	require.False(t, first.AutoControlEligible)
+	require.True(t, first.AutoControlEligible)
 	require.Equal(t, "local", first.OutputLimitMode)
 	require.Equal(t, "gpt-5.6-sol", first.MappedModel)
 	require.Equal(t, "gpt-5.6-sol", gjson.GetBytes(u.bodies[0], "model").String())
