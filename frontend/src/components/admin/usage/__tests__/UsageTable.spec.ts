@@ -607,6 +607,18 @@ describe('UsageTable streaming ACK timing', () => {
     expect(wrapper.findAll('[data-testid="latency-health-bar"]')).toHaveLength(3)
   })
 
+  it('keeps gradient health bars visible without relying on generated utility colors', () => {
+    const wrapper = mountLatency([
+      { request_id: 'gradient-bar', first_token_ms: 1_420, duration_ms: 5_900 },
+    ])
+
+    const bar = wrapper.get('[data-testid="latency-health-bar"]')
+    const inlineStyle = bar.attributes('style') || ''
+    expect(inlineStyle).toContain('background:')
+    expect(inlineStyle).toContain('linear-gradient')
+    expect(inlineStyle).toContain('width: 4px')
+  })
+
   it('updates the latency and health indicator when switching display modes', async () => {
     const wrapper = mountLatency([{
       request_id: 'switch-mode', first_token_ms: 60_000, duration_ms: 80_000, streaming_ack_ms: 720,
