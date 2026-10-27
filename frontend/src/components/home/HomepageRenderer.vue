@@ -11,6 +11,7 @@ import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores'
 import type { PublicSettings } from '@/types'
 import CompactHome from './CompactHome.vue'
+import HomepageLoading from './HomepageLoading.vue'
 import { resolveHomepageTemplate } from '@/utils/homepageTemplate'
 import { sanitizeUrl } from '@/utils/url'
 import { FeatureFlags, resolveFeatureFlag } from '@/utils/featureFlags'
@@ -24,9 +25,9 @@ watch(template, () => { loadFailed.value = false })
 function lazyTemplate(loader: AsyncComponentLoader) {
   return defineAsyncComponent({
     loader,
-    loadingComponent: CompactHome,
+    loadingComponent: HomepageLoading,
     errorComponent: CompactHome,
-    delay: 200,
+    delay: 0,
     timeout: 20000,
     onError(_error, _retry, fail) { loadFailed.value = true; fail() },
   })
