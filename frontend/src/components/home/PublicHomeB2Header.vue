@@ -5,6 +5,7 @@
     :subtitle="subtitle"
     :destination="destination"
     :authenticated="authenticated"
+    variant="story"
   >
     <RouterLink v-if="modelPlazaHref" :to="modelPlazaHref" class="public-nav-link">{{ t('home.public.nav.modelPlaza') }}</RouterLink>
     <RouterLink v-if="docsHref === '/docs'" to="/docs" class="public-nav-link">{{ t('home.public.nav.docs') }}</RouterLink>

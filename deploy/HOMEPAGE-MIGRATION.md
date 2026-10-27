@@ -34,7 +34,8 @@ checkout branch**. Keep a copy of the old updater. The script:
 2. Backs up PostgreSQL, Redis, application files and deployment configuration;
    checks archive readability, Redis integrity and SHA-256 checksums.
 3. Initializes `homepage_template` only if the key does not already exist.
-4. Fetches and fast-forwards `main`, builds, recreates only the application service,
+4. Fetches and fast-forwards `main`, builds, checks that the service user can read
+   runtime scripts and start the binary, recreates only the application service,
    then verifies health, the original data mount and completed installation state.
 
 Initialization preserves legacy custom content first, then compact mode; otherwise

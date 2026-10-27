@@ -46,5 +46,10 @@ backup_line=$(grep -n '^BACKUP_COMPLETE=true$' "$script" | cut -d: -f1)
 init_line=$(grep -n '^homepage_template_sql | docker exec' "$script" | cut -d: -f1)
 checkout_line=$(grep -n '^git -C .* switch' "$script" | cut -d: -f1)
 [[ "$backup_line" -lt "$init_line" && "$init_line" -lt "$checkout_line" ]] || fail 'verified backup must precede settings writes and checkout'
+runtime_line=$(grep -n '^log "Checking runtime file access' "$script" | cut -d: -f1)
+recreate_line=$(grep -n '^log "Recreating' "$script" | cut -d: -f1)
+[[ "$runtime_line" -lt "$recreate_line" ]] || fail 'runtime file access must be checked before replacing the live service'
+grep -Fq 'chmod 755 /app/docker-entrypoint.sh' "$repo_root/Dockerfile" || fail 'entrypoint must remain readable after dropping privileges'
+grep -Fq 'chmod -R a+rX /app/upstream-browser' "$repo_root/Dockerfile" || fail 'helper must be readable from a private checkout'
 homepage_template_sql | grep -Fq 'ON CONFLICT (key) DO NOTHING' || fail 'initialization must preserve explicit settings'
 printf 'update-sub2api tests passed\n'

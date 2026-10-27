@@ -180,6 +180,9 @@ COPY --from=backend-builder --chown=sub2api:sub2api /app/backend/resources /app/
 
 # Browser helper is read-only to the service user, as the helper README requires.
 COPY --from=browser-helper /opt/upstream-browser /app/upstream-browser
+# Build contexts may come from a checkout created with umask 077. The helper
+# stays root-owned and read-only, but the service user must be able to read it.
+RUN chmod -R a+rX /app/upstream-browser
 ENV GOVERNANCE_BROWSER_NODE=/usr/bin/node \
     GOVERNANCE_BROWSER_SCRIPT=/app/upstream-browser/main.mjs \
     GOVERNANCE_BROWSER_EXECUTABLE=/usr/local/bin/sub2api-chromium
@@ -189,7 +192,7 @@ RUN mkdir -p /app/data && chown sub2api:sub2api /app/data
 
 # Copy entrypoint script (fixes volume permissions then drops to sub2api)
 COPY deploy/docker-entrypoint.sh /app/docker-entrypoint.sh
-RUN chmod +x /app/docker-entrypoint.sh
+RUN chmod 755 /app/docker-entrypoint.sh
 
 # Expose port (can be overridden by SERVER_PORT env var)
 EXPOSE 8080

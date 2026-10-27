@@ -232,8 +232,24 @@ git -C "$APP_DIR" fetch origin "$BRANCH"
 git -C "$APP_DIR" switch "$BRANCH"
 git -C "$APP_DIR" pull --ff-only origin "$BRANCH"
 
-log "Building and recreating $SERVICE"
-(cd "$DEPLOY_DIR" && docker compose -f "$COMPOSE_FILE" up -d --build --force-recreate "$SERVICE")
+log "Building $SERVICE"
+(cd "$DEPLOY_DIR" && docker compose -f "$COMPOSE_FILE" build "$SERVICE")
+
+# Validate access after dropping privileges before replacing the running service.
+# No entrypoint is invoked, no service ports are published and no dependencies
+# are recreated. The checks only read files and print the binary version.
+log "Checking runtime file access as the service user"
+(cd "$DEPLOY_DIR" && docker compose -f "$COMPOSE_FILE" run --rm --no-deps --entrypoint /bin/sh "$SERVICE" -ec '
+  su-exec sub2api test -r /app/docker-entrypoint.sh
+  su-exec sub2api test -x /app/docker-entrypoint.sh
+  if [ -d /app/upstream-browser ]; then
+    su-exec sub2api test -r /app/upstream-browser/main.mjs
+  fi
+  su-exec sub2api /app/sub2api -version
+')
+
+log "Recreating $SERVICE"
+(cd "$DEPLOY_DIR" && docker compose -f "$COMPOSE_FILE" up -d --no-build --force-recreate "$SERVICE")
 
 log "Waiting for $SERVICE healthcheck"
 HEALTH_STATUS=""
