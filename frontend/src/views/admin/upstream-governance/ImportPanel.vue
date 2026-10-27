@@ -103,6 +103,7 @@ watch(
             props.siteBaseUrl,
             group.resolved_rate_multiplier ?? 1,
           ),
+          description: group.description || '',
           cost_multiplier: group.resolved_rate_multiplier ?? 1,
         },
       ]),
@@ -191,7 +192,7 @@ const visibleGroups = computed(() =>
     return (
       (!selectedOnly.value || choice.selected) &&
       (!platformFilter.value || choice.platform === platformFilter.value) &&
-      `${group.name} ${group.id} ${(group.models || []).join(' ')}`
+      `${group.name} ${group.description || ''} ${group.id} ${(group.models || []).join(' ')}`
         .toLowerCase()
         .includes(query.value.toLowerCase())
     )
@@ -259,6 +260,12 @@ function changeRate(choice: GroupChoice, event: Event) {
       choice.cost_multiplier,
     )
 }
+function changeDescription(choice: GroupChoice, event: Event) {
+  const next = (event.target as HTMLTextAreaElement).value
+  if (choice.description === next) return
+  choice.description = next
+  if (preview.value) invalidateDraftPreview(true)
+}
 function remap() {
   preview.value = null
   result.value = null
@@ -288,8 +295,11 @@ async function prepare() {
   try {
     const value = await api.preview(props.siteId, {
       selections: selected.value.map(
-        ({ selected: _selected, ...selection }) => ({
+        ({ selected: _selected, description, ...selection }) => ({
           ...selection,
+          ...(description?.trim()
+            ? { description: description.trim() }
+            : {}),
           platform: selection.platform as Transport,
           account_config: importAccountConfig(
             config.value,
@@ -541,6 +551,12 @@ const catalogWarnings: Record<string, string> = {
                   </td>
                   <td class="px-3 py-3">
                     <span class="break-all font-medium">{{ remote.name }}</span>
+                    <p
+                      v-if="remote.description"
+                      class="mt-1 break-all text-xs text-gray-500"
+                    >
+                      {{ remote.description }}
+                    </p>
                     <p class="mt-1 break-all text-xs text-gray-400">
                       #{{ remote.id }} ·
                       {{
@@ -640,6 +656,16 @@ const catalogWarnings: Record<string, string> = {
                             min="0"
                             step="any"
                             @input="changeRate(choices[remote.id]!, $event)"
+                        /></label>
+                        <label class="block text-xs text-gray-500"
+                          >{{ t('governance.groupDescription')
+                          }}<textarea
+                            :value="choices[remote.id]!.description"
+                            data-test="description"
+                            class="input mt-1 w-full resize-y text-sm"
+                            maxlength="300"
+                            rows="3"
+                            @input="changeDescription(choices[remote.id]!, $event)"
                         /></label>
                         <p class="text-xs text-gray-500">
                           {{ t('governance.baseRate') }}
@@ -763,6 +789,9 @@ const catalogWarnings: Record<string, string> = {
             row.selection.platform
           }}</span>
         </h5>
+        <p v-if="row.selection.description" class="whitespace-pre-wrap break-words text-sm text-gray-600 dark:text-gray-300">
+          {{ t('governance.groupDescription') }}: {{ row.selection.description }}
+        </p>
         <div data-test="preview-targets" class="flex flex-wrap items-center gap-2">
           <span class="text-xs text-gray-500">{{ t('governance.localGroup') }}</span>
           <span v-for="target in previewTargets(row)" :key="target.id" class="inline-flex max-w-full items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs dark:border-dark-600 dark:bg-dark-800">

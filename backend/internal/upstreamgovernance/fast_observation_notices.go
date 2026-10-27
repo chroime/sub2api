@@ -11,14 +11,5 @@ func fastObservationChangeNotices(site Site, previous *CatalogObservation, obser
 		return nil
 	}
 	events := DiffCatalog(site.ID, Catalog{GroupsComplete: true, Groups: previous.Groups}, Catalog{GroupsComplete: true, Groups: observation.Groups})
-	notices := make([]ChangeNotice, 0, len(events))
-	for _, event := range events {
-		event.CreatedAt = observedAt
-		notice := renderCatalogChangeNotice(site, event, Catalog{GroupsComplete: true, Groups: observation.Groups})
-		notice.DedupKey = catalogChangeNoticeDedupKey(site.ID, event)
-		notice.InitialBaseline = false
-		notice.ObservedAt = observedAt
-		notices = append(notices, notice)
-	}
-	return notices
+	return renderCatalogChangeNotices(site, events, Catalog{GroupsComplete: true, Groups: observation.Groups}, observedAt, true)
 }

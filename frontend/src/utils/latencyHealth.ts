@@ -70,6 +70,45 @@ export const LATENCY_BAR_TO_CLASSES: Record<LatencySeverity, string> = {
   critical: 'to-red-500',
 }
 
+/**
+ * Explicit bar colors used as a production-safe fallback for the latency marker.
+ *
+ * The class-based gradient is useful for the normal Tailwind build, but a stale
+ * or partially cached server asset can omit one of the dynamically selected
+ * utility classes and leave the gradient transparent. Keeping the actual color
+ * in the inline style makes the marker deterministic across build pipelines.
+ */
+export const LATENCY_BAR_COLORS: Record<LatencySeverity, string> = {
+  good: '#10b981',
+  warn: '#fbbf24',
+  slow: '#f97316',
+  critical: '#ef4444',
+}
+
+export const latencyBarStyle = (
+  firstTokenMs: number | null | undefined,
+  durationMs: number | null | undefined,
+): Record<string, string> => {
+  const baseStyle = {
+    display: 'block',
+    width: '4px',
+    minHeight: '4rem',
+    flex: '0 0 4px',
+    alignSelf: 'stretch',
+    borderRadius: '9999px',
+  }
+  const durationColor = LATENCY_BAR_COLORS[durationSeverity(durationMs ?? 0)]
+  if (firstTokenMs == null) {
+    return { ...baseStyle, background: durationColor }
+  }
+
+  const firstTokenColor = LATENCY_BAR_COLORS[firstTokenSeverity(firstTokenMs)]
+  return {
+    ...baseStyle,
+    background: `linear-gradient(to bottom, ${firstTokenColor} 0%, ${firstTokenColor} 40%, ${durationColor} 60%, ${durationColor} 100%)`,
+  }
+}
+
 // 与运维 Token 请求统计一致：使用完整耗时，输出可能包含推理 Token。
 export const formatUsageOutputRate = (row: Pick<UsageLog,
   'output_tokens' | 'duration_ms' | 'image_count' | 'image_output_tokens' | 'billing_mode' | 'request_type'

@@ -597,6 +597,28 @@ describe('UsageTable streaming ACK timing', () => {
     expect(wrapper.findAll('[data-testid="streaming-ack-value"]')).toHaveLength(0)
   })
 
+  it('keeps a visible health bar for every latency row', () => {
+    const wrapper = mountLatency([
+      { request_id: 'missing-first-token', first_token_ms: null, duration_ms: 3_440 },
+      { request_id: 'normal-first-token', first_token_ms: 1_420, duration_ms: 5_900 },
+      { request_id: 'slow-total', first_token_ms: 3_480, duration_ms: 42_910 },
+    ], 'response')
+
+    expect(wrapper.findAll('[data-testid="latency-health-bar"]')).toHaveLength(3)
+  })
+
+  it('keeps gradient health bars visible without relying on generated utility colors', () => {
+    const wrapper = mountLatency([
+      { request_id: 'gradient-bar', first_token_ms: 1_420, duration_ms: 5_900 },
+    ])
+
+    const bar = wrapper.get('[data-testid="latency-health-bar"]')
+    const inlineStyle = bar.attributes('style') || ''
+    expect(inlineStyle).toContain('background:')
+    expect(inlineStyle).toContain('linear-gradient')
+    expect(inlineStyle).toContain('width: 4px')
+  })
+
   it('updates the latency and health indicator when switching display modes', async () => {
     const wrapper = mountLatency([{
       request_id: 'switch-mode', first_token_ms: 60_000, duration_ms: 80_000, streaming_ack_ms: 720,

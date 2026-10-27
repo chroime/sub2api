@@ -150,7 +150,7 @@ func governanceLocal(a *Account) *gov.LocalAccount {
 		extra[key] = value
 	}
 	// Runtime accounting and probe refreshes do not invalidate reviewed settings.
-	for _, key := range []string{"quota_used", "quota_daily_used", "quota_weekly_used", "quota_daily_start", "quota_weekly_start", "quota_daily_reset_at", "quota_weekly_reset_at", UpstreamBillingProbeExtraKey} {
+	for _, key := range []string{"quota_used", "quota_daily_used", "quota_weekly_used", "quota_daily_start", "quota_weekly_start", "quota_daily_reset_at", "quota_weekly_reset_at", UpstreamBillingProbeExtraKey, AccountQualityGatesExtraKey} {
 		delete(extra, key)
 	}
 	rate := a.BillingRateMultiplier()
@@ -327,6 +327,7 @@ func governanceClientFactory(upstream HTTPUpstream, proxies ProxyRepository) gov
 func ProvideUpstreamGovernanceService(db *sql.DB, admin AdminService, upstream HTTPUpstream, proxies ProxyRepository, cipher SecretEncryptor, cfg *config.Config, email *EmailService, settings SettingRepository, users UserRepository) *gov.Service {
 	localAccounts := &governanceLocalAccounts{db: db, admin: admin}
 	svc := gov.NewService(gov.NewSQLStore(db), gov.NewConnector(governanceClientFactory(upstream, proxies)), localAccounts, cipher, cfg != nil && cfg.Totp.EncryptionKeyConfigured)
+	svc.SetGlobalSettingsStore(settings)
 	if cfg != nil && cfg.Server.Port > 0 {
 		if runner, err := gov.NewLocalGatewayModelRunner(fmt.Sprintf("http://127.0.0.1:%d", cfg.Server.Port)); err == nil {
 			svc.SetLocalModelRunner(runner)
@@ -335,7 +336,7 @@ func ProvideUpstreamGovernanceService(db *sql.DB, admin AdminService, upstream H
 	if pricingStore, ok := gov.NewSQLStore(db).(gov.PricingPersistence); ok {
 		svc.SetPricingCoordinator(gov.NewPricingCoordinator(pricingStore))
 	}
-	notifier := &governanceBalanceNotifier{settings: settings, admins: users}
+	notifier := &governanceBalanceNotifier{settings: settings, admins: users, runtimeGlobalSettings: svc.GetRuntimeGlobalSettings}
 	if email != nil {
 		notifier.mail = email
 	}
@@ -343,6 +344,7 @@ func ProvideUpstreamGovernanceService(db *sql.DB, admin AdminService, upstream H
 	svc.SetKeyNotifier(notifier)
 	svc.SetModelNotifier(notifier)
 	svc.SetChangeNotifier(notifier)
+	svc.SetLocalGroupChangeNotifier(&governanceLocalGroupNotifier{base: notifier})
 	configureGovernanceBrowser(svc, proxies)
 	svc.Start()
 	return svc

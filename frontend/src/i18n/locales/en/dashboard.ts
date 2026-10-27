@@ -942,7 +942,7 @@ export default {
       thresholdPlaceholder: 'Enter amount',
       systemDefault: 'System Default',
       extraEmails: 'Notification Emails',
-      extraEmailsHint: 'You must add and verify an email address to receive low balance alerts',
+      extraEmailsHint: 'If no verified and enabled notification email is configured, low balance alerts are sent to your registered email address.',
       primaryEmail: 'Primary',
       noExtraEmails: 'No extra notification emails',
       enterEmail: 'Enter email address',

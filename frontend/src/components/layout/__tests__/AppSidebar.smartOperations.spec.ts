@@ -63,8 +63,11 @@ const sectionCases = [
   ['/import', 'import'],
   ['/models', 'models'],
   ['/local-monitor', 'localMonitor'],
+  ['/account-quality', 'accountQuality'],
   ['/monitor', 'monitor'],
   ['/history', 'history'],
+  ['/notifications', 'notifications'],
+  ['/settings', 'settings'],
 ] as const
 
 async function mountSidebar(path = '/admin/dashboard') {
@@ -101,7 +104,7 @@ describe('Smart Operations route registration', () => {
     const route = applicationRouter.resolve(`${rootPath}${suffix}?site=site-42`)
 
     expect(route.name).toBe('AdminUpstreamGovernance')
-    expect(route.params.section || 'overview').toBe(section === 'localMonitor' ? 'local-monitor' : section)
+    expect(route.params.section || 'overview').toBe(section === 'localMonitor' ? 'local-monitor' : section === 'accountQuality' ? 'account-quality' : section)
     expect(route.meta.requiresAuth).toBe(true)
     expect(route.meta.requiresAdmin).toBe(true)
     expect(route.meta.titleKey).toBe('governance.smartOperations.title')
@@ -140,8 +143,11 @@ describe('AppSidebar Smart Operations navigation', () => {
       ['governance.smartOperations.sections.import', `${rootPath}/import`],
       ['governance.smartOperations.sections.models', `${rootPath}/models`],
       ['governance.smartOperations.sections.localMonitor', `${rootPath}/local-monitor`],
+      ['governance.smartOperations.sections.accountQuality', `${rootPath}/account-quality`],
       ['governance.smartOperations.sections.monitor', `${rootPath}/monitor`],
       ['governance.smartOperations.sections.history', `${rootPath}/history`],
+      ['governance.smartOperations.sections.notifications', `${rootPath}/notifications`],
+      ['governance.smartOperations.sections.settings', `${rootPath}/settings`],
     ])
     expect(router.currentRoute.value.path).toBe('/admin/dashboard')
   })
@@ -187,6 +193,14 @@ describe('AppSidebar Smart Operations navigation', () => {
     expect(router.currentRoute.value.query).toEqual({})
   })
 
+  it('opens account quality without retaining the selected upstream site', async () => {
+    const { wrapper, router } = await mountSidebar(`${rootPath}/models?site=site-42`)
+    await wrapper.get(`a[href="${rootPath}/account-quality"]`).trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe(`${rootPath}/account-quality`)
+    expect(router.currentRoute.value.query).toEqual({})
+  })
+
   it('opens a collapsed sidebar and reveals the Smart Operations children on click', async () => {
     appStore.sidebarCollapsed = true
     const { wrapper, router } = await mountSidebar()
@@ -197,7 +211,7 @@ describe('AppSidebar Smart Operations navigation', () => {
 
     expect(wrapper.get('aside').classes()).toContain('w-64')
     expect(button.attributes('aria-expanded')).toBe('true')
-    expect(wrapper.findAll(`a[href^="${rootPath}"]`)).toHaveLength(6)
+    expect(wrapper.findAll(`a[href^="${rootPath}"]`)).toHaveLength(9)
     expect(router.currentRoute.value.path).toBe('/admin/dashboard')
   })
 
@@ -254,7 +268,7 @@ describe('AppSidebar Smart Operations navigation', () => {
     const { wrapper } = await mountSidebar(rootPath)
 
     expect(smartOperationsButton(wrapper).attributes('aria-expanded')).toBe('true')
-    expect(wrapper.findAll(`a[href^="${rootPath}"]`)).toHaveLength(6)
+    expect(wrapper.findAll(`a[href^="${rootPath}"]`)).toHaveLength(9)
   })
 
   it('does not expose Smart Operations to regular users', async () => {

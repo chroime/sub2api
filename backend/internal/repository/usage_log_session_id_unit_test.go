@@ -4,6 +4,8 @@ package repository
 
 import (
 	"database/sql"
+	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -81,15 +83,27 @@ func TestPrepareUsageLogInsert_RequestedReasoningEffortArgWiring(t *testing.T) {
 	})
 
 	require.Len(t, prepared.args, len(usageLogInsertArgTypes))
-	require.Equal(t, "text", usageLogInsertArgTypes[48], "requested_reasoning_effort must follow reasoning_effort")
-	require.Equal(t, "text", usageLogInsertArgTypes[47], "reasoning_effort arg type must stay text")
+	query, _ := buildUsageLogBestEffortInsertQuery([]usageLogInsertPrepared{prepared})
+	insert := regexp.MustCompile(`(?s)INSERT INTO usage_logs \((.*?)\)`).FindStringSubmatch(query)
+	require.Len(t, insert, 2, "INSERT column list must be present")
+	columns := strings.Split(insert[1], ",")
+	for i := range columns {
+		columns[i] = strings.TrimSpace(columns[i])
+	}
+	require.Len(t, columns, len(prepared.args))
+	forwardedIdx := slices.Index(columns, "reasoning_effort")
+	requestedIdx := slices.Index(columns, "requested_reasoning_effort")
+	require.GreaterOrEqual(t, forwardedIdx, 0, "INSERT must include reasoning_effort")
+	require.Equal(t, forwardedIdx+1, requestedIdx, "requested_reasoning_effort must follow reasoning_effort")
+	require.Equal(t, "text", usageLogInsertArgTypes[requestedIdx], "requested_reasoning_effort arg type must stay text")
+	require.Equal(t, "text", usageLogInsertArgTypes[forwardedIdx], "reasoning_effort arg type must stay text")
 
-	forwardedArg, ok := prepared.args[47].(sql.NullString)
+	forwardedArg, ok := prepared.args[forwardedIdx].(sql.NullString)
 	require.True(t, ok)
 	require.True(t, forwardedArg.Valid)
 	require.Equal(t, forwarded, forwardedArg.String)
 
-	requestedArg, ok := prepared.args[48].(sql.NullString)
+	requestedArg, ok := prepared.args[requestedIdx].(sql.NullString)
 	require.True(t, ok)
 	require.True(t, requestedArg.Valid)
 	require.Equal(t, requested, requestedArg.String)

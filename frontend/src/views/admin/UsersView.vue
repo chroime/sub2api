@@ -263,6 +263,15 @@
               {{ t('admin.users.bulkDelete.action', { count: selectedCount }) }}
             </button>
 
+            <button
+              class="btn btn-secondary flex-1 md:flex-initial"
+              data-test="bulk-email-users"
+              @click="showBulkEmailModal = true"
+            >
+              <Icon name="mail" size="md" class="mr-2" />
+              {{ t('admin.users.bulkEmail.action') }}
+            </button>
+
             <!-- Create User Button (full width on mobile, auto width on desktop) -->
             <button @click="showCreateModal = true" class="btn btn-primary flex-1 md:flex-initial">
               <Icon name="plus" size="md" class="mr-2" />
@@ -776,6 +785,11 @@
       @close="showBulkEditModal = false"
       @success="handleBulkLimitsSuccess"
     />
+    <BulkEmailUserModal
+      :show="showBulkEmailModal"
+      :selected-ids="selectedIds"
+      @close="showBulkEmailModal = false"
+    />
     <UserPlatformQuotaModal
       :show="showPlatformQuotaModal"
       :user="platformQuotaUser"
@@ -824,6 +838,7 @@ import UserPlatformQuotaCell from '@/components/user/UserPlatformQuotaCell.vue'
 import UserCreateModal from '@/components/admin/user/UserCreateModal.vue'
 import UserEditModal from '@/components/admin/user/UserEditModal.vue'
 import BulkEditUserModal from '@/components/admin/user/BulkEditUserModal.vue'
+import BulkEmailUserModal from '@/components/admin/user/BulkEmailUserModal.vue'
 import UserPlatformQuotaModal from '@/components/admin/user/UserPlatformQuotaModal.vue'
 import UserApiKeysModal from '@/components/admin/user/UserApiKeysModal.vue'
 import UserAllowedGroupsModal from '@/components/admin/user/UserAllowedGroupsModal.vue'
@@ -1342,6 +1357,7 @@ const pagination = reactive({
 const showCreateModal = ref(false)
 const showEditModal = ref(false)
 const showBulkEditModal = ref(false)
+const showBulkEmailModal = ref(false)
 const showDeleteDialog = ref(false)
 const bulkDeleteIds = ref<number[]>([])
 const bulkDeleting = ref(false)

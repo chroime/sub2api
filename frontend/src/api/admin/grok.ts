@@ -85,7 +85,7 @@ export interface GrokSSOToOAuthResponse {
 }
 
 const GROK_SSO_IMPORT_CONCURRENCY = 3
-const GROK_SSO_IMPORT_TIMEOUT_PER_BATCH_MS = 90_000
+const GROK_SSO_IMPORT_TIMEOUT_PER_BATCH_MS = 180_000
 const GROK_SSO_IMPORT_TIMEOUT_BUFFER_MS = 90_000
 
 export function getGrokSSOImportTimeout(keyCount: number): number {

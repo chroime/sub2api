@@ -46,11 +46,14 @@ describe('IQDetectionView', () => {
     await wrapper.get('[data-test="pelican-work-view"]').trigger('click')
     await flushPromises()
     expect(document.body.querySelector('[role="dialog"]')).not.toBeNull()
+    const dialogFrame = document.body.querySelector('[data-test="pelican-work-dialog-frame"]') as HTMLElement | null
+    expect(dialogFrame).not.toBeNull()
+    expect(dialogFrame?.classList.contains('pointer-events-none')).toBe(false)
     expect(wrapper.get('[data-test="pelican-work-group"]').text()).toBe('GPT Lite')
     expect(wrapper.get('[data-test="pelican-work-time"]').text()).toBe('2026-10-02 20:00:00')
     expect(wrapper.get('iframe').attributes('sandbox')).toBe('allow-scripts')
     expect(wrapper.get('iframe').attributes('scrolling')).toBe('no')
-    expect(wrapper.get('iframe').classes()).toContain('pointer-events-none')
+    expect(wrapper.get('iframe').classes()).not.toContain('pointer-events-none')
     expect(wrapper.get('iframe').attributes('srcdoc')).toContain('data-pelican-preview-style')
     expect(wrapper.get('iframe').attributes('srcdoc')).toContain('scrollbar-width:none')
     expect(wrapper.get('iframe').attributes('srcdoc')).toContain('body>*{max-width:100%!important;min-height:0!important;height:auto!important;max-height:none!important}')
@@ -79,6 +82,55 @@ describe('IQDetectionView', () => {
     expect(wrapper.get('[data-test="pelican-work-preview"]').attributes('style')).toBeUndefined()
     expect(wrapper.get('[data-test="pelican-work-preview-frame"]').attributes('style')).toContain('height: 840px')
     expect(wrapper.get('[data-test="pelican-work-preview-frame"]').attributes('style')).toContain('scale(0.5)')
+  })
+
+  it('forwards preview wheel input to the parent page', async () => {
+    getIQDetection.mockResolvedValueOnce({
+      window_hours: 24,
+      generated_at: '2026-10-02T12:00:00Z',
+      timeline: [],
+      pelican_works: [{ id: 'pelican-wheel', site_name: 'fixture', group_name: 'GPT Lite', account_label: 'GPT Lite', model: 'gpt-6-astra', effort: 'low', html: '<html><body><svg /></body></html>', status: 'succeeded', duration_ms: 50, created_at: '2026-10-02T12:00:00Z' }],
+    })
+    const wrapper = mount(IQDetectionView, { global: { stubs: { Icon: true } } })
+    await flushPromises()
+
+    const originalScrollBy = window.scrollBy
+    const scrollBy = vi.fn()
+    Object.defineProperty(window, 'scrollBy', { configurable: true, value: scrollBy })
+    ;(wrapper.vm as any).handlePreviewMessage(new MessageEvent('message', {
+      data: { type: 'pelican-preview-wheel', id: 'pelican-wheel', deltaX: 0, deltaY: 240 },
+    }))
+
+    expect(scrollBy).toHaveBeenCalledWith({ left: 0, top: 240, behavior: 'auto' })
+    Object.defineProperty(window, 'scrollBy', { configurable: true, value: originalScrollBy })
+  })
+
+  it('fits an opened work inside the responsive dialog viewport', async () => {
+    getIQDetection.mockResolvedValueOnce({
+      window_hours: 24,
+      generated_at: '2026-10-02T12:00:00Z',
+      timeline: [],
+      pelican_works: [{ id: 'pelican-dialog', site_name: 'fixture', group_name: 'GPT Lite', account_label: 'GPT Lite', model: 'gpt-6-astra', effort: 'low', html: '<html><body><svg /></body></html>', status: 'succeeded', duration_ms: 50, created_at: '2026-10-02T12:00:00Z' }],
+    })
+    const wrapper = mount(IQDetectionView, { global: { stubs: { Icon: true } } })
+    await flushPromises()
+
+    await wrapper.get('[data-test="pelican-work-view"]').trigger('click')
+    await flushPromises()
+    const preview = document.body.querySelectorAll('[data-test="pelican-work-dialog-preview"]')[document.body.querySelectorAll('[data-test="pelican-work-dialog-preview"]').length - 1] as HTMLElement
+    vi.spyOn(preview, 'getBoundingClientRect').mockReturnValue({ width: 440, height: 384 } as DOMRect)
+    ;(wrapper.vm as any).updateDialogPreviewViewport()
+    ;(wrapper.vm as any).handlePreviewMessage(new MessageEvent('message', {
+      data: { type: 'pelican-preview-size', id: 'pelican-dialog', surface: 'dialog', width: 320, height: 200 },
+    }))
+    await nextTick()
+
+    const frames = document.body.querySelectorAll('[data-test="pelican-work-dialog-frame"]')
+    const frame = frames[frames.length - 1] as HTMLIFrameElement
+    expect(frame).not.toBeNull()
+    expect(frame.getAttribute('style')).toContain('width: 320px')
+    expect(frame.getAttribute('style')).toContain('height: 200px')
+    expect(frame.getAttribute('style')).toContain('scale(1.375)')
   })
 
   it('paginates pelican works with a next-page request', async () => {

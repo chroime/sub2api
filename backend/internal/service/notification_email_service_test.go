@@ -161,6 +161,112 @@ func TestNotificationEmailAdditionalEventsAreListedAndPreviewable(t *testing.T) 
 	}
 }
 
+func TestNotificationEmailSystemHealthSnapshotSupportsGroupDetails(t *testing.T) {
+	ctx := context.Background()
+	svc := NewNotificationEmailService(newNotificationEmailMemorySettingRepo(), nil)
+	infos := svc.ListEventInfos()
+	var found NotificationEmailEventInfo
+	for _, info := range infos {
+		if info.Event == NotificationEmailEventSystemHealthSnapshot {
+			found = info
+			break
+		}
+	}
+	require.Equal(t, NotificationEmailEventSystemHealthSnapshot, found.Event)
+	require.Contains(t, found.Placeholders, "health_status")
+	require.Contains(t, found.Placeholders, "group_summary_html")
+
+	preview, err := svc.PreviewTemplate(ctx, NotificationEmailPreviewInput{
+		Event:  NotificationEmailEventSystemHealthSnapshot,
+		Locale: "zh",
+		Variables: map[string]string{
+			"health_status":      "健康",
+			"health_checked_at":  "2026-10-22 12:00:00",
+			"group_summary_html": `<table><tr><td>GPT Pro</td><td>0.06x</td></tr></table>`,
+		},
+	})
+	require.NoError(t, err)
+	require.Contains(t, preview.HTML, "GPT Pro")
+	require.Contains(t, preview.HTML, "0.06x")
+}
+
+func TestNotificationEmailHealthSnapshotRuntimeDoesNotLeakPreviewSamples(t *testing.T) {
+	svc := NewNotificationEmailService(newNotificationEmailMemorySettingRepo(), nil)
+	variables := svc.runtimeVariables(context.Background(), NotificationEmailEventSystemHealthSnapshot, "zh", NotificationEmailSendInput{
+		RecipientEmail: "recipient@example.com",
+	})
+	require.Equal(t, "", variables["health_status"])
+	require.Equal(t, "", variables["health_status_detail"])
+	require.Equal(t, "", variables["health_checked_at"])
+	require.Equal(t, "", variables["active_group_count"])
+	require.Equal(t, "", variables["group_summary_html"])
+}
+
+func TestNotificationEmailHealthTemplateEditorRendersSafeSampleTable(t *testing.T) {
+	svc := NewNotificationEmailService(newNotificationEmailMemorySettingRepo(), nil)
+	preview, err := svc.PreviewTemplate(t.Context(), NotificationEmailPreviewInput{Event: NotificationEmailEventSystemHealthSnapshot, Locale: "zh"})
+	require.NoError(t, err)
+	require.Contains(t, preview.HTML, `<table class="group-summary-table"`)
+	require.NotContains(t, preview.HTML, "&lt;table&gt;")
+	preview, err = svc.PreviewTemplate(t.Context(), NotificationEmailPreviewInput{
+		Event:     NotificationEmailEventSystemHealthSnapshot,
+		Locale:    "zh",
+		Variables: map[string]string{"group_summary_html": `<img src=x onerror=alert(1)>`},
+	})
+	require.NoError(t, err)
+	require.NotContains(t, preview.HTML, "<img")
+	require.Contains(t, preview.HTML, "&lt;img")
+}
+
+func TestNotificationEmailHealthSnapshotRawHTMLIsOnlyTrustedWhenExplicit(t *testing.T) {
+	svc := NewNotificationEmailService(newNotificationEmailMemorySettingRepo(), nil)
+	tmpl, err := svc.GetTemplate(context.Background(), NotificationEmailEventSystemHealthSnapshot, "zh")
+	require.NoError(t, err)
+	variables := map[string]string{
+		"recipient_name":     `<script>unsafe</script>`,
+		"group_summary_html": `<img src=x onerror=alert(1)>`,
+	}
+	preview, err := renderNotificationEmail(NotificationEmailEventSystemHealthSnapshot, tmpl.Subject, tmpl.HTML, variables, nil)
+	require.NoError(t, err)
+	require.Contains(t, preview.HTML, "&lt;img")
+	require.NotContains(t, preview.HTML, "<script>")
+
+	preview, err = renderNotificationEmail(NotificationEmailEventSystemHealthSnapshot, tmpl.Subject, tmpl.HTML, variables, map[string]string{
+		"group_summary_html": `<table><tr><td>GPT Pro</td><td>0.06x</td></tr></table>`,
+		"recipient_name":     `<script>unsafe</script>`,
+	})
+	require.NoError(t, err)
+	require.Contains(t, preview.HTML, `<table><tr><td>GPT Pro</td><td>0.06x</td></tr></table>`)
+	require.NotContains(t, preview.HTML, "<script>")
+}
+
+func TestNotificationEmailPreviewSendUsesRealRecipientAndTrustedGroupHTML(t *testing.T) {
+	ctx := context.Background()
+	repo := newNotificationEmailMemorySettingRepo()
+	svc := NewNotificationEmailService(repo, nil)
+	require.NoError(t, repo.Set(ctx, SettingKeySiteName, "Example"))
+	svc.RememberRecipientLocale(ctx, 27, "recipient@example.com", "zh-CN")
+	preview, err := svc.PreviewSend(ctx, NotificationEmailSendInput{
+		Event:          NotificationEmailEventSystemHealthSnapshot,
+		UserID:         27,
+		RecipientEmail: "recipient@example.com",
+		RecipientName:  "实际用户",
+		Variables: map[string]string{
+			"health_status":        "部分可用",
+			"health_status_detail": "1 个分组无可调度账号",
+			"health_checked_at":    "2026-10-22 18:00:00",
+			"active_group_count":   "2",
+		},
+		RawHTMLVariables: map[string]string{"group_summary_html": `<table><tr><td>Grok</td><td>0.065x</td></tr></table>`},
+	})
+	require.NoError(t, err)
+	require.Equal(t, "[Example] 当前分组与倍率一览，欢迎回来体验", preview.Subject)
+	require.Contains(t, preview.HTML, "实际用户")
+	require.Contains(t, preview.HTML, `<table><tr><td>Grok</td><td>0.065x</td></tr></table>`)
+	require.NotContains(t, preview.HTML, "GPT Pro")
+	require.NotContains(t, preview.HTML, "张三")
+}
+
 func TestCyberPolicyNoticeTemplateWrapsLongUpstreamMessages(t *testing.T) {
 	ctx := context.Background()
 	svc := NewNotificationEmailService(newNotificationEmailMemorySettingRepo(), nil)
@@ -473,6 +579,34 @@ func TestNotificationEmailSendRespectsLegacyDeliveryKey(t *testing.T) {
 	require.NoError(t, repo.Set(ctx, legacyKey, "sent"))
 
 	require.NoError(t, svc.Send(ctx, input))
+}
+
+func TestNotificationEmailSendDeliveredDistinguishesSuppressionFromSMTPAcceptance(t *testing.T) {
+	ctx := t.Context()
+	repo := newNotificationEmailMemorySettingRepo()
+	smtpServer := startNotificationEmailTestSMTPServer(t)
+	require.NoError(t, repo.SetMultiple(ctx, smtpServer.settings()))
+	svc := NewNotificationEmailService(repo, NewEmailService(repo, nil))
+	input := NotificationEmailSendInput{
+		Event:          NotificationEmailEventSystemHealthSnapshot,
+		RecipientEmail: "recipient@example.com",
+		SourceType:     "unit_health",
+		SourceID:       "batch1",
+	}
+	sent, err := svc.SendDelivered(ctx, input)
+	require.NoError(t, err)
+	require.True(t, sent)
+	require.Equal(t, int64(1), smtpServer.messageCount())
+	sent, err = svc.SendDelivered(ctx, input)
+	require.NoError(t, err)
+	require.False(t, sent, "deduplicated notices were not newly delivered")
+	require.Equal(t, int64(1), smtpServer.messageCount())
+	input.SourceID = "batch2"
+	require.NoError(t, repo.Set(ctx, notificationEmailPreferenceKey(input.Event, input.RecipientEmail), "unsubscribed"))
+	sent, err = svc.SendDelivered(ctx, input)
+	require.NoError(t, err)
+	require.False(t, sent, "a suppression must not be reported as SMTP success")
+	require.Equal(t, int64(1), smtpServer.messageCount())
 }
 
 type notificationEmailMemorySettingRepo struct {

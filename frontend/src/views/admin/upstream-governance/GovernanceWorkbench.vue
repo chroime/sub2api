@@ -87,7 +87,7 @@ onUnmounted(() => {
 <template>
   <section data-test="operations-workbench" class="min-w-0 space-y-4" :aria-busy="loading">
     <header class="flex flex-wrap items-start justify-between gap-3">
-      <div class="min-w-0 flex-1"><div class="flex flex-wrap items-center gap-2"><h3 class="font-semibold">{{ t('governance.workbench.title') }}</h3><span class="rounded-full bg-gray-100 px-2 py-1 text-xs text-gray-600 dark:bg-dark-700 dark:text-gray-300">{{ t(siteId ? 'governance.workbench.scopeSite' : 'governance.workbench.scopeAll') }}</span></div><p class="mt-2 text-sm leading-relaxed text-gray-500 dark:text-gray-400">{{ t('governance.workbench.description') }}</p></div>
+      <div class="min-w-0 flex-1"><div class="flex flex-wrap items-center gap-2"><h3 class="font-semibold">{{ t('governance.workbench.title') }}</h3><span class="rounded-full bg-gray-100 px-2 py-1 text-xs text-gray-600 dark:bg-dark-700 dark:text-gray-300">{{ t(siteId ? 'governance.workbench.scopeSite' : 'governance.workbench.scopeAll') }}</span></div></div>
       <button data-test="workbench-refresh" class="btn btn-secondary shrink-0 text-sm" type="button" :disabled="loading || disabled" @click="refresh"><Icon name="refresh" size="sm" class="mr-2" aria-hidden="true" />{{ t('governance.workbench.refresh') }}</button>
     </header>
     <p v-if="failed" role="alert" class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm leading-relaxed text-amber-900 dark:border-amber-800 dark:bg-amber-900/10 dark:text-amber-200">{{ t(result ? 'governance.workbench.refreshFailed' : 'governance.workbench.loadFailed') }}<span v-if="result && requestedPage !== shownPage" class="mt-1 block">{{ t('governance.workbench.oldPage') }}</span></p>

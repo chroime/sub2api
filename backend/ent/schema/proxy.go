@@ -32,7 +32,7 @@ func (Proxy) Mixin() []ent.Mixin {
 func (Proxy) Fields() []ent.Field {
 	return []ent.Field{
 		field.String("name").
-			MaxLen(100).
+			MaxRuneLen(100).
 			NotEmpty(),
 		field.String("protocol").
 			MaxLen(20).

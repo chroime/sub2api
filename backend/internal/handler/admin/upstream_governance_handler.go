@@ -13,7 +13,10 @@ import (
 	"github.com/google/uuid"
 )
 
-type UpstreamGovernanceHandler struct{ svc *gov.Service }
+type UpstreamGovernanceHandler struct {
+	svc                  *gov.Service
+	balanceNotifications balanceNotificationReader
+}
 
 func NewUpstreamGovernanceHandler(svc *gov.Service) *UpstreamGovernanceHandler {
 	return &UpstreamGovernanceHandler{svc: svc}
@@ -82,17 +85,19 @@ func governanceBody(c *gin.Context, out any) bool {
 }
 
 type governanceSiteInput struct {
-	Name            string `json:"name"`
-	Platform        string `json:"platform"`
-	BaseURL         string `json:"base_url"`
-	ProxyID         *int64 `json:"proxy_id"`
-	Enabled         bool   `json:"enabled"`
-	IntervalMinutes int    `json:"interval_minutes"`
-	Version         int64  `json:"version"`
+	Name                string `json:"name"`
+	Platform            string `json:"platform"`
+	BaseURL             string `json:"base_url"`
+	ProxyID             *int64 `json:"proxy_id"`
+	Enabled             bool   `json:"enabled"`
+	IntervalMinutes     int    `json:"interval_minutes"`
+	FastIntervalSeconds int64  `json:"fast_interval_seconds"`
+	FullIntervalSeconds int64  `json:"full_interval_seconds"`
+	Version             int64  `json:"version"`
 }
 
 func (i governanceSiteInput) site() gov.Site {
-	return gov.Site{Name: i.Name, Platform: i.Platform, BaseURL: i.BaseURL, ProxyID: i.ProxyID, Enabled: i.Enabled, IntervalMinutes: i.IntervalMinutes, Version: i.Version}
+	return gov.Site{Name: i.Name, Platform: i.Platform, BaseURL: i.BaseURL, ProxyID: i.ProxyID, Enabled: i.Enabled, IntervalMinutes: i.IntervalMinutes, FastIntervalSeconds: i.FastIntervalSeconds, FullIntervalSeconds: i.FullIntervalSeconds, Version: i.Version}
 }
 func (h *UpstreamGovernanceHandler) List(c *gin.Context) {
 	v, e := h.svc.ListSites(c.Request.Context())

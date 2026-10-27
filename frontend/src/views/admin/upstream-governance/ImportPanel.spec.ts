@@ -57,6 +57,52 @@ describe('import confirmation', () => {
     vi.mocked(api.apply).mockResolvedValue({ preview_id: 'p', items: [] })
   })
   const templateSettings = () => ({ concurrency: 99, priority: 0, quota_enabled: false, quota_daily_limit: 12, quota_weekly_limit: 34, quota_limit: 56, upstream_billing_rate_sync_enabled: false, openai_long_context_billing_enabled: false })
+  const describedProps = { ...props, snapshot: { ...props.snapshot, catalog: { ...props.snapshot.catalog, groups: [{ ...props.snapshot.catalog.groups[0]!, description: 'Upstream explanation' }] } } }
+  it('shows and edits the upstream group description before preview', async () => {
+    const wrapper = mount(ImportPanel, { props: describedProps })
+    await flushPromises()
+    expect(wrapper.text()).toContain('Upstream explanation')
+    await wrapper.get('[data-test=group-details]').trigger('click')
+    const description = wrapper.get('[data-test=description]')
+    expect((description.element as HTMLTextAreaElement).value).toBe('Upstream explanation')
+    await description.setValue('Edited explanation')
+    await wrapper.get('[data-test=select]').setValue(true)
+    await wrapper.get('[data-test=target]').setValue(['3'])
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(api.preview).toHaveBeenCalledWith(1, { selections: [expect.objectContaining({ description: 'Edited explanation' })] })
+  })
+  it('invalidates an existing preview when the description draft changes', async () => {
+    const wrapper = mount(ImportPanel, { props: describedProps })
+    await flushPromises()
+    await wrapper.get('[data-test=select]').setValue(true)
+    await wrapper.get('[data-test=target]').setValue(['3'])
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(wrapper.find('[data-test=apply]').exists()).toBe(true)
+    await wrapper.get('[data-test=group-details]').trigger('click')
+    await wrapper.get('[data-test=description]').setValue('Changed after preview')
+    await flushPromises()
+    expect(wrapper.find('[data-test=apply]').exists()).toBe(false)
+  })
+  it('renders the description frozen in the preview response', async () => {
+    vi.mocked(api.preview).mockResolvedValueOnce({
+      id: 'description-preview', site_id: 1, site_version: 1, snapshot_id: 1,
+      created_at: '2026-09-26T15:08:02Z', expires_at: '2099-01-01',
+      rows: [{
+        selection: { remote_group_id: 'r', platform: 'openai', local_group_id: 3, local_group_ids: [3], account_name: 'Imported', cost_multiplier: 1, description: 'Frozen explanation', account_config: { ...defaultImportConfig(), priority: 1 } },
+        remote_group: { ...describedProps.snapshot.catalog.groups[0]!, description: 'Frozen explanation' },
+        target: { id: 3, name: 'Local', platform: 'openai', sale_multiplier: 2 }, existing: null, will_create_key: true, marker: 'description-preview',
+      }],
+    })
+    const wrapper = mount(ImportPanel, { props })
+    await flushPromises()
+    await wrapper.get('[data-test=select]').setValue(true)
+    await wrapper.get('[data-test=target]').setValue(['3'])
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(wrapper.text()).toContain('Frozen explanation')
+  })
   it('fills template settings only into the draft and keeps models and group mapping independent', async () => {
     const wrapper = mount(ImportPanel, { props })
     await flushPromises()

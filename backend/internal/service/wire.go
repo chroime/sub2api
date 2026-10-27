@@ -264,6 +264,7 @@ func ProvideAccountTestService(
 	openAIGatewayService *OpenAIGatewayService,
 	settingService *SettingService,
 	pluginManager *PluginManager,
+	concurrencyService *ConcurrencyService,
 ) *AccountTestService {
 	service := NewAccountTestService(
 		accountRepo,
@@ -279,6 +280,7 @@ func ProvideAccountTestService(
 	service.SetOpenAIGatewayService(openAIGatewayService)
 	service.SetSettingService(settingService)
 	service.SetPluginManager(pluginManager)
+	service.SetQualityProbeConcurrencyService(concurrencyService)
 	return service
 }
 
@@ -856,11 +858,13 @@ func ProvideAPIKeyService(
 
 // ProviderSet is the Wire provider set for all services
 var ProviderSet = wire.NewSet(
+	ProvideAccountQualityService,
 	ProvideUpstreamGovernanceService,
 	// Core services
 	ProvideAuthService,
 	NewPasskeyService,
 	NewUserService,
+	NewUserBulkEmailService,
 	ProvideAPIKeyService,
 	ProvideAPIKeyAuthCacheInvalidator,
 	ProvideAuthCacheInvalidationWorker,
@@ -932,7 +936,7 @@ var ProviderSet = wire.NewSet(
 	ProvideOpsCleanupService,
 	ProvideOpsScheduledReportService,
 	NewEmailService,
-	NewNotificationEmailService,
+	ProvideNotificationEmailService,
 	ProvideEmailQueueService,
 	NewTurnstileService,
 	NewTencentCaptchaService,

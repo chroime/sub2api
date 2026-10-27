@@ -946,7 +946,7 @@ export default {
       thresholdPlaceholder: '输入金额',
       systemDefault: '系统默认值',
       extraEmails: '通知邮箱',
-      extraEmailsHint: '必须添加并验证邮箱后，余额不足时才能收到提醒邮件',
+      extraEmailsHint: '未配置已验证且启用的通知邮箱时，余额不足提醒默认发送到您的注册邮箱。',
       primaryEmail: '主邮箱',
       noExtraEmails: '暂无额外通知邮箱',
       enterEmail: '输入邮箱地址',

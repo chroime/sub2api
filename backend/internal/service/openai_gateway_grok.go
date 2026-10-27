@@ -184,7 +184,7 @@ func (s *OpenAIGatewayService) forwardGrokResponses(
 		s.handleGrokAccountUpstreamError(errCtx, account, resp.StatusCode, resp.Header, respBody)
 		// Quota/rate-limit responses stamp the team+model overlay. Capacity is
 		// request pressure and must not hide sibling accounts.
-		if shouldMarkGrokTeamModelRateLimit(resp.StatusCode, respBody) {
+		if shouldMarkGrokTeamModelRateLimit(resp.StatusCode, respBody, resp.Header) {
 			markGrokTeamModelRateLimit(account, upstreamModel, resolveGrokTeamRateLimitUntil(time.Now().Add(grokTeamRateLimitDefaultTTL), time.Now()))
 		}
 		if s.shouldFailoverGrokUpstreamError(resp.StatusCode, respBody) {
@@ -2020,10 +2020,24 @@ func (s *OpenAIGatewayService) handleGrokAccountUpstreamError(ctx context.Contex
 	decision := classifyGrokUpstreamFailure(statusCode, responseBody, grokRequestedModelFromCtx(ctx))
 	snapshot := parseGrokQuotaSnapshot(headers, statusCode, now)
 	stampGrokQuotaSnapshotForPlan(account, snapshot, grokRequestedModelFromCtx(ctx))
+	if statusCode == http.StatusTooManyRequests {
+		slog.Warn("grok_upstream_rate_limit_diagnostic",
+			"account_id", account.ID,
+			"model", grokRequestedModelFromCtx(ctx),
+			"failure_class", decision.Class,
+			"reason", sanitizeUpstreamErrorMessage(truncateString(decision.Reason, 2048)),
+			"quota_snapshot", snapshot,
+			"upstream_request_id", firstNonEmpty(headers.Get("x-request-id"), headers.Get("xai-request-id")),
+		)
+	}
 	// Capacity 429 is model pressure, not account quota exhaustion. Keep the
 	// snapshot for observability but do not install account-level rate limiting;
 	// the failover decision below applies a bounded model-scoped block instead.
-	s.updateGrokUsageSnapshotWithRateLimit(ctx, account, snapshot, decision.Class != GrokFailureModelCapacity)
+	modelThrottle := applyGrokAvailableQuotaModelThrottle(account, snapshot, decision, now)
+	s.updateGrokUsageSnapshotWithRateLimit(ctx, account, snapshot, decision.Class != GrokFailureModelCapacity && !modelThrottle)
+	if modelThrottle {
+		return
+	}
 
 	// Body-first free-usage / empty / billing / capacity must run before the
 	// status switch so non-429 free-usage bodies still cool the account.
@@ -2073,9 +2087,17 @@ func (s *OpenAIGatewayService) handleGrokAccountUpstreamError(ctx context.Contex
 		}
 		if isGrokAccountAccessRejection(responseBody) {
 			s.tempUnscheduleGrok(ctx, account, 30*time.Minute, "grok access or entitlement denied")
+			return
 		}
-		// Ambiguous 403s still fail over for this request, but must not remove
-		// an otherwise healthy account from the entire scheduling pool.
+		// An unclassified 403 from an account whose billing already shows an
+		// exhausted window is a quota refusal. Briefly cool it so subsequent
+		// requests are not routed into the same rejection.
+		if grokBillingWindowExhausted(account) {
+			s.tempUnscheduleGrok(ctx, account, grokExhaustedForbiddenCooldown, "grok usage exhausted (403)")
+			return
+		}
+		// Other ambiguous 403s still fail over for this request, but must not
+		// remove an otherwise healthy account from the entire scheduling pool.
 	case http.StatusTooManyRequests:
 		// updateGrokUsageSnapshot installs rate-limit state for non-pool accounts.
 		// Free-usage 429 was already cooled above via body classification.

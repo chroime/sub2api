@@ -170,12 +170,14 @@ func (s *Service) probeLocked(ctx context.Context, site Site, b *Binding, model 
 	return check, err
 }
 
-// Start is idempotent. All outbound work is skipped without durable encryption.
+// Start is idempotent. Remote governance work requires durable encryption, but
+// local-group notifications are credential-free and must still be dispatched
+// when the instance has not configured an encryption key yet.
 func (s *Service) Start() {
 	s.startModelWorker()
 	s.workerMu.Lock()
 	defer s.workerMu.Unlock()
-	if s.workerDone != nil || !s.durableKey || s.cipher == nil {
+	if s.workerDone != nil || ((!s.durableKey || s.cipher == nil) && s.localGroupNotifier == nil) {
 		return
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -222,6 +224,12 @@ func (s *Service) workerWait(ctx context.Context) time.Duration {
 	if fastStore, ok := s.store.(FastObservationScheduleStore); ok {
 		consider(fastStore.NextFastObservationAt(ctx))
 	}
+	// Local group changes are captured immediately by a database trigger. The
+	// global local-monitor cadence controls how often the durable notification
+	// queue is polled, independently of remote-site credentials and deadlines.
+	if s.localGroupNotifier != nil {
+		consider(s.nextLocalGroupPollAt(ctx))
+	}
 	return wait
 }
 
@@ -246,7 +254,11 @@ func (s *Service) Stop() {
 
 func (s *Service) runDue(ctx context.Context) error {
 	if !s.durableKey || s.cipher == nil {
-		return nil
+		// Local-group changes are captured by a database trigger and do not
+		// require remote-site credentials. Keep their global notification queue
+		// alive even when upstream governance collection is disabled because no
+		// durable encryption key has been configured yet.
+		return s.DispatchLocalGroupChangeNotifications(ctx, s.localGroupNotifier, 20)
 	}
 	ctx, cancel := context.WithTimeout(ctx, 50*time.Second)
 	defer cancel()
@@ -277,6 +289,9 @@ func (s *Service) runDue(ctx context.Context) error {
 	// SMTP I/O but never holds a site advisory lock or remote-operation slot.
 	if notifyErr := s.DispatchChangeNotifications(ctx, 20); notifyErr != nil && firstErr == nil {
 		firstErr = notifyErr
+	}
+	if localNotifyErr := s.DispatchLocalGroupChangeNotifications(ctx, s.localGroupNotifier, 20); localNotifyErr != nil && firstErr == nil {
+		firstErr = localNotifyErr
 	}
 	return firstErr
 }

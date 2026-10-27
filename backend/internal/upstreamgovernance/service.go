@@ -23,6 +23,8 @@ import (
 
 type Service struct {
 	store                Store
+	globalSettingsStore  GlobalSettingsStore
+	globalSettingsMu     sync.Mutex
 	connector            Connector
 	local                LocalAccounts
 	cipher               Encryptor
@@ -48,12 +50,25 @@ type Service struct {
 	localModelRunner     LocalModelRunner
 	changeNotifier       ChangeNotifier
 	changeQueue          *ChangeNotificationQueue
+	localGroupNotifier   LocalGroupChangeNotifier
+	localGroupPollMu     sync.Mutex
 	pricingCoordinator   *PricingCoordinator
 	browserAuthorizer    *BrowserAuthorizer
 }
 
 func NewService(store Store, connector Connector, local LocalAccounts, cipher Encryptor, durableKey bool) *Service {
 	return &Service{store: store, connector: connector, local: local, cipher: cipher, durableKey: durableKey, slots: make(chan struct{}, 2), collectionFailures: map[int64]int{}, fastFailures: map[int64]int{}, now: func() time.Time { return time.Now().UTC() }}
+}
+
+// SetGlobalSettingsStore wires the application-wide settings repository. It is
+// deliberately an optional, narrow interface so governance remains usable in
+// isolated tests and during rolling upgrades where the settings table is not
+// available yet.
+func (s *Service) SetGlobalSettingsStore(store GlobalSettingsStore) {
+	if s == nil {
+		return
+	}
+	s.globalSettingsStore = store
 }
 
 // SetLocalModelRunner wires the optional in-process gateway runner used by
@@ -123,13 +138,37 @@ func (s *Service) EnqueueChangeNotice(ctx context.Context, notice ChangeNotice) 
 	if notice.InitialBaseline || s == nil || s.changeQueue == nil || s.changeNotifier == nil {
 		return nil
 	}
+	if len(notice.GroupChanges) > 0 || notice.Kind == "group_changes" {
+		return s.enqueueFilteredGroupChangeNotice(ctx, notice)
+	}
 	override := []string(nil)
-	if reader, ok := s.store.(ChangeNotificationPolicyReader); ok {
-		if policy, policyErr := reader.LoadChangeNotificationPolicy(ctx, notice.SiteID); policyErr == nil {
-			if !changeNotificationPolicyAllows(policy, notice.Kind) {
+	globalEnabled := false
+	if s.globalSettingsStore != nil {
+		if global, globalErr := s.GetGlobalSettings(ctx); globalErr == nil {
+			globalEnabled = global.Notifications.Enabled
+			if !globalNotificationAllows(global.Notifications.Events, notice.Kind) {
 				return nil
 			}
-			override = policy.Recipients
+			if globalEnabled {
+				override = append([]string(nil), global.Notifications.Recipients...)
+			}
+		}
+	}
+	if reader, ok := s.store.(ChangeNotificationPolicyReader); ok {
+		if policy, policyErr := reader.LoadChangeNotificationPolicy(ctx, notice.SiteID); policyErr == nil {
+			// A configured global policy is the default for every upstream. An
+			// explicitly enabled site policy remains an override for that site;
+			// a missing/disabled site policy inherits the global configuration.
+			if policy.Enabled {
+				if !changeNotificationPolicyAllows(policy, notice.Kind) {
+					return nil
+				}
+				if len(policy.Recipients) > 0 {
+					override = policy.Recipients
+				}
+			} else if !globalEnabled {
+				return nil
+			}
 		}
 	}
 	recipients, err := s.changeNotifier.Recipients(ctx, override)
@@ -147,6 +186,16 @@ func (s *Service) DispatchChangeNotifications(ctx context.Context, limit int) er
 		return nil
 	}
 	return s.changeQueue.Dispatch(ctx, limit)
+}
+
+// SetLocalGroupChangeNotifier wires the global local-group notification
+// transport. Local group events are dispatched independently from remote-site
+// change notifications because they do not have a site_id.
+func (s *Service) SetLocalGroupChangeNotifier(notifier LocalGroupChangeNotifier) {
+	if s == nil {
+		return
+	}
+	s.localGroupNotifier = notifier
 }
 
 func (s *Service) ListSites(ctx context.Context) ([]Site, error) {
@@ -277,6 +326,9 @@ func validateSite(site *Site) error {
 	if ip := net.ParseIP(host); ip != nil && (!ip.IsGlobalUnicast() || ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast()) {
 		return ErrInvalid
 	}
+	if site.IntervalMinutes != 0 && !validIntervalMinutes(site.IntervalMinutes) {
+		return ErrInvalid
+	}
 	if site.FullIntervalSeconds != 0 {
 		if !validIntervalSeconds(site.FullIntervalSeconds) {
 			return ErrInvalid
@@ -317,6 +369,7 @@ func validateSite(site *Site) error {
 }
 
 func (s *Service) CreateSite(ctx context.Context, input Site) (*Site, error) {
+	s.applyGlobalCadenceDefaults(ctx, &input)
 	if e := validateSite(&input); e != nil {
 		return nil, e
 	}
@@ -363,9 +416,6 @@ func (s *Service) UpdateSite(ctx context.Context, id int64, input Site) (*Site, 
 }
 
 func (s *Service) UpdateSiteWithLogin(ctx context.Context, id int64, input Site, login *LoginCredentials) (*Site, error) {
-	if e := validateSite(&input); e != nil {
-		return nil, e
-	}
 	if login != nil {
 		normalized, e := normalizeLoginCredentials(*login)
 		if e != nil {
@@ -383,6 +433,30 @@ func (s *Service) UpdateSiteWithLogin(ctx context.Context, id int64, input Site,
 	}
 	if input.Version != site.Version {
 		return nil, ErrConflict
+	}
+	if input.FullIntervalSeconds == 0 {
+		if input.IntervalMinutes != 0 && input.IntervalMinutes != site.IntervalMinutes {
+			// An explicitly changed legacy interval still updates both cadences,
+			// unless the caller supplied an independent fast interval.
+			if !validIntervalMinutes(input.IntervalMinutes) {
+				return nil, ErrInvalid
+			}
+			input.FullIntervalSeconds = int64(input.IntervalMinutes) * 60
+			if input.FastIntervalSeconds == 0 {
+				input.FastIntervalSeconds = input.FullIntervalSeconds
+			}
+		} else {
+			input.FullIntervalSeconds = collectionIntervalSeconds(*site)
+		}
+	}
+	if input.FastIntervalSeconds == 0 {
+		input.FastIntervalSeconds = site.FastIntervalSeconds
+		if input.FastIntervalSeconds == 0 {
+			input.FastIntervalSeconds = collectionIntervalSeconds(*site)
+		}
+	}
+	if e := validateSite(&input); e != nil {
+		return nil, e
 	}
 	changedOrigin := site.BaseURL != input.BaseURL || site.Platform != input.Platform
 	changedProxy := !reflect.DeepEqual(site.ProxyID, input.ProxyID)
@@ -462,6 +536,28 @@ func (s *Service) UpdateSiteWithLogin(ctx context.Context, id int64, input Site,
 		return nil, e
 	}
 	return site, nil
+}
+
+// applyGlobalCadenceDefaults fills unspecified cadences for newly created
+// upstream sites. A legacy minute-only caller still controls both cadences;
+// updates preserve the site's current values instead of inheriting defaults.
+func (s *Service) applyGlobalCadenceDefaults(ctx context.Context, input *Site) {
+	if s == nil || input == nil || s.globalSettingsStore == nil || (input.FastIntervalSeconds != 0 && input.FullIntervalSeconds != 0) {
+		return
+	}
+	if input.FullIntervalSeconds == 0 && input.IntervalMinutes != 0 {
+		return
+	}
+	settings, err := s.GetGlobalSettings(ctx)
+	if err != nil {
+		return
+	}
+	if input.FullIntervalSeconds == 0 {
+		input.FullIntervalSeconds = settings.Defaults.FullIntervalSeconds
+	}
+	if input.FastIntervalSeconds == 0 {
+		input.FastIntervalSeconds = settings.Defaults.FastIntervalSeconds
+	}
 }
 func (s *Service) DeleteSite(ctx context.Context, id int64) error {
 	site, release, e := s.remoteSiteLock(ctx, id)
@@ -799,7 +895,8 @@ func (s *Service) syncLockedWithAutoReauthorization(ctx context.Context, site Si
 	// Catalog events are persisted as notification intents while the site lock
 	// is still held; SMTP dispatch is deferred until runDue has released every
 	// site/remote lock. A notification failure never invalidates this snapshot.
-	s.enqueueCatalogChangeNotices(ctx, site, events, previous == nil, catalog)
+	completeBaseline := previous != nil && previous.Catalog.GroupsComplete && catalog.GroupsComplete
+	s.enqueueCatalogChangeNotices(ctx, site, events, previous == nil, completeBaseline, catalog)
 	if e = s.store.ObserveSite(ctx, site.ID, "healthy", "", now, next); e != nil {
 		return nil, e
 	}
@@ -824,19 +921,90 @@ func (s *Service) syncLockedWithAutoReauthorization(ctx context.Context, site Si
 	return snapshot, nil
 }
 
-func (s *Service) enqueueCatalogChangeNotices(ctx context.Context, site Site, events []Event, initialBaseline bool, catalog Catalog) {
-	if len(events) == 0 || s.changeQueue == nil || s.changeNotifier == nil {
+func (s *Service) enqueueCatalogChangeNotices(ctx context.Context, site Site, events []Event, initialBaseline, completeBaseline bool, catalog Catalog) {
+	if initialBaseline || len(events) == 0 || s.changeQueue == nil || s.changeNotifier == nil {
 		return
 	}
+	var observedAt time.Time
 	for _, event := range events {
-		notice := renderCatalogChangeNotice(site, event, catalog)
-		notice.DedupKey = catalogChangeNoticeDedupKey(site.ID, event)
-		notice.InitialBaseline = initialBaseline
-		notice.ObservedAt = event.CreatedAt
+		if event.CreatedAt.After(observedAt) || observedAt.IsZero() {
+			observedAt = event.CreatedAt
+		}
+	}
+	if observedAt.IsZero() {
+		observedAt = s.now().UTC()
+	}
+	for _, notice := range renderCatalogChangeNotices(site, events, catalog, observedAt, completeBaseline) {
 		if err := s.EnqueueChangeNotice(ctx, notice); err != nil {
 			log.Printf("[UpstreamGovernance] enqueue change notification: %s", ErrorCode(err))
 		}
 	}
+}
+
+func filterGroupChangeDetails(details []GroupChangeDetail, events GlobalNotificationEvents, policy *PricingNotificationPolicy) []GroupChangeDetail {
+	filtered := make([]GroupChangeDetail, 0, len(details))
+	for _, detail := range details {
+		if !events.AllowsGroupEvent(detail.Kind) {
+			continue
+		}
+		if policy != nil && policy.Enabled {
+			if detail.Kind == GroupEventRateChange && !policy.RateChanges || detail.Kind != GroupEventRateChange && !policy.GroupChanges {
+				continue
+			}
+		}
+		filtered = append(filtered, detail)
+	}
+	return filtered
+}
+
+func (s *Service) enqueueFilteredGroupChangeNotice(ctx context.Context, notice ChangeNotice) error {
+	global := defaultGlobalSettings()
+	globalEnabled := false
+	var override []string
+	if s.globalSettingsStore != nil {
+		if settings, err := s.GetGlobalSettings(ctx); err == nil {
+			global = settings
+			globalEnabled = settings.Notifications.Enabled
+			if globalEnabled {
+				override = append([]string(nil), global.Notifications.Recipients...)
+			}
+		}
+	}
+	details := filterGroupChangeDetails(notice.GroupChanges, global.Notifications.Events, nil)
+	if len(details) == 0 {
+		return nil
+	}
+	if reader, ok := s.store.(ChangeNotificationPolicyReader); ok {
+		if policy, err := reader.LoadChangeNotificationPolicy(ctx, notice.SiteID); err == nil {
+			if policy.Enabled {
+				details = filterGroupChangeDetails(details, global.Notifications.Events, &policy)
+				if len(details) == 0 {
+					return nil
+				}
+				if len(policy.Recipients) > 0 {
+					override = policy.Recipients
+				}
+			} else if !globalEnabled {
+				return nil
+			}
+		} else if !globalEnabled {
+			return nil
+		}
+	} else if !globalEnabled {
+		return nil
+	}
+	notice.GroupChanges = details
+	notice.Kind = "group_changes"
+	notice.DedupKey = catalogDetailsDedupKey(notice.SiteID, notice.GroupResource, details)
+	filteredNotice := renderCatalogGroupNotice(Site{ID: notice.SiteID, Name: notice.SiteName, BaseURL: notice.BaseURL}, notice.GroupResource, details, notice.ObservedAt)
+	notice.Subject = filteredNotice.Subject
+	notice.Body = filteredNotice.Body
+	notice.AstrBotText = filteredNotice.AstrBotText
+	recipients, err := s.changeNotifier.Recipients(ctx, override)
+	if err != nil {
+		return err
+	}
+	return s.changeQueue.EnqueueNotice(ctx, notice, recipients)
 }
 
 func marker(siteID int64, group, platform string) string {
@@ -901,6 +1069,13 @@ func (s *Service) Preview(ctx context.Context, id int64, selections []Selection)
 			selection.AccountName = site.BaseURL + "--" + strconv.FormatFloat(selection.CostMultiplier, 'f', -1, 64)
 		}
 		if len(selection.AccountName) > 100 {
+			return nil, ErrInvalid
+		}
+		selection.Description = strings.TrimSpace(selection.Description)
+		if selection.Description == "" {
+			selection.Description = strings.TrimSpace(g.Description)
+		}
+		if len(selection.Description) > 300 {
 			return nil, ErrInvalid
 		}
 		selection.AccountConfig, e = NormalizeAccountConfig(selection.AccountConfig, selection.Platform, g.Models)
@@ -1236,8 +1411,8 @@ func DiffCatalog(siteID int64, before, after Catalog) []Event {
 			}
 			add("models_changed", g.ID, sortedStrings(prior.Models), sortedStrings(g.Models))
 			add("price_changed", g.ID, prices(prior), prices(g))
-			if prior.Name != g.Name || prior.Platform != g.Platform {
-				add("group_changed", g.ID, []string{prior.Name, prior.Platform}, []string{g.Name, g.Platform})
+			if prior.Name != g.Name || prior.Description != g.Description || prior.Platform != g.Platform {
+				add("group_changed", g.ID, []string{prior.Name, prior.Description, prior.Platform}, []string{g.Name, g.Description, g.Platform})
 			}
 		}
 		delete(old, g.ID)

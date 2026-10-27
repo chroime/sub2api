@@ -2,6 +2,7 @@ package upstreamgovernance
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -33,7 +34,7 @@ func TestConnectorSub2APIRateOverride(t *testing.T) {
 		case "/api/v1/user/profile":
 			return 200, `{"code":0,"data":{"id":42}}`
 		case "/api/v1/groups/available":
-			return 200, `{"code":0,"data":[{"id":7,"name":"VIP","platform":"openai","rate_multiplier":2}]}`
+			return 200, `{"code":0,"data":[{"id":7,"name":"VIP","description":"Production access","platform":"openai","rate_multiplier":2}]}`
 		case "/api/v1/groups/rates":
 			return 200, `{"code":0,"data":{"7":0.8}}`
 		case "/api/v1/channels/available", "/api/v1/model-plaza":
@@ -48,6 +49,17 @@ func TestConnectorSub2APIRateOverride(t *testing.T) {
 	}
 	if len(cat.Groups) != 1 || cat.Groups[0].ResolvedRateMultiplier == nil || *cat.Groups[0].ResolvedRateMultiplier != 0.8 {
 		t.Fatalf("bad override: %+v", cat)
+	}
+	encoded, err := json.Marshal(cat.Groups[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(encoded, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload["description"] != "Production access" {
+		t.Fatalf("description was not preserved: %s", encoded)
 	}
 	if len(cat.Warnings) == 0 {
 		t.Fatal("missing unavailable pricing warning")
@@ -100,7 +112,7 @@ func TestConnectorNewAPIDiscoverRatios(t *testing.T) {
 		case "/api/user/self":
 			return 200, `{"success":true,"data":{"id":42}}`
 		case "/api/user/self/groups":
-			return 200, `{"success":true,"data":{"vip":{"ratio":0.8,"desc":"VIP"},"auto":{"ratio":"自动","desc":"Auto"}}}`
+			return 200, `{"success":true,"data":{"vip":{"ratio":0.8,"desc":"VIP","description":"Production access"},"auto":{"ratio":"自动","desc":"Auto"}}}`
 		case "/api/user/models":
 			return 200, `{"success":true,"data":["text-model"]}`
 		case "/api/pricing":
@@ -123,6 +135,17 @@ func TestConnectorNewAPIDiscoverRatios(t *testing.T) {
 		if g.ID == "vip" {
 			if len(g.Prices) != 1 || g.Prices[0].Unit != "newapi_ratio" || *g.Prices[0].Input != 1 || *g.Prices[0].Output != 3 {
 				t.Fatalf("lost ratio provenance %+v", g)
+			}
+			encoded, err := json.Marshal(g)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var payload map[string]any
+			if err := json.Unmarshal(encoded, &payload); err != nil {
+				t.Fatal(err)
+			}
+			if payload["description"] != "Production access" {
+				t.Fatalf("description was not preserved: %s", encoded)
 			}
 		}
 	}

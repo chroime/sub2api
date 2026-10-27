@@ -78,6 +78,7 @@ async function onboard() {
       }
       if (disposed) return
       stage.value = 'creating'
+      const defaults = await api.globalSettings().catch(() => null)
       savedSite.value = await api.create({
         name: name.value.trim() || detected.name,
         platform: platform.value || detected.platform,
@@ -85,6 +86,8 @@ async function onboard() {
         proxy_id: proxyId.value,
         enabled: true,
         interval_minutes: 15,
+        fast_interval_seconds: defaults?.defaults.fast_interval_seconds ?? 60,
+        full_interval_seconds: defaults?.defaults.full_interval_seconds ?? 900,
       })
       if (disposed) return
       emit('created', savedSite.value)

@@ -42,6 +42,36 @@ func TestInputAndActionBounds(t *testing.T) {
 	}
 }
 
+func TestGrokSSOInputCookieOriginsAreBounded(t *testing.T) {
+	input := Input{
+		BaseURL:         "https://accounts.x.ai",
+		Platform:        "grok-sso",
+		SSOToken:        "ephemeral-sso",
+		UserCode:        "ABCD-EFGH",
+		VerificationURL: "https://auth.x.ai/oauth2/device/complete?user_code=ABCD-EFGH",
+		ConsentURL:      "https://auth.x.ai/oauth2/device/consent",
+	}
+	if !validInput(input) {
+		t.Fatal("valid Grok SSO input rejected")
+	}
+	for _, cookie := range []Cookie{
+		{Name: "session", Value: "value", URL: "https://evil.example/"},
+		{Name: "session", Value: "value", URL: "https://auth.x.ai/?leak=1"},
+		{Name: "session", Value: "value", URL: "https://auth.x.ai/path"},
+		{Name: "session", Value: "bad\nvalue", URL: "https://auth.x.ai/"},
+	} {
+		candidate := input
+		candidate.Cookies = []Cookie{cookie}
+		if validInput(candidate) {
+			t.Fatalf("unsafe Grok SSO cookie accepted: %#v", cookie)
+		}
+	}
+	input.Cookies = []Cookie{{Name: "session", Value: "value", URL: "https://auth.x.ai/"}}
+	if !validInput(input) {
+		t.Fatal("valid Grok SSO cookie rejected")
+	}
+}
+
 func TestManagerUnavailableIsTokenFree(t *testing.T) {
 	m := New(Options{NodePath: "missing-node-secret", ScriptPath: "missing-script-secret", ExecutablePath: "missing-browser-secret"})
 	if ok, code := m.Available(); ok || strings.Contains(code, "secret") {

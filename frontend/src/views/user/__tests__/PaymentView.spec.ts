@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, shallowMount } from '@vue/test-utils'
+import { reactive } from 'vue'
 import PaymentView from '../PaymentView.vue'
 import { PAYMENT_RECOVERY_STORAGE_KEY } from '@/components/payment/paymentFlow'
 import { formatPaymentAmount } from '@/components/payment/currency'
 import AmountInput from '@/components/payment/AmountInput.vue'
+import PaymentMethodSelector from '@/components/payment/PaymentMethodSelector.vue'
 import SubscriptionPlanCard from '@/components/payment/SubscriptionPlanCard.vue'
 import en from '@/i18n/locales/en'
 import zh from '@/i18n/locales/zh'
@@ -122,6 +124,7 @@ function checkoutInfoFixture(overrides: Partial<CheckoutInfoResponse> = {}) {
     },
     global_min: 0,
     global_max: 0,
+    recharge_amounts: [10, 20, 50, 100, 200, 500, 1000, 2000, 5000],
     plans: [],
     balance_disabled: false,
     balance_recharge_multiplier: 1,
@@ -371,6 +374,221 @@ describe('PaymentView subscription plan grid', () => {
       'sm:grid-cols-2',
       'lg:grid-cols-3',
     ]))
+  })
+})
+
+describe('PaymentView preset-only balance recharge', () => {
+  beforeEach(() => {
+    vi.useRealTimers()
+    routeState.path = '/purchase'
+    routeState.query = {}
+    routerReplace.mockReset().mockResolvedValue(undefined)
+    createOrder.mockReset().mockRejectedValue({ reason: 'TOO_MANY_PENDING' })
+    showError.mockReset()
+    window.localStorage.clear()
+    appStoreState.setPublicSettings(undefined)
+  })
+
+  async function mountRecharge(overrides: Partial<CheckoutInfoResponse> = {}) {
+    const checkout = reactive(checkoutInfoFixture(overrides).data)
+    getCheckoutInfo.mockReset().mockResolvedValue({ data: checkout })
+    const wrapper = shallowMount(PaymentView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          AmountInput: false,
+          Teleport: true,
+          Transition: false,
+        },
+      },
+    })
+    await flushPromises()
+    return { wrapper, checkout }
+  }
+
+  function submitButton(wrapper: Awaited<ReturnType<typeof mountRecharge>>['wrapper']) {
+    return wrapper.findAll('button').find(button => button.text().includes('payment.createOrder'))!
+  }
+
+  it('renders the server presets and submits the chosen preset amount', async () => {
+    const { wrapper } = await mountRecharge({ recharge_amounts: [20, 100] })
+
+    expect(wrapper.findAll('[data-testid^="quick-amount-"]').map(button => button.text())).toEqual(['20', '100'])
+    expect(wrapper.find('input').exists()).toBe(false)
+    expect(submitButton(wrapper).attributes('disabled')).toBeDefined()
+    await wrapper.get('[data-testid="quick-amount-20"]').trigger('click')
+    expect(submitButton(wrapper).attributes('disabled')).toBeUndefined()
+    await submitButton(wrapper).trigger('click')
+    await flushPromises()
+
+    expect(createOrder).toHaveBeenCalledTimes(1)
+    expect(createOrder).toHaveBeenCalledWith(expect.objectContaining({ amount: 20, order_type: 'balance' }))
+  })
+
+  it.each([
+    { label: 'empty', recharge_amounts: [] },
+    { label: 'missing', recharge_amounts: undefined },
+  ])('fails closed when checkout presets are $label', async ({ recharge_amounts }) => {
+    const { wrapper } = await mountRecharge({ recharge_amounts })
+
+    expect(wrapper.findAll('[data-testid^="quick-amount-"]')).toHaveLength(0)
+    wrapper.getComponent(AmountInput).vm.$emit('update:modelValue', 10)
+    await flushPromises()
+    expect(submitButton(wrapper).attributes('disabled')).toBeDefined()
+    await submitButton(wrapper).trigger('click')
+    expect(createOrder).not.toHaveBeenCalled()
+  })
+
+  it.each([15, 0, -10, NaN, Infinity])('blocks a programmatically injected non-preset amount %s', async (value) => {
+    const { wrapper } = await mountRecharge({ recharge_amounts: [20, 100] })
+    wrapper.getComponent(AmountInput).vm.$emit('update:modelValue', value)
+    await flushPromises()
+
+    expect(submitButton(wrapper).attributes('disabled')).toBeDefined()
+    await submitButton(wrapper).trigger('click')
+    expect(createOrder).not.toHaveBeenCalled()
+  })
+
+  it('filters presets by payment method ranges and blocks an amount hidden by the current range', async () => {
+    const { wrapper } = await mountRecharge({
+      recharge_amounts: [10, 50, 100, 500],
+      methods: { wxpay: { ...checkoutInfoFixture().data.methods.wxpay, single_min: 50, single_max: 200 } },
+    })
+
+    expect(wrapper.findAll('[data-testid^="quick-amount-"]').map(button => button.text())).toEqual(['50', '100'])
+    wrapper.getComponent(AmountInput).vm.$emit('update:modelValue', 10)
+    await flushPromises()
+    expect(submitButton(wrapper).attributes('disabled')).toBeDefined()
+    await submitButton(wrapper).trigger('click')
+    expect(createOrder).not.toHaveBeenCalled()
+  })
+
+  it('blocks a previously selected preset after it disappears from checkout', async () => {
+    const { wrapper, checkout } = await mountRecharge({ recharge_amounts: [20, 100] })
+    await wrapper.get('[data-testid="quick-amount-20"]').trigger('click')
+    expect(submitButton(wrapper).attributes('disabled')).toBeUndefined()
+
+    checkout.recharge_amounts = [100]
+    await flushPromises()
+    expect(wrapper.find('[data-testid="quick-amount-20"]').exists()).toBe(false)
+    expect(submitButton(wrapper).attributes('disabled')).toBeDefined()
+    await submitButton(wrapper).trigger('click')
+    expect(createOrder).not.toHaveBeenCalled()
+  })
+
+  it('keeps a discounted preset payable within the method limit and submits its original amount', async () => {
+    const { wrapper } = await mountRecharge({
+      recharge_amounts: [100],
+      recharge_bonus_mode: 'discount',
+      recharge_bonus_tiers: [{ min_amount: 100, bonus_percent: 20 }],
+      methods: { wxpay: { ...checkoutInfoFixture().data.methods.wxpay, single_max: 80 } },
+    })
+
+    const preset = wrapper.get('[data-testid="quick-amount-100"]')
+    expect(preset.get('[data-testid="quick-amount-bonus-badge"]').text()).toBe('20% OFF')
+    await preset.trigger('click')
+    expect(submitButton(wrapper).attributes('disabled')).toBeUndefined()
+    expect(submitButton(wrapper).text()).toContain('80.00')
+    await submitButton(wrapper).trigger('click')
+    await flushPromises()
+    expect(createOrder).toHaveBeenCalledTimes(1)
+    expect(createOrder).toHaveBeenCalledWith(expect.objectContaining({ amount: 100, order_type: 'balance' }))
+  })
+
+  it('excludes a preset when its fee-inclusive payment exceeds every method limit', async () => {
+    const { wrapper } = await mountRecharge({
+      recharge_amounts: [50, 100],
+      recharge_fee_rate: 1,
+      methods: { wxpay: { ...checkoutInfoFixture().data.methods.wxpay, single_max: 100 } },
+    })
+
+    expect(wrapper.find('[data-testid="quick-amount-50"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="quick-amount-100"]').exists()).toBe(false)
+    wrapper.getComponent(AmountInput).vm.$emit('update:modelValue', 100)
+    await flushPromises()
+    expect(submitButton(wrapper).attributes('disabled')).toBeDefined()
+  })
+
+  it('keeps a preset at an exact decimal fee boundary without charging an extra minor unit', async () => {
+    const { wrapper } = await mountRecharge({
+      recharge_amounts: [100],
+      recharge_fee_rate: 1.1,
+      methods: { wxpay: { ...checkoutInfoFixture().data.methods.wxpay, currency: 'USD', single_max: 101.1 } },
+    })
+
+    await wrapper.get('[data-testid="quick-amount-100"]').trigger('click')
+    expect(submitButton(wrapper).attributes('disabled')).toBeUndefined()
+    expect(submitButton(wrapper).text()).toContain('101.10')
+  })
+
+  it('keeps a discounted preset whose server-rounded payment meets the method minimum', async () => {
+    const { wrapper } = await mountRecharge({
+      recharge_amounts: [10],
+      recharge_bonus_mode: 'discount',
+      recharge_bonus_tiers: [{ min_amount: 10, bonus_percent: 0.85 }],
+      methods: { wxpay: { ...checkoutInfoFixture().data.methods.wxpay, currency: 'USD', single_min: 9.92 } },
+    })
+
+    await wrapper.get('[data-testid="quick-amount-10"]').trigger('click')
+    expect(submitButton(wrapper).attributes('disabled')).toBeUndefined()
+    expect(submitButton(wrapper).text()).toContain('9.92')
+  })
+
+  it('switches methods using each currency precision and the fee-inclusive discounted total', async () => {
+    const method = checkoutInfoFixture().data.methods.wxpay
+    const { wrapper } = await mountRecharge({
+      recharge_amounts: [100],
+      recharge_bonus_mode: 'discount',
+      recharge_bonus_tiers: [{ min_amount: 100, bonus_percent: 14.15 }],
+      recharge_fee_rate: 1,
+      methods: {
+        alipay: { ...method, currency: 'JPY', single_max: 86 },
+        wxpay: { ...method, currency: 'USD', single_max: 86.71 },
+      },
+    })
+
+    await wrapper.get('[data-testid="quick-amount-100"]').trigger('click')
+    const selector = wrapper.getComponent(PaymentMethodSelector)
+    expect(selector.props('selected')).toBe('wxpay')
+    expect(selector.props('methods')).toEqual([
+      expect.objectContaining({ type: 'alipay', available: false }),
+      expect.objectContaining({ type: 'wxpay', available: true }),
+    ])
+    expect(submitButton(wrapper).attributes('disabled')).toBeUndefined()
+    expect(submitButton(wrapper).text()).toContain('86.71')
+  })
+
+  it.each(['15', '500'])('rejects an unsigned WeChat resume amount %s outside the visible presets', async (value) => {
+    routeState.query = { wechat_resume: '1', openid: 'openid-123', amount: value }
+    const { wrapper } = await mountRecharge({ recharge_amounts: [20, 100] })
+
+    expect(routerReplace).toHaveBeenCalledWith({ path: '/purchase', query: {} })
+    expect(createOrder).not.toHaveBeenCalled()
+    expect(submitButton(wrapper).attributes('disabled')).toBeDefined()
+  })
+
+  it('resumes an approved preset after unsigned WeChat OAuth', async () => {
+    routeState.query = { wechat_resume: '1', openid: 'openid-123', amount: '20' }
+    await mountRecharge({ recharge_amounts: [20, 100] })
+
+    expect(createOrder).toHaveBeenCalledTimes(1)
+    expect(createOrder).toHaveBeenCalledWith(expect.objectContaining({
+      amount: 20,
+      order_type: 'balance',
+      openid: 'openid-123',
+    }))
+  })
+
+  it('leaves signed token-only WeChat resumes to server validation when no preset is available', async () => {
+    routeState.query = { wechat_resume: '1', wechat_resume_token: 'signed-resume-token' }
+    await mountRecharge({ recharge_amounts: [] })
+
+    expect(createOrder).toHaveBeenCalledTimes(1)
+    expect(createOrder).toHaveBeenCalledWith(expect.objectContaining({
+      amount: 0,
+      order_type: 'balance',
+      wechat_resume_token: 'signed-resume-token',
+    }))
   })
 })
 
@@ -774,24 +992,13 @@ describe('PaymentView WeChat JSAPI flow', () => {
     })
   })
 
-  it('falls back to QR flow when mobile WeChat payment is unavailable', async () => {
+  it('does not retry a signed WeChat resume as an unsigned zero-amount QR order', async () => {
     routeState.query = {
       wechat_resume: '1',
       wechat_resume_token: 'resume-token-h5',
       payment_type: 'wxpay_direct',
     }
-    createOrder
-      .mockRejectedValueOnce({ reason: 'WECHAT_H5_NOT_AUTHORIZED' })
-      .mockResolvedValueOnce({
-        order_id: 778,
-        amount: 88,
-        pay_amount: 88,
-        fee_rate: 0,
-        expires_at: '2099-01-01T00:10:00.000Z',
-        payment_type: 'wxpay',
-        qr_code: 'weixin://wxpay/bizpayurl?pr=fallback-native',
-        out_trade_no: 'sub2_qr_778',
-      })
+    createOrder.mockRejectedValueOnce({ reason: 'WECHAT_H5_NOT_AUTHORIZED' })
 
     shallowMount(PaymentView, {
       global: {
@@ -804,19 +1011,16 @@ describe('PaymentView WeChat JSAPI flow', () => {
     await flushPromises()
     await flushPromises()
 
-    expect(createOrder).toHaveBeenNthCalledWith(1, expect.objectContaining({
+    expect(createOrder).toHaveBeenCalledTimes(1)
+    expect(createOrder).toHaveBeenCalledWith(expect.objectContaining({
+      amount: 0,
       payment_type: 'wxpay',
       is_mobile: true,
       wechat_resume_token: 'resume-token-h5',
     }))
-    expect(createOrder).toHaveBeenNthCalledWith(2, expect.objectContaining({
-      payment_type: 'wxpay',
-      is_mobile: false,
-      payment_source: 'hosted_redirect',
-    }))
-    expect(showWarning).toHaveBeenCalledWith('payment.errors.mobilePaymentFallbackToQr')
-    expect(showError).not.toHaveBeenCalled()
-    expect(window.localStorage.getItem(PAYMENT_RECOVERY_STORAGE_KEY)).toContain('weixin://wxpay/bizpayurl?pr=fallback-native')
+    expect(showWarning).not.toHaveBeenCalled()
+    expect(showError).toHaveBeenCalledWith('payment.errors.wechatH5NotAuthorized payment.errors.wechatOpenInWeChatHint')
+    expect(window.localStorage.getItem(PAYMENT_RECOVERY_STORAGE_KEY)).toBeNull()
   })
 })
 

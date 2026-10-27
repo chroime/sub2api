@@ -242,6 +242,56 @@ func TestHandleGeminiCachedContentFailoverExhausted(t *testing.T) {
 	require.NotContains(t, rec.Body.String(), "bad key")
 }
 
+func TestHandleGeminiCachedContentFailoverExhaustedStreamingProtocol(t *testing.T) {
+	const upstreamBody = "{\n  \"error\": {\n    \"code\": 503,\n    \"message\": \"cache unavailable\",\n    \"status\": \"UNAVAILABLE\",\n    \"details\": [{\"reason\": \"retry_cached_account\"}]\n  }\n}"
+	for _, state := range []string{"pending ACK", "committed ACK", "admission heartbeat"} {
+		t.Run(state, func(t *testing.T) {
+			h := &GatewayHandler{cfg: gatewayACKTestConfig(5)}
+			apiKey := geminiCachedContentTestAPIKey(service.PlatformGemini)
+			c, rec := newGeminiCachedContentTestContext(http.MethodPost, "/v1beta/models/gemini-3.8-flash:streamGenerateContent?alt=sse", apiKey)
+			if state == "admission heartbeat" {
+				started := false
+				require.NoError(t, balancePrechargeWaitHeartbeat(c, &started)())
+			} else {
+				if state == "pending ACK" {
+					h.cfg = gatewayACKTestConfig(2000)
+				}
+				stop := h.startStreamingACK(c, true, time.Now(), gatewayACKTestAccount(service.PlatformGemini, true), nil)
+				t.Cleanup(stop)
+				if state == "committed ACK" {
+					require.Eventually(t, func() bool { return service.StreamingACKCommitted(c) }, time.Second, time.Millisecond)
+				}
+			}
+
+			h.handleGeminiCachedContentFailoverExhausted(c, &service.UpstreamFailoverError{
+				StatusCode: http.StatusServiceUnavailable, ResponseBody: []byte(upstreamBody), BoundUpstreamPassthrough: true,
+			})
+
+			if state == "pending ACK" {
+				require.Equal(t, http.StatusServiceUnavailable, rec.Code)
+				require.Contains(t, rec.Header().Get("Content-Type"), "application/json")
+				require.JSONEq(t, upstreamBody, rec.Body.String())
+				require.Nil(t, service.StreamingACKMs(c))
+				return
+			}
+			require.Equal(t, http.StatusOK, rec.Code)
+			require.Contains(t, rec.Header().Get("Content-Type"), "text/event-stream")
+			require.NotContains(t, rec.Body.String(), "\n\n{")
+			require.Contains(t, rec.Body.String(), "data: ")
+			for _, line := range strings.Split(rec.Body.String(), "\n") {
+				if strings.HasPrefix(line, "data: ") {
+					require.JSONEq(t, upstreamBody, strings.TrimPrefix(line, "data: "), "keep upstream details in one valid SSE data line")
+				}
+			}
+			require.True(t, service.IsResponseCommitted(c))
+			streamErr, ok := service.GetOpsStreamError(c)
+			require.True(t, ok)
+			require.Equal(t, http.StatusServiceUnavailable, streamErr.IntendedStatus)
+			require.Equal(t, "cache unavailable", streamErr.Message)
+		})
+	}
+}
+
 func TestWriteGeminiCachedContentUpstreamError_RateLimitMappedUnlessUpstreamGateway(t *testing.T) {
 	h := &GatewayHandler{}
 	apiKey := geminiCachedContentTestAPIKey(service.PlatformGemini)

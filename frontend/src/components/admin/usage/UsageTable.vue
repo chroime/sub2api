@@ -356,12 +356,14 @@
 
         <!-- 合并首字/总耗时的健康度列：左侧色条上端随首字档、下端随总耗时档，中段(40%-60%)短渐变过渡，便于纵向扫视整体健康状况 -->
         <template #cell-latency="{ row }">
-          <div class="flex items-stretch gap-2">
+          <div class="latency-cell flex items-stretch gap-2">
             <span
-              class="w-1 shrink-0 rounded-full"
+              data-testid="latency-health-bar"
+              class="latency-health-bar w-1 shrink-0 rounded-full"
               :class="displayFirstTokenMs(row) != null
                 ? ['bg-gradient-to-b from-40% to-60%', LATENCY_BAR_FROM_CLASSES[firstTokenSeverity(displayFirstTokenMs(row)!)], LATENCY_BAR_TO_CLASSES[durationSeverity(row.duration_ms ?? 0)]]
                 : LATENCY_BAR_CLASSES[durationSeverity(row.duration_ms ?? 0)]"
+              :style="latencyBarStyle(displayFirstTokenMs(row), row.duration_ms)"
               aria-hidden="true"
             ></span>
             <div class="grid grid-cols-[max-content_max-content] items-baseline gap-x-2 gap-y-0.5 text-xs">
@@ -386,12 +388,14 @@
         </template>
 
         <template #cell-real_latency="{ row }">
-          <div data-testid="real-latency" class="flex items-stretch gap-2">
+          <div data-testid="real-latency" class="latency-cell flex items-stretch gap-2">
             <span
-              class="w-1 shrink-0 rounded-full"
+              data-testid="latency-health-bar"
+              class="latency-health-bar w-1 shrink-0 rounded-full"
               :class="row.first_token_ms != null
                 ? ['bg-gradient-to-b from-40% to-60%', LATENCY_BAR_FROM_CLASSES[firstTokenSeverity(row.first_token_ms)], LATENCY_BAR_TO_CLASSES[durationSeverity(row.duration_ms ?? 0)]]
                 : LATENCY_BAR_CLASSES[durationSeverity(row.duration_ms ?? 0)]"
+              :style="latencyBarStyle(row.first_token_ms, row.duration_ms)"
               aria-hidden="true"
             ></span>
             <div class="grid grid-cols-[max-content_max-content] items-baseline gap-x-2 gap-y-0.5 text-xs">
@@ -718,6 +722,7 @@ import {
   durationSeverity,
   firstTokenSeverity,
   formatUsageOutputRate,
+  latencyBarStyle,
 } from '@/utils/latencyHealth'
 import {
   BILLING_MODE_TOKEN,
@@ -1039,3 +1044,17 @@ const hideTokenTooltip = () => {
   tokenTooltipData.value = null
 }
 </script>
+
+<style scoped>
+/* Keep the health marker visible even when a table cell has sparse or missing timing data. */
+.latency-cell {
+  min-height: 4rem;
+}
+
+.latency-health-bar {
+  display: block;
+  align-self: stretch;
+  flex: 0 0 0.25rem;
+  min-height: 4rem;
+}
+</style>

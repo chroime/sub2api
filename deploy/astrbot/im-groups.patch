@@ -1,0 +1,143 @@
+diff --git a/astrbot/dashboard/api/open_api.py b/astrbot/dashboard/api/open_api.py
+index 1262f8f7f..da129c909 100644
+--- a/astrbot/dashboard/api/open_api.py
++++ b/astrbot/dashboard/api/open_api.py
+@@ -333,3 +333,19 @@ async def list_im_bots(
+     service: OpenApiService = Depends(get_service),
+ ):
+     return ok(service.get_bots())
++
++
++@router.get("/im/groups", summary="List live QQ groups", operation_id="listImGroups")
++async def list_im_groups(
++    _auth: AuthContext = Depends(require_im_scope),
++    service: OpenApiService = Depends(get_service),
++):
++    try:
++        data = await service.get_groups()
++    except OpenApiServiceError as exc:
++        return JSONResponse(
++            error(str(exc), {"complete": False}),
++            status_code=502,
++            headers={"Cache-Control": "no-store"},
++        )
++    return JSONResponse(ok(data), headers={"Cache-Control": "no-store"})
+diff --git a/astrbot/dashboard/services/open_api_service.py b/astrbot/dashboard/services/open_api_service.py
+index 131b8e3b9..c47b3ed73 100644
+--- a/astrbot/dashboard/services/open_api_service.py
++++ b/astrbot/dashboard/services/open_api_service.py
+@@ -694,3 +694,114 @@ class OpenApiService:
+             ):
+                 bot_ids.append(platform_id)
+         return {"bot_ids": bot_ids}
++
++    async def get_groups(self) -> dict:
++        """List live QQ groups only when every running OneBot adapter succeeds.
++
++        Returns:
++            A complete group list with UMOs supported by proactive IM sending.
++
++        Raises:
++            OpenApiServiceError: No supported adapter is running, a connection
++                cannot be routed unambiguously, or the live lookup fails.
++        """
++        clients = []
++        bot_ids: set[str] = set()
++        for platform in self.platform_manager.platform_insts:
++            meta = platform.meta()
++            if meta.name != "aiocqhttp":
++                continue
++            bot_id = meta.id
++            if not isinstance(bot_id, str) or not bot_id or bot_id in bot_ids:
++                raise OpenApiServiceError("OneBot adapter has an invalid bot ID")
++            bot_ids.add(bot_id)
++            get_client = getattr(platform, "get_client", None)
++            try:
++                client = get_client() if callable(get_client) else None
++            except Exception:
++                raise OpenApiServiceError("OneBot adapter is not connected") from None
++            connections = getattr(client, "_wsr_api_clients", None)
++            if not isinstance(connections, dict) or not connections:
++                raise OpenApiServiceError(f"OneBot adapter {bot_id} is not connected")
++            if len(connections) != 1:
++                raise OpenApiServiceError(
++                    f"OneBot adapter {bot_id} has multiple OneBot connections; "
++                    "use one bot per adapter for proactive IM delivery"
++                )
++            if not callable(getattr(client, "call_action", None)):
++                raise OpenApiServiceError(f"OneBot adapter {bot_id} is not connected")
++            self_id, connection = next(iter(connections.items()))
++            if (
++                not isinstance(self_id, str)
++                or len(self_id) > 20
++                or not self_id.isascii()
++                or not self_id.isdecimal()
++                or int(self_id) <= 0
++            ):
++                raise OpenApiServiceError(
++                    f"OneBot adapter {bot_id} has an unroutable bot identity"
++                )
++            clients.append((bot_id, client, self_id, connection))
++
++        if not clients:
++            raise OpenApiServiceError("No running OneBot adapters are available")
++
++        try:
++            results = await asyncio.wait_for(
++                asyncio.gather(
++                    *(
++                        client.call_action("get_group_list", self_id=self_id)
++                        for _, client, self_id, _ in clients
++                    ),
++                    return_exceptions=True,
++                ),
++                timeout=8,
++            )
++        except asyncio.TimeoutError:
++            raise OpenApiServiceError("Live QQ group lookup timed out") from None
++        except Exception:
++            raise OpenApiServiceError("Live QQ group lookup failed") from None
++
++        groups = []
++        for (bot_id, client, self_id, connection), result in zip(clients, results):
++            connections = getattr(client, "_wsr_api_clients", None)
++            if (
++                not isinstance(connections, dict)
++                or len(connections) != 1
++                or connections.get(self_id) is not connection
++            ):
++                raise OpenApiServiceError(
++                    f"OneBot adapter {bot_id} connection changed during group lookup"
++                )
++            if isinstance(result, BaseException):
++                raise OpenApiServiceError(
++                    f"Live QQ group lookup failed for OneBot adapter {bot_id}"
++                )
++            if not isinstance(result, list):
++                raise OpenApiServiceError("OneBot returned an invalid group list")
++            for group in result:
++                group_id = group.get("group_id") if isinstance(group, dict) else None
++                group_name = (
++                    group.get("group_name") if isinstance(group, dict) else None
++                )
++                if (
++                    isinstance(group_id, bool)
++                    or not isinstance(group_id, int | str)
++                    or (isinstance(group_id, int) and not 0 < group_id <= 2**64 - 1)
++                    or (isinstance(group_id, str) and len(group_id) > 20)
++                    or not str(group_id).isascii()
++                    or not str(group_id).isdecimal()
++                    or int(group_id) <= 0
++                    or not isinstance(group_name, str)
++                    or not group_name.strip()
++                ):
++                    raise OpenApiServiceError("OneBot returned an invalid group list")
++                groups.append(
++                    {
++                        "bot_id": bot_id,
++                        "group_id": str(group_id),
++                        "group_name": group_name,
++                        "umo": f"{bot_id}:GroupMessage:{group_id}",
++                    }
++                )
++        return {"complete": True, "groups": groups}

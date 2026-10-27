@@ -1,122 +1,241 @@
+//go:build unit
+
 package handler
 
 import (
-	"encoding/json"
+	"bytes"
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
+	middleware "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
 
-func TestGeminiImageGenerationPermission(t *testing.T) {
-	tests := []struct {
-		name             string
-		body             string
-		allowImage       bool
-		wantAllowed      bool
-		wantStatus       int
-		wantErrorMessage string
-	}{
-		{
-			name:        "text-only remains allowed for a group without image permission",
-			body:        `{"generationConfig":{"responseModalities":["TEXT"]}}`,
-			allowImage:  false,
-			wantAllowed: true,
-		},
-		{
-			name:        "text and audio remain allowed for a group without image permission",
-			body:        `{"generationConfig":{"responseModalities":["TEXT","AUDIO"]}}`,
-			allowImage:  false,
-			wantAllowed: true,
-		},
-		{
-			name:             "mixed text and image is rejected when group disallows images",
-			body:             `{"generationConfig":{"responseModalities":["TEXT","IMAGE"]}}`,
-			allowImage:       false,
-			wantAllowed:      false,
-			wantStatus:       403,
-			wantErrorMessage: "Image generation is not allowed for this API key group",
-		},
-		{
-			name:             "lowercase image is rejected case-insensitively",
-			body:             `{"generationConfig":{"responseModalities":["image"]}}`,
-			allowImage:       false,
-			wantAllowed:      false,
-			wantStatus:       403,
-			wantErrorMessage: "Image generation is not allowed for this API key group",
-		},
-		{
-			name:        "image is allowed for a group with image permission",
-			body:        `{"generationConfig":{"responseModalities":["TEXT","IMAGE"]}}`,
-			allowImage:  true,
-			wantAllowed: true,
-		},
-		{
-			name:        "malformed modality field is not treated as image generation",
-			body:        `{"generationConfig":{"responseModalities":"IMAGE"}}`,
-			allowImage:  false,
-			wantAllowed: true,
-		},
-	}
+type geminiImageGateEndpoint struct {
+	name          string
+	path          string
+	body          string
+	params        gin.Params
+	forcePlatform string
+	call          func(*GatewayHandler, *gin.Context)
+}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			gin.SetMode(gin.TestMode)
-			recorder := httptest.NewRecorder()
-			c, _ := gin.CreateTestContext(recorder)
-			apiKey := &service.APIKey{Group: &service.Group{AllowImageGeneration: tt.allowImage}}
-
-			allowed := requireGeminiImageGenerationPermission(c, apiKey, []byte(tt.body))
-
-			require.Equal(t, tt.wantAllowed, allowed)
-			if tt.wantStatus == 0 {
-				require.Equal(t, http.StatusOK, recorder.Code)
-				return
-			}
-
-			require.Equal(t, tt.wantStatus, recorder.Code)
-			var response struct {
-				Error struct {
-					Code    int    `json:"code"`
-					Message string `json:"message"`
-					Status  string `json:"status"`
-				} `json:"error"`
-			}
-			require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &response))
-			require.Equal(t, tt.wantStatus, response.Error.Code)
-			require.Equal(t, tt.wantErrorMessage, response.Error.Message)
-			require.Equal(t, "PERMISSION_DENIED", response.Error.Status)
-		})
+func geminiImageGateEndpoints(model string) []geminiImageGateEndpoint {
+	return []geminiImageGateEndpoint{
+		{
+			name: "messages", path: "/v1/messages",
+			body: `{"model":"` + model + `","max_tokens":16,"messages":[{"role":"user","content":"draw a cat"}]}`,
+			call: (*GatewayHandler).Messages,
+		},
+		{
+			name: "chat completions", path: "/v1/chat/completions",
+			body: `{"model":"` + model + `","messages":[{"role":"user","content":"draw a cat"}]}`,
+			call: (*GatewayHandler).ChatCompletions,
+		},
+		{
+			name: "responses", path: "/v1/responses",
+			body: `{"model":"` + model + `","input":"draw a cat"}`,
+			call: (*GatewayHandler).Responses,
+		},
+		{
+			name: "gemini native", path: "/v1beta/models/" + model + ":generateContent",
+			body:   `{"contents":[{"role":"user","parts":[{"text":"draw a cat"}]}]}`,
+			params: gin.Params{{Key: "modelAction", Value: "/" + model + ":generateContent"}},
+			call:   (*GatewayHandler).GeminiV1BetaModels,
+		},
 	}
 }
 
-func TestGeminiImageGenerationPermissionUngroupedKeyRemainsAllowed(t *testing.T) {
+func runGeminiImageGateEndpoint(t *testing.T, ep geminiImageGateEndpoint, group *service.Group, accountPlatform string) (*httptest.ResponseRecorder, *gin.Context, *groupScopedSchedulerCache) {
+	t.Helper()
+	const accountID = int64(9411)
+	schedulerCache := &groupScopedSchedulerCache{fakeSchedulerCache: &fakeSchedulerCache{accounts: []*service.Account{{
+		ID: accountID, Platform: accountPlatform, Type: service.AccountTypeAPIKey,
+		Status: service.StatusActive, Schedulable: true, Concurrency: 1,
+		AccountGroups: []service.AccountGroup{{AccountID: accountID, GroupID: group.ID}},
+	}}}}
+	gatewayService := service.NewGatewayService(
+		nil, &groupMapRepo{fakeGroupRepo: &fakeGroupRepo{}, groups: map[int64]*service.Group{group.ID: group}},
+		nil, nil, nil, nil, nil, nil, nil,
+		service.NewSchedulerSnapshotService(schedulerCache, nil, nil, nil, nil),
+		nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+	)
+	cfg := &config.Config{RunMode: config.RunModeSimple}
+	billingCacheService := service.NewBillingCacheService(nil, nil, nil, nil, nil, nil, cfg, nil)
+	t.Cleanup(billingCacheService.Stop)
+	h := &GatewayHandler{
+		gatewayService:      gatewayService,
+		billingCacheService: billingCacheService,
+		concurrencyHelper:   NewConcurrencyHelper(service.NewConcurrencyService(&fakeConcurrencyCache{}), SSEPingFormatClaude, 0),
+		maxAccountSwitches:  1,
+		cfg:                 cfg,
+	}
+
+	groupID := group.ID
+	apiKey := &service.APIKey{
+		ID: 9420, UserID: 9430, GroupID: &groupID, Group: group, Status: service.StatusActive,
+		User: &service.User{ID: 9430, Concurrency: 10, Balance: 100},
+	}
 	recorder := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(recorder)
+	ctx := context.WithValue(context.Background(), ctxkey.Group, group)
+	req := httptest.NewRequest(http.MethodPost, ep.path, bytes.NewBufferString(ep.body)).WithContext(ctx)
+	req.Header.Set("Content-Type", "application/json")
+	c.Request = req
+	c.Params = ep.params
+	if ep.forcePlatform != "" {
+		c.Set(string(middleware.ContextKeyForcePlatform), ep.forcePlatform)
+	}
+	c.Set(string(middleware.ContextKeyAPIKey), apiKey)
+	c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{UserID: apiKey.UserID, Concurrency: 10})
 
-	require.True(t, requireGeminiImageGenerationPermission(c, &service.APIKey{}, []byte(`{"generationConfig":{"responseModalities":["IMAGE"]}}`)))
-	require.Equal(t, http.StatusOK, recorder.Code)
+	ep.call(h, c)
+	return recorder, c, schedulerCache
 }
 
-func TestGeminiImageGenerationRequestUsesImageModality(t *testing.T) {
-	tests := []struct {
+func TestGatewayHandlers_GeminiImageGenerationDisabledGroupRejectsBeforeSelection(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, platform := range []string{service.PlatformGemini, service.PlatformAntigravity} {
+		for _, ep := range geminiImageGateEndpoints("gemini-3-pro-image") {
+			if platform == service.PlatformAntigravity && ep.params != nil {
+				ep.path = "/antigravity" + ep.path
+				ep.forcePlatform = service.PlatformAntigravity
+			}
+			t.Run(platform+"/"+ep.name, func(t *testing.T) {
+				group := &service.Group{
+					ID: 9400, Hydrated: true, Platform: platform, Status: service.StatusActive,
+					AllowImageGeneration: false,
+				}
+				recorder, c, schedulerCache := runGeminiImageGateEndpoint(t, ep, group, platform)
+
+				require.Equal(t, http.StatusBadRequest, recorder.Code)
+				require.Contains(t, recorder.Body.String(), service.ImageGenerationPermissionMessage())
+				require.Equal(t, service.OpsClientBusinessLimitedReasonLocalFeatureGate, service.OpsClientBusinessLimitedReason(c))
+				_, reachedSelection := c.Get(opsAccountIDKey)
+				require.False(t, reachedSelection)
+				require.Empty(t, schedulerCache.queriedGroupIDs())
+			})
+		}
+	}
+}
+
+func TestGatewayHandlers_GeminiNativeImageModalitiesRejectBeforeSelection(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	cases := []struct {
 		name string
 		body string
-		want bool
 	}{
-		{name: "missing generation config", body: `{}`, want: false},
-		{name: "trimmed uppercase image", body: `{"generationConfig":{"responseModalities":[" text "," IMAGE "]}}`, want: true},
-		{name: "text only", body: `{"generationConfig":{"responseModalities":["TEXT"]}}`, want: false},
-		{name: "invalid json", body: `{`, want: false},
-		{name: "non-array modalities", body: `{"generationConfig":{"responseModalities":null}}`, want: false},
+		{name: "camelCase", body: `{"generationConfig":{"responseModalities":["TEXT","IMAGE"]}}`},
+		{name: "trimmed lowercase", body: `{"generationConfig":{"responseModalities":["text"," image "]}}`},
+		{name: "snake_case", body: `{"generation_config":{"response_modalities":["IMAGE"]}}`},
+		{name: "mixed field spellings", body: `{"generationConfig":{"response_modalities":["IMAGE"]}}`},
+		{name: "integer enum", body: `{"generation_config":{"response_modalities":[1,2]}}`},
+		{name: "scalar modality", body: `{"generationConfig":{"responseModalities":"IMAGE"}}`},
+		{name: "duplicate config", body: `{"generationConfig":{"responseModalities":["IMAGE"]},"generationConfig":{"responseModalities":["TEXT"]}}`},
+		{name: "duplicate modalities", body: `{"generationConfig":{"responseModalities":["IMAGE"],"responseModalities":["TEXT"]}}`},
 	}
+	for _, platform := range []string{service.PlatformGemini, service.PlatformAntigravity} {
+		for _, tc := range cases {
+			t.Run(platform+"/"+tc.name, func(t *testing.T) {
+				ep := geminiImageGateEndpoints("gemini-3.7-flash")[3]
+				ep.body = tc.body
+				if platform == service.PlatformAntigravity {
+					ep.path = "/antigravity" + ep.path
+					ep.forcePlatform = platform
+				}
+				group := &service.Group{
+					ID: 9403, Hydrated: true, Platform: platform, Status: service.StatusActive,
+					AllowImageGeneration: false,
+				}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			require.Equal(t, tt.want, geminiRequestUsesImageModality([]byte(tt.body)))
+				recorder, c, schedulerCache := runGeminiImageGateEndpoint(t, ep, group, platform)
+
+				require.Equal(t, http.StatusBadRequest, recorder.Code)
+				require.Contains(t, recorder.Body.String(), service.ImageGenerationPermissionMessage())
+				require.Equal(t, service.OpsClientBusinessLimitedReasonLocalFeatureGate, service.OpsClientBusinessLimitedReason(c))
+				_, reachedSelection := c.Get(opsAccountIDKey)
+				require.False(t, reachedSelection)
+				require.Empty(t, schedulerCache.queriedGroupIDs())
+			})
+		}
+	}
+}
+
+func TestGeminiImageGenerationRejected_PreservesNonImageAndUngroupedRequests(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	disabledKey := &service.APIKey{Group: &service.Group{Platform: service.PlatformGemini}}
+	imageBody := `{"generationConfig":{"responseModalities":["TEXT","IMAGE"]}}`
+	cases := []struct {
+		name   string
+		apiKey *service.APIKey
+		body   string
+	}{
+		{name: "text only", apiKey: disabledKey, body: `{"generationConfig":{"responseModalities":["TEXT"]}}`},
+		{name: "text and audio", apiKey: disabledKey, body: `{"generationConfig":{"responseModalities":["TEXT","AUDIO"]}}`},
+		{name: "no generation config", apiKey: disabledKey, body: `{}`},
+		{name: "invalid json", apiKey: disabledKey, body: `{`},
+		{name: "null modalities", apiKey: disabledKey, body: `{"generationConfig":{"responseModalities":null}}`},
+		{name: "nil api key", apiKey: nil, body: imageBody},
+		{name: "ungrouped key", apiKey: &service.APIKey{}, body: imageBody},
+		{name: "enabled group", apiKey: &service.APIKey{Group: &service.Group{Platform: service.PlatformGemini, AllowImageGeneration: true}}, body: imageBody},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(recorder)
+
+			require.False(t, geminiImageGenerationRejected(c, tc.apiKey, []byte(tc.body), "gemini-3.7-flash"))
+			require.False(t, c.Writer.Written())
+			require.False(t, service.HasOpsClientBusinessLimited(c))
 		})
+	}
+}
+
+func TestGatewayHandlers_GeminiImageGenerationGateSkipsGroupsWithoutTheSwitch(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	// Anthropic 分组在后台不展示生图开关，混合调度 Antigravity 账号时不受门禁约束。
+	for _, ep := range geminiImageGateEndpoints("gemini-3-pro-image")[:3] {
+		t.Run(ep.name, func(t *testing.T) {
+			group := &service.Group{
+				ID: 9401, Hydrated: true, Platform: service.PlatformAnthropic, Status: service.StatusActive,
+				AllowImageGeneration: false,
+			}
+			recorder, _, schedulerCache := runGeminiImageGateEndpoint(t, ep, group, service.PlatformAnthropic)
+
+			require.NotContains(t, recorder.Body.String(), service.ImageGenerationPermissionMessage())
+			require.NotEmpty(t, schedulerCache.queriedGroupIDs())
+		})
+	}
+}
+
+func TestGatewayHandlers_GeminiImageGenerationGateAllowsTextModelsAndEnabledGroups(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	cases := []struct {
+		name  string
+		model string
+		allow bool
+	}{
+		{name: "text model in disabled group", model: "gemini-3.7-flash", allow: false},
+		{name: "image model in enabled group", model: "gemini-3-pro-image", allow: true},
+	}
+	for _, tc := range cases {
+		for _, ep := range geminiImageGateEndpoints(tc.model)[:3] {
+			t.Run(tc.name+"/"+ep.name, func(t *testing.T) {
+				group := &service.Group{
+					ID: 9402, Hydrated: true, Platform: service.PlatformGemini, Status: service.StatusActive,
+					AllowImageGeneration: tc.allow,
+				}
+				recorder, _, schedulerCache := runGeminiImageGateEndpoint(t, ep, group, service.PlatformGemini)
+
+				require.NotContains(t, recorder.Body.String(), service.ImageGenerationPermissionMessage())
+				require.NotEmpty(t, schedulerCache.queriedGroupIDs())
+			})
+		}
 	}
 }

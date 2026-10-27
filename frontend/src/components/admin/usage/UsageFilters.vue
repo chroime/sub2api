@@ -186,8 +186,15 @@
         </button>
         <slot name="after-reset" />
         <template v-if="mode === 'usage'">
-          <button type="button" @click="$emit('cleanup')" class="btn btn-danger">
-            {{ t('admin.usage.cleanup.button') }}
+          <button
+            type="button"
+            data-testid="usage-cleanup"
+            class="btn btn-danger bg-red-500 text-white whitespace-nowrap"
+            :aria-label="t('admin.usage.cleanup.button')"
+            @click="$emit('cleanup')"
+          >
+            <Icon name="trash" size="sm" aria-hidden="true" focusable="false" />
+            <span>{{ t('admin.usage.cleanup.button') }}</span>
           </button>
           <button type="button" @click="$emit('export')" :disabled="exporting" class="btn btn-primary">
             {{ t('usage.exportExcel') }}
@@ -203,6 +210,7 @@ import { ref, onMounted, onUnmounted, toRef, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { adminAPI } from '@/api/admin'
 import Select, { type SelectOption } from '@/components/common/Select.vue'
+import Icon from '@/components/icons/Icon.vue'
 import { COMMON_ERROR_STATUS_CODES } from '@/utils/errorBadges'
 import type { SimpleApiKey, SimpleUser } from '@/api/admin/usage'
 

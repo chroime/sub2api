@@ -34,6 +34,7 @@ type UserHandler struct {
 	totpService           *service.TotpService                // 角色提升为管理员的 step-up 门控
 	userService           *service.UserService
 	settingService        *service.SettingService // step-up 功能开关
+	bulkEmailService      userBulkEmailService
 }
 
 // NewUserHandler creates a new admin user handler

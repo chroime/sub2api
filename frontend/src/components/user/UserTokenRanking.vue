@@ -118,9 +118,9 @@ const medalClasses = [
   'bg-orange-100 dark:bg-orange-500/20',
 ]
 const podiumClasses = [
-  'border-amber-200 bg-gradient-to-br from-amber-50 to-yellow-100 text-amber-950 dark:border-amber-800/60 dark:from-amber-950/40 dark:to-yellow-950/30 dark:text-amber-100',
-  'border-slate-200 bg-gradient-to-br from-slate-50 to-gray-100 text-slate-900 dark:border-slate-700 dark:from-slate-900/60 dark:to-gray-900/40 dark:text-slate-100',
-  'border-orange-200 bg-gradient-to-br from-orange-50 to-amber-100 text-orange-950 dark:border-orange-800/60 dark:from-orange-950/40 dark:to-amber-950/30 dark:text-orange-100',
+  'podium-gold border-amber-200 text-amber-950 dark:border-amber-800/60 dark:text-amber-100',
+  'podium-silver border-slate-200 text-slate-900 dark:border-slate-700 dark:text-slate-100',
+  'podium-bronze border-orange-200 text-orange-950 dark:border-orange-800/60 dark:text-orange-100',
 ]
 
 const period = ref<TokenRankingPeriod>('today')
@@ -165,3 +165,36 @@ onMounted(() => {
 
 defineExpose({ load })
 </script>
+
+<style scoped>
+/* Keep podium colors independent of shared gradient custom properties. */
+.podium-gold {
+  background-color: #fffbeb;
+  background-image: linear-gradient(135deg, #fffbeb, #fef9c3);
+}
+
+.podium-silver {
+  background-color: #f8fafc;
+  background-image: linear-gradient(135deg, #f8fafc, #f3f4f6);
+}
+
+.podium-bronze {
+  background-color: #fff7ed;
+  background-image: linear-gradient(135deg, #fff7ed, #fef3c7);
+}
+
+.dark .podium-gold {
+  background-color: #1c1917;
+  background-image: linear-gradient(135deg, rgb(69 26 3 / 40%), rgb(66 32 6 / 30%));
+}
+
+.dark .podium-silver {
+  background-color: #0f172a;
+  background-image: linear-gradient(135deg, rgb(15 23 42 / 60%), rgb(17 24 39 / 40%));
+}
+
+.dark .podium-bronze {
+  background-color: #1c1917;
+  background-image: linear-gradient(135deg, rgb(67 20 7 / 40%), rgb(69 26 3 / 30%));
+}
+</style>

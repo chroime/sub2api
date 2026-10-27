@@ -209,6 +209,23 @@ describe('admin UsersView', () => {
     vi.useRealTimers()
   })
 
+  it('opens bulk email with the selected users while keeping all-user sending explicitly selectable', async () => {
+    const wrapper = mountBulkDeleteView()
+    await flushPromises()
+
+    await wrapper.get('[data-test="select-42"]').trigger('click')
+    await wrapper.get('[data-test="bulk-email-users"]').trigger('click')
+
+    expect(wrapper.get('[data-test="scope-selected"]').attributes('disabled')).toBeUndefined()
+    expect(wrapper.get('[data-test="scope-selected"]').element).toHaveProperty('checked', true)
+    expect(wrapper.get('[data-test="scope-all"]').element).toHaveProperty('checked', false)
+    expect(wrapper.text()).toContain('admin.users.bulkEmail.selected:1')
+    expect(wrapper.get('[data-test="send-email"]').attributes('disabled')).toBeDefined()
+    await wrapper.get('[data-test="close-email"]').trigger('click')
+    expect(wrapper.get('[data-test="selected-keys"]').text()).toBe('42')
+    wrapper.unmount()
+  })
+
   it('cancels bulk deletion without deleting or clearing selected users', async () => {
     const wrapper = mountBulkDeleteView()
     await flushPromises()

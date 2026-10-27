@@ -2,13 +2,22 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import test from 'node:test';
-import { BrowserError, BrowserRuntime, launchOptions, validateStart, cookieCandidates } from './runtime.mjs';
+import { BrowserError, BrowserRuntime, SSO_MAX_CLICKS, SSO_RECLICK_MS, SSO_SETTLE_MS, launchOptions, validateStart, cookieCandidates } from './runtime.mjs';
 import { LoginCapture } from './contract.mjs';
 
 const input = {
   base_url: 'https://upstream.example', platform: 'sub2api', username: '', password: '',
   executable_path: process.execPath, profile_dir: path.resolve('temporary-profile'),
   proxy_server: 'http://127.0.0.1:3128', proxy_username: 'job', proxy_password: 'random-secret'
+};
+
+const ssoInput = {
+  base_url: 'https://accounts.x.ai', platform: 'grok-sso', username: '', password: '',
+  sso_token: 'ephemeral-sso', user_code: 'ABCD-EFGH',
+  verification_url: 'https://auth.x.ai/oauth2/device/complete?user_code=ABCD-EFGH',
+  consent_url: 'https://auth.x.ai/oauth2/device/consent',
+  executable_path: input.executable_path, profile_dir: input.profile_dir,
+  proxy_server: input.proxy_server, proxy_username: input.proxy_username, proxy_password: input.proxy_password
 };
 
 test('launch config keeps the sandbox and guarded proxy and never overrides browser identity', () => {
@@ -43,6 +52,83 @@ test('runtime only accepts a local authenticated guard, explicit browser and abs
     { proxy_server: 'http://user:pass@127.0.0.1:3128' }, { proxy_password: '' },
     { executable_path: 'chromium' }, { profile_dir: 'relative' }, { arbitrary: true } ])
     assert.equal(validateStart({ ...input, ...override }), false);
+});
+
+test('Grok SSO keeps browser challenge capabilities enabled', () => {
+  assert.equal(validateStart(ssoInput), true);
+  const options = launchOptions(ssoInput);
+  assert.equal(options.serviceWorkers, 'allow');
+  assert.deepEqual(options.ignoreDefaultArgs, ['--enable-automation']);
+  assert.ok(options.args.includes('--disable-blink-features=AutomationControlled'));
+  assert.ok(!options.args.some((arg) => arg.includes('WebTransport') || arg === '--disable-quic'));
+  assert.equal(validateStart({ ...ssoInput, cookies: [{ name: 'session', value: 'session-cookie', url: 'https://auth.x.ai/' }] }), true);
+  assert.equal(validateStart({ ...ssoInput, cookies: [{ name: 'session', value: 'secret', url: 'https://evil.example/' }] }), false);
+});
+
+test('Grok SSO browser carries consent cookies and opens the consent page', async () => {
+  const runtime = new BrowserRuntime();
+  const added = [];
+  const opened = [];
+  runtime.context = { addCookies: async (cookies) => { added.push(...cookies); } };
+  runtime.runGrokSSO = async (url) => { opened.push(url); runtime.ssoApproved = true; };
+  const input = {
+    ...ssoInput,
+    cookies: [{ name: 'session', value: 'session-cookie', url: 'https://auth.x.ai/' }]
+  };
+  await runtime.startGrokSSO(input);
+  await runtime.ssoTask;
+  assert.deepEqual(added, [
+    { name: 'session', value: 'session-cookie', url: 'https://auth.x.ai/', httpOnly: true, secure: true }
+  ]);
+  assert.deepEqual(opened, [input.consent_url]);
+});
+
+test('headed Linux launch uses software compositing so GPU-less Xvfb hosts can start', () => {
+  const previous = process.env.GOVERNANCE_BROWSER_HEADLESS;
+  try {
+    delete process.env.GOVERNANCE_BROWSER_HEADLESS;
+    const headed = launchOptions(ssoInput).args;
+    assert.equal(headed.includes('--disable-gpu'), process.platform === 'linux');
+    assert.ok(!headed.some((arg) => arg.includes('no-sandbox')));
+    process.env.GOVERNANCE_BROWSER_HEADLESS = 'true';
+    assert.ok(!launchOptions(ssoInput).args.includes('--disable-gpu'), 'headless keeps its default GPU path');
+  } finally {
+    if (previous === undefined) delete process.env.GOVERNANCE_BROWSER_HEADLESS;
+    else process.env.GOVERNANCE_BROWSER_HEADLESS = previous;
+  }
+});
+
+function ssoClickFixture(point) {
+  const runtime = new BrowserRuntime();
+  const clicks = [];
+  runtime.page = {
+    evaluate: async () => point,
+    mouse: { move: async () => {}, click: async (...args) => { clicks.push(args); } }
+  };
+  return { runtime, clicks };
+}
+
+test('Grok SSO approval waits for the control to settle, then uses a trusted mouse click', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: 1_000_000 });
+  const { runtime, clicks } = ssoClickFixture({ x: 321, y: 123, key: 'https://auth.x.ai/device/consent|Allow', ready: true });
+  await runtime.grokSSOClickAllow();
+  assert.equal(clicks.length, 0, 'first sighting only starts the settle timer');
+  t.mock.timers.tick(SSO_SETTLE_MS);
+  await runtime.grokSSOClickAllow();
+  await runtime.grokSSOClickAllow();
+  assert.deepEqual(clicks, [[321, 123, { delay: 60 }]], 'no immediate double click');
+  t.mock.timers.tick(SSO_RECLICK_MS);
+  await runtime.grokSSOClickAllow();
+  assert.equal(clicks.length, 2, 'a stuck page is clicked again after the retry pause');
+  for (let i = 0; i < 5; i++) { t.mock.timers.tick(SSO_RECLICK_MS); await runtime.grokSSOClickAllow(); }
+  assert.equal(clicks.length, SSO_MAX_CLICKS, 'retries are bounded');
+});
+
+test('Grok SSO approval does not click before the document finishes loading', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: 1_000_000 });
+  const { runtime, clicks } = ssoClickFixture({ x: 1, y: 1, key: 'k', ready: false });
+  for (let i = 0; i < 3; i++) { await runtime.grokSSOClickAllow(); t.mock.timers.tick(SSO_SETTLE_MS); }
+  assert.equal(clicks.length, 0);
 });
 
 test('cookies never cross host boundaries and legacy session must match observed login header', () => {

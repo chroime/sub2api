@@ -15,6 +15,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -56,15 +57,22 @@ func ConfigureTransportProxy(transport *http.Transport, proxyURL *url.URL) error
 	if proxyURL == nil {
 		return nil
 	}
+	forward, err := NewProxyForwardDialer()
+	if err != nil {
+		return err
+	}
 
 	scheme := strings.ToLower(proxyURL.Scheme)
 	switch scheme {
 	case "http", "https":
 		transport.Proxy = http.ProxyURL(proxyURL)
+		if strings.TrimSpace(os.Getenv(ForwardProxyEnv)) != "" {
+			transport.DialContext = forward.DialContext
+		}
 		return nil
 
 	case "socks5", "socks5h":
-		dialer, err := proxy.FromURL(proxyURL, socks5ForwardDialer)
+		dialer, err := proxy.FromURL(proxyURL, forward)
 		if err != nil {
 			return fmt.Errorf("create socks5 dialer: %w", err)
 		}

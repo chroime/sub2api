@@ -226,6 +226,54 @@ func TestCollectBalanceNotifyRecipients_Empty(t *testing.T) {
 	require.Empty(t, s.collectBalanceNotifyRecipients(u))
 }
 
+func TestCollectBalanceNotifyRecipients_FallsBackToRegisteredEmail(t *testing.T) {
+	s := &BalanceNotifyService{}
+	u := &User{
+		Email: "  registered@example.com  ",
+		BalanceNotifyExtraEmails: []NotifyEmailEntry{
+			{Email: "pending@example.com", Verified: false},
+			{Email: "disabled@example.com", Verified: true, Disabled: true},
+		},
+	}
+	require.Equal(t, []string{"registered@example.com"}, s.collectBalanceNotifyRecipients(u))
+}
+
+func TestCollectBalanceNotifyRecipients_PrefersVerifiedExtraEmails(t *testing.T) {
+	s := &BalanceNotifyService{}
+	u := &User{
+		Email: "registered@example.com",
+		BalanceNotifyExtraEmails: []NotifyEmailEntry{
+			{Email: "extra@example.com", Verified: true},
+		},
+	}
+	require.Equal(t, []string{"extra@example.com"}, s.collectBalanceNotifyRecipients(u))
+}
+
+func TestCollectBalanceNotifyRecipients_RejectsPlaceholderOrInvalidRegisteredEmail(t *testing.T) {
+	s := &BalanceNotifyService{}
+	for _, email := range []string{
+		"user" + LinuxDoConnectSyntheticEmailDomain,
+		"user" + OIDCConnectSyntheticEmailDomain,
+		"user" + WeChatConnectSyntheticEmailDomain,
+		"user" + DingTalkConnectSyntheticEmailDomain,
+		"user@CUSTOM.INVALID", "user@invalid", "user@localhost", "user@service.localhost",
+		"not-an-email", "Name <user@example.com>", "user@example.com\r\nBcc: other@example.com",
+	} {
+		t.Run(email, func(t *testing.T) {
+			require.Empty(t, s.collectBalanceNotifyRecipients(&User{Email: email}))
+		})
+	}
+}
+
+func TestCollectBalanceNotifyRecipients_PlaceholderAccountCanUseVerifiedExtraEmail(t *testing.T) {
+	s := &BalanceNotifyService{}
+	user := &User{
+		Email:                    "user" + OIDCConnectSyntheticEmailDomain,
+		BalanceNotifyExtraEmails: []NotifyEmailEntry{{Email: "real@example.com", Verified: true}},
+	}
+	require.Equal(t, []string{"real@example.com"}, s.collectBalanceNotifyRecipients(user))
+}
+
 func TestCollectBalanceNotifyRecipients_FiltersDisabledAndUnverified(t *testing.T) {
 	s := &BalanceNotifyService{}
 	u := &User{

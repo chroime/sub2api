@@ -28,6 +28,13 @@ export const SMART_OPERATIONS_SECTIONS = [
     icon: 'beaker',
   },
   {
+    id: 'account-quality',
+    path: '/admin/upstream-governance/account-quality',
+    labelKey: 'governance.smartOperations.sections.accountQuality',
+    descriptionKey: 'governance.smartOperations.descriptions.accountQuality',
+    icon: 'shield',
+  },
+  {
     id: 'monitor',
     path: '/admin/upstream-governance/monitor',
     labelKey: 'governance.smartOperations.sections.monitor',
@@ -40,6 +47,20 @@ export const SMART_OPERATIONS_SECTIONS = [
     labelKey: 'governance.smartOperations.sections.history',
     descriptionKey: 'governance.smartOperations.descriptions.history',
     icon: 'clock',
+  },
+  {
+    id: 'notifications',
+    path: '/admin/upstream-governance/notifications',
+    labelKey: 'governance.smartOperations.sections.notifications',
+    descriptionKey: 'governance.smartOperations.descriptions.notifications',
+    icon: 'bell',
+  },
+  {
+    id: 'settings',
+    path: '/admin/upstream-governance/settings',
+    labelKey: 'governance.smartOperations.sections.settings',
+    descriptionKey: 'governance.smartOperations.descriptions.settings',
+    icon: 'cog',
   },
 ] as const
 

@@ -139,7 +139,12 @@ func (s *PaymentService) validateOrderInput(ctx context.Context, req CreateOrder
 		return nil, infraerrors.BadRequest("INVALID_AMOUNT", "amount out of range").
 			WithMetadata(map[string]string{"min": fmt.Sprintf("%.2f", cfg.MinAmount), "max": fmt.Sprintf("%.2f", cfg.MaxAmount)})
 	}
-	return nil, nil
+	for _, amount := range cfg.RechargeAmounts() {
+		if req.Amount == amount {
+			return nil, nil
+		}
+	}
+	return nil, infraerrors.BadRequest("INVALID_AMOUNT", "amount must be one of the available recharge denominations")
 }
 
 func (s *PaymentService) validateSubOrder(ctx context.Context, req CreateOrderRequest) (*dbent.SubscriptionPlan, error) {

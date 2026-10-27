@@ -42,7 +42,7 @@
         <div v-if="dashboard.pelican_works.length" class="grid grid-cols-1 items-start gap-5 md:grid-cols-2 lg:grid-cols-4" data-test="pelican-work-grid">
           <article v-for="work in dashboard.pelican_works" :key="work.id" class="group flex h-[620px] min-w-0 flex-col overflow-hidden rounded-[1.35rem] border border-gray-200/90 bg-white shadow-sm ring-1 ring-black/[0.02] transition duration-300 hover:-translate-y-0.5 hover:shadow-lg dark:border-dark-700 dark:bg-dark-800 dark:ring-white/[0.03]" data-test="pelican-work-card">
             <div class="iq-pelican-preview relative h-[420px] shrink-0 overflow-hidden bg-slate-100 dark:bg-dark-900" data-test="pelican-work-preview">
-              <iframe :key="`${work.id}:${replayNonce[work.id] || 0}`" :srcdoc="preview(work.html, work.id)" :title="`${t('iqDetection.pelicanTitle')} ${work.model}`" :data-pelican-preview-id="work.id" :style="previewFrameStyle(work.id)" data-test="pelican-work-preview-frame" sandbox="allow-scripts" scrolling="no" referrerpolicy="no-referrer" class="pointer-events-none absolute left-1/2 top-0 block w-full select-none border-0" />
+              <iframe :key="`${work.id}:${replayNonce[work.id] || 0}`" :srcdoc="preview(work.html, work.id, 'card')" :title="`${t('iqDetection.pelicanTitle')} ${work.model}`" :data-pelican-preview-id="work.id" data-pelican-preview-surface="card" :style="previewFrameStyle(work.id)" data-test="pelican-work-preview-frame" sandbox="allow-scripts" scrolling="no" referrerpolicy="no-referrer" class="absolute left-1/2 top-0 block w-full select-none border-0" />
               <div class="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/25 via-black/5 to-transparent" />
               <button type="button" class="absolute bottom-3 right-3 inline-flex items-center gap-1.5 rounded-full bg-white/95 px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-lg ring-1 ring-black/5 transition hover:bg-white dark:bg-dark-800/95 dark:text-dark-100 dark:ring-white/10 dark:hover:bg-dark-800" @click="replay(work.id)"><Icon name="play" size="xs" />{{ t('iqDetection.replay') }}</button>
             </div>
@@ -73,8 +73,8 @@
         <div v-else class="rounded-xl border border-dashed border-gray-300 bg-white px-5 py-8 text-center text-sm text-gray-500 dark:border-dark-600 dark:bg-dark-800">{{ t('iqDetection.emptyPelican') }}</div>
       </section>
       <BaseDialog v-if="selectedWork" :show="true" :title="`${t('iqDetection.pelicanTitle')} · ${selectedWork.model}`" width="wide" @close="selectedWork = null">
-        <div class="aspect-[6/5] min-h-[24rem] overflow-hidden rounded-xl bg-slate-50 dark:bg-dark-900">
-          <iframe :srcdoc="preview(selectedWork.html, selectedWork.id)" :title="selectedWork.model" :data-pelican-preview-id="selectedWork.id" sandbox="allow-scripts" scrolling="no" referrerpolicy="no-referrer" class="pointer-events-none block h-full w-full select-none border-0" />
+        <div ref="dialogPreviewRef" class="relative aspect-[6/5] min-h-[24rem] overflow-hidden rounded-xl bg-slate-50 dark:bg-dark-900" data-test="pelican-work-dialog-preview">
+          <iframe :srcdoc="preview(selectedWork.html, selectedWork.id, 'dialog')" :title="selectedWork.model" :data-pelican-preview-id="selectedWork.id" data-pelican-preview-surface="dialog" :style="previewDialogFrameStyle(selectedWork.id)" data-test="pelican-work-dialog-frame" sandbox="allow-scripts" scrolling="no" referrerpolicy="no-referrer" class="absolute left-1/2 top-0 block select-none border-0" />
         </div>
       </BaseDialog>
     </template>
@@ -83,7 +83,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from '@/components/icons/Icon.vue'
 import AppLayout from '@/components/layout/AppLayout.vue'
@@ -92,21 +92,27 @@ import userAPI, { type IQDashboard } from '@/api/user'
 import { modelPreviewDocument, modelPreviewCSP } from '@/views/admin/upstream-governance/model-preview'
 
 const { t } = useI18n()
+type PreviewSurface = 'card' | 'dialog'
+type PreviewMetric = { width: number; height: number }
 const loading = ref(true)
 const error = ref('')
 const dashboard = ref<IQDashboard>({ pelican_works: [], pelican_page: 1, pelican_page_size: 8, pelican_has_more: false, timeline: [], window_hours: 24, generated_at: '' })
 const replayNonce = ref<Record<string, number>>({})
-const previewMetrics = ref<Record<string, { height: number }>>({})
+const previewMetrics = ref<Record<string, Partial<Record<PreviewSurface, PreviewMetric>>>>({})
 const pelicanLoading = ref(false)
 const selectedWork = ref<IQDashboard['pelican_works'][number] | null>(null)
+const dialogPreviewRef = ref<HTMLElement | null>(null)
+const dialogPreviewViewport = ref({ width: 0, height: 0 })
+let dialogPreviewObserver: ResizeObserver | null = null
 const pelicanPage = computed(() => dashboard.value.pelican_page || 1)
 const pelicanPreviewHeight = 420
 const maxPelicanContentHeight = 2400
 const pelicanPreviewStyle = '<style data-pelican-preview-style>html,body{width:100%!important;min-height:0!important;height:auto!important;max-height:none!important;margin:0!important;overflow:hidden!important;overscroll-behavior:none!important;scrollbar-width:none!important}html::-webkit-scrollbar,body::-webkit-scrollbar{display:none!important;width:0!important;height:0!important}*,*::before,*::after{box-sizing:border-box!important}body>*{max-width:100%!important;min-height:0!important;height:auto!important;max-height:none!important}svg,canvas,img,video{max-width:100%!important;max-height:none!important}</style>'
 
-function pelicanPreviewScript(id: string) {
+function pelicanPreviewScript(id: string, surface: PreviewSurface) {
   const serializedID = JSON.stringify(id)
-  return `<script data-pelican-preview-size>(function(){const id=${serializedID};let raf=0,last='';const send=function(){raf=0;const root=document.documentElement,body=document.body;if(!root)return;const width=Math.max(root.scrollWidth||0,root.clientWidth||0,body?.scrollWidth||0);const height=Math.ceil(Math.max(root.scrollHeight||0,root.offsetHeight||0,body?.scrollHeight||0,body?.offsetHeight||0));if(!width||!height)return;const key=width+':'+height;if(key===last)return;last=key;window.parent.postMessage({type:'pelican-preview-size',id,width,height},'*')};const schedule=function(){if(!raf)raf=window.requestAnimationFrame(send)};const start=function(){schedule();if(window.ResizeObserver){const observer=new ResizeObserver(schedule);observer.observe(document.documentElement);if(document.body)observer.observe(document.body)}if(window.MutationObserver){new MutationObserver(schedule).observe(document.documentElement,{childList:true,subtree:true})}window.addEventListener('load',schedule,{once:true});window.setTimeout(schedule,80);window.setTimeout(schedule,300)};if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start()})();<\/script>`
+  const serializedSurface = JSON.stringify(surface)
+  return `<script data-pelican-preview-size>(function(){const id=${serializedID},surface=${serializedSurface};let raf=0,last='';const send=function(){raf=0;const root=document.documentElement,body=document.body;if(!root)return;const width=Math.max(root.scrollWidth||0,root.clientWidth||0,body?.scrollWidth||0);const height=Math.ceil(Math.max(root.scrollHeight||0,root.offsetHeight||0,body?.scrollHeight||0,body?.offsetHeight||0));if(!width||!height)return;const key=width+':'+height;if(key===last)return;last=key;window.parent.postMessage({type:'pelican-preview-size',id,surface,width,height},'*')};const forwardWheel=function(event){window.parent.postMessage({type:'pelican-preview-wheel',id,deltaX:Number(event.deltaX)||0,deltaY:Number(event.deltaY)||0},'*')};const schedule=function(){if(!raf)raf=window.requestAnimationFrame(send)};const start=function(){schedule();window.addEventListener('wheel',forwardWheel,{passive:true});if(window.ResizeObserver){const observer=new ResizeObserver(schedule);observer.observe(document.documentElement);if(document.body)observer.observe(document.body)}if(window.MutationObserver){new MutationObserver(schedule).observe(document.documentElement,{childList:true,subtree:true})}window.addEventListener('load',schedule,{once:true});window.setTimeout(schedule,80);window.setTimeout(schedule,300)};if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start()})();<\/script>`
 }
 
 async function fetchDashboard(page = 1) {
@@ -141,25 +147,56 @@ function effortLabel(value: string) { return value?.trim() || '—' }
 function timelineClass(status: string) { return status === 'fail' ? 'bg-rose-500' : 'bg-emerald-500' }
 function timelineLabel(status: string) { return status === 'fail' ? t('iqDetection.fail') : t('iqDetection.pass') }
 function previewFrameStyle(id: string) {
-  const measuredHeight = previewMetrics.value[id]?.height
+  const measuredHeight = previewMetrics.value[id]?.card?.height
   if (!measuredHeight) return { height: '100%', transform: 'translateX(-50%) scale(1)', transformOrigin: 'top center' }
   const scale = Math.min(1, pelicanPreviewHeight / measuredHeight)
   return { height: `${measuredHeight}px`, transform: `translateX(-50%) scale(${scale})`, transformOrigin: 'top center' }
 }
+function previewDialogFrameStyle(id: string) {
+  const metric = previewMetrics.value[id]?.dialog
+  const viewport = dialogPreviewViewport.value
+  if (!metric || !viewport.width || !viewport.height) {
+    return { height: '100%', width: '100%', transform: 'translateX(-50%) scale(1)', transformOrigin: 'top center' }
+  }
+  const scale = Math.min(viewport.width / metric.width, viewport.height / metric.height)
+  return {
+    width: `${metric.width}px`,
+    height: `${metric.height}px`,
+    transform: `translateX(-50%) scale(${scale})`,
+    transformOrigin: 'top center',
+  }
+}
 function handlePreviewMessage(event: MessageEvent) {
   const data = event.data
-  if (!data || data.type !== 'pelican-preview-size' || typeof data.id !== 'string') return
+  if (!data || typeof data.id !== 'string' || !['pelican-preview-size', 'pelican-preview-wheel'].includes(data.type)) return
   if (!dashboard.value.pelican_works.some((work) => work.id === data.id)) return
   const frames = Array.from(document.querySelectorAll<HTMLIFrameElement>('iframe[data-pelican-preview-id]'))
-  if (frames.length && event.source != null && !frames.some((frame) => frame.dataset.pelicanPreviewId === data.id && frame.contentWindow === event.source)) return
+  const sourceFrame = frames.find((frame) => frame.dataset.pelicanPreviewId === data.id && frame.contentWindow === event.source)
+  if (frames.length && event.source != null && !sourceFrame) return
+  if (data.type === 'pelican-preview-wheel') {
+    const deltaX = Number(data.deltaX)
+    const deltaY = Number(data.deltaY)
+    if (!Number.isFinite(deltaX) || !Number.isFinite(deltaY) || Math.abs(deltaX) > 2000 || Math.abs(deltaY) > 2000) return
+    window.scrollBy({ left: deltaX, top: deltaY, behavior: 'auto' })
+    return
+  }
+  const surface: PreviewSurface = data.surface === 'dialog' ? 'dialog' : 'card'
+  const measuredWidth = Number(data.width)
   const measuredHeight = Number(data.height)
-  if (!Number.isFinite(measuredHeight) || measuredHeight <= 0) return
+  if (!Number.isFinite(measuredWidth) || measuredWidth <= 0 || !Number.isFinite(measuredHeight) || measuredHeight <= 0) return
+  const width = Math.ceil(measuredWidth)
   const height = Math.min(maxPelicanContentHeight, Math.ceil(measuredHeight))
-  if (previewMetrics.value[data.id]?.height !== height) previewMetrics.value = { ...previewMetrics.value, [data.id]: { height } }
+  const current = previewMetrics.value[data.id]?.[surface]
+  if (current?.width !== width || current?.height !== height) {
+    previewMetrics.value = {
+      ...previewMetrics.value,
+      [data.id]: { ...previewMetrics.value[data.id], [surface]: { width, height } },
+    }
+  }
 }
-function preview(html: string, id?: string) {
+function preview(html: string, id?: string, surface: PreviewSurface = 'card') {
   const source = html || ''
-  const instrumentation = id ? pelicanPreviewScript(id) : ''
+  const instrumentation = id ? pelicanPreviewScript(id, surface) : ''
   const styled = /<\/head\s*>/i.test(source)
     ? source.replace(/<\/head\s*>/i, `${pelicanPreviewStyle}${instrumentation}</head>`)
     : /<html(?:\s[^>]*)?>/i.test(source)
@@ -169,11 +206,34 @@ function preview(html: string, id?: string) {
 }
 function replay(id: string) { replayNonce.value[id] = (replayNonce.value[id] || 0) + 1 }
 function openWork(work: IQDashboard['pelican_works'][number]) { selectedWork.value = work }
+function stopDialogPreviewObserver() {
+  dialogPreviewObserver?.disconnect()
+  dialogPreviewObserver = null
+}
+function updateDialogPreviewViewport() {
+  const element = dialogPreviewRef.value
+  if (!element) return
+  const rect = element.getBoundingClientRect()
+  dialogPreviewViewport.value = { width: rect.width, height: rect.height }
+}
+watch(selectedWork, async (work) => {
+  stopDialogPreviewObserver()
+  dialogPreviewViewport.value = { width: 0, height: 0 }
+  if (!work) return
+  await nextTick()
+  updateDialogPreviewViewport()
+  if (typeof ResizeObserver === 'undefined' || !dialogPreviewRef.value) return
+  dialogPreviewObserver = new ResizeObserver(updateDialogPreviewViewport)
+  dialogPreviewObserver.observe(dialogPreviewRef.value)
+})
 onMounted(() => {
   window.addEventListener('message', handlePreviewMessage)
   load()
 })
-onBeforeUnmount(() => window.removeEventListener('message', handlePreviewMessage))
+onBeforeUnmount(() => {
+  stopDialogPreviewObserver()
+  window.removeEventListener('message', handlePreviewMessage)
+})
 </script>
 
 <style scoped>

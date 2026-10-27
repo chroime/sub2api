@@ -10,9 +10,22 @@ import (
 	"github.com/google/wire"
 )
 
+func ProvideAdminUserHandler(adminService service.AdminService, concurrencyService *service.ConcurrencyService, userPlatformQuotaRepo service.UserPlatformQuotaRepository, billingCache service.BillingCache, totpService *service.TotpService, userService *service.UserService, settingService *service.SettingService, bulkEmailService *service.UserBulkEmailService) *admin.UserHandler {
+	h := admin.NewUserHandler(adminService, concurrencyService, userPlatformQuotaRepo, billingCache, totpService, userService, settingService)
+	h.SetBulkEmailService(bulkEmailService)
+	return h
+}
+
+func ProvideUpstreamGovernanceHandler(svc *gov.Service, notifications *service.NotificationEmailService) *admin.UpstreamGovernanceHandler {
+	h := admin.NewUpstreamGovernanceHandler(svc)
+	h.SetBalanceNotificationRecords(notifications.BalanceNotificationRecords())
+	return h
+}
+
 // ProvideAdminHandlers creates the AdminHandlers struct
 func ProvideAdminHandlers(
 	upstreamGovernance *admin.UpstreamGovernanceHandler,
+	accountQuality *admin.AccountQualityHandler,
 	dashboardHandler *admin.DashboardHandler,
 	userHandler *admin.UserHandler,
 	groupHandler *admin.GroupHandler,
@@ -59,6 +72,7 @@ func ProvideAdminHandlers(
 	accountHandler.SetOpenCodeGoUsageService(opencodeGoUsage)
 	accountHandler.SetClaudeResetCreditService(claudeResetCredits)
 	return &AdminHandlers{
+		AccountQuality:         accountQuality,
 		UpstreamGovernance:     upstreamGovernance,
 		Dashboard:              dashboardHandler,
 		User:                   userHandler,
@@ -255,7 +269,8 @@ func ProvideHandlers(
 
 // ProviderSet is the Wire provider set for all handlers
 var ProviderSet = wire.NewSet(
-	admin.NewUpstreamGovernanceHandler,
+	admin.NewAccountQualityHandler,
+	ProvideUpstreamGovernanceHandler,
 	// Top-level handlers
 	NewAuthHandler,
 	ProvideUserHandler,
@@ -280,7 +295,7 @@ var ProviderSet = wire.NewSet(
 
 	// Admin handlers
 	admin.NewDashboardHandler,
-	admin.NewUserHandler,
+	ProvideAdminUserHandler,
 	admin.NewGroupHandlerWithConfig,
 	admin.ProvideAccountHandler,
 	admin.NewAnnouncementHandler,

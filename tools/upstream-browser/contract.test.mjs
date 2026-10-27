@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { LoginCapture, allowedRequest, validateAction, validateInput } from './contract.mjs';
+import { LoginCapture, allowedRequest, allowedSSORequest, validateAction, validateInput } from './contract.mjs';
 
 const origin = 'https://upstream.example';
 const now = new Date('2026-09-28T01:00:00Z');
@@ -120,4 +120,20 @@ test('configuration never accepts non-HTTPS or path-bearing upstream origins', (
   for (const base_url of ['http://upstream.example', `${origin}/path`, `${origin}?query`, 'https://user:pass@upstream.example', 'https://upstream.example:8443', 'file:///tmp/a'])
     assert.equal(validateInput({ ...good, base_url }), false);
   assert.equal(validateInput({ ...good, platform: 'unknown' }), false);
+});
+
+test('Grok SSO browser input is bounded to xAI authorization URLs', () => {
+  const good = {
+    base_url: 'https://accounts.x.ai', platform: 'grok-sso', username: '', password: '',
+    sso_token: 'ephemeral-sso', user_code: 'ABCD-EFGH',
+    verification_url: 'https://auth.x.ai/oauth2/device/complete?user_code=ABCD-EFGH',
+    consent_url: 'https://auth.x.ai/oauth2/device/consent'
+  };
+  assert.equal(validateInput(good), true);
+  assert.equal(validateInput({ ...good, verification_url: 'https://evil.example/steal' }), false);
+  assert.equal(validateInput({ ...good, consent_url: 'https://x.ai.evil.example/' }), false);
+  assert.equal(validateInput({ ...good, sso_token: 'bad\nvalue' }), false);
+  assert.equal(allowedSSORequest({ url: good.verification_url, pageMatches: true, isNavigation: true, isMainFrame: true }), true);
+  assert.equal(allowedSSORequest({ url: 'https://evil.example/next', pageMatches: true, isNavigation: true, isMainFrame: true }), false);
+  assert.equal(allowedSSORequest({ url: 'https://challenge.example/frame', pageMatches: true, isNavigation: true, isMainFrame: false }), true);
 });

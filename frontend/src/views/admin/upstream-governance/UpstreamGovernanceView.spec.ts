@@ -19,6 +19,10 @@ import GovernanceSitesOverview from './GovernanceSitesOverview.vue'
 import ModelMonitorPanel from './ModelMonitorPanel.vue'
 import modelAPI from '@/api/admin/upstream-model-monitoring'
 import operationsAPI from '@/api/admin/upstream-operations'
+import qualityAPI from '@/api/admin/account-quality'
+import balanceNotificationsAPI from '@/api/admin/balance-notifications'
+vi.mock('@/api/admin/balance-notifications', () => ({ default: { list: vi.fn().mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20, pages: 1, summary: { total: 0, pending: 0, sent: 0, failed: 0, suppressed: 0 }, evaluated_at: '2026-10-27T01:00:00Z' }), detail: vi.fn() } }))
+vi.mock('@/api/admin/account-quality', () => ({ default: { overview: vi.fn().mockResolvedValue({ policies: [], bindings: [], templates: [], capabilities: [], settings: { version: 1, concurrency: 2, daily_request_limit: 2000, daily_cost_limit_usd: 0, notifications: { email_enabled: false, email_recipients: [], qq_enabled: false, qq_targets: [], events: [], reminder_seconds: 3600 } } }), run: vi.fn(), control: vi.fn(), saveSettings: vi.fn() } }))
 import api, { type BalanceHealth, type ReadinessOverview, type Site, type Snapshot } from '@/api/admin/upstream-governance'
 vi.mock('@/api/admin/upstream-governance', () => ({
   default: {
@@ -49,6 +53,8 @@ vi.mock('@/api/admin/upstream-governance', () => ({
     reconciliation: vi.fn().mockResolvedValue({ snapshot_id: 0, observed_at: null, rows: [] }),
     reconcilePreview: vi.fn(),
     rechargePlan: vi.fn().mockResolvedValue({ version: 0, policy: { mode: 'disabled', threshold: 10, unit: 'usd', amount_minor: 1000, currency: 'USD', daily_budget_minor: 10000, cooldown_minutes: 1440 }, capability: { available: false, reason: 'provider_unavailable' }, status: 'disabled', evaluation: null }),
+    globalSettings: vi.fn().mockResolvedValue({ version: 0, notifications: { enabled: false, recipients: [], events: { upstream_group_change: true, upstream_rate_change: true, pricing_change: true, protection_change: true, local_group_change: false, health_change: true } }, local_monitor: { enabled: false, interval_seconds: 60 }, defaults: { fast_interval_seconds: 900, full_interval_seconds: 900 }, astrbot: { enabled: false, base_url: '', endpoint_path: '/api/v1/im/message', api_key: '', events: { upstream_group_change: false, upstream_rate_change: false, pricing_change: false, protection_change: false, local_group_change: true, health_change: false }, targets: [], timeout_seconds: 10 } }),
+    saveGlobalSettings: vi.fn(),
     revealKey: vi.fn(),
   },
 }))
@@ -104,6 +110,33 @@ describe('governance page', () => {
     expect(api.sync).not.toHaveBeenCalled()
     expect(api.connect).not.toHaveBeenCalled()
     expect(api.check).not.toHaveBeenCalled()
+  })
+  it('opens account quality independently of upstream sites and does not start checks or notifications', async () => {
+    await router.push('/admin/upstream-governance/account-quality?site=2')
+    const wrapper = mount(View)
+    await flushPromises()
+    expect(wrapper.find('[data-test=account-quality-view]').exists()).toBe(true)
+    expect(wrapper.find('[data-test=smart-operations-site-rail]').exists()).toBe(false)
+    expect(wrapper.find('[data-test=site-selection-empty]').exists()).toBe(false)
+    expect(router.currentRoute.value.query.site).toBeUndefined()
+    expect(qualityAPI.overview).toHaveBeenCalledOnce()
+    expect(api.list).not.toHaveBeenCalled()
+    expect(api.catalog).not.toHaveBeenCalled()
+    expect(qualityAPI.run).not.toHaveBeenCalled()
+    expect(qualityAPI.control).not.toHaveBeenCalled()
+    expect(qualityAPI.saveSettings).not.toHaveBeenCalled()
+  })
+  it('opens user balance records without loading upstreams or sending notifications', async () => {
+    await router.push('/admin/upstream-governance/notifications?site=2')
+    const wrapper = mount(View)
+    await flushPromises()
+    expect(wrapper.find('[data-test=balance-notification-records]').exists()).toBe(true)
+    expect(wrapper.find('[data-test=smart-operations-site-rail]').exists()).toBe(false)
+    expect(router.currentRoute.value.query.site).toBeUndefined()
+    expect(balanceNotificationsAPI.list).toHaveBeenCalledOnce()
+    expect(api.list).not.toHaveBeenCalled()
+    expect(api.sync).not.toHaveBeenCalled()
+    expect(api.catalog).not.toHaveBeenCalled()
   })
   it('scopes current tasks to the selected site and offers a route back to all-site overview', async () => {
     setupNavigationSites()
@@ -166,7 +199,7 @@ describe('governance page', () => {
     setupNavigationSites()
     const wrapper = mount(View)
     await flushPromises()
-    expect(wrapper.findAll('[role=tab]')).toHaveLength(6)
+    expect(wrapper.findAll('[role=tab]')).toHaveLength(9)
     expect(wrapper.get('[data-test=smart-operations-site-rail]').isVisible()).toBe(true)
     await wrapper.get('#governance-models-tab').trigger('click')
     await flushPromises()
@@ -174,6 +207,17 @@ describe('governance page', () => {
     expect(wrapper.get('[data-test=sites-overview-compact]').isVisible()).toBe(true)
     expect(api.catalog).not.toHaveBeenCalled()
     expect(modelAPI.policies).not.toHaveBeenCalled()
+  })
+  it('opens global settings without selecting an upstream or loading site details', async () => {
+    setupNavigationSites()
+    await router.push('/admin/upstream-governance/settings')
+    const wrapper = mount(View)
+    await flushPromises()
+    expect(wrapper.get('[data-test=global-settings]').isVisible()).toBe(true)
+    expect(api.globalSettings).toHaveBeenCalledTimes(1)
+    expect(api.catalog).not.toHaveBeenCalled()
+    expect(wrapper.find('[data-test=smart-operations-site-rail]').exists()).toBe(false)
+    expect(wrapper.find('[data-test=active-site-workspace]').exists()).toBe(false)
   })
   it('does not create or load the local workspace on the default governance page', async () => {
     setupNavigationSites()
@@ -997,7 +1041,7 @@ describe('governance page', () => {
     await wrapper.get('form').trigger('submit')
     await flushPromises()
     expect(api.detect).toHaveBeenCalledWith({ base_url: site.base_url, proxy_id: null })
-    expect(api.create).toHaveBeenCalledWith({ name: 'Detected site', platform: 'sub2api', base_url: site.base_url, proxy_id: null, enabled: true, interval_minutes: 15 })
+    expect(api.create).toHaveBeenCalledWith({ name: 'Detected site', platform: 'sub2api', base_url: site.base_url, proxy_id: null, enabled: true, interval_minutes: 15, fast_interval_seconds: 900, full_interval_seconds: 900 })
     expect(api.connect).toHaveBeenCalledWith(8, expect.objectContaining({ username: 'fixture-user', password: 'fixture-password' }))
     expect(api.sync).toHaveBeenCalledWith(8)
     expect(wrapper.text()).toContain('governance.emptyCatalog')

@@ -49,6 +49,17 @@ const getBodyText = () => document.body.textContent ?? ''
 const getBodyButtons = () => Array.from(document.body.querySelectorAll('button'))
 
 describe('AccountActionMenu — spark shadow 按钮可见性', () => {
+  it('opens policy assignment directly for the current account without requiring a bulk selection', async () => {
+    const account = makeAccount({ name: '039', id: 7 })
+    const wrapper = mount(AccountActionMenu, { props: { show: true, account, anchorRect }, attachTo: document.body })
+    const assign = getBodyButtons().find(button => button.textContent?.includes('accountQuality.assignPolicy'))
+    expect(assign).toBeDefined()
+    assign!.click()
+    await wrapper.vm.$nextTick()
+    expect(wrapper.emitted('assign-quality')?.[0]).toEqual([account])
+    expect(wrapper.emitted('close')).toHaveLength(1)
+    wrapper.unmount()
+  })
   it('普通账号显示「复制账号」按钮', () => {
     const account = makeAccount({ platform: 'anthropic', type: 'apikey', parent_account_id: null })
     const wrapper = mount(AccountActionMenu, {

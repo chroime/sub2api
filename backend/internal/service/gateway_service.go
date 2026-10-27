@@ -561,7 +561,7 @@ func shouldClearStickySession(account *Account, requestedModel string) bool {
 	if account == nil {
 		return false
 	}
-	if !account.IsSchedulable() {
+	if !account.IsSchedulable() || account.IsQualityBlockedForModel(requestedModel) {
 		return true
 	}
 	if remaining := account.GetRateLimitRemainingTimeWithContext(context.Background(), requestedModel); remaining > 0 {

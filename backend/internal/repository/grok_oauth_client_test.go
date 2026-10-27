@@ -134,6 +134,29 @@ func TestGrokSSOConversionErrorMapsBrowserRequired(t *testing.T) {
 	require.Contains(t, err.Error(), "browser verification")
 }
 
+func TestGrokSSOConversionErrorMapsBrowserFallbackFailures(t *testing.T) {
+	for _, tc := range []struct {
+		err  error
+		code string
+	}{
+		{fmt.Errorf("start: %w", xai.ErrSSOBrowserUnavailable), "GROK_SSO_BROWSER_UNAVAILABLE"},
+		{fmt.Errorf("page: %w", xai.ErrSSOBrowserApproval), "GROK_SSO_BROWSER_APPROVAL_FAILED"},
+	} {
+		err := grokSSOConversionError(tc.err)
+		require.Error(t, err)
+		require.Contains(t, strings.ToUpper(err.Error()), tc.code)
+	}
+}
+
+func TestGrokSSOConversionErrorExposesOnlyBoundedBrowserCode(t *testing.T) {
+	err := grokSSOConversionError(fmt.Errorf("approve: %w", fmt.Errorf("browser_launch_failed: %w", xai.ErrSSOBrowserApproval)))
+	require.Contains(t, err.Error(), "(browser_launch_failed)")
+
+	err = grokSSOConversionError(fmt.Errorf("https://auth.x.ai/secret?sso=leak: %w", xai.ErrSSOBrowserApproval))
+	require.NotContains(t, err.Error(), "leak")
+	require.NotContains(t, err.Error(), "auth.x.ai")
+}
+
 func TestNewGrokOAuthClient_UnvalidatedTokenURLFallsBackToDefault(t *testing.T) {
 	// Without unsafe overrides, a random env TokenURL must not be used (fail-closed).
 	t.Setenv(xai.EnvAllowUnsafeURLOverrides, "")

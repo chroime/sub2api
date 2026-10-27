@@ -45,6 +45,21 @@ type Input struct {
 	ProxyURL string `json:"-"`
 	Username string `json:"username"`
 	Password string `json:"password"`
+	// Grok SSO approval only. SSOToken is ephemeral; it crosses only the
+	// backend-to-helper stdin boundary and is never returned to an administrator.
+	SSOToken        string   `json:"sso_token,omitempty"`
+	UserCode        string   `json:"user_code,omitempty"`
+	VerificationURL string   `json:"verification_url,omitempty"`
+	ConsentURL      string   `json:"consent_url,omitempty"`
+	Cookies         []Cookie `json:"cookies,omitempty"`
+}
+
+// Cookie is a narrowly scoped browser cookie used only by the Grok SSO
+// approval flow. URL identifies the trusted xAI origin that issued it.
+type Cookie struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+	URL   string `json:"url"`
 }
 
 type Driver interface {

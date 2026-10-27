@@ -126,6 +126,7 @@ type RemotePrice struct {
 type RemoteGroup struct {
 	ID                     string        `json:"id"`
 	Name                   string        `json:"name"`
+	Description            string        `json:"description,omitempty"`
 	Platform               string        `json:"platform"`
 	RateMultiplier         *float64      `json:"rate_multiplier"`
 	UserRateMultiplier     *float64      `json:"user_rate_multiplier"`
@@ -226,6 +227,7 @@ type Selection struct {
 	LocalGroupID   int64          `json:"local_group_id"`
 	LocalGroupIDs  []int64        `json:"local_group_ids"`
 	AccountName    string         `json:"account_name"`
+	Description    string         `json:"description,omitempty"`
 	CostMultiplier float64        `json:"cost_multiplier"`
 	AccountConfig  *AccountConfig `json:"account_config,omitempty"`
 }

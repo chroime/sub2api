@@ -1,4 +1,5 @@
 import governance from './governance'
+import accountQuality from './accountQuality'
 import landing from './landing'
 import common from './common'
 import dashboard from './dashboard'
@@ -11,6 +12,7 @@ import iqDetection from './iqDetection'
 
 export default {
   governance,
+  accountQuality,
   ...landing,
   ...common,
   ...dashboard,

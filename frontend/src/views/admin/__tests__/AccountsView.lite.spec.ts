@@ -4,6 +4,10 @@ import { defineComponent } from 'vue'
 
 import AccountsView from '../AccountsView.vue'
 import AccountActionMenu from '@/components/admin/account/AccountActionMenu.vue'
+import qualityAPI from '@/api/admin/account-quality'
+import QualityAssignmentDialog from '@/views/admin/account-quality/QualityAssignmentDialog.vue'
+import { newPolicy } from '@/views/admin/account-quality/quality'
+vi.mock('@/api/admin/account-quality', () => ({ default: { summaries: vi.fn().mockResolvedValue({}), policies: vi.fn().mockResolvedValue([]), run: vi.fn() } }))
 
 const {
   listAccounts,
@@ -104,6 +108,7 @@ function mountView(stubActionMenu = true) {
         AccountTableActions: { template: '<div><slot name="after" /></div>' },
         AccountTableFilters: true,
         AccountBulkActionsBar: true,
+        QualityAssignmentDialog: { props: ['accountIds', 'policies'], template: '<div data-test="quality-assignment-dialog" />' },
         Pagination: true,
         ConfirmDialog: true,
         AccountActionMenu: stubActionMenu,
@@ -158,6 +163,8 @@ const fullAccount = {
 
 describe('admin AccountsView lite account list', () => {
   beforeEach(() => {
+    vi.mocked(qualityAPI.summaries).mockClear()
+    vi.mocked(qualityAPI.policies).mockReset().mockResolvedValue([])
     localStorage.clear()
     listAccounts.mockReset().mockResolvedValue({ items: [listRow], total: 1, page: 1, page_size: 20, pages: 1 })
     listWithEtag.mockReset().mockResolvedValue({ notModified: true, etag: 'compact-etag', data: null })
@@ -186,6 +193,38 @@ describe('admin AccountsView lite account list', () => {
       expect.objectContaining({ lite: '1' }),
       expect.objectContaining({ signal: expect.any(AbortSignal) })
     )
+    wrapper.unmount()
+  })
+
+  it('loads quality summaries in one batch only after the optional quality column is shown', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    expect(qualityAPI.summaries).not.toHaveBeenCalled()
+    const tools = wrapper.findAll('button').find(button => button.attributes('title') === 'admin.accounts.moreActions')!
+    await tools.trigger('click')
+    const qualityColumn = wrapper.findAll('button').find(button => button.text() === 'accountQuality.title')!
+    await qualityColumn.trigger('click')
+    await flushPromises()
+    expect(qualityAPI.summaries).toHaveBeenCalledTimes(1)
+    expect(qualityAPI.summaries).toHaveBeenCalledWith([42])
+    expect(getById).not.toHaveBeenCalled()
+    await qualityColumn.trigger('click')
+    await flushPromises()
+    expect(qualityAPI.summaries).toHaveBeenCalledTimes(1)
+    wrapper.unmount()
+  })
+
+  it('opens single-account quality policy assignment directly from the row menu', async () => {
+    const policy = { ...newPolicy(), id: 8, platform: 'openai', name: 'Selected account quality' }
+    vi.mocked(qualityAPI.policies).mockResolvedValue([policy, { ...policy, id: 9, platform: 'anthropic' }])
+    const wrapper = mountView()
+    await flushPromises()
+    wrapper.getComponent(AccountActionMenu).vm.$emit('assign-quality', listRow)
+    await flushPromises()
+    expect(wrapper.getComponent(QualityAssignmentDialog).props('accountIds')).toEqual([42])
+    expect(wrapper.getComponent(QualityAssignmentDialog).props('policies')).toEqual([policy])
+    expect(getById).not.toHaveBeenCalled()
+    expect(qualityAPI.run).not.toHaveBeenCalled()
     wrapper.unmount()
   })
 

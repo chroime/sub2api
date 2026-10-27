@@ -65,6 +65,7 @@ func (s *GatewayService) SelectAccountForModelWithExclusions(ctx context.Context
 		platform = PlatformAnthropic
 	}
 	ctx = s.withGatewayProfitControlGate(ctx, groupID)
+	ctx = withAccountQualitySelectionModel(ctx, requestedModel)
 
 	// Claude Code 限制可能已将 groupID 解析为 fallback group，
 	// 渠道限制预检查必须使用解析后的分组。
@@ -98,6 +99,7 @@ func (s *GatewayService) SelectAccountForModelWithExclusions(ctx context.Context
 // metadataUserID: 用于客户端亲和调度，从中提取客户端 ID
 // sub2apiUserID: 系统用户 ID，用于二维亲和调度
 func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}, metadataUserID string, sub2apiUserID int64) (*AccountSelectionResult, error) {
+	ctx = withAccountQualitySelectionModel(ctx, requestedModel)
 	// 调试日志：记录调度入口参数
 	excludedIDsList := make([]int64, 0, len(excludedIDs))
 	for id := range excludedIDs {
@@ -1122,10 +1124,22 @@ func (s *GatewayService) listSchedulableAccounts(ctx context.Context, groupID *i
 	return accounts, useMixed, nil
 }
 
-// IsSingleAntigravityAccountGroup 检查指定分组是否只有一个 antigravity 平台的可调度账号。
-// 用于 Handler 层在首次请求时提前设置 SingleAccountRetry context，
-// 避免单账号分组收到 503 时错误地设置模型限流标记导致后续请求连续快速失败。
-func (s *GatewayService) IsSingleAntigravityAccountGroup(ctx context.Context, groupID *int64) bool {
+// WithSingleAntigravityAccountGroupProbe 为请求挂载「分组是否只有一个 antigravity 可调度账号」的延迟判定。
+// 只有 antigravity 账号遇到 503 或模型限流预检查时才会查询；其他平台的请求不读取该判定。
+func (s *GatewayService) WithSingleAntigravityAccountGroupProbe(ctx context.Context, groupID *int64) context.Context {
+	var probeGroupID *int64
+	if groupID != nil {
+		id := *groupID
+		probeGroupID = &id
+	}
+	return WithSingleAccountRetryProbe(ctx, func(probeCtx context.Context) bool {
+		return s.isSingleAntigravityAccountGroup(probeCtx, probeGroupID)
+	})
+}
+
+// isSingleAntigravityAccountGroup 检查指定分组是否只有一个 antigravity 平台的可调度账号。
+// 单账号分组收到 503 时原地重试而不设置模型限流，避免后续请求连续快速失败。
+func (s *GatewayService) isSingleAntigravityAccountGroup(ctx context.Context, groupID *int64) bool {
 	accounts, _, err := s.listSchedulableAccounts(ctx, groupID, PlatformAntigravity, true)
 	if err != nil {
 		return false
@@ -1309,9 +1323,9 @@ func (s *GatewayService) withWindowCostPrefetch(ctx context.Context, accounts []
 }
 
 // isAccountSchedulableForQuota 检查账号是否在配额限制内
-// 适用于配置了 quota_limit 的 apikey 和 bedrock 类型账号
+// 适用于配置了 quota_limit 的 apikey、bedrock 和 service_account 类型账号
 func (s *GatewayService) isAccountSchedulableForQuota(account *Account) bool {
-	if !account.IsAPIKeyOrBedrock() {
+	if !account.SupportsAccountQuota() {
 		return true
 	}
 	return !account.IsQuotaExceeded()
@@ -1559,15 +1573,23 @@ func (s *GatewayService) isAccountBlockedBySchedulingThreshold(ctx context.Conte
 }
 
 func (s *GatewayService) hydrateSelectedAccount(ctx context.Context, account *Account) (*Account, error) {
-	if account == nil || s.schedulerSnapshot == nil {
+	if account == nil {
 		return account, nil
 	}
-	hydrated, err := s.schedulerSnapshot.GetAccount(ctx, account.ID)
-	if err != nil {
-		return nil, err
+	hydrated := account
+	if s.schedulerSnapshot != nil {
+		var err error
+		hydrated, err = s.schedulerSnapshot.GetAccount(ctx, account.ID)
+		if err != nil {
+			return nil, err
+		}
+		if hydrated == nil {
+			return nil, fmt.Errorf("selected gateway account %d not found during hydration", account.ID)
+		}
 	}
-	if hydrated == nil {
-		return nil, fmt.Errorf("selected gateway account %d not found during hydration", account.ID)
+	model, _ := ctx.Value(accountQualitySelectionModelKey{}).(string)
+	if hydrated.IsQualityBlockedForModel(model) {
+		return nil, fmt.Errorf("%w: account %d is quality isolated", ErrNoAvailableAccounts, hydrated.ID)
 	}
 	return hydrated, nil
 }
@@ -1575,6 +1597,9 @@ func (s *GatewayService) hydrateSelectedAccount(ctx context.Context, account *Ac
 func (s *GatewayService) newSelectionResult(ctx context.Context, account *Account, acquired bool, release func(), waitPlan *AccountWaitPlan) (*AccountSelectionResult, error) {
 	hydrated, err := s.hydrateSelectedAccount(ctx, account)
 	if err != nil {
+		if acquired && release != nil {
+			release()
+		}
 		return nil, err
 	}
 	return attachSelectionProfitGate(ctx, &AccountSelectionResult{

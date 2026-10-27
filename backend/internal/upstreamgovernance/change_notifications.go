@@ -39,14 +39,21 @@ type ChangeNotification struct {
 // resolved to one durable delivery row per recipient only after the event has
 // been committed by the governance worker.
 type ChangeNotice struct {
-	SiteID          int64
-	SiteName        string
-	BaseURL         string
-	Kind            string
-	Severity        string
-	DedupKey        string
-	Subject         string
-	Body            string
+	SiteID   int64
+	SiteName string
+	BaseURL  string
+	Kind     string
+	Severity string
+	DedupKey string
+	Subject  string
+	Body     string
+	// GroupChanges are filtered before enqueueing the rendered durable body.
+	GroupChanges  []GroupChangeDetail
+	GroupResource string
+	// AstrBotText is an optional compact rendering for QQ/AstrBot delivery.
+	// Email delivery continues to use Subject and Body so operators retain the
+	// detailed audit description there.
+	AstrBotText     string
 	InitialBaseline bool
 	ObservedAt      time.Time
 }
@@ -241,7 +248,7 @@ func (q *ChangeNotificationQueue) EnqueueNotice(ctx context.Context, notice Chan
 	if notice.SiteID <= 0 || strings.TrimSpace(notice.DedupKey) == "" || strings.TrimSpace(notice.Kind) == "" || strings.TrimSpace(notice.Subject) == "" || notice.Body == "" {
 		return ErrInvalid
 	}
-	normalized, err := normalizeBalanceRecipients(recipients)
+	normalized, err := normalizeChangeRecipients(recipients)
 	if err != nil {
 		return err
 	}
@@ -264,6 +271,39 @@ func (q *ChangeNotificationQueue) EnqueueNotice(ctx context.Context, notice Chan
 		}
 	}
 	return firstErr
+}
+
+// normalizeChangeRecipients accepts normal email addresses plus the internal
+// queue references used by global AstrBot notifications. References are
+// validated here so arbitrary values cannot reach the outbound transport.
+func normalizeChangeRecipients(recipients []string) ([]string, error) {
+	if len(recipients) > 100 {
+		return nil, ErrInvalid
+	}
+	result := make([]string, 0, len(recipients))
+	seen := make(map[string]struct{}, len(recipients))
+	for _, raw := range recipients {
+		value := strings.TrimSpace(raw)
+		if value == "" || strings.ContainsAny(value, "\r\n") || len(value) > 2048 {
+			return nil, ErrInvalid
+		}
+		key := strings.ToLower(value)
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		if strings.HasPrefix(value, "qq:") {
+			if strings.TrimSpace(strings.TrimPrefix(value, "qq:")) == "" {
+				return nil, ErrInvalid
+			}
+		} else {
+			if _, err := normalizeBalanceRecipients([]string{value}); err != nil {
+				return nil, err
+			}
+		}
+		seen[key] = struct{}{}
+		result = append(result, value)
+	}
+	return result, nil
 }
 
 func changeNotificationRetry(now time.Time, attempts int) time.Time {

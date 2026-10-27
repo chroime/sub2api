@@ -80,10 +80,17 @@
   }
 
   .btn-primary {
+    /* Keep a solid fallback when the gradient layer is reset by a theme or UA rule. */
+    background-color: #0d9488;
     @apply bg-gradient-to-r from-primary-500 to-primary-600;
     @apply text-white shadow-md shadow-primary-500/25;
     @apply hover:from-primary-600 hover:to-primary-700 hover:shadow-lg hover:shadow-primary-500/30;
     @apply dark:shadow-primary-500/20;
+  }
+
+  .btn-primary:disabled {
+    background-color: #5eead4;
+    background-image: linear-gradient(to right, #2dd4bf, #14b8a6);
   }
 
   .btn-secondary {
@@ -100,12 +107,16 @@
   }
 
   .btn-danger {
+    /* Keep a solid fallback when the gradient layer is reset by a theme or UA rule. */
+    background-color: #ef4444;
     @apply bg-gradient-to-r from-red-500 to-red-600;
     @apply text-white shadow-md shadow-red-500/25;
     @apply hover:from-red-600 hover:to-red-700 hover:shadow-lg hover:shadow-red-500/30;
   }
 
   .btn-success {
+    /* Keep a solid fallback when the gradient layer is reset by a theme or UA rule. */
+    background-color: #10b981;
     @apply bg-gradient-to-r from-emerald-500 to-emerald-600;
     @apply text-white shadow-md shadow-emerald-500/25;
     @apply hover:from-emerald-600 hover:to-emerald-700 hover:shadow-lg hover:shadow-emerald-500/30;
@@ -113,6 +124,8 @@
   }
 
   .btn-warning {
+    /* Keep a solid fallback when the gradient layer is reset by a theme or UA rule. */
+    background-color: #f59e0b;
     @apply bg-gradient-to-r from-amber-500 to-amber-600;
     @apply text-white shadow-md shadow-amber-500/25;
     @apply hover:from-amber-600 hover:to-amber-700 hover:shadow-lg hover:shadow-amber-500/30;

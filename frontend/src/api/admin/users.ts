@@ -56,6 +56,51 @@ export interface BatchUpdateUserLimitsResponse {
   affected: number
 }
 
+export type BulkUserEmailEvent = 'system.health_snapshot' | 'balance.low'
+
+export interface UserBulkEmailLinks {
+  platform_url: string
+  docs_url: string
+  model_plaza_url: string
+  canvas_url: string
+}
+
+export interface BulkUserEmailRequest {
+  user_ids: number[]
+  all: boolean
+  event: BulkUserEmailEvent
+  locale?: string
+  links?: UserBulkEmailLinks
+}
+
+export interface BulkUserEmailResultItem {
+  user_id: number
+  email: string
+  status: 'sent' | 'failed' | 'skipped'
+  error?: string
+}
+
+export interface BulkUserEmailResponse {
+  items: BulkUserEmailResultItem[]
+  total: number
+  sent: number
+  failed: number
+  skipped: number
+}
+
+export interface BulkUserEmailPreviewRequest {
+  event: BulkUserEmailEvent
+  locale?: string
+  user_id?: number
+  links?: UserBulkEmailLinks
+}
+
+export interface BulkUserEmailPreviewResponse {
+  subject: string
+  html: string
+  links?: UserBulkEmailLinks
+}
+
 /**
  * List all users with pagination
  * @param page - Page number (default: 1)
@@ -202,6 +247,26 @@ export async function batchUpdateLimits(
 ): Promise<BatchUpdateUserLimitsResponse> {
   const { data } = await apiClient.post<BatchUpdateUserLimitsResponse>(
     '/admin/users/batch-limits',
+    request
+  )
+  return data
+}
+
+/** Send a supported notification template and retain each recipient's delivery result. */
+export async function bulkEmail(request: BulkUserEmailRequest): Promise<BulkUserEmailResponse> {
+  const { data } = await apiClient.post<BulkUserEmailResponse>('/admin/users/bulk-email', request, {
+    // A batch can outlast the standard timeout. Do not report an unknown result while mail is sending.
+    timeout: 0
+  })
+  return data
+}
+
+/** Render the real template with current system data and a representative user. */
+export async function previewBulkEmail(
+  request: BulkUserEmailPreviewRequest
+): Promise<BulkUserEmailPreviewResponse> {
+  const { data } = await apiClient.post<BulkUserEmailPreviewResponse>(
+    '/admin/users/bulk-email/preview',
     request
   )
   return data
@@ -413,6 +478,8 @@ export const usersAPI = {
   updateBalance,
   updateConcurrency,
   batchUpdateLimits,
+  bulkEmail,
+  previewBulkEmail,
   toggleStatus,
   getUserApiKeys,
   getUserUsageStats,

@@ -24,8 +24,16 @@ services:
       options:
         max-size: "50m"
         max-file: "5"
+    # Chromium (Grok SSO browser approval) needs more than Docker's 64 MB /dev/shm.
+    shm_size: "1gb"
     security_opt:
       - no-new-privileges:true
+      # Grok SSO browser approval: Chromium's sandbox needs user namespaces,
+      # which Docker's default seccomp profile denies. Uncomment one option
+      # (see tools/upstream-browser/README.md), otherwise the import reports
+      # GROK_SSO_BROWSER_UNAVAILABLE (browser_launch_failed).
+      # - seccomp=./chrome-seccomp.json
+      # - seccomp=unconfined
     ulimits:
       nofile:
         soft: 100000

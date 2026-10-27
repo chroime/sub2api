@@ -170,7 +170,13 @@ export function quoteRechargeBonus(
   quote.tier = tier
   if (mode === 'discount') {
     if (tier.bonus_percent >= 100) return quote
-    const payBase = roundRechargeAmount((amount * (100 - tier.bonus_percent)) / 100, digits)
+    // Amounts and percentages have at most two decimals. Multiply integer cents
+    // by percentage basis points before rounding to match the server's decimal
+    // half-up calculation, including values such as 10 × 99.15% = 9.915.
+    const amountCents = Math.round(amount * 100)
+    const remainingBasisPoints = 10_000 - Math.round(tier.bonus_percent * 100)
+    const factor = 10 ** digits
+    const payBase = Math.round((amountCents * remainingBasisPoints) / (1_000_000 / factor)) / factor
     if (payBase <= 0 || payBase >= amount) return quote
     const paidCredit = roundRechargeAmount(payBase * rate)
     quote.payBase = payBase

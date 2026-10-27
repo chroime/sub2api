@@ -370,7 +370,7 @@
     <BaseDialog
       :show="showCreateModal"
       :title="t('admin.proxies.createProxy')"
-      width="normal"
+      :width="createMode === 'batch' ? 'extra-wide' : 'normal'"
       @close="closeCreateModal"
     >
       <!-- Tab Switch -->
@@ -536,7 +536,9 @@
           <label class="input-label">{{ t('admin.proxies.batchInput') }}</label>
           <textarea
             v-model="batchInput"
-            rows="10"
+            data-testid="proxy-batch-input"
+            :disabled="submitting"
+            rows="5"
             class="input font-mono text-sm"
             :placeholder="t('admin.proxies.batchInputPlaceholder')"
             @input="parseBatchInput"
@@ -546,10 +548,66 @@
           </p>
         </div>
 
+        <section class="space-y-3 rounded-xl border border-gray-200 bg-gray-50/70 p-4 dark:border-dark-600 dark:bg-dark-800/60">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <h4 class="text-sm font-semibold text-gray-900 dark:text-white">{{ t('admin.proxies.namingTitle') }}</h4>
+            <span v-if="!batchNamingInvalid" data-testid="proxy-naming-example" class="font-mono text-xs text-primary-700 dark:text-primary-300">{{ batchNameExamples.join(' · ') }}</span>
+          </div>
+          <div class="grid grid-cols-2 gap-3 lg:grid-cols-[minmax(0,2fr)_1fr_1fr_1fr]">
+            <div class="col-span-2 lg:col-span-1">
+              <label for="proxy-naming-country" class="input-label">{{ t('admin.proxies.namingCountry') }}</label>
+              <Select
+                id="proxy-naming-country"
+                v-model="batchNamingRule.country"
+                data-testid="proxy-naming-country"
+                :options="countryOptions"
+                :searchable="true"
+                :disabled="submitting"
+                :aria-label="t('admin.proxies.namingCountry')"
+              />
+            </div>
+            <div>
+              <label for="proxy-naming-start" class="input-label">{{ t('admin.proxies.namingStart') }}</label>
+              <input id="proxy-naming-start" v-model="batchNamingRule.start" data-testid="proxy-naming-start" type="number" min="1" max="999999999" step="1" class="input" :disabled="submitting" />
+            </div>
+            <div>
+              <label for="proxy-naming-digits" class="input-label">{{ t('admin.proxies.namingDigits') }}</label>
+              <Select id="proxy-naming-digits" v-model="batchNamingRule.digits" data-testid="proxy-naming-digits" :options="[1, 2, 3, 4, 5, 6, 7, 8, 9].map(value => ({ value, label: t('admin.proxies.namingDigitsOption', { count: value }) }))" :disabled="submitting" :aria-label="t('admin.proxies.namingDigits')" />
+            </div>
+            <div>
+              <label for="proxy-naming-separator" class="input-label">{{ t('admin.proxies.namingSeparator') }}</label>
+              <Select id="proxy-naming-separator" v-model="batchNamingRule.separator" data-testid="proxy-naming-separator" :options="[{ value: '', label: t('admin.proxies.namingNoSeparator') }, { value: '-', label: '-' }, { value: '_', label: '_' }]" :disabled="submitting" :aria-label="t('admin.proxies.namingSeparator')" />
+            </div>
+          </div>
+          <p class="text-xs text-gray-500 dark:text-dark-400">{{ t('admin.proxies.namingHint') }}</p>
+          <p v-if="batchNamingInvalid" class="text-xs text-red-600 dark:text-red-400">{{ t('admin.proxies.namingInvalid') }}</p>
+          <p v-if="batchNamesLoading" class="text-xs text-gray-500 dark:text-dark-400" role="status">{{ t('admin.proxies.namingLoading') }}</p>
+          <div v-if="batchNamesLoadFailed" class="flex items-center gap-3 text-xs text-red-600 dark:text-red-400" role="alert">
+            <span>{{ t('admin.proxies.namingLoadFailed') }}</span>
+            <button type="button" class="underline" :disabled="submitting" @click="loadBatchExistingNames">{{ t('common.tryAgain') }}</button>
+          </div>
+        </section>
+
         <!-- Parse Result -->
-        <div v-if="batchParseResult.total > 0" class="rounded-lg bg-gray-50 p-4 dark:bg-dark-700">
-            <div class="flex items-center gap-4 text-sm">
-              <div class="flex items-center gap-1.5">
+        <section v-if="batchParseResult.total > 0" class="min-w-0 space-y-3">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h4 class="text-sm font-semibold text-gray-900 dark:text-white">{{ t('admin.proxies.previewTitle') }}</h4>
+              <p class="mt-1 text-xs text-gray-500 dark:text-dark-400">{{ t('admin.proxies.previewHint') }}</p>
+            </div>
+            <label class="flex cursor-pointer items-center gap-2 text-xs text-gray-600 dark:text-dark-300">
+              <input
+                v-model="batchPasswordsVisible"
+                data-testid="proxy-preview-show-passwords"
+                type="checkbox"
+                :disabled="submitting"
+                class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+              />
+              {{ t('admin.proxies.previewShowPasswords') }}
+            </label>
+          </div>
+          <div class="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg bg-gray-50 px-3 py-2.5 text-sm dark:bg-dark-700">
+            <div class="flex items-center gap-1.5">
               <Icon name="checkCircle" size="sm" :stroke-width="2" class="text-primary-500" />
               <span class="text-gray-700 dark:text-gray-300">
                 {{ t('admin.proxies.parsedCount', { count: batchParseResult.valid }) }}
@@ -585,7 +643,149 @@
               </span>
             </div>
           </div>
-        </div>
+          <div class="max-h-80 overflow-auto rounded-xl border border-gray-200 dark:border-dark-600">
+            <table class="w-full min-w-[1320px] table-fixed text-left text-xs">
+              <thead class="sticky top-0 z-10 bg-gray-50 text-gray-500 dark:bg-dark-800 dark:text-dark-300">
+                <tr>
+                  <th class="w-16 px-2 py-3 font-medium">{{ t('admin.proxies.previewLine') }}</th>
+                  <th class="w-48 px-2 py-3 font-medium">{{ t('admin.proxies.name') }}</th>
+                  <th class="w-40 px-2 py-3 font-medium">{{ t('admin.proxies.namingCountry') }}</th>
+                  <th class="w-36 px-2 py-3 font-medium">{{ t('admin.proxies.protocol') }}</th>
+                  <th class="px-2 py-3 font-medium">{{ t('admin.proxies.host') }}</th>
+                  <th class="w-24 px-2 py-3 font-medium">{{ t('admin.proxies.port') }}</th>
+                  <th class="w-36 px-2 py-3 font-medium">{{ t('admin.proxies.username') }}</th>
+                  <th class="w-44 px-2 py-3 font-medium">{{ t('admin.proxies.password') }}</th>
+                  <th class="w-12 px-2 py-3"><span class="sr-only">{{ t('admin.proxies.columns.actions') }}</span></th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100 bg-white dark:divide-dark-700 dark:bg-dark-900">
+                <template v-for="entry in batchParseResult.entries" :key="entry.row.id">
+                  <tr
+                    data-testid="proxy-preview-row"
+                    :data-status="entry.error ? 'invalid' : entry.duplicate ? 'duplicate' : 'valid'"
+                    :class="entry.error ? 'bg-red-50/50 dark:bg-red-950/20' : entry.duplicate ? 'bg-amber-50/50 dark:bg-amber-950/20' : ''"
+                  >
+                    <td class="px-2 py-2 align-middle">
+                      <span class="font-mono text-gray-500 dark:text-dark-400">{{ entry.row.line }}</span>
+                      <span
+                        class="mt-1 block text-[10px]"
+                        :class="entry.error ? 'text-red-600 dark:text-red-400' : entry.duplicate ? 'text-amber-600 dark:text-amber-400' : 'text-primary-600 dark:text-primary-400'"
+                      >{{ entry.error ? t('admin.proxies.previewInvalid') : entry.duplicate ? t('admin.proxies.previewDuplicate') : t('admin.proxies.previewReady') }}</span>
+                    </td>
+                    <td class="px-2 py-2">
+                      <div class="flex items-center gap-1">
+                        <input
+                          :value="entry.row.manualName ? entry.row.name : entry.name"
+                          data-field="name"
+                          type="text"
+                          :disabled="submitting"
+                          :aria-invalid="entry.error === 'name' || entry.error === 'duplicateName' || entry.error === 'existingName'"
+                          :aria-label="t('admin.proxies.previewFieldLabel', { line: entry.row.line, field: t('admin.proxies.name') })"
+                          class="input min-w-0 font-mono !px-2 !py-2 text-xs"
+                          :class="['name', 'duplicateName', 'existingName'].includes(entry.error || '') ? 'border-red-400' : ''"
+                          @input="editBatchName(entry.row, $event)"
+                        />
+                        <button
+                          v-if="entry.row.manualName"
+                          data-action="auto-name"
+                          type="button"
+                          :disabled="submitting"
+                          :title="t('admin.proxies.namingRestoreAuto')"
+                          :aria-label="t('admin.proxies.previewFieldLabel', { line: entry.row.line, field: t('admin.proxies.namingRestoreAuto') })"
+                          class="shrink-0 rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-dark-700 dark:hover:text-primary-400"
+                          @click="entry.row.manualName = false"
+                        ><Icon name="refresh" size="sm" /></button>
+                      </div>
+                    </td>
+                    <td class="px-2 py-2">
+                      <Select v-model="entry.row.country" data-field="country" :options="rowCountryOptions" :searchable="true" :disabled="submitting" :aria-label="t('admin.proxies.previewFieldLabel', { line: entry.row.line, field: t('admin.proxies.namingCountry') })" />
+                    </td>
+                    <td class="px-2 py-2">
+                      <Select
+                        v-model="entry.row.protocol"
+                        data-field="protocol"
+                        :options="protocolSelectOptions"
+                        :disabled="submitting"
+                        :error="entry.error === 'protocol'"
+                        :aria-label="t('admin.proxies.previewFieldLabel', { line: entry.row.line, field: t('admin.proxies.protocol') })"
+                      />
+                    </td>
+                    <td class="px-2 py-2">
+                      <input
+                        v-model="entry.row.host"
+                        data-field="host"
+                        type="text"
+                        :disabled="submitting"
+                        :aria-invalid="entry.error === 'host'"
+                        :aria-label="t('admin.proxies.previewFieldLabel', { line: entry.row.line, field: t('admin.proxies.host') })"
+                        class="input font-mono !px-2 !py-2 text-xs"
+                        :class="entry.error === 'host' ? 'border-red-400' : ''"
+                      />
+                    </td>
+                    <td class="px-2 py-2">
+                      <input
+                        v-model="entry.row.port"
+                        data-field="port"
+                        type="number"
+                        min="1"
+                        max="65535"
+                        step="1"
+                        :disabled="submitting"
+                        :aria-invalid="entry.error === 'port'"
+                        :aria-label="t('admin.proxies.previewFieldLabel', { line: entry.row.line, field: t('admin.proxies.port') })"
+                        class="input font-mono !px-2 !py-2 text-xs"
+                        :class="entry.error === 'port' ? 'border-red-400' : ''"
+                      />
+                    </td>
+                    <td class="px-2 py-2">
+                      <input
+                        v-model="entry.row.username"
+                        data-field="username"
+                        type="text"
+                        autocomplete="off"
+                        :disabled="submitting"
+                        :aria-invalid="entry.error === 'credentials'"
+                        :aria-label="t('admin.proxies.previewFieldLabel', { line: entry.row.line, field: t('admin.proxies.username') })"
+                        class="input font-mono !px-2 !py-2 text-xs"
+                        :class="entry.error === 'credentials' ? 'border-red-400' : ''"
+                      />
+                    </td>
+                    <td class="px-2 py-2">
+                      <input
+                        v-model="entry.row.password"
+                        data-field="password"
+                        :type="batchPasswordsVisible ? 'text' : 'password'"
+                        autocomplete="new-password"
+                        :disabled="submitting"
+                        :aria-invalid="entry.error === 'credentials'"
+                        :aria-label="t('admin.proxies.previewFieldLabel', { line: entry.row.line, field: t('admin.proxies.password') })"
+                        class="input font-mono !px-2 !py-2 text-xs"
+                        :class="entry.error === 'credentials' ? 'border-red-400' : ''"
+                      />
+                    </td>
+                    <td class="px-2 py-2 text-center">
+                      <button
+                        type="button"
+                        data-action="remove"
+                        :disabled="submitting"
+                        :aria-label="t('admin.proxies.previewRemove', { line: entry.row.line })"
+                        :title="t('admin.proxies.previewRemove', { line: entry.row.line })"
+                        class="rounded-lg p-2 text-gray-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50 dark:hover:bg-red-950/30 dark:hover:text-red-400"
+                        @click="removeBatchRow(entry.row.id)"
+                      ><Icon name="trash" size="sm" /></button>
+                    </td>
+                  </tr>
+                  <tr v-if="entry.error">
+                    <td colspan="9" class="bg-red-50/50 px-3 pb-2 text-xs text-red-600 dark:bg-red-950/20 dark:text-red-400">
+                      {{ batchRowErrorMessage(entry.error) }}
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+          <p v-if="batchParseResult.invalid > 0" class="text-xs text-red-600 dark:text-red-400">{{ t('admin.proxies.previewFixInvalid') }}</p>
+        </section>
 
       </div>
 
@@ -625,9 +825,10 @@
           </button>
           <button
             v-else
+            data-testid="proxy-batch-import"
             @click="handleBatchCreate"
             type="button"
-            :disabled="submitting || batchParseResult.valid === 0"
+            :disabled="submitting || !batchNamesReady || batchNamingInvalid || batchParseResult.valid === 0 || batchParseResult.invalid > 0"
             class="btn btn-primary"
           >
             <svg
@@ -964,7 +1165,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { adminAPI } from '@/api/admin'
@@ -988,8 +1189,22 @@ import { useTableSelection } from '@/composables/useTableSelection'
 import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
 import { formatDateTime } from '@/utils/format'
 import { proxyExpiryBadgeClass, proxyExpiryLabelKey } from '@/utils/proxyExpiry'
+import {
+  parseProxyInput,
+  proxyImportValidationError,
+  normalizeProxyImportFields,
+  type ProxyImportDraft,
+  type ProxyImportFields
+} from '@/utils/proxyImport'
+import {
+  DEFAULT_PROXY_NAMING_RULE,
+  PROXY_NAMING_COUNTRIES,
+  generateProxyNames,
+  proxyNamingRuleError,
+  type ProxyNamingRule
+} from '@/utils/proxyNaming'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const appStore = useAppStore()
 const { copyToClipboard } = useClipboard()
 
@@ -1107,18 +1322,65 @@ const qualityReport = ref<ProxyQualityCheckResult | null>(null)
 // Batch import state
 const createMode = ref<'standard' | 'batch'>('standard')
 const batchInput = ref('')
-const batchParseResult = reactive({
-  total: 0,
-  valid: 0,
-  invalid: 0,
-  duplicate: 0,
-  proxies: [] as Array<{
-    protocol: ProxyProtocol
-    host: string
-    port: number
-    username: string
-    password: string
-  }>
+const batchPasswordsVisible = ref(false)
+const batchNamingRule = reactive<ProxyNamingRule>({ ...DEFAULT_PROXY_NAMING_RULE })
+const batchNamingInvalid = computed(() => proxyNamingRuleError(batchNamingRule))
+const batchExistingNames = ref<string[]>([])
+const batchNamesReady = ref(false)
+const batchNamesLoading = ref(false)
+const batchNamesLoadFailed = ref(false)
+let batchNamesGeneration = 0
+const countryOptions = computed(() => {
+  let names: Intl.DisplayNames | undefined
+  try { names = new Intl.DisplayNames([locale?.value || 'zh-CN'], { type: 'region' }) } catch { /* Use ISO codes as a fallback. */ }
+  const preferred = ['us', 'jp', 'sg', 'hk', 'tw', 'kr', 'gb', 'de', 'ca', 'au']
+  const codes = [...preferred, ...PROXY_NAMING_COUNTRIES.filter(code => !preferred.includes(code))]
+  return [
+    ...codes.map(code => ({ value: code, label: `${names?.of(code.toUpperCase()) || code.toUpperCase()} · ${code}` })),
+    { value: 'proxy', label: t('admin.proxies.namingGeneric') }
+  ]
+})
+const rowCountryOptions = computed(() => [
+  { value: '', label: t('admin.proxies.namingInherit') }, ...countryOptions.value
+])
+type BatchProxyRow = ProxyImportDraft & {
+  id: number; line: number; source: string; country: string; name: string; manualName: boolean
+}
+type BatchRowError = NonNullable<ReturnType<typeof proxyImportValidationError>> | 'name' | 'duplicateName' | 'existingName'
+const batchRows = ref<BatchProxyRow[]>([])
+const batchGeneratedNames = computed(() => generateProxyNames(batchRows.value, batchNamingRule, batchExistingNames.value))
+const batchNameExamples = computed(() => generateProxyNames([{}, {}, {}], batchNamingRule, batchExistingNames.value))
+const batchParseResult = computed(() => {
+  const seen = new Set<string>()
+  const seenNames = new Set<string>()
+  const existingNames = new Set(batchExistingNames.value.map(name => name.trim().toLowerCase()))
+  const proxies: Array<ProxyImportFields & { name: string }> = []
+  let invalid = 0
+  let duplicate = 0
+  const entries = batchRows.value.map((row, index) => {
+    const name = batchGeneratedNames.value[index] || ''
+    const nameKey = name.toLowerCase()
+    let error: BatchRowError | null = proxyImportValidationError(row)
+    if (!error && (!name || Array.from(name).length > 100 || /\p{Cc}/u.test(name))) error = 'name'
+    if (!error && existingNames.has(nameKey)) error = 'existingName'
+    if (!error && seenNames.has(nameKey)) error = 'duplicateName'
+    if (error) {
+      invalid++
+      return { row, name, error, duplicate: false }
+    }
+    const proxy = normalizeProxyImportFields(row)
+    // Match the server's identity check, including its credential trimming.
+    const key = JSON.stringify([proxy.host, proxy.port, proxy.username.trim(), proxy.password.trim()])
+    if (seen.has(key)) {
+      duplicate++
+      return { row, name, error: null, duplicate: true }
+    }
+    seen.add(key)
+    seenNames.add(nameKey)
+    proxies.push({ ...proxy, name })
+    return { row, name, error: null, duplicate: false }
+  })
+  return { total: entries.length, valid: proxies.length, invalid, duplicate, proxies, entries }
 })
 
 const createForm = reactive({
@@ -1268,11 +1530,14 @@ const closeCreateModal = () => {
   createForm.expiry_warn_days = 7
   createPasswordVisible.value = false
   batchInput.value = ''
-  batchParseResult.total = 0
-  batchParseResult.valid = 0
-  batchParseResult.invalid = 0
-  batchParseResult.duplicate = 0
-  batchParseResult.proxies = []
+  batchRows.value = []
+  batchPasswordsVisible.value = false
+  Object.assign(batchNamingRule, DEFAULT_PROXY_NAMING_RULE)
+  batchNamesGeneration++
+  batchExistingNames.value = []
+  batchNamesReady.value = false
+  batchNamesLoading.value = false
+  batchNamesLoadFailed.value = false
 }
 
 const handleDataImported = () => {
@@ -1280,83 +1545,75 @@ const handleDataImported = () => {
   loadProxies()
 }
 
-// Parse proxy URL: protocol://user:pass@host:port or protocol://host:port
-// Host may be a domain, IPv4, or bracketed IPv6 ([2001:db8::1]).
-const parseProxyUrl = (
-  line: string
-): {
-  protocol: ProxyProtocol
-  host: string
-  port: number
-  username: string
-  password: string
-} | null => {
-  const trimmed = line.trim()
-  if (!trimmed) return null
-
-  // Regex to parse proxy URL (supports http, https, socks5, socks5h).
-  // Host alternatives: [bracketed-IPv6] | hostname/IPv4 (colon-free, so the
-  // match stops before the final :port).
-  const regex =
-    /^(https?|socks5h?):\/\/(?:([^:@\[\]]+):([^@\[\]]+)@)?(\[[0-9a-f:.]+\]|[^:\[\]]+):(\d+)$/i
-  const match = trimmed.match(regex)
-
-  if (!match) return null
-
-  const [, protocol, username, password, rawHost, port] = match
-  const portNum = parseInt(port, 10)
-
-  if (portNum < 1 || portNum > 65535) return null
-
-  // Strip brackets from IPv6 literals; the backend re-brackets via net.JoinHostPort.
-  const host = rawHost.replace(/^\[|\]$/g, '').trim()
-
-  return {
-    protocol: protocol.toLowerCase() as ProxyProtocol,
-    host,
-    port: portNum,
-    username: username?.trim() || '',
-    password: password?.trim() || ''
-  }
-}
-
 const parseBatchInput = () => {
-  const lines = batchInput.value.split('\n').filter((l) => l.trim())
-  const seen = new Set<string>()
-  const proxies: typeof batchParseResult.proxies = []
-  let invalid = 0
-  let duplicate = 0
-
-  for (const line of lines) {
-    const parsed = parseProxyUrl(line)
-    if (!parsed) {
-      invalid++
-      continue
-    }
-
-    // Check for duplicates (same host:port:username:password)
-    const key = `${parsed.host}:${parsed.port}:${parsed.username}:${parsed.password}`
-    if (seen.has(key)) {
-      duplicate++
-      continue
-    }
-    seen.add(key)
-    proxies.push(parsed)
-  }
-
-  batchParseResult.total = lines.length
-  batchParseResult.valid = proxies.length
-  batchParseResult.invalid = invalid
-  batchParseResult.duplicate = duplicate
-  batchParseResult.proxies = proxies
+  batchRows.value = batchInput.value.split(/\r?\n/).flatMap((source, index) => {
+    if (!source.trim()) return []
+    const parsed = parseProxyInput(source)
+    return [{
+      id: index,
+      line: index + 1,
+      source,
+      country: '',
+      name: '',
+      manualName: false,
+      ...(parsed ?? { protocol: 'socks5', host: '', port: '', username: '', password: '' })
+    }]
+  })
 }
+
+const removeBatchRow = (id: number) => {
+  batchRows.value = batchRows.value.filter(row => row.id !== id)
+}
+
+const batchRowErrorMessage = (error: BatchRowError) => {
+  if (error === 'name') return t('admin.proxies.previewInvalidName')
+  if (error === 'duplicateName') return t('admin.proxies.previewDuplicateName')
+  if (error === 'existingName') return t('admin.proxies.previewExistingName')
+  if (error === 'protocol') return t('admin.proxies.previewInvalidProtocol')
+  if (error === 'port') return t('admin.proxies.previewInvalidPort')
+  if (error === 'credentials') return t('admin.proxies.previewInvalidCredentials')
+  return t('admin.proxies.previewInvalidHost')
+}
+
+const editBatchName = (row: BatchProxyRow, event: Event) => {
+  row.manualName = true
+  row.name = (event.target as HTMLInputElement).value
+}
+
+const loadBatchExistingNames = async () => {
+  const generation = ++batchNamesGeneration
+  batchNamesLoading.value = true
+  batchNamesReady.value = false
+  batchNamesLoadFailed.value = false
+  try {
+    const names: string[] = []
+    for (let page = 1; ; page++) {
+      const result = await adminAPI.proxies.list(page, 1000, { sort_by: 'name', sort_order: 'asc' })
+      if (generation !== batchNamesGeneration) return
+      names.push(...result.items.map(proxy => proxy.name))
+      if (result.items.length === 0 || page * 1000 >= result.total) break
+    }
+    batchExistingNames.value = names
+    batchNamesReady.value = true
+  } catch {
+    if (generation === batchNamesGeneration) batchNamesLoadFailed.value = true
+  } finally {
+    if (generation === batchNamesGeneration) batchNamesLoading.value = false
+  }
+}
+
+watch([showCreateModal, createMode], ([show, mode]) => {
+  if (show && mode === 'batch') void loadBatchExistingNames()
+  else batchNamesGeneration++
+})
 
 const handleBatchCreate = async () => {
-  if (batchParseResult.valid === 0) return
+  const reviewed = batchParseResult.value
+  if (submitting.value || !batchNamesReady.value || batchNamingInvalid.value || reviewed.valid === 0 || reviewed.invalid > 0) return
 
   submitting.value = true
   try {
-    const result = await adminAPI.proxies.batchCreate(batchParseResult.proxies)
+    const result = await adminAPI.proxies.batchCreate(reviewed.proxies)
     const created = result.created || 0
     const skipped = result.skipped || 0
 
@@ -1369,7 +1626,7 @@ const handleBatchCreate = async () => {
     closeCreateModal()
     loadProxies()
   } catch (error: any) {
-    appStore.showError(error.response?.data?.detail || t('admin.proxies.failedToImport'))
+    appStore.showError(error.message || error.response?.data?.detail || t('admin.proxies.failedToImport'))
     console.error('Error batch creating proxies:', error)
   } finally {
     submitting.value = false
@@ -2082,6 +2339,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  batchNamesGeneration++
   clearTimeout(searchTimeout)
   abortController?.abort()
   document.removeEventListener('click', closeCopyMenu)

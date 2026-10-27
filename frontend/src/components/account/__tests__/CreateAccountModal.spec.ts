@@ -393,7 +393,7 @@ describe('CreateAccountModal OpenAI long-context billing', () => {
     'persists streaming ACK for %s Vertex service-account creation', async (platform, label) => {
       const wrapper = mountModal()
       await selectButtonByText(wrapper, label)
-      await selectButtonByText(wrapper, 'Vertex')
+      await selectButtonByText(wrapper, 'admin.accounts.vertexLabel')
       await wrapper.get('form#create-account-form input[type="text"]').setValue('Vertex ACK')
       const fileInput = wrapper.get<HTMLInputElement>('input[type="file"]')
       Object.defineProperty(fileInput.element, 'files', {

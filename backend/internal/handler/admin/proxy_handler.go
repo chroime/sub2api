@@ -2,9 +2,12 @@ package admin
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
+	"unicode"
 
 	"github.com/Wei-Shaw/sub2api/internal/handler/dto"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
@@ -15,7 +18,8 @@ import (
 
 // ProxyHandler handles admin proxy management
 type ProxyHandler struct {
-	adminService service.AdminService
+	adminService  service.AdminService
+	batchCreateMu sync.Mutex
 }
 
 // NewProxyHandler creates a new admin proxy handler
@@ -336,6 +340,7 @@ func (h *ProxyHandler) GetProxyAccounts(c *gin.Context) {
 
 // BatchCreateProxyItem represents a single proxy in batch create request
 type BatchCreateProxyItem struct {
+	Name     string `json:"name" binding:"required,max=100"`
 	Protocol string `json:"protocol" binding:"required,oneof=http https socks5 socks5h"`
 	Host     string `json:"host" binding:"required"`
 	Port     int    `json:"port" binding:"required,min=1,max=65535"`
@@ -345,7 +350,7 @@ type BatchCreateProxyItem struct {
 
 // BatchCreateRequest represents batch create proxies request
 type BatchCreateRequest struct {
-	Proxies []BatchCreateProxyItem `json:"proxies" binding:"required,min=1"`
+	Proxies []BatchCreateProxyItem `json:"proxies" binding:"required,min=1,dive"`
 }
 
 // BatchCreate handles batch creating proxies
@@ -357,8 +362,61 @@ func (h *ProxyHandler) BatchCreate(c *gin.Context) {
 		return
 	}
 
+	// Validate every name before creating any proxy, including later rows.
+	names := make(map[string]int, len(req.Proxies))
+	for i := range req.Proxies {
+		item := &req.Proxies[i]
+		item.Name = strings.TrimSpace(item.Name)
+		item.Host = strings.TrimSpace(item.Host)
+		item.Username = strings.TrimSpace(item.Username)
+		item.Password = strings.TrimSpace(item.Password)
+		if item.Name == "" || strings.ContainsFunc(item.Name, unicode.IsControl) {
+			response.BadRequest(c, fmt.Sprintf("Proxy #%d name must not be blank or contain control characters", i+1))
+			return
+		}
+		key := strings.ToLower(item.Name)
+		if previous, exists := names[key]; exists {
+			response.BadRequest(c, fmt.Sprintf("Proxy #%d name duplicates proxy #%d: %s", i+1, previous, item.Name))
+			return
+		}
+		names[key] = i + 1
+	}
+
+	// Keep the name inventory and writes consistent across concurrent imports.
+	h.batchCreateMu.Lock()
+	defer h.batchCreateMu.Unlock()
+
+	// Check all statuses, since the active-only list would allow reused names.
+	const pageSize = 1000
+	for page := 1; ; page++ {
+		proxies, total, err := h.adminService.ListProxies(c.Request.Context(), page, pageSize, "", "", "", "id", "asc")
+		if err != nil {
+			response.ErrorFrom(c, err)
+			return
+		}
+		for _, proxy := range proxies {
+			if row, exists := names[strings.ToLower(strings.TrimSpace(proxy.Name))]; exists {
+				item := req.Proxies[row-1]
+				if proxy.Host == item.Host && proxy.Port == item.Port && proxy.Username == item.Username && proxy.Password == item.Password {
+					// Retrying a partially successful import skips this endpoint below.
+					continue
+				}
+				response.BadRequest(c, fmt.Sprintf("Proxy #%d name already exists: %s", row, req.Proxies[row-1].Name))
+				return
+			}
+		}
+		if len(proxies) == 0 || int64(page)*pageSize >= total {
+			break
+		}
+	}
+
 	created := 0
 	skipped := 0
+	type endpointIdentity struct {
+		host, username, password string
+		port                     int
+	}
+	seenEndpoints := make(map[endpointIdentity]struct{}, len(req.Proxies))
 
 	for _, item := range req.Proxies {
 		// Trim all string fields
@@ -366,6 +424,11 @@ func (h *ProxyHandler) BatchCreate(c *gin.Context) {
 		protocol := strings.TrimSpace(item.Protocol)
 		username := strings.TrimSpace(item.Username)
 		password := strings.TrimSpace(item.Password)
+		identity := endpointIdentity{host, username, password, item.Port}
+		if _, seen := seenEndpoints[identity]; seen {
+			skipped++
+			continue
+		}
 
 		// Check for duplicates (same host, port, username, password)
 		exists, err := h.adminService.CheckProxyExists(c.Request.Context(), host, item.Port, username, password)
@@ -375,13 +438,14 @@ func (h *ProxyHandler) BatchCreate(c *gin.Context) {
 		}
 
 		if exists {
+			seenEndpoints[identity] = struct{}{}
 			skipped++
 			continue
 		}
 
-		// Create proxy with default name
+		// Preserve the name confirmed in the import preview.
 		_, err = h.adminService.CreateProxy(c.Request.Context(), &service.CreateProxyInput{
-			Name:     "default",
+			Name:     item.Name,
 			Protocol: protocol,
 			Host:     host,
 			Port:     item.Port,
@@ -389,11 +453,11 @@ func (h *ProxyHandler) BatchCreate(c *gin.Context) {
 			Password: password,
 		})
 		if err != nil {
-			// If creation fails due to duplicate, count as skipped
-			skipped++
-			continue
+			response.ErrorFrom(c, err)
+			return
 		}
 
+		seenEndpoints[identity] = struct{}{}
 		created++
 	}
 
