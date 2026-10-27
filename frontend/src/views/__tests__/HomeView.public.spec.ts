@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { config, mount, RouterLinkStub, type VueWrapper } from '@vue/test-utils'
+import { config, mount, flushPromises, RouterLinkStub, type VueWrapper } from '@vue/test-utils'
 
 import HomeView from '../HomeView.vue'
 
@@ -31,7 +31,7 @@ vi.mock('@/stores', () => ({
 vi.mock('@/stores/app', () => ({ useAppStore: () => appStore }))
 
 const wrappers: VueWrapper[] = []
-function mountHome(locale: 'en' | 'zh' = 'zh') {
+async function mountHome(locale: 'en' | 'zh' = 'zh') {
   const i18n = config.global.plugins[0] as { global: { locale: { value: string } } }
   i18n.global.locale.value = locale
   const wrapper = mount(HomeView, {
@@ -39,6 +39,8 @@ function mountHome(locale: 'en' | 'zh' = 'zh') {
       stubs: { RouterLink: RouterLinkStub, LocaleSwitcher: true },
     },
   })
+  await flushPromises()
+  await vi.waitFor(() => expect(wrapper.find('header').exists()).toBe(true))
   wrappers.push(wrapper)
   return wrapper
 }
@@ -65,8 +67,8 @@ describe('HomeView main public home', () => {
     vi.restoreAllMocks()
   })
 
-  it('keeps the main homepage navigation and footer requirements', () => {
-    const wrapper = mountHome()
+  it('keeps the main homepage navigation and footer requirements', async () => {
+    const wrapper = await mountHome()
 
     expect(wrapper.get('h1').text()).toBe('Test gateway')
     expect(wrapper.get('header').text()).toContain('模型广场')
@@ -76,7 +78,7 @@ describe('HomeView main public home', () => {
   })
 
   it('switches the public protocol preview across Claude and Gemini', async () => {
-    const wrapper = mountHome()
+    const wrapper = await mountHome()
 
     await wrapper.get('[data-testid="home-route-anthropic"]').trigger('click')
     expect(wrapper.get('[data-testid="home-route-endpoint"]').text()).toBe('POST /v1/messages')
@@ -87,7 +89,7 @@ describe('HomeView main public home', () => {
   })
 
   it('switches the shared document theme from the restored homepage header', async () => {
-    const wrapper = mountHome()
+    const wrapper = await mountHome()
 
     await wrapper.get('.public-theme-toggle').trigger('click')
     expect(document.documentElement.classList.contains('dark')).toBe(true)
@@ -97,8 +99,8 @@ describe('HomeView main public home', () => {
     expect(localStorage.getItem('theme')).toBe('light')
   })
 
-  it('renders the restored request preview and integration copy in English', () => {
-    const wrapper = mountHome('en')
+  it('renders the restored request preview and integration copy in English', async () => {
+    const wrapper = await mountHome('en')
 
     expect(wrapper.get('.home-flow-caption').text()).toBe('Request path preview')
     expect(wrapper.get('#home-integration-title').text()).toBe('Start with one API request')

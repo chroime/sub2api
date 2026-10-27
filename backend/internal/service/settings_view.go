@@ -158,6 +158,7 @@ type SystemSettings struct {
 	DocURL                      string
 	DocsTitle                   string
 	DocsContent                 string
+	HomepageTemplate            string
 	HomeContent                 string
 	CompactHomeEnabled          bool
 	HideCcsImportButton         bool
@@ -363,6 +364,7 @@ type PublicSettings struct {
 	DocURL                              string
 	DocsTitle                           string
 	DocsContent                         string
+	HomepageTemplate                    string
 	HomeContent                         string
 	CompactHomeEnabled                  bool
 	HideCcsImportButton                 bool

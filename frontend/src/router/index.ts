@@ -449,6 +449,17 @@ const routes: RouteRecordRaw[] = [
     redirect: '/admin/dashboard'
   },
   {
+    path: '/admin/settings/homepage-preview',
+    name: 'HomepagePreview',
+    component: () => import('@/views/admin/HomepagePreviewView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Homepage Preview',
+      titleKey: 'admin.settings.site.homepagePreview'
+    }
+  },
+  {
     path: '/admin/dashboard',
     name: 'AdminDashboard',
     component: () => import('@/views/admin/DashboardView.vue'),

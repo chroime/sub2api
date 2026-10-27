@@ -77,6 +77,7 @@ func (h *SettingHandler) GetPublicSettings(c *gin.Context) {
 		DocURL:                              settings.DocURL,
 		DocsTitle:                           settings.DocsTitle,
 		DocsContent:                         settings.DocsContent,
+		HomepageTemplate:                    settings.HomepageTemplate,
 		HomeContent:                         settings.HomeContent,
 		CompactHomeEnabled:                  settings.CompactHomeEnabled,
 		HideCcsImportButton:                 settings.HideCcsImportButton,

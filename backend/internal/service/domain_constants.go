@@ -382,6 +382,7 @@ const (
 	SettingKeyDocURL                      = "doc_url"                       // 文档链接
 	SettingKeyDocsTitle                   = "docs_title"                    // 内置 API 文档标题
 	SettingKeyDocsContent                 = "docs_content"                  // 内置 API 文档 Markdown 内容
+	SettingKeyHomepageTemplate            = "homepage_template"             // classic, brand, compact, custom
 	SettingKeyHomeContent                 = "home_content"                  // 首页内容（支持 Markdown/HTML，或 URL 作为 iframe src）
 	SettingKeyCompactHomeEnabled          = "compact_home_enabled"          // 是否启用内置简洁首页
 	SettingKeyHideCcsImportButton         = "hide_ccs_import_button"        // 是否隐藏 API Keys 页面的导入 CCS 按钮

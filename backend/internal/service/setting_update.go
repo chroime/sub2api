@@ -99,6 +99,9 @@ func (s *SettingService) refreshCachedSettingsAfterWrite(ctx context.Context, se
 }
 
 func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, settings *SystemSettings) (map[string]string, error) {
+	if settings.HomepageTemplate != "" && !IsHomepageTemplate(settings.HomepageTemplate) {
+		return nil, infraerrors.BadRequest("INVALID_HOMEPAGE_TEMPLATE", "Homepage template must be classic, brand, compact, or custom")
+	}
 	if err := s.validateDefaultSubscriptionGroups(ctx, settings.DefaultSubscriptions); err != nil {
 		return nil, err
 	}
@@ -345,6 +348,9 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	updates[SettingKeyDocURL] = settings.DocURL
 	updates[SettingKeyDocsTitle] = settings.DocsTitle
 	updates[SettingKeyDocsContent] = settings.DocsContent
+	if settings.HomepageTemplate != "" {
+		updates[SettingKeyHomepageTemplate] = settings.HomepageTemplate
+	}
 	updates[SettingKeyHomeContent] = settings.HomeContent
 	updates[SettingKeyCompactHomeEnabled] = strconv.FormatBool(settings.CompactHomeEnabled)
 	updates[SettingKeyHideCcsImportButton] = strconv.FormatBool(settings.HideCcsImportButton)

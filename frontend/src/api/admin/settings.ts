@@ -1,3 +1,4 @@
+import type { HomepageTemplate } from '@/utils/homepageTemplate'
 /**
  * Admin Settings API endpoints
  * Handles system settings management for administrators
@@ -491,6 +492,7 @@ export interface SystemSettings {
   doc_url: string;
   docs_title?: string;
   docs_content?: string;
+  homepage_template?: HomepageTemplate;
   home_content: string;
   compact_home_enabled: boolean;
   hide_ccs_import_button: boolean;
@@ -846,6 +848,7 @@ export interface UpdateSettingsRequest {
   doc_url?: string;
   docs_title?: string;
   docs_content?: string;
+  homepage_template?: HomepageTemplate;
   home_content?: string;
   compact_home_enabled?: boolean;
   hide_ccs_import_button?: boolean;

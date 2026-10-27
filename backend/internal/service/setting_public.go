@@ -189,6 +189,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SettingKeyDocURL,
 		SettingKeyDocsTitle,
 		SettingKeyDocsContent,
+		SettingKeyHomepageTemplate,
 		SettingKeyHomeContent,
 		SettingKeyCompactHomeEnabled,
 		SettingKeyHideCcsImportButton,
@@ -336,6 +337,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		DocURL:                              settings[SettingKeyDocURL],
 		DocsTitle:                           s.getStringOrDefault(settings, SettingKeyDocsTitle, ""),
 		DocsContent:                         settings[SettingKeyDocsContent],
+		HomepageTemplate:                    ResolveHomepageTemplate(settings[SettingKeyHomepageTemplate], settings[SettingKeyHomeContent], settings[SettingKeyCompactHomeEnabled] == "true"),
 		HomeContent:                         settings[SettingKeyHomeContent],
 		CompactHomeEnabled:                  settings[SettingKeyCompactHomeEnabled] == "true",
 		HideCcsImportButton:                 settings[SettingKeyHideCcsImportButton] == "true",
@@ -598,6 +600,7 @@ type PublicSettingsInjectionPayload struct {
 	DocURL                              string                   `json:"doc_url"`
 	DocsTitle                           string                   `json:"docs_title"`
 	DocsContent                         string                   `json:"docs_content"`
+	HomepageTemplate                    string                   `json:"homepage_template"`
 	HomeContent                         string                   `json:"home_content"`
 	CompactHomeEnabled                  bool                     `json:"compact_home_enabled"`
 	HideCcsImportButton                 bool                     `json:"hide_ccs_import_button"`
@@ -695,6 +698,7 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		DocURL:                              settings.DocURL,
 		DocsTitle:                           settings.DocsTitle,
 		DocsContent:                         settings.DocsContent,
+		HomepageTemplate:                    settings.HomepageTemplate,
 		HomeContent:                         settings.HomeContent,
 		CompactHomeEnabled:                  settings.CompactHomeEnabled,
 		HideCcsImportButton:                 settings.HideCcsImportButton,

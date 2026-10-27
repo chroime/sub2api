@@ -8,7 +8,7 @@ APP_DIR="${APP_DIR:-/home/sub2api/app}"
 DEPLOY_DIR="${DEPLOY_DIR:-/home/sub2api/deploy}"
 DATA_DIR="${DATA_DIR:-/home/sub2api/data}"
 BACKUP_ROOT="${BACKUP_ROOT:-/home/sub2api/backups}"
-BRANCH="${BRANCH:-b2}"
+BRANCH="${BRANCH:-main}"
 COMPOSE_FILE="${COMPOSE_FILE:-$DEPLOY_DIR/docker-compose.yml}"
 SERVICE="${SERVICE:-sub2api}"
 POSTGRES_CONTAINER="${POSTGRES_CONTAINER:-sub2api-postgres}"
@@ -44,13 +44,59 @@ on_exit() {
   fi
   exit "$status"
 }
-trap on_exit EXIT
-
 require_command() {
   command -v "$1" >/dev/null 2>&1 || fail "required command is missing: $1"
 }
 
-for command in git docker curl tar sha256sum head stat grep; do
+# Kept in this standalone script so an existing deployment can use the new
+# updater before its checkout has been switched to main.
+homepage_template_sql() {
+  cat <<'SQL'
+INSERT INTO settings (key, value)
+SELECT 'homepage_template', CASE
+  WHEN EXISTS (SELECT 1 FROM settings WHERE key = 'home_content' AND value ~ '[^[:space:]]') THEN 'custom'
+  WHEN EXISTS (SELECT 1 FROM settings WHERE key = 'compact_home_enabled' AND value = 'true') THEN 'compact'
+  ELSE :'legacy_template'
+END
+ON CONFLICT (key) DO NOTHING;
+SELECT value AS homepage_template FROM settings WHERE key = 'homepage_template';
+SQL
+}
+
+tar_errors_are_log_changes() {
+  local status="$1" report="$2"
+  [[ "$status" == 1 && -s "$report" ]] || return 1
+  # Never accept unreadable files, vanished files, non-log changes or tar errors.
+  LC_ALL=C grep -Eq '^tar: app/logs/.+: file changed as we read it$' "$report" &&
+    ! LC_ALL=C grep -Eqv '^tar: app/logs/.+: file changed as we read it$|^[[:space:]]*$' "$report"
+}
+
+hash_application_files() {
+  (cd "$1" && find app -path app/logs -prune -o -type f -print0 | LC_ALL=C sort -z | xargs -0 -r sha256sum)
+}
+
+archive_application_data() {
+  local data_path="$1" backup_path="$2" tar_status=0
+  hash_application_files "$data_path" > "$backup_path/app-files.before.sha256"
+  LC_ALL=C tar --xattrs --acls --numeric-owner -czf "$backup_path/data-app.tar.gz" -C "$data_path" app 2> "$backup_path/data-app-tar.stderr" || tar_status=$?
+  hash_application_files "$data_path" > "$backup_path/app-files.after.sha256"
+  cmp -s "$backup_path/app-files.before.sha256" "$backup_path/app-files.after.sha256" || fail 'application files changed during backup; retry when configuration writes have finished'
+  if [[ "$tar_status" != 0 ]]; then
+    tar_errors_are_log_changes "$tar_status" "$backup_path/data-app-tar.stderr" || {
+      cat "$backup_path/data-app-tar.stderr" >&2
+      fail "application archive failed (tar exit $tar_status)"
+    }
+    log 'Live log files changed during archival; non-log application files verified unchanged'
+  fi
+}
+
+# Allow the pure compatibility/backup helpers to be exercised without a deployment.
+if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then
+  return 0
+fi
+trap on_exit EXIT
+
+for command in git docker curl tar sha256sum head stat grep find sort xargs cmp; do
   require_command "$command"
 done
 
@@ -108,7 +154,7 @@ docker cp "$REDIS_CONTAINER:$REDIS_RDB_PATH" "$BACKUP_DIR/redis.rdb" >/dev/null
 docker exec "$REDIS_CONTAINER" rm -f "$REDIS_RDB_PATH" "$REDIS_LOG_PATH" >/dev/null
 
 log "Archiving application data"
-tar --xattrs --acls --numeric-owner -czf "$BACKUP_DIR/data-app.tar.gz" -C "$DATA_DIR" app
+archive_application_data "$DATA_DIR" "$BACKUP_DIR"
 
 for file in data-app.tar.gz deploy.env docker-compose.yml metadata.txt postgres-globals.sql postgres.dump redis.rdb; do
   [[ -s "$BACKUP_DIR/$file" ]] || fail "backup file is empty or missing: $file"
@@ -139,6 +185,9 @@ du -sh "$BACKUP_DIR" > "$BACKUP_DIR/size.txt"
 
 printf 'redis_snapshot_bytes=%s\npostgres_toc_entries=%s\n' "$REDIS_BYTES" "$TOC_COUNT" >> "$BACKUP_DIR/metadata.txt"
 sha256sum \
+  "$BACKUP_DIR/app-files.before.sha256" \
+  "$BACKUP_DIR/app-files.after.sha256" \
+  "$BACKUP_DIR/data-app-tar.stderr" \
   "$BACKUP_DIR/data-app.tar.gz" \
   "$BACKUP_DIR/deploy.env" \
   "$BACKUP_DIR/docker-compose.yml" \
@@ -152,6 +201,9 @@ sha256sum \
 (cd "$BACKUP_DIR" && sha256sum -c SHA256SUMS)
 sed -i 's/^backup_complete=false$/backup_complete=true/' "$BACKUP_DIR/metadata.txt"
 sha256sum \
+  "$BACKUP_DIR/app-files.before.sha256" \
+  "$BACKUP_DIR/app-files.after.sha256" \
+  "$BACKUP_DIR/data-app-tar.stderr" \
   "$BACKUP_DIR/data-app.tar.gz" \
   "$BACKUP_DIR/deploy.env" \
   "$BACKUP_DIR/docker-compose.yml" \
@@ -166,6 +218,14 @@ sha256sum \
 chmod 600 "$BACKUP_DIR"/*
 BACKUP_COMPLETE=true
 log "Backup verified: $BACKUP_DIR (PostgreSQL TOC: $TOC_COUNT, Redis: $REDIS_BYTES bytes)"
+
+case "${LEGACY_HOMEPAGE_TEMPLATE:-$BEFORE_BRANCH}" in
+  b2|brand) LEGACY_HOMEPAGE_TEMPLATE=brand ;;
+  main|classic) LEGACY_HOMEPAGE_TEMPLATE=classic ;;
+  *) fail 'set LEGACY_HOMEPAGE_TEMPLATE=classic or brand for this legacy checkout before retrying' ;;
+esac
+log "Preserving the existing homepage (legacy default: $LEGACY_HOMEPAGE_TEMPLATE)"
+homepage_template_sql | docker exec -i "$POSTGRES_CONTAINER" sh -ceu 'PGPASSWORD="${POSTGRES_PASSWORD:-}" psql -X -h 127.0.0.1 -U "${POSTGRES_USER:-sub2api}" -d "${POSTGRES_DB:-sub2api}" -v ON_ERROR_STOP=1 -v legacy_template="$1"' sh "$LEGACY_HOMEPAGE_TEMPLATE"
 
 log "Fetching origin/$BRANCH"
 git -C "$APP_DIR" fetch origin "$BRANCH"

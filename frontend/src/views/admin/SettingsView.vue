@@ -6745,40 +6745,11 @@
                 />
               </div>
 
-              <!-- Home Content -->
-              <div>
-                <label
-                  class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
-                >
-                  {{ t("admin.settings.site.homeContent") }}
-                </label>
-                <textarea
-                  v-model="form.home_content"
-                  rows="6"
-                  class="input font-mono text-sm"
-                  :placeholder="t('admin.settings.site.homeContentPlaceholder')"
-                ></textarea>
-                <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
-                  {{ t("admin.settings.site.homeContentHint") }}
-                </p>
-                <!-- iframe CSP Warning -->
-                <p class="mt-2 text-xs text-amber-600 dark:text-amber-400">
-                  {{ t("admin.settings.site.homeContentIframeWarning") }}
-                </p>
-              </div>
-
-              <!-- Compact Home Page -->
-              <div class="flex items-center justify-between border-t border-gray-100 pt-4 dark:border-dark-700">
-                <div>
-                  <label class="font-medium text-gray-900 dark:text-white">{{
-                    t("admin.settings.site.compactHome")
-                  }}</label>
-                  <p class="text-sm text-gray-500 dark:text-gray-400">
-                    {{ t("admin.settings.site.compactHomeHint") }}
-                  </p>
-                </div>
-                <Toggle v-model="form.compact_home_enabled" data-testid="compact-home-toggle" />
-              </div>
+              <HomepageSettings
+                v-model="form.homepage_template"
+                v-model:content="form.home_content"
+                :draft="form"
+              />
 
               <!-- Hide CCS Import Button -->
               <div
@@ -9078,6 +9049,8 @@ import ProxySelector from "@/components/common/ProxySelector.vue";
 import ImageUpload from "@/components/common/ImageUpload.vue";
 import BackupSettings from "@/views/admin/BackupView.vue";
 import EmailTemplateEditor from "@/views/admin/settings/EmailTemplateEditor.vue";
+import HomepageSettings from "@/components/admin/settings/HomepageSettings.vue";
+import { resolveHomepageTemplate, type HomepageTemplate } from "@/utils/homepageTemplate";
 import RechargeBonusTierEditor from "@/components/admin/settings/RechargeBonusTierEditor.vue";
 import {
   normalizeRechargeBonusMode,
@@ -9832,6 +9805,7 @@ type SettingsForm = Omit<
   payment_recharge_bonus_notice: string;
   // 系统全局平台限额 map；form 内始终归一化为全部平台对象（模板非空绑定依赖此不变量）
   default_platform_quotas: DefaultPlatformQuotasMap;
+  homepage_template: HomepageTemplate;
   account_scheduling_thresholds: ReturnType<typeof normalizeAccountSchedulingThresholdsMap>;
 };
 
@@ -9885,6 +9859,7 @@ const form = reactive<SettingsForm>({
   doc_url: "",
   docs_title: "",
   docs_content: "",
+  homepage_template: "classic" as HomepageTemplate,
   home_content: "",
   compact_home_enabled: false,
   backend_mode_enabled: false,
@@ -11128,6 +11103,7 @@ async function loadSettings() {
         (form as Record<string, unknown>)[key] = value;
       }
     }
+    form.homepage_template = resolveHomepageTemplate(settings);
     // For this optional override, null explicitly selects per-account rates.
     if (settings.openai_oauth_scheduling_rate_multiplier === null) {
       form.openai_oauth_scheduling_rate_multiplier = null;
@@ -11596,8 +11572,9 @@ async function saveSettings() {
       doc_url: form.doc_url,
       docs_title: form.docs_title,
       docs_content: form.docs_content,
+      homepage_template: form.homepage_template,
       home_content: form.home_content,
-      compact_home_enabled: form.compact_home_enabled,
+      compact_home_enabled: form.homepage_template === "compact",
       backend_mode_enabled: form.backend_mode_enabled,
       hide_ccs_import_button: form.hide_ccs_import_button,
       table_default_page_size: form.table_default_page_size,

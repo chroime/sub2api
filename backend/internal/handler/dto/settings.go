@@ -158,6 +158,7 @@ type SystemSettings struct {
 	DocURL                      string           `json:"doc_url"`
 	DocsTitle                   string           `json:"docs_title"`
 	DocsContent                 string           `json:"docs_content"`
+	HomepageTemplate            string           `json:"homepage_template"`
 	HomeContent                 string           `json:"home_content"`
 	CompactHomeEnabled          bool             `json:"compact_home_enabled"`
 	HideCcsImportButton         bool             `json:"hide_ccs_import_button"`
@@ -401,6 +402,7 @@ type PublicSettings struct {
 	DocURL                              string                   `json:"doc_url"`
 	DocsTitle                           string                   `json:"docs_title"`
 	DocsContent                         string                   `json:"docs_content"`
+	HomepageTemplate                    string                   `json:"homepage_template"`
 	HomeContent                         string                   `json:"home_content"`
 	CompactHomeEnabled                  bool                     `json:"compact_home_enabled"`
 	HideCcsImportButton                 bool                     `json:"hide_ccs_import_button"`

@@ -893,19 +893,19 @@ describe("admin SettingsView payment visible method controls", () => {
     expect(fetchPublicSettings).toHaveBeenCalledWith(true);
   });
 
-  it("submits the compact home page toggle", async () => {
+  it("submits the homepage selection and its legacy compact flag", async () => {
     const wrapper = mountView();
     await flushPromises();
 
-    const toggle = wrapper.get('[data-testid="compact-home-toggle"]');
-    expect((toggle.element as HTMLInputElement).checked).toBe(false);
+    const selection = wrapper.get('#homepage-template');
+    expect((selection.element as HTMLSelectElement).value).toBe('classic');
 
-    await toggle.setValue(true);
+    await selection.setValue('compact');
     await wrapper.find("form").trigger("submit.prevent");
     await flushPromises();
 
     expect(updateSettings).toHaveBeenCalledWith(
-      expect.objectContaining({ compact_home_enabled: true }),
+      expect.objectContaining({ homepage_template: "compact", compact_home_enabled: true }),
     );
   });
 

@@ -162,6 +162,7 @@ type UpdateSettingsRequest struct {
 	DocURL                      string                `json:"doc_url"`
 	DocsTitle                   string                `json:"docs_title"`
 	DocsContent                 string                `json:"docs_content"`
+	HomepageTemplate            string                `json:"homepage_template"`
 	HomeContent                 string                `json:"home_content"`
 	CompactHomeEnabled          bool                  `json:"compact_home_enabled"`
 	HideCcsImportButton         bool                  `json:"hide_ccs_import_button"`
@@ -502,6 +503,10 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 	var req UpdateSettingsRequest
 	if err := c.ShouldBindBodyWith(&req, binding.JSON); err != nil {
 		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	if _, sent := sentFields[service.SettingKeyHomepageTemplate]; sent && !service.IsHomepageTemplate(req.HomepageTemplate) {
+		response.BadRequest(c, "Homepage template must be classic, brand, compact, or custom")
 		return
 	}
 	if len([]rune(req.DocsTitle)) > 120 {
@@ -1664,6 +1669,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		DocURL:                                 req.DocURL,
 		DocsTitle:                              req.DocsTitle,
 		DocsContent:                            req.DocsContent,
+		HomepageTemplate:                       req.HomepageTemplate,
 		HomeContent:                            req.HomeContent,
 		CompactHomeEnabled:                     req.CompactHomeEnabled,
 		HideCcsImportButton:                    req.HideCcsImportButton,
@@ -2331,6 +2337,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		DocURL:                                                 updatedSettings.DocURL,
 		DocsTitle:                                              updatedSettings.DocsTitle,
 		DocsContent:                                            updatedSettings.DocsContent,
+		HomepageTemplate:                                       updatedSettings.HomepageTemplate,
 		HomeContent:                                            updatedSettings.HomeContent,
 		CompactHomeEnabled:                                     updatedSettings.CompactHomeEnabled,
 		HideCcsImportButton:                                    updatedSettings.HideCcsImportButton,

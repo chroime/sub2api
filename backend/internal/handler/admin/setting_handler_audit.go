@@ -344,6 +344,9 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	if before.DocsContent != after.DocsContent {
 		changed = append(changed, "docs_content")
 	}
+	if before.HomepageTemplate != after.HomepageTemplate {
+		changed = append(changed, service.SettingKeyHomepageTemplate)
+	}
 	if before.HomeContent != after.HomeContent {
 		changed = append(changed, "home_content")
 	}

@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 set -eu
 
 repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
@@ -25,4 +25,26 @@ grep -Fq 'pull --ff-only' "$script" || fail 'script must update only with fast-f
 grep -Fq 'backup_complete=true' "$script" || fail 'script must mark a completed backup'
 
 bash -n "$script" || fail 'script has shell syntax errors'
-printf 'update-sub2api test passed\n'
+grep -Fq 'BRANCH="${BRANCH:-main}"' "$script" || fail 'default branch must be main'
+
+# Source helpers only. This must not invoke Docker, Git or install an EXIT trap.
+source "$script"
+[[ -z "$(trap -p EXIT)" ]] || fail 'sourcing helpers must not install deployment traps'
+report=$(mktemp)
+trap 'rm -f "$report"' EXIT
+printf 'tar: app/logs/sub2api.log: file changed as we read it\n' > "$report"
+tar_errors_are_log_changes 1 "$report" || fail 'live-log changes should be accepted'
+if tar_errors_are_log_changes 2 "$report"; then fail 'tar fatal errors must fail'; fi
+printf 'tar: app/config.yaml: file changed as we read it\n' >> "$report"
+if tar_errors_are_log_changes 1 "$report"; then fail 'non-log changes must fail'; fi
+printf 'tar: app/logs/sub2api.log: Cannot open: Permission denied\n' > "$report"
+if tar_errors_are_log_changes 1 "$report"; then fail 'unreadable log files must fail'; fi
+: > "$report"
+if tar_errors_are_log_changes 1 "$report"; then fail 'unexplained tar errors must fail'; fi
+
+backup_line=$(grep -n '^BACKUP_COMPLETE=true$' "$script" | cut -d: -f1)
+init_line=$(grep -n '^homepage_template_sql | docker exec' "$script" | cut -d: -f1)
+checkout_line=$(grep -n '^git -C .* switch' "$script" | cut -d: -f1)
+[[ "$backup_line" -lt "$init_line" && "$init_line" -lt "$checkout_line" ]] || fail 'verified backup must precede settings writes and checkout'
+homepage_template_sql | grep -Fq 'ON CONFLICT (key) DO NOTHING' || fail 'initialization must preserve explicit settings'
+printf 'update-sub2api tests passed\n'

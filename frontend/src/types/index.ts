@@ -1,3 +1,4 @@
+import type { HomepageTemplate } from '@/utils/homepageTemplate'
 /**
  * Core Type Definitions for Sub2API Frontend
  */
@@ -241,6 +242,7 @@ export interface PublicSettings {
   doc_url: string
   docs_title?: string
   docs_content?: string
+  homepage_template?: HomepageTemplate
   home_content: string
   compact_home_enabled: boolean
   hide_ccs_import_button: boolean

@@ -369,6 +369,7 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 		DocURL:                                 settings[SettingKeyDocURL],
 		DocsTitle:                              s.getStringOrDefault(settings, SettingKeyDocsTitle, ""),
 		DocsContent:                            settings[SettingKeyDocsContent],
+		HomepageTemplate:                       ResolveHomepageTemplate(settings[SettingKeyHomepageTemplate], settings[SettingKeyHomeContent], settings[SettingKeyCompactHomeEnabled] == "true"),
 		HomeContent:                            settings[SettingKeyHomeContent],
 		CompactHomeEnabled:                     settings[SettingKeyCompactHomeEnabled] == "true",
 		HideCcsImportButton:                    settings[SettingKeyHideCcsImportButton] == "true",
