@@ -1,4 +1,7 @@
+import balanceNotifications from './balanceNotifications'
+
 export default {
+  balanceNotifications,
   importTemplates: {
     title: '导入配置模板',
     hint: '复用账户参数。默认模板仅填入未修改的新草稿；载入模板不会创建账户、密钥或发起上游操作。',
@@ -270,6 +273,7 @@ export default {
     title: "智能运维",
     description: "集中管理上游接入、分组导入、模型监测与自动化任务。",
     sections: {
+	  notifications: '通知记录',
       accountQuality: "账号质量",
       overview: "运维总览",
       import: "分组导入",
@@ -280,6 +284,7 @@ export default {
       settings: "全局设置",
     },
     descriptions: {
+	  notifications: '查询发送给平台用户的余额不足邮件和发送结果。',
       accountQuality: "固定账号执行能力检测，查看原始证据并管理独立质量门。",
       overview: "查看当前待办，管理上游接入、授权状态与采集概况。",
       import: "导入上游分组，查看账号映射与同步设置。",

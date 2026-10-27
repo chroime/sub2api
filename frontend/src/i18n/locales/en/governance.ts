@@ -1,4 +1,7 @@
+import balanceNotifications from './balanceNotifications'
+
 export default {
+  balanceNotifications,
   importTemplates: {
     title: 'Import configuration templates',
     hint: 'Reuse account parameters. Defaults fill only untouched new drafts; loading a template never creates accounts or keys or runs upstream operations.',
@@ -255,6 +258,7 @@ export default {
     title: "Smart Operations",
     description: "Manage upstream connections, group imports, model monitoring, and automation in one place.",
     sections: {
+	  notifications: 'Notification records',
       accountQuality: "Account quality",
       overview: "Operations overview",
       import: "Group import",
@@ -265,6 +269,7 @@ export default {
       settings: "Global settings",
     },
     descriptions: {
+	  notifications: 'Review low-balance messages sent to platform users and their delivery outcomes.',
       accountQuality: "Check fixed accounts, review evidence and manage independent quality gates.",
       overview: "Review current tasks and manage upstream connections, authorization, and collection status.",
       import: "Import upstream groups and review account mappings and synchronization settings.",

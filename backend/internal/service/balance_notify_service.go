@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Wei-Shaw/sub2api/internal/balancenotice"
 )
 
 const (
@@ -371,18 +373,32 @@ func (s *BalanceNotifyService) sendBalanceLowEmails(recipients []string, userID 
 	if displayName == "" {
 		displayName = userEmail
 	}
+	records := s.notificationEmailService.BalanceNotificationRecords()
+	reminderKey := time.Now().UTC().Format("2006-01-02")
+	begin := func(to string) *balancenotice.Delivery {
+		return records.Begin(balancenotice.Input{UserID: userID, UserEmail: userEmail, UserName: userName, Recipient: to, Balance: &balance, Threshold: &threshold, TriggerType: "automatic", DeliveryKey: notificationEmailDeliveryKey(NotificationEmailEventBalanceLow, "balance_low", strconv.FormatInt(userID, 10), to, reminderKey)})
+	}
+	if len(recipients) == 0 {
+		begin("").Suppress("no_recipient")
+		return
+	}
+	deliveries := map[string]*balancenotice.Delivery{}
+	for _, to := range recipients {
+		deliveries[to] = begin(to)
+	}
 	if s.notificationEmailService != nil {
 		fallbackRecipients := make([]string, 0, len(recipients))
 		for _, to := range recipients {
 			ctx, cancel := context.WithTimeout(context.Background(), emailSendTimeout)
 			err := s.notificationEmailService.Send(ctx, NotificationEmailSendInput{
-				Event:          NotificationEmailEventBalanceLow,
-				RecipientEmail: to,
-				RecipientName:  displayName,
-				UserID:         userID,
-				SourceType:     "balance_low",
-				SourceID:       firstNonEmpty(strconv.FormatInt(userID, 10), userEmail),
-				ReminderKey:    time.Now().UTC().Format("2006-01-02"),
+				BalanceDelivery: deliveries[to],
+				Event:           NotificationEmailEventBalanceLow,
+				RecipientEmail:  to,
+				RecipientName:   displayName,
+				UserID:          userID,
+				SourceType:      "balance_low",
+				SourceID:        firstNonEmpty(strconv.FormatInt(userID, 10), userEmail),
+				ReminderKey:     reminderKey,
 				Variables: map[string]string{
 					"current_balance": fmt.Sprintf("%.2f", balance),
 					"threshold":       fmt.Sprintf("%.2f", threshold),
@@ -406,7 +422,16 @@ func (s *BalanceNotifyService) sendBalanceLowEmails(recipients []string, userID 
 	}
 	subject := fmt.Sprintf("[%s] 余额不足提醒 / Balance Low Alert", sanitizeEmailHeader(siteName))
 	body := s.buildBalanceLowEmailBody(html.EscapeString(displayName), balance, threshold, html.EscapeString(siteName), rechargeURL)
-	s.sendEmails(recipients, subject, body, "user_email", userEmail, "balance", balance)
+	for _, to := range recipients {
+		delivery := deliveries[to]
+		delivery.Content(subject, body)
+		ctx, cancel := context.WithTimeout(context.Background(), emailSendTimeout)
+		err := sendRecordedBalanceEmail(ctx, s.emailService, delivery, to, subject, body)
+		cancel()
+		if err != nil {
+			slog.Error("failed to send balance notification", "user_id", userID, "error", err)
+		}
+	}
 }
 
 // sendQuotaAlertEmails sends quota alert notification to admin emails.

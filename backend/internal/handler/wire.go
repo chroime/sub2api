@@ -16,6 +16,12 @@ func ProvideAdminUserHandler(adminService service.AdminService, concurrencyServi
 	return h
 }
 
+func ProvideUpstreamGovernanceHandler(svc *gov.Service, notifications *service.NotificationEmailService) *admin.UpstreamGovernanceHandler {
+	h := admin.NewUpstreamGovernanceHandler(svc)
+	h.SetBalanceNotificationRecords(notifications.BalanceNotificationRecords())
+	return h
+}
+
 // ProvideAdminHandlers creates the AdminHandlers struct
 func ProvideAdminHandlers(
 	upstreamGovernance *admin.UpstreamGovernanceHandler,
@@ -264,7 +270,7 @@ func ProvideHandlers(
 // ProviderSet is the Wire provider set for all handlers
 var ProviderSet = wire.NewSet(
 	admin.NewAccountQualityHandler,
-	admin.NewUpstreamGovernanceHandler,
+	ProvideUpstreamGovernanceHandler,
 	// Top-level handlers
 	NewAuthHandler,
 	ProvideUserHandler,

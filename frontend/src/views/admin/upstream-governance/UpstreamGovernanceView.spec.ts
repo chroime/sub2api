@@ -20,6 +20,8 @@ import ModelMonitorPanel from './ModelMonitorPanel.vue'
 import modelAPI from '@/api/admin/upstream-model-monitoring'
 import operationsAPI from '@/api/admin/upstream-operations'
 import qualityAPI from '@/api/admin/account-quality'
+import balanceNotificationsAPI from '@/api/admin/balance-notifications'
+vi.mock('@/api/admin/balance-notifications', () => ({ default: { list: vi.fn().mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20, pages: 1, summary: { total: 0, pending: 0, sent: 0, failed: 0, suppressed: 0 }, evaluated_at: '2026-10-27T01:00:00Z' }), detail: vi.fn() } }))
 vi.mock('@/api/admin/account-quality', () => ({ default: { overview: vi.fn().mockResolvedValue({ policies: [], bindings: [], templates: [], capabilities: [], settings: { version: 1, concurrency: 2, daily_request_limit: 2000, daily_cost_limit_usd: 0, notifications: { email_enabled: false, email_recipients: [], qq_enabled: false, qq_targets: [], events: [], reminder_seconds: 3600 } } }), run: vi.fn(), control: vi.fn(), saveSettings: vi.fn() } }))
 import api, { type BalanceHealth, type ReadinessOverview, type Site, type Snapshot } from '@/api/admin/upstream-governance'
 vi.mock('@/api/admin/upstream-governance', () => ({
@@ -124,6 +126,18 @@ describe('governance page', () => {
     expect(qualityAPI.control).not.toHaveBeenCalled()
     expect(qualityAPI.saveSettings).not.toHaveBeenCalled()
   })
+  it('opens user balance records without loading upstreams or sending notifications', async () => {
+    await router.push('/admin/upstream-governance/notifications?site=2')
+    const wrapper = mount(View)
+    await flushPromises()
+    expect(wrapper.find('[data-test=balance-notification-records]').exists()).toBe(true)
+    expect(wrapper.find('[data-test=smart-operations-site-rail]').exists()).toBe(false)
+    expect(router.currentRoute.value.query.site).toBeUndefined()
+    expect(balanceNotificationsAPI.list).toHaveBeenCalledOnce()
+    expect(api.list).not.toHaveBeenCalled()
+    expect(api.sync).not.toHaveBeenCalled()
+    expect(api.catalog).not.toHaveBeenCalled()
+  })
   it('scopes current tasks to the selected site and offers a route back to all-site overview', async () => {
     setupNavigationSites()
     await router.push('/admin/upstream-governance?site=2')
@@ -185,7 +199,7 @@ describe('governance page', () => {
     setupNavigationSites()
     const wrapper = mount(View)
     await flushPromises()
-    expect(wrapper.findAll('[role=tab]')).toHaveLength(8)
+    expect(wrapper.findAll('[role=tab]')).toHaveLength(9)
     expect(wrapper.get('[data-test=smart-operations-site-rail]').isVisible()).toBe(true)
     await wrapper.get('#governance-models-tab').trigger('click')
     await flushPromises()

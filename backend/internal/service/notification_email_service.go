@@ -17,6 +17,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Wei-Shaw/sub2api/internal/balancenotice"
 )
 
 const (
@@ -80,8 +82,9 @@ var (
 )
 
 type NotificationEmailService struct {
-	settingRepo  SettingRepository
-	emailService *EmailService
+	settingRepo    SettingRepository
+	emailService   *EmailService
+	balanceRecords *balancenotice.Service
 }
 
 type NotificationEmailEventInfo struct {
@@ -117,6 +120,7 @@ type NotificationEmailPreviewInput struct {
 }
 
 type NotificationEmailSendInput struct {
+	BalanceDelivery  *balancenotice.Delivery
 	Event            string
 	Locale           string
 	RecipientEmail   string
@@ -389,13 +393,23 @@ func (s *NotificationEmailService) Send(ctx context.Context, input NotificationE
 // SendDelivered reports whether SMTP accepted a new message. Suppressed and
 // deduplicated notices remain successful no-ops for existing Send callers, but
 // must not be counted as delivered by administrator batch operations.
-func (s *NotificationEmailService) SendDelivered(ctx context.Context, input NotificationEmailSendInput) (bool, error) {
+func (s *NotificationEmailService) SendDelivered(ctx context.Context, input NotificationEmailSendInput) (delivered bool, sendErr error) {
+	delivery := input.BalanceDelivery
+	if input.Event != NotificationEmailEventBalanceLow {
+		delivery = nil
+	}
+	defer func() {
+		if sendErr != nil && !delivered {
+			delivery.Fail(sendErr)
+		}
+	}()
 	info, normalizedEvent, err := s.eventInfo(input.Event)
 	if err != nil {
 		return false, notificationEmailTemplateErr(err)
 	}
 	recipient := strings.TrimSpace(input.RecipientEmail)
 	if recipient == "" {
+		delivery.Suppress("no_recipient")
 		return false, nil
 	}
 	if info.Optional {
@@ -404,6 +418,7 @@ func (s *NotificationEmailService) SendDelivered(ctx context.Context, input Noti
 			return false, err
 		}
 		if unsubscribed {
+			delivery.Suppress("unsubscribed")
 			slog.Info("notification email suppressed by unsubscribe preference", "event", normalizedEvent, "recipient_hash", notificationEmailHash(recipient))
 			return false, nil
 		}
@@ -413,6 +428,7 @@ func (s *NotificationEmailService) SendDelivered(ctx context.Context, input Noti
 	if err != nil {
 		return false, notificationEmailTemplateErr(err)
 	}
+	delivery.Content(rendered.Subject, rendered.HTML)
 
 	deliveryKey := notificationEmailDeliveryKey(normalizedEvent, input.SourceType, input.SourceID, recipient, input.ReminderKey)
 	if deliveryKey != "" {
@@ -421,6 +437,7 @@ func (s *NotificationEmailService) SendDelivered(ctx context.Context, input Noti
 			return false, err
 		}
 		if sent {
+			delivery.Suppress("duplicate")
 			return false, nil
 		}
 	}
@@ -428,7 +445,7 @@ func (s *NotificationEmailService) SendDelivered(ctx context.Context, input Noti
 	if s.emailService == nil {
 		return false, notificationEmailConfigErr(errors.New("email service is not configured"))
 	}
-	if err := s.emailService.SendEmail(ctx, recipient, rendered.Subject, rendered.HTML); err != nil {
+	if err := sendRecordedBalanceEmail(ctx, s.emailService, delivery, recipient, rendered.Subject, rendered.HTML); err != nil {
 		return false, notificationEmailDeliveryErr(err)
 	}
 	if deliveryKey != "" {

@@ -49,6 +49,13 @@ export const SMART_OPERATIONS_SECTIONS = [
     icon: 'clock',
   },
   {
+    id: 'notifications',
+    path: '/admin/upstream-governance/notifications',
+    labelKey: 'governance.smartOperations.sections.notifications',
+    descriptionKey: 'governance.smartOperations.descriptions.notifications',
+    icon: 'bell',
+  },
+  {
     id: 'settings',
     path: '/admin/upstream-governance/settings',
     labelKey: 'governance.smartOperations.sections.settings',

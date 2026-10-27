@@ -11,6 +11,8 @@ func registerUpstreamGovernanceRoutes(admin *gin.RouterGroup, h *handler.Handler
 	}
 	api := h.Admin.UpstreamGovernance
 	g := admin.Group("/upstream-governance")
+	g.GET("/notifications", api.ListBalanceNotifications)
+	g.GET("/notifications/:id", api.BalanceNotification)
 	g.GET("/import-templates", api.ImportTemplates)
 	g.PUT("/import-templates", api.SaveImportTemplates)
 	g.GET("/workbench", api.Workbench)

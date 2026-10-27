@@ -27,6 +27,7 @@ import ModelMonitorPanel from './ModelMonitorPanel.vue'
 import ObservationPricingPanel from './ObservationPricingPanel.vue'
 import GlobalSettingsView from './GlobalSettingsView.vue'
 import AccountQualityView from '../account-quality/AccountQualityView.vue'
+import BalanceNotificationRecords from './BalanceNotificationRecords.vue'
 import Icon from '@/components/icons/Icon.vue'
 import api, {
   type Site,
@@ -54,7 +55,7 @@ const tab = computed({
     if (navigationLocked.value) return
     const entry = SMART_OPERATIONS_SECTIONS.find(item => item.id === section)!
     const query = { ...route.query }
-    if (section === 'local-monitor' || section === 'settings' || section === 'account-quality') delete query.site
+    if (section === 'local-monitor' || section === 'settings' || section === 'account-quality' || section === 'notifications') delete query.site
     void router.push({ path: entry.path, query })
   },
 })
@@ -68,7 +69,7 @@ const automation = ref<AutomationConfiguration | null>(null), balanceHealth = re
 const readinessLoading = ref(false), readinessReadFailed = ref(false)
 const automationBusy = ref(false), observationBusy = ref(false), reconciliationBusy = ref(false), keyBusy = ref(false), rechargeBusy = ref(false), modelBusy = ref(false)
 const qualityBusy = ref(false)
-const siteIndependent = computed(() => tab.value === 'settings' || tab.value === 'account-quality')
+const siteIndependent = computed(() => tab.value === 'settings' || tab.value === 'account-quality' || tab.value === 'notifications')
 const localWorkspaceLoading = ref(false), localWorkspaceError = ref('')
 const keysOpen = ref(false), keySelections = ref<KeySelection[]>([]), reconciliationEpoch = ref(0)
 const importPreviewEpoch = ref(0)
@@ -240,10 +241,10 @@ function retryLocalWorkspace() {
   void loadLocalWorkspace()
 }
 watch([tab, showOverview, () => route.query.site], ([section, overview, siteQuery]) => {
-  if (section === 'account-quality' && siteQuery !== undefined) {
+  if ((section === 'account-quality' || section === 'notifications') && siteQuery !== undefined) {
     const query = { ...route.query }
     delete query.site
-    void router.replace({ path: '/admin/upstream-governance/account-quality', query })
+    void router.replace({ path: `/admin/upstream-governance/${section}`, query })
     return
   }
   if (section === 'local-monitor' && siteQuery !== undefined) {
@@ -616,8 +617,8 @@ async function initializeSites() {
   restoreLocation()
   siteRefreshTimer = setInterval(() => { void refreshSiteSummaries() }, 60_000)
 }
-watch(tab, section => { if (section !== 'account-quality' && !sitesLoaded) void initializeSites() })
-onMounted(() => { if (tab.value !== 'account-quality') void initializeSites() })
+watch(tab, section => { if (section !== 'account-quality' && section !== 'notifications' && !sitesLoaded) void initializeSites() })
+onMounted(() => { if (tab.value !== 'account-quality' && tab.value !== 'notifications') void initializeSites() })
 onUnmounted(() => {
   generation++
   localWorkspaceGeneration++
@@ -648,6 +649,7 @@ onUnmounted(() => {
       <p v-if="error" role="alert" class="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-600 dark:border-red-900 dark:bg-red-900/10">{{ error }}</p>
       <p v-if="siteNotFound" role="status" class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-300">{{ t('governance.smartOperations.siteNotFound') }}</p>
       <GlobalSettingsView v-if="tab === 'settings'" />
+      <BalanceNotificationRecords v-else-if="tab === 'notifications'" />
       <AccountQualityView v-else-if="tab === 'account-quality'" @busy="qualityBusy = $event" />
       <GovernanceWorkbench v-else-if="tab === 'overview' && !siteNotFound && (showOverview || active)" :site-id="showOverview ? undefined : active?.id" :disabled="navigationLocked" @navigate="navigateFromWorkbench" />
       <section v-if="tab === 'local-monitor' && showOverview && localWorkspaceLoading" data-test="local-model-workspace-loading" class="min-w-0 rounded-xl border border-dashed border-gray-200 bg-white p-8 text-center text-sm text-gray-500 dark:border-dark-600 dark:bg-dark-800">{{ t('governance.modelMonitoring.localWorkspaceLoading') }}</section>

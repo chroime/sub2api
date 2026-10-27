@@ -12,6 +12,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/balancenotice"
+	"github.com/google/uuid"
+
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 )
@@ -86,10 +89,11 @@ type UserBulkEmailService struct {
 	accounts userBulkEmailAccounts
 	settings SettingRepository
 	sender   userBulkEmailSender
+	records  *balancenotice.Service
 }
 
 func NewUserBulkEmailService(users UserRepository, groups *APIKeyService, accounts AccountRepository, settings SettingRepository, sender *NotificationEmailService) *UserBulkEmailService {
-	return &UserBulkEmailService{users: users, groups: groups, accounts: accounts, settings: settings, sender: sender}
+	return &UserBulkEmailService{users: users, groups: groups, accounts: accounts, settings: settings, sender: sender, records: sender.BalanceNotificationRecords()}
 }
 
 func normalizeUserBulkEmailEvent(event, locale string) (string, string, error) {
@@ -166,8 +170,9 @@ func (s *UserBulkEmailService) Send(ctx context.Context, input UserBulkEmailInpu
 	}
 	result := &UserBulkEmailResult{Items: make([]UserBulkEmailItem, 0, len(ids)), Total: len(ids)}
 	health := make(map[int64]userBulkGroupHealth)
+	batchID := uuid.NewString()
 	for _, id := range ids {
-		item := s.sendUser(ctx, id, event, locale, health, input.Links)
+		item := s.sendUser(ctx, id, event, locale, health, input.Links, batchID)
 		result.Items = append(result.Items, item)
 		switch item.Status {
 		case "sent":
@@ -181,8 +186,33 @@ func (s *UserBulkEmailService) Send(ctx context.Context, input UserBulkEmailInpu
 	return result, nil
 }
 
-func (s *UserBulkEmailService) sendUser(ctx context.Context, id int64, event, locale string, health map[int64]userBulkGroupHealth, links *NotificationEmailLinks) UserBulkEmailItem {
-	item := UserBulkEmailItem{UserID: id, Status: "failed"}
+func (s *UserBulkEmailService) sendUser(ctx context.Context, id int64, event, locale string, health map[int64]userBulkGroupHealth, links *NotificationEmailLinks, batchIDs ...string) (item UserBulkEmailItem) {
+	item = UserBulkEmailItem{UserID: id, Status: "failed"}
+	var delivery *balancenotice.Delivery
+	var knownUser *User
+	amountsResolved := false
+	batchID := ""
+	if len(batchIDs) > 0 {
+		batchID = batchIDs[0]
+	}
+	defer func() {
+		if event != NotificationEmailEventBalanceLow {
+			return
+		}
+		if delivery == nil {
+			delivery = s.records.Begin(balancenotice.Input{UserID: id, TriggerType: "manual_batch", BatchID: batchID})
+		}
+		if s.records != nil && knownUser != nil && !amountsResolved {
+			delivery.Amounts(&knownUser.Balance, s.balanceThresholdForRecord(knownUser))
+		}
+		if delivery != nil {
+			if item.Status == "skipped" {
+				delivery.Suppress(item.Error)
+			} else if item.Status == "failed" {
+				delivery.Fail(errors.New(item.Error))
+			}
+		}
+	}()
 	if err := ctx.Err(); err != nil {
 		item.Error = "request_cancelled"
 		return item
@@ -197,6 +227,10 @@ func (s *UserBulkEmailService) sendUser(ctx context.Context, id int64, event, lo
 		return item
 	}
 	item.Email = strings.TrimSpace(user.Email)
+	knownUser = user
+	if event == NotificationEmailEventBalanceLow {
+		delivery = s.records.Begin(balancenotice.Input{UserID: user.ID, UserEmail: user.Email, UserName: user.Username, Recipient: item.Email, Balance: &user.Balance, TriggerType: "manual_batch", BatchID: batchID})
+	}
 	if !userBulkEmailAddressValid(item.Email) {
 		item.Status, item.Error = "skipped", "invalid_email"
 		return item
@@ -210,7 +244,9 @@ func (s *UserBulkEmailService) sendUser(ctx context.Context, id int64, event, lo
 		item.Status, item.Error = "skipped", "unsubscribed"
 		return item
 	}
-	mailInput, reason, err := s.messageInput(ctx, user, event, locale, health, links)
+	mailInput, reason, err := s.messageInput(ctx, user, event, locale, health, links, delivery)
+	amountsResolved = err == nil
+	mailInput.BalanceDelivery = delivery
 	if err != nil {
 		item.Error = "notification_data_unavailable"
 		return item
@@ -279,7 +315,7 @@ func (s *UserBulkEmailService) Preview(ctx context.Context, input UserBulkEmailP
 	}}, nil
 }
 
-func (s *UserBulkEmailService) messageInput(ctx context.Context, user *User, event, locale string, health map[int64]userBulkGroupHealth, overrides *NotificationEmailLinks) (NotificationEmailSendInput, string, error) {
+func (s *UserBulkEmailService) messageInput(ctx context.Context, user *User, event, locale string, health map[int64]userBulkGroupHealth, overrides *NotificationEmailLinks, deliveries ...*balancenotice.Delivery) (NotificationEmailSendInput, string, error) {
 	if locale == "" {
 		locale = s.sender.ResolveRecipientLocale(ctx, user.ID, user.Email)
 	}
@@ -300,6 +336,9 @@ func (s *UserBulkEmailService) messageInput(ctx context.Context, user *User, eve
 			threshold = *user.BalanceNotifyThreshold
 		}
 		threshold = resolveBalanceThreshold(threshold, user.BalanceNotifyThresholdType, user.TotalRecharged)
+		if len(deliveries) > 0 {
+			deliveries[0].Amounts(&user.Balance, &threshold)
+		}
 		input.Variables["current_balance"] = fmt.Sprintf("%.2f", user.Balance)
 		input.Variables["threshold"] = fmt.Sprintf("%.2f", threshold)
 		input.Variables["recharge_url"] = settings[SettingKeyBalanceLowNotifyRechargeURL]

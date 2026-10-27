@@ -13,7 +13,10 @@ import (
 	"github.com/google/uuid"
 )
 
-type UpstreamGovernanceHandler struct{ svc *gov.Service }
+type UpstreamGovernanceHandler struct {
+	svc                  *gov.Service
+	balanceNotifications balanceNotificationReader
+}
 
 func NewUpstreamGovernanceHandler(svc *gov.Service) *UpstreamGovernanceHandler {
 	return &UpstreamGovernanceHandler{svc: svc}
