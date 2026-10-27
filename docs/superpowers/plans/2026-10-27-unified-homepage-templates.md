@@ -69,10 +69,10 @@
 ## Task 6: Verify and finish integration
 
 - [x] Run the relevant Go packages, frontend suite/typecheck/build, and production-style browser checks for all four modes, preview and both themes.
-- [ ] Commit the completed feature on main, switch the primary workspace to main without disturbing ignored data, and restart local services with the existing configuration/data directory.
+- [x] Commit the completed feature on main, switch the primary workspace to main without disturbing ignored data, and restart local services with the existing configuration/data directory.
 - [x] Confirm settings persistence and unchanged installation state using local HTTP APIs.
-- [ ] Publish main and the archive tag, then use a verified backup and explicit previous homepage selection for any authorized server rollout. Keep b2 as a frozen fallback branch.
-- [ ] Report final commits, tests, deployment state and remaining concrete limitations.
+- [x] Publish main and the archive tag, then use a verified backup and explicit previous homepage selection for any authorized server rollout. Keep b2 as a frozen fallback branch.
+- [x] Report final commits, tests, deployment state and remaining concrete limitations.
 
 ## Verification recorded on 2026-10-28
 
@@ -81,3 +81,14 @@
 - Deployment script syntax and safety helpers passed. PostgreSQL exercised nine legacy/explicit cases and repeated initialization in a temporary table.
 - Real-browser checks used the embedded production build: four templates at 1440/390 px in light/dark themes, unsaved preview, admin guard, public HTML/API agreement, partial-update preservation and invalid selection rejection.
 - Local database backup: `.tmp/backups/before-unified-main-20261027T155850Z`. Original `backend/data/config.yaml` and `.installed` hashes unchanged; selected template restored to `brand` after persistence tests.
+
+## Rollout outcome
+
+- Feature commits: `70ec0c628` (runtime template selection/preview) and `c32043ee0` (preserve b2 header/button sizing and validate runtime permissions).
+- Both archive tags and main were pushed. The primary workspace now uses main; b2 remains a frozen history reference.
+- Local dev: frontend `127.0.0.1:5173`, backend `127.0.0.1:18080`, original `E:/workspace/agent/sub2api/backend/data`. Template remains `brand`; config and installation-marker hashes match the pre-update snapshot.
+- Server 40: updated through `/home/sub2api/deploy/update-sub2api.sh`; runtime source `c32043ee0`; branch main, template brand, healthy service. Original environment values, ports and data mounts compare equal before/after.
+- Verified deployment backup: `/home/sub2api/backups/pre-update-20261027T163344Z`. Previous application image retained as `sub2api-local:before-main-unification-20261028-r2`.
+- First rollout detected an entrypoint read-permission failure and restored the previous image without restoring/replacing the database. Dockerfiles now give the entrypoint explicit 0755 permissions; the root-owned browser helper is readable by the service user. The updater tests access and binary startup as that user before recreating the application container. The subsequent rollout passed these checks.
+- External HTTP verification: xenoai.eu.cc and us.xenoai.eu.cc homepage/public settings/health return 200, template is brand, and installation is complete.
+- Final brand presentation checks confirm the original story header and 42px primary-button minimum height. The relevant 17 UI tests and production build passed after this restoration; deployment shell/runtime checks also pass.
