@@ -278,6 +278,7 @@ func PrepareBedrockRequestBodyWithTokens(body []byte, modelID string, betaTokens
 		body = sanitizeBedrockThinking(body, modelID)
 		body = sanitizeBedrockToolUseIDs(body)
 	}
+	body = sanitizeBedrockThinkingTemperature(body)
 
 	return body, nil
 }
@@ -779,6 +780,25 @@ func sanitizeBedrockThinking(body []byte, modelID string) []byte {
 	}
 
 	return body
+}
+
+// sanitizeBedrockThinkingTemperature enforces Bedrock's Claude sampling rule:
+// requests using enabled/adaptive thinking may only send temperature=1.
+// Keep sampling parameters unchanged when thinking is absent or disabled.
+func sanitizeBedrockThinkingTemperature(body []byte) []byte {
+	thinkingType := gjson.GetBytes(body, "thinking.type").String()
+	if thinkingType != "enabled" && thinkingType != "adaptive" {
+		return body
+	}
+	temperature := gjson.GetBytes(body, "temperature")
+	if !temperature.Exists() || temperature.Type != gjson.Number || temperature.Float() == 1 {
+		return body
+	}
+	updated, err := sjson.SetBytes(body, "temperature", 1)
+	if err != nil {
+		return body
+	}
+	return updated
 }
 
 // sanitizeBedrockToolUseIDs 清理 messages 中 tool_use.id 和 tool_result.tool_use_id

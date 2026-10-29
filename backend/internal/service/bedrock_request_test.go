@@ -984,6 +984,18 @@ func TestSanitizeBedrockThinking_EdgeCases(t *testing.T) {
 	})
 }
 
+func TestSanitizeBedrockThinking_NormalizesTemperatureForThinking(t *testing.T) {
+	input := []byte(`{"thinking":{"type":"adaptive"},"temperature":0.2,"messages":[]}`)
+	result := sanitizeBedrockThinkingTemperature(input)
+	assert.Equal(t, float64(1), gjson.GetBytes(result, "temperature").Float())
+}
+
+func TestSanitizeBedrockThinking_PreservesTemperatureWithoutThinking(t *testing.T) {
+	input := []byte(`{"temperature":0.2,"messages":[]}`)
+	result := sanitizeBedrockThinkingTemperature(input)
+	assert.Equal(t, float64(0.2), gjson.GetBytes(result, "temperature").Float())
+}
+
 func TestIsBedrockOpus47OrNewer_EdgeCases(t *testing.T) {
 	tests := []struct {
 		modelID string
