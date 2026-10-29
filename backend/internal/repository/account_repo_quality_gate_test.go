@@ -41,8 +41,8 @@ func TestAccountQualityGateGeneralEditUsesLockedRuntimeState(t *testing.T) {
 			t.Cleanup(func() { _ = client.Close() })
 			mock.ExpectQuery(`(?s)SELECT.*FOR NO KEY UPDATE`).
 				WithArgs(int64(7), service.PlatformOpenAI, service.AccountTypeAPIKey, `{"api_key":"fixture"}`, nil).
-				WillReturnRows(sqlmock.NewRows([]string{"identity_unchanged", "ollama_group_unchanged", "ollama_proxy_unchanged", "enabled", "rate_sync_enabled", "snapshot", "ollama_session", "ollama_auto", "ollama_snapshot", "opencode_group_unchanged", "opencode_auto", "opencode_snapshot", "current_extra"}).
-					AddRow(true, false, true, nil, nil, nil, nil, nil, nil, false, nil, nil, []byte(currentJSON)))
+				WillReturnRows(sqlmock.NewRows([]string{"identity_unchanged", "ollama_group_unchanged", "ollama_proxy_unchanged", "enabled", "rate_sync_enabled", "snapshot", "ollama_session", "ollama_auto", "ollama_snapshot", "opencode_group_unchanged", "opencode_auto", "opencode_snapshot", "grok_observed_models", "upstream_model_metadata", "current_extra"}).
+					AddRow(true, false, true, nil, nil, nil, nil, nil, nil, false, nil, nil, nil, nil, []byte(currentJSON)))
 			a := &service.Account{ID: 7, Platform: service.PlatformOpenAI, Type: service.AccountTypeAPIKey,
 				Credentials: map[string]any{"api_key": "fixture"},
 				Extra:       map[string]any{"account_quality_gates": map[string]any{"forged": true}, "ordinary": "keep"},

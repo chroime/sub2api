@@ -200,6 +200,7 @@ func groupFromServiceBase(g *service.Group) Group {
 		AllowImageGeneration:            g.AllowImageGeneration,
 		ModelAllowlist:                  g.ModelAllowlist,
 		AllowBatchImageGeneration:       g.AllowBatchImageGeneration,
+		ImageCountBilling:               g.ImageCountBilling,
 		ImageRateIndependent:            g.ImageRateIndependent,
 		ImageRateMultiplier:             g.ImageRateMultiplier,
 		BatchImageDiscountMultiplier:    g.BatchImageDiscountMultiplier,
