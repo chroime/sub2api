@@ -1680,6 +1680,11 @@ func (s *OpenAIGatewayService) updateGrokUsageSnapshotWithRateLimit(ctx context.
 }
 
 func (s *OpenAIGatewayService) updateGrokUsageFromResponse(ctx context.Context, account *Account, headers http.Header, statusCode int) {
+	// A successful upstream response clears an earlier 403 from failover.
+	recordGrokForbiddenReplayUpstreamStatus(ctx, statusCode)
+	if account != nil && statusCode < http.StatusBadRequest {
+		resetGrokServerErrorStreak(account.ID)
+	}
 	snapshot := parseGrokQuotaSnapshot(headers, statusCode, time.Now())
 	if snapshot != nil {
 		stampGrokQuotaSnapshotForPlan(account, snapshot, grokRequestedModelFromCtx(ctx))
@@ -2015,6 +2020,9 @@ func (s *OpenAIGatewayService) handleGrokAccountUpstreamError(ctx context.Contex
 	if s == nil || account == nil {
 		return
 	}
+	// Content-policy 403s are recorded too: they are request-scoped, still
+	// billed, and the most common target of blind downstream replays.
+	recordGrokForbiddenReplayUpstreamStatus(ctx, statusCode)
 	if isGrokContentPolicyRejection(statusCode, responseBody) {
 		return
 	}
@@ -2105,7 +2113,9 @@ func (s *OpenAIGatewayService) handleGrokAccountUpstreamError(ctx context.Contex
 		// Free-usage 429 was already cooled above via body classification.
 	default:
 		if statusCode >= 500 {
-			s.tempUnscheduleGrok(ctx, account, 2*time.Minute, "grok upstream temporary error")
+			if _, burst := recordGrokServerError(account.ID, time.Now()); burst {
+				s.tempUnscheduleGrok(ctx, account, 2*time.Minute, "grok upstream temporary error (consecutive 5xx)")
+			}
 		}
 	}
 }
@@ -2140,9 +2150,20 @@ func (s *OpenAIGatewayService) tempUnscheduleGrok(ctx context.Context, account *
 		until = *account.TempUnschedulableUntil
 	}
 	s.BlockAccountScheduling(account, until, reason)
+	// The DB fields are cleared on recovery, so this log line is the only
+	// durable record of why an account was taken out of rotation.
+	slog.Warn("grok_account_temp_unschedulable",
+		"account_id", account.ID,
+		"account_name", account.Name,
+		"reason", reason,
+		"cooldown", cooldown.String(),
+		"until", until,
+	)
 	if s.accountRepo != nil {
 		stateCtx, cancel := openAIAccountStateContext(ctx)
 		defer cancel()
-		_ = s.accountRepo.SetTempUnschedulable(stateCtx, account.ID, until, reason)
+		if err := s.accountRepo.SetTempUnschedulable(stateCtx, account.ID, until, reason); err != nil {
+			slog.Warn("grok_account_temp_unschedulable_persist_failed", "account_id", account.ID, "error", err)
+		}
 	}
 }

@@ -604,7 +604,12 @@ func (s *OpenAIGatewayService) applyGrokUpstreamFailureDecision(
 		// the handler only invokes this for non-RateLimit classes.
 		return false
 	case GrokFailureServer:
-		reason = "grok upstream temporary error"
+		// A single 5xx is usually transient and the request already fails over.
+		// Only a burst of consecutive 5xx cools the whole account.
+		if _, burst := recordGrokServerError(account.ID, time.Now()); !burst {
+			return true
+		}
+		reason = "grok upstream temporary error (consecutive 5xx)"
 	case GrokFailureCompatibility:
 		// Deliberately no account mutation. The caller uses ShouldFailover to
 		// retry another account; cooling a pool for a request-shape mismatch

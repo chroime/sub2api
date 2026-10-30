@@ -125,6 +125,13 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 	subscription, _ := middleware2.GetSubscriptionFromContext(c)
 	requestPlatform := openAICompatibleRequestPlatform(c.Request.Context(), apiKey)
 
+	// Grok：拦截下游对已被上游 403 拒绝请求的盲目重放（xAI 对 403 也计费）。
+	finishForbiddenGuard, forbiddenBlocked := beginGrokForbiddenReplayGuard(c, reqLog, apiKey.ID, requestPlatform, body, h.errorResponse)
+	if forbiddenBlocked {
+		return
+	}
+	defer finishForbiddenGuard()
+
 	service.SetOpsLatencyMs(c, service.OpsAuthLatencyMsKey, time.Since(requestStart).Milliseconds())
 	routingStart := time.Now()
 
