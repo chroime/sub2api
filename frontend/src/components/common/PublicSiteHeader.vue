@@ -101,7 +101,7 @@ onBeforeUnmount(() => themeObserver?.disconnect())
   padding: 16px 0;
 }
 .public-site-header-story .public-brand { gap: 9px; }
-.public-site-header-story .public-brand-icon { width: 28px; height: 28px; border-radius: 0; }
+.public-site-header-story .public-brand-icon { width: 28px; height: 28px; border-radius: 8px; }
 .public-site-header-story .public-brand-name { font-size: 21px; font-weight: 720; line-height: 1; }
 .public-site-header-story .public-brand-subtitle { max-width: 180px; padding-left: 11px; font-size: 12px; line-height: 1.2; }
 .public-header-inner { display: flex; align-items: center; justify-content: space-between; gap: 12px; max-width: 1280px; min-height: 72px; margin: 0 auto; padding: 16px 20px; }

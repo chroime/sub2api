@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount, RouterLinkStub } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
+import { parse } from 'vue/compiler-sfc'
+import postcss from 'postcss'
 import PublicSiteHeader from '../PublicSiteHeader.vue'
+import source from '../PublicSiteHeader.vue?raw'
 
 describe('shared public site header', () => {
   beforeEach(() => {
@@ -12,6 +15,17 @@ describe('shared public site header', () => {
   afterEach(() => {
     document.documentElement.classList.remove('dark')
     vi.restoreAllMocks()
+  })
+
+  it('keeps the brand homepage logo at 28px with an 8px corner radius', () => {
+    const { descriptor } = parse(source)
+    const stylesheet = postcss.parse(descriptor.styles.map(block => block.content).join('\n'))
+    const declarations: Record<string, string> = {}
+    stylesheet.walkRules('.public-site-header-story .public-brand-icon', rule => {
+      rule.walkDecls(declaration => { declarations[declaration.prop] = declaration.value })
+    })
+
+    expect(declarations).toMatchObject({ width: '28px', height: '28px', 'border-radius': '8px' })
   })
 
   it('renders dynamic branding, navigation and a common account action', async () => {
