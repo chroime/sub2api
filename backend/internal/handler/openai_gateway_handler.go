@@ -596,6 +596,13 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 	subscription, _ := middleware2.GetSubscriptionFromContext(c)
 	requestPlatform := openAICompatibleRequestPlatform(c.Request.Context(), apiKey)
 
+	// Grok：拦截下游对已被上游 403 拒绝请求的盲目重放（xAI 对 403 也计费）。
+	finishForbiddenGuard, forbiddenBlocked := beginGrokForbiddenReplayGuard(c, reqLog, apiKey.ID, requestPlatform, sessionHashBody, h.errorResponse)
+	if forbiddenBlocked {
+		return
+	}
+	defer finishForbiddenGuard()
+
 	service.SetOpsLatencyMs(c, service.OpsAuthLatencyMsKey, time.Since(requestStart).Milliseconds())
 	routingStart := time.Now()
 
@@ -1262,6 +1269,13 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 
 	subscription, _ := middleware2.GetSubscriptionFromContext(c)
 	requestPlatform := openAICompatibleRequestPlatform(c.Request.Context(), apiKey)
+
+	// Grok：拦截下游对已被上游 403 拒绝请求的盲目重放（xAI 对 403 也计费）。
+	finishForbiddenGuard, forbiddenBlocked := beginGrokForbiddenReplayGuard(c, reqLog, apiKey.ID, requestPlatform, body, h.anthropicErrorResponse)
+	if forbiddenBlocked {
+		return
+	}
+	defer finishForbiddenGuard()
 
 	service.SetOpsLatencyMs(c, service.OpsAuthLatencyMsKey, time.Since(requestStart).Milliseconds())
 	routingStart := time.Now()
