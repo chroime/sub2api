@@ -18,32 +18,21 @@ import (
 // routed onto another pooled account and burns its quota for the same refusal.
 // The guard remembers request fingerprints whose final outcome followed an
 // upstream 403 and rejects identical replays locally, without touching any
-// account. A per-API-key strike window additionally pauses a key whose varied
-// requests keep ending in upstream 403s (clients that mutate timestamps or ids
-// between retries). State is process-local, like the other Grok soft-blocks.
+// account. Only identical replays are blocked: a key's other requests are never
+// paused, so downstreams with a high 403 rate are not cut off wholesale.
+// State is process-local, like the other Grok soft-blocks.
 const (
 	grokForbiddenReplayTTL           = 60 * time.Second
-	grokForbiddenStrikeWindow        = 5 * time.Minute
-	grokForbiddenStrikeThreshold     = 5
-	grokForbiddenAPIKeyCooldown      = 2 * time.Minute
 	grokForbiddenReplaySweepInterval = 4096
 )
 
-// Scopes reported by GrokForbiddenReplayGuard.Blocked.
-const (
-	GrokForbiddenReplayScopeRequest = "request"
-	GrokForbiddenReplayScopeAPIKey  = "api_key"
-)
-
-type grokForbiddenStrikes struct {
-	hits         []time.Time
-	blockedUntil time.Time
-}
+// GrokForbiddenReplayScopeRequest is the scope reported by
+// GrokForbiddenReplayGuard.Blocked for an identical-request replay.
+const GrokForbiddenReplayScopeRequest = "request"
 
 type grokForbiddenReplayStore struct {
 	mu           sync.Mutex
 	requests     map[string]time.Time // fingerprint -> blocked until
-	apiKeys      map[int64]*grokForbiddenStrikes
 	insertsSince int
 }
 
@@ -52,7 +41,6 @@ var globalGrokForbiddenReplayStore = newGrokForbiddenReplayStore()
 func newGrokForbiddenReplayStore() *grokForbiddenReplayStore {
 	return &grokForbiddenReplayStore{
 		requests: make(map[string]time.Time),
-		apiKeys:  make(map[int64]*grokForbiddenStrikes),
 	}
 }
 
@@ -130,9 +118,6 @@ func (g *GrokForbiddenReplayGuard) Blocked(now time.Time) (time.Duration, string
 		}
 		delete(s.requests, g.fingerprint)
 	}
-	if strikes, ok := s.apiKeys[g.apiKeyID]; ok && strikes.blockedUntil.After(now) {
-		return strikes.blockedUntil.Sub(now), GrokForbiddenReplayScopeAPIKey, true
-	}
 	return 0, "", false
 }
 
@@ -147,34 +132,14 @@ func (g *GrokForbiddenReplayGuard) Finish(clientGone bool, now time.Time) bool {
 	if clientGone || g.lastUpstream.Load() != http.StatusForbidden {
 		return false
 	}
-	g.store.recordForbidden(g.apiKeyID, g.fingerprint, now)
+	g.store.recordForbidden(g.fingerprint, now)
 	return true
 }
 
-func (s *grokForbiddenReplayStore) recordForbidden(apiKeyID int64, fingerprint string, now time.Time) {
+func (s *grokForbiddenReplayStore) recordForbidden(fingerprint string, now time.Time) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.requests[fingerprint] = now.Add(grokForbiddenReplayTTL)
-
-	if apiKeyID > 0 {
-		strikes, ok := s.apiKeys[apiKeyID]
-		if !ok {
-			strikes = &grokForbiddenStrikes{}
-			s.apiKeys[apiKeyID] = strikes
-		}
-		cutoff := now.Add(-grokForbiddenStrikeWindow)
-		kept := strikes.hits[:0]
-		for _, at := range strikes.hits {
-			if at.After(cutoff) {
-				kept = append(kept, at)
-			}
-		}
-		strikes.hits = append(kept, now)
-		if len(strikes.hits) >= grokForbiddenStrikeThreshold {
-			strikes.blockedUntil = now.Add(grokForbiddenAPIKeyCooldown)
-			strikes.hits = strikes.hits[:0]
-		}
-	}
 
 	s.insertsSince++
 	if s.insertsSince >= grokForbiddenReplaySweepInterval {
@@ -187,15 +152,6 @@ func (s *grokForbiddenReplayStore) sweepLocked(now time.Time) {
 	for key, until := range s.requests {
 		if !until.After(now) {
 			delete(s.requests, key)
-		}
-	}
-	cutoff := now.Add(-grokForbiddenStrikeWindow)
-	for id, strikes := range s.apiKeys {
-		if strikes.blockedUntil.After(now) {
-			continue
-		}
-		if n := len(strikes.hits); n == 0 || !strikes.hits[n-1].After(cutoff) {
-			delete(s.apiKeys, id)
 		}
 	}
 }

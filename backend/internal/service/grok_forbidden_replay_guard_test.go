@@ -74,41 +74,26 @@ func TestGrokForbiddenReplayGuardIgnoresRecoveredAndDisconnected(t *testing.T) {
 	}
 }
 
-func TestGrokForbiddenReplayGuardAPIKeyStrikes(t *testing.T) {
+func TestGrokForbiddenReplayGuardNeverPausesWholeAPIKey(t *testing.T) {
+	// Many varied requests from one key ending in 403 must not block the key's
+	// other requests; only the exact replays are rejected.
 	store := newGrokForbiddenReplayStore()
 	now := time.Now()
 
-	for i := 0; i < grokForbiddenStrikeThreshold; i++ {
-		// Clients that mutate the body each retry still accumulate strikes.
+	for i := 0; i < 20; i++ {
 		g, ctx := newTestGrokForbiddenGuard(store, 7, time.Duration(i).String())
 		recordGrokForbiddenReplayUpstreamStatus(ctx, http.StatusForbidden)
 		require.True(t, g.Finish(false, now.Add(time.Duration(i)*time.Second)))
 	}
 
 	fresh, _ := newTestGrokForbiddenGuard(store, 7, "never-seen")
-	_, scope, blocked := fresh.Blocked(now.Add(10 * time.Second))
-	require.True(t, blocked)
-	require.Equal(t, GrokForbiddenReplayScopeAPIKey, scope)
+	_, _, blocked := fresh.Blocked(now.Add(25 * time.Second))
+	require.False(t, blocked, "a new request from the same key is not paused")
 
-	_, _, blocked = fresh.Blocked(now.Add(grokForbiddenAPIKeyCooldown + 10*time.Second))
-	require.False(t, blocked)
-
-	unrelated, _ := newTestGrokForbiddenGuard(store, 8, "never-seen")
-	_, _, blocked = unrelated.Blocked(now.Add(10 * time.Second))
-	require.False(t, blocked)
-}
-
-func TestGrokForbiddenReplayGuardStrikesOutsideWindowDoNotAccumulate(t *testing.T) {
-	store := newGrokForbiddenReplayStore()
-	now := time.Now()
-	for i := 0; i < grokForbiddenStrikeThreshold; i++ {
-		g, ctx := newTestGrokForbiddenGuard(store, 9, time.Duration(i).String())
-		recordGrokForbiddenReplayUpstreamStatus(ctx, http.StatusForbidden)
-		g.Finish(false, now.Add(time.Duration(i)*(grokForbiddenStrikeWindow/2+time.Second)))
-	}
-	probe, _ := newTestGrokForbiddenGuard(store, 9, "probe")
-	_, scope, blocked := probe.Blocked(now.Add(time.Duration(grokForbiddenStrikeThreshold) * grokForbiddenStrikeWindow))
-	require.False(t, blocked, scope)
+	replay, _ := newTestGrokForbiddenGuard(store, 7, time.Duration(3).String())
+	_, scope, blocked := replay.Blocked(now.Add(25 * time.Second))
+	require.True(t, blocked, "an identical replay is still rejected")
+	require.Equal(t, GrokForbiddenReplayScopeRequest, scope)
 }
 
 func TestGrokForbiddenReplayGuardFinishOnce(t *testing.T) {
