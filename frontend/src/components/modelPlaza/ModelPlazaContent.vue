@@ -32,46 +32,101 @@
     >
       {{ t('modelPlaza.loadFailed') }}
     </div>
-    <template v-else>
-      <!-- 筛选区:平台 → 分组 → 倍率 -->
-      <PlazaFilterBar
-        :platforms="platforms"
-        :groups="groupOptions"
-        :rates="rates"
-        :platform="selectedPlatform"
-        :group-id="selectedGroupId"
-        :rate="selectedRate"
-        :search="searchQuery"
-        @update:platform="selectedPlatform = $event"
-        @update:group-id="selectedGroupId = $event"
-        @update:rate="selectedRate = $event"
-        @update:search="searchQuery = $event"
-      />
+    <div
+      v-else-if="groups.length === 0"
+      class="plaza-empty rounded-2xl border border-dashed border-gray-300 px-5 py-12 text-center text-sm plaza-muted text-gray-500 dark:border-dark-600 dark:text-dark-400"
+    >
+      {{ t('modelPlaza.empty') }}
+    </div>
 
-      <!-- 分组分节的模型清单(默认按生效倍率升序) -->
-      <div v-if="filteredGroups.length > 0" class="space-y-5">
-        <PlazaGroupSection v-for="g in filteredGroups" :key="g.id" :group="g" />
-      </div>
-      <div
-        v-else
-        class="plaza-empty rounded-2xl border border-dashed border-gray-300 px-5 py-12 text-center text-sm plaza-muted text-gray-500 dark:border-dark-600 dark:text-dark-400"
-      >
-        {{ searchActive ? t('modelPlaza.noSearchResult') : t('modelPlaza.empty') }}
-      </div>
-    </template>
+    <!-- 左侧厂商树 + 右侧模型价格 -->
+    <div v-else class="grid gap-5 lg:grid-cols-[260px_minmax(0,1fr)]">
+      <aside class="lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:self-start lg:overflow-y-auto">
+        <PlazaVendorTree
+          :vendors="vendorTree"
+          :vendor="selectedVendor"
+          :search="searchQuery"
+          :highlighted="highlightedKey"
+          @update:vendor="selectVendor"
+          @update:search="searchQuery = $event"
+          @select-model="focusModel"
+        />
+      </aside>
+
+      <section class="min-w-0 space-y-3">
+        <!-- 分组切换:全部分组只看单价,选中分组额外展示按倍率折算的实付价 -->
+        <div class="flex flex-wrap items-center gap-3">
+          <label for="plaza-group-select" class="text-sm font-medium text-gray-700 dark:text-dark-200">
+            {{ t('modelPlaza.priceTable.groupLabel') }}
+          </label>
+          <div class="w-full sm:w-72">
+            <Select
+              id="plaza-group-select"
+              :model-value="selectedGroupId"
+              :options="groupSelectOptions"
+              :search-placeholder="t('modelPlaza.priceTable.groupLabel')"
+              @update:model-value="onGroupChange"
+            />
+          </div>
+          <span class="text-xs plaza-soft text-gray-400 dark:text-dark-500">
+            {{ selectedGroup ? t('modelPlaza.priceTable.groupHint', { rate: effectiveRate(selectedGroup) }) : t('modelPlaza.priceTable.allGroupsHint') }}
+          </span>
+        </div>
+
+        <p
+          v-if="selectedGroup?.description"
+          class="text-sm plaza-muted text-gray-500 dark:text-dark-400"
+        >
+          {{ selectedGroup.description }}
+        </p>
+        <p
+          v-if="peakNote"
+          class="inline-flex items-center gap-1 text-xs plaza-warning text-amber-600 dark:text-amber-400"
+        >
+          <Icon name="clock" size="xs" class="h-3 w-3" />
+          {{ peakNote }}
+        </p>
+
+        <div class="flex items-baseline justify-between gap-3">
+          <h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ currentVendorLabel }}</h2>
+          <span class="text-xs plaza-soft text-gray-400 dark:text-dark-500">
+            {{ t('modelPlaza.priceTable.unitNote') }}
+          </span>
+        </div>
+
+        <PlazaVendorPriceTable
+          v-if="tableModels.length > 0"
+          :models="tableModels"
+          :group="selectedGroup"
+          :caption="currentVendorLabel"
+          :highlighted="highlightedKey"
+          :peak-window="peakWindow"
+        />
+        <div
+          v-else
+          class="plaza-empty rounded-2xl border border-dashed border-gray-300 px-5 py-12 text-center text-sm plaza-muted text-gray-500 dark:border-dark-600 dark:text-dark-400"
+        >
+          {{ searchActive ? t('modelPlaza.noSearchResult') : t('modelPlaza.detail.noModels') }}
+        </div>
+      </section>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import Icon from '@/components/icons/Icon.vue'
-import PlazaFilterBar from './PlazaFilterBar.vue'
-import PlazaGroupSection from './PlazaGroupSection.vue'
-import type { ModelPlazaGroup, ModelPlazaResponse } from '@/api/modelPlaza'
+import Select, { type SelectOption } from '@/components/common/Select.vue'
+import PlazaVendorTree from './PlazaVendorTree.vue'
+import PlazaVendorPriceTable from './PlazaVendorPriceTable.vue'
+import { buildVendorTree, collectPlazaModels, plazaModelKey } from './plazaVendorTree'
+import type { ModelPlazaGroup, ModelPlazaResponse, PlazaModel } from '@/api/modelPlaza'
 import { useAuthStore } from '@/stores/auth'
+import { useAppStore } from '@/stores/app'
+import { formatPeakRateWindow, hasPeakRate, serverTimezoneLabel } from '@/utils/peak-rate'
 
 const props = defineProps<{
   response: ModelPlazaResponse | null
@@ -85,10 +140,10 @@ const { t } = useI18n()
 const authStore = useAuthStore()
 const isAuthenticated = computed(() => authStore.isAuthenticated)
 
-const selectedPlatform = ref<string>('all')
+const selectedVendor = ref<string>('all')
 const selectedGroupId = ref<number | 'all'>('all')
-const selectedRate = ref<number | 'all'>('all')
 const searchQuery = ref('')
+const highlightedKey = ref('')
 
 const searchActive = computed(() => searchQuery.value.trim() !== '')
 
@@ -98,59 +153,88 @@ const descriptionHtml = computed(() => {
   return DOMPurify.sanitize(marked.parse(md) as string)
 })
 
+const groups = computed(() => props.response?.groups ?? [])
+
 /** 生效倍率 = 用户专属倍率 ?? 分组默认倍率。 */
 function effectiveRate(g: ModelPlazaGroup): number {
   return g.user_rate_multiplier ?? g.rate_multiplier
 }
 
-const platforms = computed(() =>
-  [...new Set((props.response?.groups ?? []).map((g) => g.platform).filter(Boolean))].sort()
+const sortedGroups = computed(() =>
+  [...groups.value].sort((a, b) => effectiveRate(a) - effectiveRate(b) || a.name.localeCompare(b.name))
 )
 
-const groupOptions = computed(() =>
-  (props.response?.groups ?? []).map((g) => ({
-    id: g.id,
-    name: g.name,
-    platform: g.platform,
-    rate: effectiveRate(g)
-  }))
+const groupSelectOptions = computed<SelectOption[]>(() => [
+  { value: 'all', label: t('modelPlaza.priceTable.allGroups') },
+  ...sortedGroups.value.map((g) => ({ value: g.id, label: `${g.name} · ${effectiveRate(g)}x` }))
+])
+
+function onGroupChange(value: string | number | boolean | null) {
+  selectedGroupId.value = typeof value === 'number' ? value : 'all'
+}
+
+const selectedGroup = computed<ModelPlazaGroup | null>(() =>
+  selectedGroupId.value === 'all' ? null : groups.value.find((g) => g.id === selectedGroupId.value) ?? null
 )
 
-/** 全量生效倍率;当前组合下不可用的项由 FilterBar 置灰而非隐藏。 */
-const rates = computed(() =>
-  [...new Set((props.response?.groups ?? []).map(effectiveRate))].sort((a, b) => a - b)
-)
+const appStore = useAppStore()
 
-/** 数据刷新后选中的倍率可能不复存在,重置为全部。 */
-watch(rates, (list) => {
-  if (selectedRate.value !== 'all' && !list.includes(selectedRate.value)) {
-    selectedRate.value = 'all'
+/** 选中分组的高峰窗口描述(含倍率与服务器时区标注);未启用高峰为空串。 */
+const peakWindow = computed(() => {
+  const g = selectedGroup.value
+  if (!g || !hasPeakRate(g)) return ''
+  return formatPeakRateWindow(g, serverTimezoneLabel(appStore.cachedPublicSettings?.server_utc_offset))
+})
+
+const peakNote = computed(() => {
+  if (!peakWindow.value || !selectedGroup.value) return ''
+  return t('modelPlaza.detail.peakNote', {
+    window: peakWindow.value,
+    multiplier: selectedGroup.value.peak_rate_multiplier
+  })
+})
+
+// 数据刷新后选中的分组可能已不可见。
+watch(groups, (list) => {
+  if (selectedGroupId.value !== 'all' && !list.some((g) => g.id === selectedGroupId.value)) {
+    selectedGroupId.value = 'all'
   }
 })
 
-const filteredGroups = computed(() => {
-  let groups = props.response?.groups ?? []
-  if (selectedPlatform.value !== 'all') {
-    groups = groups.filter((g) => g.platform === selectedPlatform.value)
+const vendorTree = computed(() =>
+  buildVendorTree(collectPlazaModels(groups.value, selectedGroupId.value), searchQuery.value, t('modelPlaza.vendor.other'))
+)
+
+// 切换分组或搜索后选中的厂商可能没有模型了。
+watch(vendorTree, (nodes) => {
+  if (selectedVendor.value !== 'all' && !nodes.some((n) => n.key === selectedVendor.value)) {
+    selectedVendor.value = 'all'
   }
-  if (selectedGroupId.value !== 'all') {
-    groups = groups.filter((g) => g.id === selectedGroupId.value)
-  }
-  if (selectedRate.value !== 'all') {
-    groups = groups.filter((g) => effectiveRate(g) === selectedRate.value)
-  }
-  // 模型名搜索:分组内只留命中的模型,整组无命中则隐藏该分组。
-  const q = searchQuery.value.trim().toLowerCase()
-  if (q) {
-    groups = groups
-      .map((g) => ({ ...g, models: g.models.filter((m) => m.name.toLowerCase().includes(q)) }))
-      .filter((g) => g.models.length > 0)
-  }
-  // 专属倍率会改变生效值,不能只依赖后端按默认倍率的排序。
-  return [...groups].sort(
-    (a, b) => effectiveRate(a) - effectiveRate(b) || a.name.localeCompare(b.name)
-  )
 })
+
+const tableModels = computed<PlazaModel[]>(() => {
+  if (selectedVendor.value === 'all') return vendorTree.value.flatMap((n) => n.models)
+  return vendorTree.value.find((n) => n.key === selectedVendor.value)?.models ?? []
+})
+
+const currentVendorLabel = computed(() => {
+  if (selectedVendor.value === 'all') return t('modelPlaza.vendor.all')
+  return vendorTree.value.find((n) => n.key === selectedVendor.value)?.label ?? ''
+})
+
+function selectVendor(key: string) {
+  selectedVendor.value = key
+  highlightedKey.value = ''
+}
+
+/** 点击树中模型:切到其厂商并滚动到对应行。 */
+async function focusModel(model: PlazaModel, vendor: string) {
+  selectedVendor.value = vendor
+  highlightedKey.value = plazaModelKey(model)
+  await nextTick()
+  const id = `plaza-model-${highlightedKey.value.replace(/[^a-zA-Z0-9_-]/g, '_')}`
+  document.getElementById(id)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+}
 </script>
 
 <style scoped>

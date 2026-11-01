@@ -737,6 +737,39 @@ export default {
     nav: {
       login: '登录',
       backToDashboard: '回到后台'
+    },
+    vendor: {
+      treeLabel: '模型厂商',
+      all: '全部模型',
+      other: '其他',
+      expand: '展开 {vendor}',
+      collapse: '收起 {vendor}'
+    },
+    priceTable: {
+      groupLabel: '分组',
+      allGroups: '全部分组（仅单价）',
+      allGroupsHint: '展示模型单价，选择分组可查看按倍率折算的实付价',
+      groupHint: '实付价 = 单价 × {rate}x',
+      unitNote: 'token 单价单位：/ 1M token（国产模型渠道价为人民币 ¥，其余为美元 $）',
+      official: '官方价格',
+      officialCnyHint: '国产模型按官方人民币定价展示，与渠道配置的价格一致',
+      inShort: '入',
+      outShort: '出',
+      cnyHint: '国产模型的渠道/分组定价按人民币计价',
+      cacheRead: '缓存读取',
+      cacheWrite: '缓存写入',
+      source: '定价来源',
+      tiered: '阶梯',
+      tieredHint: '按上下文长度分档计价，此处展示最低档单价',
+      paidShort: '实付'
+    },
+    source: {
+      group: '分组定价',
+      channel: '渠道定价',
+      official: '官方定价',
+      groupHint: '该分组为此模型单独设置了价格',
+      channelHint: '渠道为此模型设置了价格，覆盖官方定价',
+      officialHint: '渠道未设置价格，使用官方模型定价'
     }
   },
 

@@ -21,6 +21,8 @@ type ModelPlazaHandler struct {
 	plazaService   *service.ModelPlazaService
 	apiKeyService  *service.APIKeyService
 	settingService *service.SettingService
+	// accountModels 并入分组账号侧的模型（与 /v1/models 同源）；nil 时只展示渠道模型。
+	accountModels service.PlazaAccountModelLister
 }
 
 // NewModelPlazaHandler 创建模型广场 handler。
@@ -28,12 +30,17 @@ func NewModelPlazaHandler(
 	plazaService *service.ModelPlazaService,
 	apiKeyService *service.APIKeyService,
 	settingService *service.SettingService,
+	gatewayHandler *GatewayHandler,
 ) *ModelPlazaHandler {
-	return &ModelPlazaHandler{
+	h := &ModelPlazaHandler{
 		plazaService:   plazaService,
 		apiKeyService:  apiKeyService,
 		settingService: settingService,
 	}
+	if gatewayHandler != nil {
+		h.accountModels = gatewayHandler.PlazaAccountModels
+	}
+	return h
 }
 
 // modelPlazaOfficialPricing 官方参考价（USD per token，与计费目录同源）。
@@ -64,9 +71,11 @@ type modelPlazaTimePricing struct {
 
 // modelPlazaModel 广场模型条目：实收口径展示定价（白名单形态）+ 官方参考价。
 type modelPlazaModel struct {
-	Name            string                     `json:"name"`
-	Platform        string                     `json:"platform"`
-	Pricing         *userSupportedModelPricing `json:"pricing"`
+	Name     string                     `json:"name"`
+	Platform string                     `json:"platform"`
+	Pricing  *userSupportedModelPricing `json:"pricing"`
+	// PricingSource 展示定价来源："group" | "channel" | "official"；无定价省略。
+	PricingSource   string                     `json:"pricing_source,omitempty"`
 	OfficialPricing *modelPlazaOfficialPricing `json:"official_pricing"`
 	// LongContextBasis 多档时的计价基准："whole_request"（整单按档）| "marginal"（仅超出部分）。
 	LongContextBasis string `json:"long_context_basis,omitempty"`
@@ -124,7 +133,7 @@ func (h *ModelPlazaHandler) Get(c *gin.Context) {
 		return
 	}
 
-	groups, err := h.plazaService.ListGroups(c.Request.Context())
+	groups, err := h.plazaService.ListGroupsWithAccountModels(c.Request.Context(), h.accountModels)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
@@ -205,6 +214,7 @@ func toModelPlazaGroupDTO(g *service.PlazaGroup, userRates map[int64]float64) mo
 			Name:             m.Name,
 			Platform:         m.Platform,
 			Pricing:          toUserPricing(m.Pricing),
+			PricingSource:    m.PricingSource,
 			OfficialPricing:  toModelPlazaOfficialPricing(m.OfficialPricing),
 			LongContextBasis: string(m.LongContextBasis),
 			TimePricing:      toModelPlazaTimePricing(m.TimePricing),
