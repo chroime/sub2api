@@ -1426,6 +1426,35 @@ func (s *GatewayService) GetAvailableModels(ctx context.Context, groupID *int64,
 		return nil
 	}
 
+	models, cacheable := AvailableModelsFromAccounts(accounts, platform)
+	if !cacheable {
+		// 不缓存的结果原样返回：OpenAI 过滤后的空切片（非 nil）是权威结果，
+		// cloneStringSlice 会把它变成 nil（= 使用默认清单）。
+		return models
+	}
+	if s.modelsListCache != nil {
+		s.modelsListCache.Set(cacheKey, cloneStringSlice(models), s.modelsListCacheTTL)
+		modelsListCacheStoreTotal.Add(1)
+	}
+	return cloneStringSlice(models)
+}
+
+// ListActiveAccountsByGroup 列出分组下所有启用账号（不看限流/冷却等调度状态）。
+// 模型广场用它取账号模型，避免账号临时不可调度时模型从橱窗消失。
+func (s *GatewayService) ListActiveAccountsByGroup(ctx context.Context, groupID int64) ([]Account, error) {
+	if s == nil || s.accountRepo == nil {
+		return nil, nil
+	}
+	return s.accountRepo.ListByGroup(ctx, groupID)
+}
+
+// AvailableModelsFromAccounts 按 /v1/models 口径从给定账号集合推导模型列表。
+// 返回 nil 表示“使用平台默认清单”；cacheable 为 false 时结果不应写入列表缓存。
+func AvailableModelsFromAccounts(accounts []Account, platform string) ([]string, bool) {
+	if len(accounts) == 0 {
+		return nil, false
+	}
+
 	// Filter by platform if specified. Mixed scheduling (a gemini group routing
 	// to antigravity accounts) is honoured here as well, so the advertised list
 	// stays in sync with what the request path can actually serve.
@@ -1470,15 +1499,11 @@ func (s *GatewayService) GetAvailableModels(ctx context.Context, groupID *int64,
 	if !hasAnyMapping && platform == PlatformOpenAI {
 		models := filterRetiredOpenAIModelIDs(accounts, openai.DefaultModelIDs())
 		if len(models) != len(openai.DefaultModels) {
-			return models
+			return models, false
 		}
 	}
 	if !hasAnyMapping {
-		if s.modelsListCache != nil {
-			s.modelsListCache.Set(cacheKey, []string(nil), s.modelsListCacheTTL)
-			modelsListCacheStoreTotal.Add(1)
-		}
-		return nil
+		return nil, true
 	}
 
 	// Convert to slice
@@ -1494,15 +1519,10 @@ func (s *GatewayService) GetAvailableModels(ctx context.Context, groupID *int64,
 		// nil means "use defaults" to listing callers; an empty filtered catalog
 		// must remain authoritative instead of resurrecting retired defaults.
 		if len(models) == 0 {
-			return models
+			return models, false
 		}
 	}
-
-	if s.modelsListCache != nil {
-		s.modelsListCache.Set(cacheKey, cloneStringSlice(models), s.modelsListCacheTTL)
-		modelsListCacheStoreTotal.Add(1)
-	}
-	return cloneStringSlice(models)
+	return models, true
 }
 
 func (s *GatewayService) resolveCompositeModelOwnership(ctx context.Context, groupID int64, model string) (CompositeModelOwnership, error) {

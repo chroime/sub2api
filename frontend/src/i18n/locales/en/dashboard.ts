@@ -733,6 +733,39 @@ export default {
     nav: {
       login: 'Sign In',
       backToDashboard: 'Back to Console'
+    },
+    vendor: {
+      treeLabel: 'Model vendors',
+      all: 'All models',
+      other: 'Other',
+      expand: 'Expand {vendor}',
+      collapse: 'Collapse {vendor}'
+    },
+    priceTable: {
+      groupLabel: 'Group',
+      allGroups: 'All groups (unit price only)',
+      allGroupsHint: 'Showing unit prices. Pick a group to see the price after its rate',
+      groupHint: 'Your price = unit price × {rate}x',
+      unitNote: 'Token prices per 1M tokens (channel prices for Chinese models in CNY ¥, others in USD $)',
+      official: 'Official',
+      officialCnyHint: 'Chinese models show the official CNY price, as configured on the channel',
+      inShort: 'In',
+      outShort: 'Out',
+      cnyHint: 'Channel/group prices for Chinese models are in CNY',
+      cacheRead: 'Cache read',
+      cacheWrite: 'Cache write',
+      source: 'Pricing source',
+      tiered: 'Tiered',
+      tieredHint: 'Priced by context length; the lowest tier is shown here',
+      paidShort: 'Paid'
+    },
+    source: {
+      group: 'Group price',
+      channel: 'Channel price',
+      official: 'Official price',
+      groupHint: 'This group sets its own price for the model',
+      channelHint: 'The channel sets a price for this model, overriding the official price',
+      officialHint: 'No channel price is set, so the official model price is used'
     }
   },
 

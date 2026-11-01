@@ -43,11 +43,15 @@ export interface PlazaTimePricing {
   periods: PlazaTimePricingPeriod[]
 }
 
+export type PlazaPricingSource = 'group' | 'channel' | 'official'
+
 export interface PlazaModel {
   name: string
   platform: string
   /** 实收口径的展示定价：档位可提供绝对单价或相对基础价倍率；均为标准时段价。 */
   pricing: UserSupportedModelPricing | null
+  /** 展示定价来源：分组模型级定价 > 渠道模型定价 > 官方目录价；无定价时缺省。 */
+  pricing_source?: PlazaPricingSource
   official_pricing: PlazaOfficialPricing | null
   /** 仅多档模型返回。 */
   long_context_basis?: PlazaLongContextBasis

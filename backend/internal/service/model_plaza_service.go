@@ -19,11 +19,20 @@ type PlazaOfficialPricing struct {
 	Intervals []PricingInterval
 }
 
+// 模型广场展示定价的来源：分组模型级定价 > 渠道模型定价 > 官方目录价。
+const (
+	PlazaPricingSourceGroup    = "group"
+	PlazaPricingSourceChannel  = "channel"
+	PlazaPricingSourceOfficial = "official"
+)
+
 // PlazaModel 模型广场中单个模型条目：按实收口径合成的展示定价 + 官方参考价。
 type PlazaModel struct {
-	Name            string
-	Platform        string
-	Pricing         *ChannelModelPricing
+	Name     string
+	Platform string
+	Pricing  *ChannelModelPricing
+	// PricingSource 展示定价来自哪一层（见 PlazaPricingSource*）；无任何定价为空。
+	PricingSource   string
 	OfficialPricing *PlazaOfficialPricing
 	// LongContextBasis 多档时的计价基准（整单 / 仅超出部分），单档为空。
 	LongContextBasis ContextPricingBasis
@@ -61,9 +70,18 @@ type PlazaGroup struct {
 	Models                    []PlazaModel
 }
 
+// PlazaAccountModel 分组下可调度账号对外暴露的模型（与 /v1/models 同源）。
+type PlazaAccountModel struct {
+	Name     string
+	Platform string
+}
+
+// PlazaAccountModelLister 列出分组账号侧的模型；由 handler 层按 /v1/models 口径提供。
+type PlazaAccountModelLister func(ctx context.Context, g *Group) []PlazaAccountModel
+
 // ModelPlazaService 聚合模型广场数据。
 //
-// 模型枚举来自渠道配置；token 模型的展示单价与阶梯由 BillingService 的阶梯表
+// 模型枚举来自渠道配置与分组账号（见 ListGroupsWithAccountModels）；token 模型的展示单价与阶梯由 BillingService 的阶梯表
 // 查询给出（与扣费走同一条解析链与计费函数），图片/按次模型沿用渠道/分组档位价。
 type ModelPlazaService struct {
 	channelRepo    ChannelRepository
@@ -104,6 +122,15 @@ func NewModelPlazaService(
 //
 // 可见性过滤（专属分组）不在此层做，由 handler 按登录态裁剪。
 func (s *ModelPlazaService) ListGroups(ctx context.Context) ([]PlazaGroup, error) {
+	return s.ListGroupsWithAccountModels(ctx, nil)
+}
+
+// ListGroupsWithAccountModels 在 ListGroups 的渠道模型之外，再并入分组账号侧的模型
+// （accountModels 为 nil 时等同 ListGroups）：
+//   - 渠道里已有的模型保持渠道条目与渠道定价不变；
+//   - 仅账号侧才有的模型按官方目录价展示，来源标记为 official，目录也查不到时无定价；
+//   - 没有绑定渠道但有账号模型的分组同样返回；平台隔离规则与渠道模型一致。
+func (s *ModelPlazaService) ListGroupsWithAccountModels(ctx context.Context, accountModels PlazaAccountModelLister) ([]PlazaGroup, error) {
 	channels, err := s.channelRepo.ListAll(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list channels: %w", err)
@@ -158,7 +185,19 @@ func (s *ModelPlazaService) ListGroups(ctx context.Context) ([]PlazaGroup, error
 		}
 		ch.normalizeBillingModelSource()
 		supported := ch.SupportedModels()
+		// 回落前记录哪些模型由渠道显式定价；其余由官方目录价补齐。
+		sources := make([]string, len(supported))
+		for j := range supported {
+			if !pricingNeedsFallback(supported[j].Pricing) {
+				sources[j] = PlazaPricingSourceChannel
+			}
+		}
 		fillGlobalPricingFallback(s.pricingService, supported)
+		for j := range supported {
+			if sources[j] == "" && supported[j].Pricing != nil {
+				sources[j] = PlazaPricingSourceOfficial
+			}
+		}
 
 		for _, gid := range ch.GroupIDs {
 			pg, ok := byGroup[gid]
@@ -181,18 +220,54 @@ func (s *ModelPlazaService) ListGroups(ctx context.Context) ([]PlazaGroup, error
 				}
 				key := modelKey{platform: m.Platform, name: m.Name}
 				if at, seen := idx[key]; seen {
-					// 先见者胜；仅当已存条目无定价而新条目有定价时升级。
-					if pg.Models[at].Pricing == nil && m.Pricing != nil {
-						pg.Models[at].Pricing = m.Pricing
+					// 先见者胜；已存条目无定价、或只有官方回落价而新条目是渠道显式定价时升级。
+					existing := &pg.Models[at]
+					upgrade := (existing.Pricing == nil && m.Pricing != nil) ||
+						(existing.PricingSource != PlazaPricingSourceChannel && sources[j] == PlazaPricingSourceChannel)
+					if upgrade {
+						existing.Pricing = m.Pricing
+						existing.PricingSource = sources[j]
 					}
 					continue
 				}
 				idx[key] = len(pg.Models)
 				pg.Models = append(pg.Models, PlazaModel{
-					Name:     m.Name,
-					Platform: m.Platform,
-					Pricing:  m.Pricing,
+					Name:          m.Name,
+					Platform:      m.Platform,
+					Pricing:       m.Pricing,
+					PricingSource: sources[j],
 				})
+			}
+		}
+	}
+
+	if accountModels != nil {
+		for _, gid := range order {
+			pg := byGroup[gid]
+			idx := modelIdx[gid]
+			if idx == nil {
+				idx = make(map[modelKey]int)
+				modelIdx[gid] = idx
+			}
+			for _, am := range accountModels(ctx, groupEnt[gid]) {
+				name := strings.TrimSpace(am.Name)
+				// 账号映射键可能是通配模式，不是可展示的具体模型。
+				if name == "" || strings.Contains(name, wildcardSuffix) {
+					continue
+				}
+				if pg.Platform == PlatformComposite {
+					if !isConcreteRequestPlatform(am.Platform) {
+						continue
+					}
+				} else if am.Platform != pg.Platform {
+					continue
+				}
+				key := modelKey{platform: am.Platform, name: name}
+				if _, seen := idx[key]; seen {
+					continue
+				}
+				idx[key] = len(pg.Models)
+				pg.Models = append(pg.Models, s.accountOnlyPlazaModel(name, am.Platform))
 			}
 		}
 	}
@@ -213,6 +288,10 @@ func (s *ModelPlazaService) ListGroups(ctx context.Context) ([]PlazaGroup, error
 		g := groupEnt[gid]
 		for j := range pg.Models {
 			s.fillDisplayPricing(ctx, &pg.Models[j], g)
+			// 无渠道/分组定价、由计费目录（含内置兜底价）给出单价的模型归为官方价。
+			if pg.Models[j].PricingSource == "" && pg.Models[j].Pricing != nil {
+				pg.Models[j].PricingSource = PlazaPricingSourceOfficial
+			}
 			pg.Models[j].OfficialPricing = s.lookupOfficialPricing(ctx, pg.Models[j].Name, officialMemo)
 		}
 		out = append(out, *pg)
@@ -227,12 +306,25 @@ func (s *ModelPlazaService) ListGroups(ctx context.Context) ([]PlazaGroup, error
 	return out, nil
 }
 
+// accountOnlyPlazaModel 构造仅账号侧才有的模型条目：没有渠道定价，按官方目录价展示。
+func (s *ModelPlazaService) accountOnlyPlazaModel(name, platform string) PlazaModel {
+	m := PlazaModel{Name: name, Platform: platform}
+	if s.pricingService != nil {
+		if lp := s.pricingService.GetModelPricing(name); lp != nil {
+			m.Pricing = synthesizePricingFromLiteLLM(lp, nil)
+			m.PricingSource = PlazaPricingSourceOfficial
+		}
+	}
+	return m
+}
+
 // fillDisplayPricing 把模型的展示定价换成实收口径：
 // token 模型取计费阶梯表（单价与档位均由真实计费函数得出），
 // 图片/按次模型（或阶梯表不可用时）沿用渠道定价与分组图片档位价。
 func (s *ModelPlazaService) fillDisplayPricing(ctx context.Context, m *PlazaModel, g *Group) {
 	if groupPricing := matchGroupModelPricing(g, m.Name); groupPricing != nil {
 		m.Pricing = groupPricing
+		m.PricingSource = PlazaPricingSourceGroup
 		// 分组模型级固定价就是实收价，不能再被分组图片兜底档位覆盖。
 		// 否则模型广场会显示 image_price_1k/2k/4k，而实际按 model_pricing 扣费。
 		if groupPricing.BillingMode == BillingModeImage || groupPricing.BillingMode == BillingModePerRequest {
