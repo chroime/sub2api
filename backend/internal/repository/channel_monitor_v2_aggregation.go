@@ -261,6 +261,7 @@ WITH dedup AS (
     COALESCE(current_error.group_id, 0) AS group_id,
     COALESCE(NULLIF(TRIM(current_error.requested_model), ''), NULLIF(TRIM(current_error.model), ''), 'unknown') AS model,
     current_error.user_id, current_error.error_type, current_error.error_owner, COALESCE(current_error.status_code, 0) AS status_code,
+    COALESCE(current_error.is_business_limited, false) AS is_business_limited,
     COALESCE(current_error.upstream_status_code, 0) AS upstream_status_code,
     lower(CONCAT_WS(' ', current_error.error_type, current_error.error_source, current_error.error_message, current_error.upstream_error_message, current_error.upstream_error_detail, current_error.error_body)) AS text,
     (CASE WHEN jsonb_typeof(current_error.upstream_errors) = 'array' THEN jsonb_array_length(current_error.upstream_errors) > 0 ELSE FALSE END
@@ -301,7 +302,10 @@ WITH dedup AS (
     WHEN status_code >= 500 OR error_type = 'internal' OR error_owner = 'system' THEN 'internal'
     ELSE 'other' END AS category
   FROM dedup
-  WHERE bucket_start >= $1 AND bucket_start < $2
+  -- Local rejections (replay guard, billing/concurrency limits, ingress policy)
+  -- never reached a channel; like the ops SLA, they are not channel errors.
+  -- Filtered after dedup so a request whose final outcome was local is dropped.
+  WHERE bucket_start >= $1 AND bucket_start < $2 AND NOT is_business_limited
 ), metric_rows AS (
   INSERT INTO channel_monitor_v2_metrics_1m (bucket_start, platform, group_id, model, error_requests, upstream_affected_requests, upstream_attempt_count, computed_at)
   SELECT bucket_start, platform, group_id, model, COUNT(*), COUNT(*) FILTER (WHERE upstream_affected), SUM(upstream_attempts), NOW()

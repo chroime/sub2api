@@ -756,6 +756,9 @@ func (r *channelMonitorV2Repository) loadErrorDetails(ctx context.Context, filte
 				  AND (COALESCE(newer.status_code, 0) >= 400 OR newer.error_type = 'cyber_policy')
 				  AND (newer.created_at, newer.id) > (current_error.created_at, current_error.id)
 		))`,
+		// Mirrors the aggregation: local rejections are not channel errors. Applied
+		// to the deduped (latest) row only, so drilldown matches the rollup counts.
+		"NOT COALESCE(current_error.is_business_limited, false)",
 	}
 	args := []any{filter.Start, filter.End}
 	platforms := channelMonitorV2EnabledPlatforms(cfg)
