@@ -751,6 +751,7 @@ export default {
       officialCnyHint: 'Chinese models show the official CNY price, as configured on the channel',
       inShort: 'In',
       outShort: 'Out',
+      cacheWrite1hHint: '1-hour cache write price; only models whose billing distinguishes 5m/1h have this',
       cnyHint: 'Channel/group prices for Chinese models are in CNY',
       cacheRead: 'Cache read',
       cacheWrite: 'Cache write',

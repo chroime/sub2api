@@ -755,6 +755,7 @@ export default {
       officialCnyHint: '国产模型按官方人民币定价展示，与渠道配置的价格一致',
       inShort: '入',
       outShort: '出',
+      cacheWrite1hHint: '1 小时缓存写入单价，仅计费区分 5m/1h 的模型有此项',
       cnyHint: '国产模型的渠道/分组定价按人民币计价',
       cacheRead: '缓存读取',
       cacheWrite: '缓存写入',

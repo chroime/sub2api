@@ -55,9 +55,25 @@
               <span
                 v-if="isTiered(row.model)"
                 class="rounded-md bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500 dark:bg-dark-700/70 dark:text-dark-300"
-                :title="t('modelPlaza.priceTable.tieredHint')"
+                :title="tierHint(row.model)"
               >
                 {{ t('modelPlaza.priceTable.tiered') }}
+              </span>
+              <span
+                v-if="row.model.long_context_basis === 'marginal'"
+                class="rounded-md bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500 dark:bg-dark-700/70 dark:text-dark-300"
+                :title="t('modelPlaza.table.tierHintMarginal')"
+              >
+                {{ t('modelPlaza.table.marginalBadge') }}
+              </span>
+              <span
+                v-for="[effort, multiplier] in reasoningMultipliers(row.model)"
+                :key="effort"
+                class="rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/20 dark:text-amber-300"
+                :title="t('modelPlaza.table.reasoningMultiplierHint', { effort, multiplier })"
+                :data-reasoning-effort="effort"
+              >
+                {{ t('modelPlaza.table.reasoningMultiplierBadge', { effort, multiplier }) }}
               </span>
               <span
                 v-if="isCny(row.model)"
@@ -71,15 +87,46 @@
 
           <template v-if="billingMode(row.model) === BILLING_MODE_TOKEN">
             <td v-for="field in TOKEN_FIELDS" :key="field" class="px-3 py-3 text-right align-middle">
-              <div class="font-mono font-semibold text-gray-900 dark:text-gray-50">
-                {{ unitPrice(row.model, row.model.pricing?.[field], row.period) }}
-              </div>
-              <div
-                v-if="group && row.model.pricing?.[field] != null"
-                class="mt-0.5 font-mono text-[11px] text-primary-600 dark:text-primary-400"
-              >
-                {{ t('modelPlaza.priceTable.paidShort') }} {{ paidTokenPrice(row.model, row.model.pricing[field], row.period) }}
-              </div>
+              <!-- 多档模型逐档展示；档位标签只放在输入列，其余列按行对齐 -->
+              <template v-if="isTiered(row.model)">
+                <div
+                  v-for="(iv, idx) in tokenIntervals(row.model)"
+                  :key="idx"
+                  class="whitespace-nowrap font-mono text-xs leading-5"
+                  :title="tierHint(row.model)"
+                >
+                  <span
+                    v-if="field === 'input_price'"
+                    class="mr-1 font-sans font-normal text-gray-400 dark:text-dark-500"
+                  >{{ tierLabel(iv) }}</span>
+                  <span class="font-semibold text-gray-900 dark:text-gray-50">
+                    {{ unitPrice(row.model, iv[field], row.period) }}
+                  </span>
+                  <span
+                    v-if="group && iv[field] != null"
+                    class="ml-1 text-[11px] font-normal text-primary-600 dark:text-primary-400"
+                  >{{ paidTokenPrice(row.model, iv[field], row.period) }}</span>
+                </div>
+              </template>
+              <template v-else>
+                <div class="font-mono font-semibold text-gray-900 dark:text-gray-50">
+                  {{ unitPrice(row.model, row.model.pricing?.[field], row.period) }}
+                </div>
+                <!-- 支持 5m/1h 分档的模型，缓存写入列补一行 1h 价 -->
+                <div
+                  v-if="field === 'cache_write_price' && row.model.pricing?.cache_write_1h_price != null"
+                  class="mt-0.5 whitespace-nowrap font-mono text-[11px] text-gray-500 dark:text-dark-400"
+                  :title="t('modelPlaza.priceTable.cacheWrite1hHint')"
+                >
+                  1h {{ unitPrice(row.model, row.model.pricing.cache_write_1h_price, row.period) }}
+                </div>
+                <div
+                  v-if="group && row.model.pricing?.[field] != null"
+                  class="mt-0.5 font-mono text-[11px] text-primary-600 dark:text-primary-400"
+                >
+                  {{ t('modelPlaza.priceTable.paidShort') }} {{ paidTokenPrice(row.model, row.model.pricing[field], row.period) }}
+                </div>
+              </template>
             </td>
           </template>
           <td v-else colspan="4" class="px-3 py-3 text-right align-middle">
@@ -104,19 +151,38 @@
             class="border-l border-gray-100 px-3 py-3 text-right align-middle font-mono text-xs text-gray-500 dark:border-dark-700/60 dark:text-dark-400"
           >
             <template v-if="!row.period && officialPrices(row.model)">
-              <div class="whitespace-nowrap" :title="isCny(row.model) ? t('modelPlaza.priceTable.officialCnyHint') : undefined">
-                <span class="font-sans text-gray-400 dark:text-dark-500">{{ t('modelPlaza.priceTable.inShort') }}</span>
-                {{ official(row.model, officialPrices(row.model)!.input_price) }}
-                <span class="ml-1 font-sans text-gray-400 dark:text-dark-500">{{ t('modelPlaza.priceTable.outShort') }}</span>
-                {{ official(row.model, officialPrices(row.model)!.output_price) }}
-              </div>
-              <div
-                v-if="officialPrices(row.model)!.cache_read_price != null || officialPrices(row.model)!.cache_write_price != null"
-                class="mt-0.5 whitespace-nowrap text-[11px] text-gray-400 dark:text-dark-500"
-              >
-                {{ t('modelPlaza.table.cacheReadShort') }} {{ official(row.model, officialPrices(row.model)!.cache_read_price) }}
-                <span class="ml-1">{{ t('modelPlaza.table.cacheWriteShort') }} {{ official(row.model, officialPrices(row.model)!.cache_write_price) }}</span>
-              </div>
+              <!-- 官方阶梯按目录规则合成，不受分组阶梯开关影响 -->
+              <template v-if="officialIntervals(row.model).length > 1">
+                <div
+                  v-for="(iv, idx) in officialIntervals(row.model)"
+                  :key="idx"
+                  class="whitespace-nowrap leading-5"
+                  :title="t('modelPlaza.table.tierHint')"
+                >
+                  <span class="mr-1 font-sans text-gray-400 dark:text-dark-500">{{ tierLabel(iv) }}</span>
+                  {{ official(row.model, iv.input_price) }}
+                  <span class="font-sans text-gray-400 dark:text-dark-500"> / </span>
+                  {{ official(row.model, iv.output_price) }}
+                </div>
+              </template>
+              <template v-else>
+                <div class="whitespace-nowrap" :title="isCny(row.model) ? t('modelPlaza.priceTable.officialCnyHint') : undefined">
+                  <span class="font-sans text-gray-400 dark:text-dark-500">{{ t('modelPlaza.priceTable.inShort') }}</span>
+                  {{ official(row.model, officialPrices(row.model)!.input_price) }}
+                  <span class="ml-1 font-sans text-gray-400 dark:text-dark-500">{{ t('modelPlaza.priceTable.outShort') }}</span>
+                  {{ official(row.model, officialPrices(row.model)!.output_price) }}
+                </div>
+                <div
+                  v-if="officialPrices(row.model)!.cache_read_price != null || officialPrices(row.model)!.cache_write_price != null"
+                  class="mt-0.5 whitespace-nowrap text-[11px] text-gray-400 dark:text-dark-500"
+                >
+                  {{ t('modelPlaza.table.cacheReadShort') }} {{ official(row.model, officialPrices(row.model)!.cache_read_price) }}
+                  <span class="ml-1">{{ t('modelPlaza.table.cacheWriteShort') }} {{ official(row.model, officialPrices(row.model)!.cache_write_price) }}</span>
+                  <span v-if="official1hPrice(row.model) != null" class="ml-1">
+                    (1h {{ official(row.model, official1hPrice(row.model)) }})
+                  </span>
+                </div>
+              </template>
             </template>
             <span v-else-if="!row.period">-</span>
           </td>
@@ -144,10 +210,17 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ModelIcon from '@/components/common/ModelIcon.vue'
-import { formatScaled } from '@/utils/pricing'
+import { formatScaled, resolveIntervalPrices } from '@/utils/pricing'
 import { isDomesticModelVendor, modelVendorOf } from '@/utils/modelVendor'
-import { BILLING_MODE_IMAGE, BILLING_MODE_TOKEN, BILLING_MODE_VIDEO, type BillingMode } from '@/constants/channel'
+import {
+  BILLING_MODE_IMAGE,
+  BILLING_MODE_TOKEN,
+  BILLING_MODE_VIDEO,
+  REASONING_EFFORT_LEVELS,
+  type BillingMode
+} from '@/constants/channel'
 import type { ModelPlazaGroup, PlazaModel, PlazaPricingSource, PlazaTimePricingPeriod } from '@/api/modelPlaza'
+import type { UserPricingInterval } from '@/api/channels'
 import { plazaModelKey } from './plazaVendorTree'
 
 const props = defineProps<{
@@ -195,8 +268,51 @@ function billingMode(m: PlazaModel): BillingMode {
   return (m.pricing?.billing_mode || BILLING_MODE_TOKEN) as BillingMode
 }
 
+/** token 模式的长上下文阶梯；档位的相对倍率在此解析为绝对单价。 */
+function tokenIntervals(m: PlazaModel): UserPricingInterval[] {
+  if (billingMode(m) !== BILLING_MODE_TOKEN || !m.pricing) return []
+  return [...(m.pricing.intervals ?? [])]
+    .sort((a, b) => a.min_tokens - b.min_tokens)
+    .map((iv) => resolveIntervalPrices(iv, m.pricing!))
+}
+
 function isTiered(m: PlazaModel): boolean {
-  return billingMode(m) === BILLING_MODE_TOKEN && (m.pricing?.intervals?.length ?? 0) > 1
+  return tokenIntervals(m).length > 1
+}
+
+/**
+ * 档位标签：优先后端给出的 tier_label，否则按区间生成——
+ * 有上限为「≤上限」，末档为「>下限」。
+ */
+function tierLabel(iv: UserPricingInterval): string {
+  if (iv.tier_label) return iv.tier_label
+  return iv.max_tokens == null
+    ? `>${formatTokenCount(iv.min_tokens)}`
+    : `≤${formatTokenCount(iv.max_tokens)}`
+}
+
+function formatTokenCount(n: number): string {
+  const trim = (v: number) => String(Math.round(v * 100) / 100)
+  if (n >= 1_000_000) return `${trim(n / 1_000_000)}M`
+  if (n >= 1_000) return `${trim(n / 1_000)}K`
+  return String(n)
+}
+
+/** 档位计价说明：整单按所在档，或仅超出阈值的部分按该档。 */
+function tierHint(m: PlazaModel): string {
+  return m.long_context_basis === 'marginal'
+    ? t('modelPlaza.table.tierHintMarginal')
+    : t('modelPlaza.table.tierHint')
+}
+
+/** 思考等级倍率：仅列出配置了正倍率的等级。 */
+function reasoningMultipliers(m: PlazaModel): [string, number][] {
+  const configured = m.pricing?.reasoning_effort_multipliers
+  if (!configured) return []
+  return REASONING_EFFORT_LEVELS.flatMap((effort) => {
+    const v = configured[effort]
+    return typeof v === 'number' && Number.isFinite(v) && v > 0 ? [[effort, v] as [string, number]] : []
+  })
 }
 
 /**
@@ -256,6 +372,18 @@ function officialPrices(m: PlazaModel): OfficialTokenPrices | null {
 
 function official(m: PlazaModel, value: number | null | undefined): string {
   return value == null ? '-' : money(m, value, PER_MILLION)
+}
+
+/** 官方长上下文阶梯；国产模型用渠道价作官方价，不带官方阶梯。 */
+function officialIntervals(m: PlazaModel): UserPricingInterval[] {
+  if (isCny(m)) return []
+  return [...(m.official_pricing?.intervals ?? [])].sort((a, b) => a.min_tokens - b.min_tokens)
+}
+
+/** 1h 缓存写入价只在计费区分 5m/1h 时有意义，缺省为 null。 */
+function official1hPrice(m: PlazaModel): number | null {
+  if (isCny(m)) return m.pricing?.cache_write_1h_price ?? null
+  return m.official_pricing?.cache_write_1h_price ?? null
 }
 
 function perUnitSuffix(m: PlazaModel): string {
