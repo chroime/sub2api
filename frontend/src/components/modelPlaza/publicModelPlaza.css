@@ -160,25 +160,28 @@
   color: var(--public-heading);
 }
 
-.public-model-plaza .model-plaza-content .plaza-pricing-table {
-  --pz-title: color-mix(in srgb, var(--plaza-accent) 35%, var(--public-heading));
-  --pz-bg: color-mix(in srgb, var(--plaza-accent) 5%, var(--public-surface));
-  --pz-bg-hover: color-mix(in srgb, var(--plaza-accent) 7%, var(--public-hover));
+/* 公开页用自身配色覆盖表格的主色变量，避免后台主色与公开页主题冲突 */
+.public-model-plaza .model-plaza-content .plaza-vendor-price-table {
+  background: var(--public-surface);
+  border-color: var(--public-border);
+  box-shadow: var(--public-shadow);
+  --pz-title: color-mix(in srgb, var(--public-accent) 35%, var(--public-heading));
+  --pz-bg: color-mix(in srgb, var(--public-accent) 5%, var(--public-surface));
+  --pz-bg-hover: color-mix(in srgb, var(--public-accent) 7%, var(--public-hover));
 }
 
-.public-model-plaza .model-plaza-content .plaza-pricing-table :is(th, td, tr),
-.public-model-plaza .plaza-pricing-table .plaza-reference-heading {
+.public-model-plaza .model-plaza-content .plaza-vendor-price-table :is(th, td, tr) {
   border-color: var(--public-border);
 }
 
-.public-model-plaza .model-plaza-content .plaza-pricing-table thead {
+.public-model-plaza .model-plaza-content .plaza-vendor-price-table thead {
   background: var(--public-surface-soft);
 }
 
-.public-model-plaza .model-plaza-content .plaza-pricing-table .pz-unit {
+.public-model-plaza .model-plaza-content .plaza-vendor-price-table .pz-unit {
   color: var(--public-muted);
 }
 
-.public-model-plaza .model-plaza-content .plaza-pricing-table tbody tr:hover {
+.public-model-plaza .model-plaza-content .plaza-vendor-price-table tbody tr:hover {
   background: var(--public-hover);
 }

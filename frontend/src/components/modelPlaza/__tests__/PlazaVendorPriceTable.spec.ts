@@ -65,22 +65,22 @@ function mountTable(models: PlazaModel[], g: ModelPlazaGroup | null = null) {
   })
 }
 
-describe('PlazaVendorPriceTable 单价与实付价', () => {
-  it('未选分组时只显示单价，不显示实付价', () => {
+describe('PlazaVendorPriceTable 本站价与官方价', () => {
+  it('未选分组时本站价按 1x，等于单价', () => {
     const text = mountTable([tokenModel()]).text()
     expect(text).toContain('$3.00')
-    expect(text).not.toContain('modelPlaza.priceTable.paidShort')
   })
 
-  it('选中分组后按生效倍率显示实付价', () => {
-    const text = mountTable([tokenModel()], group({ rate_multiplier: 0.5 })).text()
-    expect(text).toContain('$3.00')
+  it('选中分组后本站价按生效倍率折算，官方价不受影响', () => {
+    const m = tokenModel({ official_pricing: { input_price: 3e-6, output_price: 1.5e-5, cache_write_price: null, cache_read_price: null } })
+    const text = mountTable([m], group({ rate_multiplier: 0.5 })).text()
+    // 本站价：input $3.00 × 0.5 = $1.50；官方价仍为未折算的 $3.00。
     expect(text).toContain('$1.50')
+    expect(text).toContain('$3.00')
   })
 
   it('用户专属倍率优先于分组倍率', () => {
     // 输入 $3.00：专属 0.2x → $0.60，分组 0.5x → $1.50。
-    // 断言取输入列，避开输出价折算后与其他数字重合。
     const text = mountTable(
       [tokenModel()],
       group({ rate_multiplier: 0.5, user_rate_multiplier: 0.2 })
@@ -149,7 +149,7 @@ describe('PlazaVendorPriceTable 币种', () => {
   const cnyModel = () =>
     tokenModel({ name: 'glm-5', platform: 'zhipu', pricing_source: 'channel' })
 
-  it('国产模型渠道价显示人民币并带 CNY 标记', () => {
+  it('国产模型渠道价显示人民币并带 CNY 标记（本站价与官方价同为 ¥）', () => {
     const text = mountTable([cnyModel()]).text()
     expect(text).toContain('¥3.00')
     expect(text).toContain('CNY')

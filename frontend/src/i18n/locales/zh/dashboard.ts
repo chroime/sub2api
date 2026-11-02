@@ -712,8 +712,6 @@ export default {
       cache: '缓存',
       cacheWrite: '写入',
       cacheRead: '读取',
-      cacheWriteShort: '写',
-      cacheReadShort: '读',
       tierHint: '按单次请求的总上下文（输入 + 缓存写入 + 缓存读取）所在档位对整单计价',
       tierHintMarginal: '仅超过阈值的部分按该档计价，输出不加价',
       reasoningMultiplierBadge: '{effort} ×{multiplier}',
@@ -747,30 +745,19 @@ export default {
     },
     priceTable: {
       groupLabel: '分组',
-      allGroups: '全部分组（仅单价）',
-      allGroupsHint: '展示模型单价，选择分组可查看按倍率折算的实付价',
-      groupHint: '实付价 = 单价 × {rate}x',
-      unitNote: 'token 单价单位：/ 1M token（国产模型渠道价为人民币 ¥，其余为美元 $）',
+      allGroups: '全部分组（倍率 1x）',
+      allGroupsHint: '本站价按 1x 展示，选择分组可查看该分组倍率折算后的价格',
+      groupHint: '本站价 = 本站单价 × {rate}x',
+      unitNote: 'token 价格单位：/ 1M token（国产模型按人民币 ¥，其余按美元 $）',
+      sitePrice: '本站价格',
+      siteRateNote: '已含 {rate}x 倍率',
       official: '官方价格',
       officialCnyHint: '国产模型按官方人民币定价展示，与渠道配置的价格一致',
-      inShort: '入',
-      outShort: '出',
-      cacheWrite1hHint: '1 小时缓存写入单价，仅计费区分 5m/1h 的模型有此项',
+      cacheWrite1hHint: '1 小时缓存写入价，仅计费区分 5m/1h 的模型有此项',
       cnyHint: '国产模型的渠道/分组定价按人民币计价',
       cacheRead: '缓存读取',
       cacheWrite: '缓存写入',
-      source: '定价来源',
-      tiered: '阶梯',
-      tieredHint: '按上下文长度分档计价，此处展示最低档单价',
-      paidShort: '实付'
-    },
-    source: {
-      group: '分组定价',
-      channel: '渠道定价',
-      official: '官方定价',
-      groupHint: '该分组为此模型单独设置了价格',
-      channelHint: '渠道为此模型设置了价格，覆盖官方定价',
-      officialHint: '渠道未设置价格，使用官方模型定价'
+      tiered: '阶梯'
     }
   },
 
