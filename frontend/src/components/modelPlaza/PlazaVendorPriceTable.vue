@@ -2,7 +2,7 @@
   <div
     class="plaza-vendor-price-table overflow-x-auto rounded-2xl border border-gray-100 bg-white shadow-card dark:border-dark-700/50 dark:bg-dark-800/50"
   >
-    <table class="w-full min-w-[1080px] border-collapse text-sm tabular-nums">
+    <table class="w-full min-w-[720px] border-collapse text-sm tabular-nums">
       <caption class="sr-only">{{ caption }}</caption>
       <thead>
         <!-- 两级表头：本站价与官方价同列序、同格式，便于逐项对比 -->
@@ -25,16 +25,16 @@
         <tr
           class="border-b border-gray-200 text-[11px] font-medium uppercase leading-4 tracking-wide text-gray-400 dark:border-dark-700 dark:text-dark-500"
         >
-          <th scope="col" class="pz-bg px-3 py-2 text-right font-medium">{{ t('modelPlaza.table.input') }}</th>
-          <th scope="col" class="pz-bg px-3 py-2 text-right font-medium">{{ t('modelPlaza.table.output') }}</th>
-          <th scope="col" class="pz-bg px-3 py-2 text-right font-medium">{{ t('modelPlaza.priceTable.cacheRead') }}</th>
-          <th scope="col" class="pz-bg px-3 py-2 text-right font-medium">{{ t('modelPlaza.priceTable.cacheWrite') }}</th>
-          <th scope="col" class="border-l border-gray-100 px-3 py-2 text-right font-medium dark:border-dark-700/60">
+          <th scope="col" class="pz-bg px-2.5 py-2 text-right font-medium">{{ t('modelPlaza.table.input') }}</th>
+          <th scope="col" class="pz-bg px-2.5 py-2 text-right font-medium">{{ t('modelPlaza.table.output') }}</th>
+          <th scope="col" class="pz-bg px-2.5 py-2 text-right font-medium">{{ t('modelPlaza.priceTable.cacheRead') }}</th>
+          <th scope="col" class="pz-bg px-2.5 py-2 text-right font-medium">{{ t('modelPlaza.priceTable.cacheWrite') }}</th>
+          <th scope="col" class="border-l border-gray-100 px-2.5 py-2 text-right font-medium dark:border-dark-700/60">
             {{ t('modelPlaza.table.input') }}
           </th>
-          <th scope="col" class="px-3 py-2 text-right font-medium">{{ t('modelPlaza.table.output') }}</th>
-          <th scope="col" class="px-3 py-2 text-right font-medium">{{ t('modelPlaza.priceTable.cacheRead') }}</th>
-          <th scope="col" class="px-3 py-2 pr-5 text-right font-medium">{{ t('modelPlaza.priceTable.cacheWrite') }}</th>
+          <th scope="col" class="px-2.5 py-2 text-right font-medium">{{ t('modelPlaza.table.output') }}</th>
+          <th scope="col" class="px-2.5 py-2 text-right font-medium">{{ t('modelPlaza.priceTable.cacheRead') }}</th>
+          <th scope="col" class="px-2.5 py-2 pr-5 text-right font-medium">{{ t('modelPlaza.priceTable.cacheWrite') }}</th>
         </tr>
       </thead>
       <tbody>
@@ -108,7 +108,7 @@
             <td
               v-for="field in TOKEN_FIELDS"
               :key="`site-${field}`"
-              class="pz-cell px-3 py-3 text-right align-middle font-mono"
+              class="pz-cell px-2.5 py-3 text-right align-middle font-mono"
             >
               <template v-if="isTiered(row.model)">
                 <div
@@ -140,7 +140,7 @@
               </template>
             </td>
           </template>
-          <td v-else colspan="4" class="pz-cell px-3 py-3 text-right align-middle">
+          <td v-else colspan="4" class="pz-cell px-2.5 py-3 text-right align-middle">
             <div v-if="requestPrices(row.model).length" class="flex flex-wrap items-center justify-end gap-1.5">
               <span
                 v-for="p in requestPrices(row.model)"
@@ -163,7 +163,7 @@
             <td
               v-for="(field, fieldIdx) in TOKEN_FIELDS"
               :key="`official-${field}`"
-              class="px-3 py-3 text-right align-middle font-mono text-xs text-gray-500 dark:text-dark-400"
+              class="px-2.5 py-3 text-right align-middle font-mono text-xs text-gray-500 dark:text-dark-400"
               :class="[fieldIdx === 0 ? 'border-l border-gray-100 dark:border-dark-700/60' : '',
                        fieldIdx === TOKEN_FIELDS.length - 1 ? 'pr-5' : '']"
             >
@@ -178,7 +178,7 @@
                     v-if="field === 'input_price'"
                     class="mr-1 font-sans text-gray-400 dark:text-dark-500"
                   >{{ tierLabel(iv) }}</span>
-                  {{ official(row.model, iv[field]) }}
+                  <span>{{ official(row.model, iv[field]) }}</span>
                 </div>
               </template>
               <template v-else>
@@ -195,7 +195,7 @@
               </template>
             </td>
           </template>
-          <td v-else colspan="4" class="border-l border-gray-100 px-3 py-3 pr-5 text-right align-middle text-xs text-gray-400 dark:border-dark-700/60 dark:text-dark-500">
+          <td v-else colspan="4" class="border-l border-gray-100 px-2.5 py-3 pr-5 text-right align-middle text-xs text-gray-400 dark:border-dark-700/60 dark:text-dark-500">
             -
           </td>
         </tr>
@@ -319,8 +319,21 @@ function isCny(m: PlazaModel): boolean {
     isDomesticModelVendor(modelVendorOf(m.name, m.platform))
 }
 
+/**
+ * 展示精度：最多保留 DISPLAY_SIGNIFICANT 位有效数字（整数部分不截断），
+ * 避免倍率折算或录入换算产生的长小数（如 3.911111111）把列宽撑开。
+ */
+const DISPLAY_SIGNIFICANT = 5
+
+function roundForDisplay(v: number): number {
+  if (!Number.isFinite(v) || v === 0) return v
+  const intDigits = Math.floor(Math.log10(Math.abs(v))) + 1
+  const precision = Math.min(100, Math.max(DISPLAY_SIGNIFICANT, intDigits + MIN_DECIMALS))
+  return Number(v.toPrecision(precision))
+}
+
 function money(m: PlazaModel, value: number, scale: number): string {
-  const s = formatScaled(value, scale, MIN_DECIMALS)
+  const s = formatScaled(roundForDisplay(value * scale), 1, MIN_DECIMALS)
   return isCny(m) ? s.replace(/^\$/, '¥') : s
 }
 
@@ -366,9 +379,9 @@ function official(m: PlazaModel, value: number | null | undefined): string {
   return value == null ? '-' : money(m, value, PER_MILLION)
 }
 
-/** 官方长上下文阶梯；国产模型用渠道价作官方价，不带官方阶梯。 */
+/** 官方长上下文阶梯；国产模型的渠道价即官方价，阶梯与本站价一致。 */
 function officialIntervals(m: PlazaModel): UserPricingInterval[] {
-  if (isCny(m)) return []
+  if (isCny(m)) return tokenIntervals(m)
   return [...(m.official_pricing?.intervals ?? [])].sort((a, b) => a.min_tokens - b.min_tokens)
 }
 

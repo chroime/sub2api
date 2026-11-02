@@ -165,6 +165,37 @@ describe('PlazaVendorPriceTable 币种', () => {
   it('非国产模型始终按美元显示', () => {
     expect(mountTable([tokenModel()]).text()).not.toContain('¥')
   })
+
+  it('国产模型的官方价阶梯与本站价一致', () => {
+    const m = cnyModel()
+    m.pricing!.intervals = [
+      { min_tokens: 0, max_tokens: 32_000, input_price: 2e-6, output_price: 8e-6,
+        cache_write_price: null, cache_read_price: null, per_request_price: null },
+      { min_tokens: 32_000, max_tokens: null, input_price: 4e-6, output_price: 1.6e-5,
+        cache_write_price: null, cache_read_price: null, per_request_price: null }
+    ]
+    const text = mountTable([m]).text()
+    // 档位标签只出现在输入列：本站价、官方价两侧各一次
+    expect(text.match(/≤32K/g)).toHaveLength(2)
+    expect(text.match(/>32K/g)).toHaveLength(2)
+  })
+})
+
+describe('PlazaVendorPriceTable 展示精度', () => {
+  it('长小数最多保留 5 位有效数字', () => {
+    const m = tokenModel()
+    m.pricing!.output_price = 3.911111111e-6
+    const text = mountTable([m]).text()
+    expect(text).toContain('$3.9111')
+    expect(text).not.toContain('3.91111')
+  })
+
+  it('整数部分不截断，仍保留两位小数', () => {
+    const m = tokenModel()
+    m.pricing!.output_price = 1.2345678e-3
+    // 5 位有效数字会得到 1234.6；整数部分 4 位时放宽到保留两位小数
+    expect(mountTable([m]).text()).toContain('$1234.57')
+  })
 })
 
 describe('PlazaVendorPriceTable 分时倍率', () => {
