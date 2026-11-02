@@ -102,10 +102,12 @@
                   <span class="font-semibold text-gray-900 dark:text-gray-50">
                     {{ unitPrice(row.model, iv[field], row.period) }}
                   </span>
+                  <!-- 分档行横向空间紧张，用箭头代替「实付」标签表达折算关系 -->
                   <span
                     v-if="group && iv[field] != null"
                     class="ml-1 text-[11px] font-normal text-primary-600 dark:text-primary-400"
-                  >{{ paidTokenPrice(row.model, iv[field], row.period) }}</span>
+                    :title="t('modelPlaza.priceTable.paidShort')"
+                  >→{{ paidTokenPrice(row.model, iv[field], row.period) }}</span>
                 </div>
               </template>
               <template v-else>
