@@ -327,6 +327,11 @@ func (s *GrokQuotaService) probeBilling(ctx context.Context, accountID int64) (*
 	if persistErr != nil {
 		slog.Warn("grok_billing_persist_failed", "account_id", account.ID, "error", persistErr)
 	}
+	// Prepaid money and weekly usage both come from the credits (weekly)
+	// response, so only a fresh weekly answer may release a spending lock.
+	if weeklyOK {
+		releaseGrokSpendingLockIfServable(ctx, s.accountRepo, account, billing, time.Now())
+	}
 	now := time.Now().UTC()
 	localUsage24h, localUsage7d, localUsageMonthly := grokLocalUsageForQuota(ctx, s.usageLogRepo, account.ID, billing, now)
 	return &GrokQuotaProbeResult{

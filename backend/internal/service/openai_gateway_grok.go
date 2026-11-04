@@ -1846,18 +1846,21 @@ func isSuccessfulGrokRateLimitRecovery(account *Account, snapshot *xai.QuotaSnap
 		snapshot.StatusCode < http.StatusMultipleChoices
 }
 
-func clearGrokRateLimitAfterRecovery(ctx context.Context, repo AccountRepository, account *Account) {
+// clearGrokRateLimitAfterRecovery reports whether it cleared the observed lock.
+func clearGrokRateLimitAfterRecovery(ctx context.Context, repo AccountRepository, account *Account) bool {
 	if repo == nil || account == nil || account.RateLimitedAt == nil || account.RateLimitResetAt == nil || ctx.Err() != nil {
-		return
+		return false
 	}
 	recoveryRepo, ok := repo.(grokRateLimitRecoveryRepository)
 	if !ok {
-		return
+		return false
 	}
-	_, err := recoveryRepo.ClearRateLimitIfObserved(ctx, account.ID, *account.RateLimitedAt, *account.RateLimitResetAt)
+	cleared, err := recoveryRepo.ClearRateLimitIfObserved(ctx, account.ID, *account.RateLimitedAt, *account.RateLimitResetAt)
 	if err != nil {
 		slog.Warn("grok_rate_limit_recovery_clear_failed", "account_id", account.ID, "error", err)
+		return false
 	}
+	return cleared
 }
 
 func persistGrokRateLimit(ctx context.Context, repo AccountRepository, account *Account, resetAt time.Time) {
