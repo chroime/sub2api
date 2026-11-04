@@ -81,10 +81,10 @@ func catalogGroupFromJSON(raw string) RemoteGroup {
 	return group
 }
 
-func catalogGroupDescriptionChange(name, before, after string) GroupChangeDetail {
-	text := fmt.Sprintf("分组描述调整：%s，原描述「%s」更改为「%s」", singleLineGroupValue(name), groupNoticeDescription(before), groupNoticeDescription(after))
+func catalogGroupDescriptionChange(name, after string) GroupChangeDetail {
+	text := fmt.Sprintf("分组描述调整：%s，新描述「%s」", singleLineGroupValue(name), groupNoticeDescription(after))
 	if strings.TrimSpace(after) == "" {
-		text = fmt.Sprintf("分组描述调整：%s，原描述「%s」，描述已清空", singleLineGroupValue(name), groupNoticeDescription(before))
+		text = fmt.Sprintf("分组描述调整：%s，描述已清空", singleLineGroupValue(name))
 	}
 	return GroupChangeDetail{Kind: GroupEventDescriptionChange, GroupName: singleLineGroupValue(name), Text: text}
 }
@@ -138,7 +138,7 @@ func catalogEventDetails(event Event, catalog Catalog) []GroupChangeDetail {
 			details = append(details, GroupChangeDetail{Kind: GroupEventNameChange, GroupName: newName, Text: fmt.Sprintf("分组名称调整：%s 更改为 %s", oldName, newName)})
 		}
 		if before[1] != after[1] {
-			details = append(details, catalogGroupDescriptionChange(newName, before[1], after[1]))
+			details = append(details, catalogGroupDescriptionChange(newName, after[1]))
 		}
 		return details
 	case "rate_changed":

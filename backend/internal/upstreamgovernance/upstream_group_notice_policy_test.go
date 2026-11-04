@@ -56,7 +56,7 @@ func TestUpstreamGroupNoticesFilterEachGlobalAndSiteDetailBeforeCombining(t *tes
 		},
 		{
 			name: "only description enabled globally", events: `{"group_name_change":false,"group_description_change":true,"group_rate_change":false}`,
-			want: []string{"分组描述调整：新名称，原描述「旧描述」更改为「新描述」"}, omit: []string{"分组名称调整：", "分组倍率调整："},
+			want: []string{"分组描述调整：新名称，新描述「新描述」"}, omit: []string{"分组名称调整：", "分组倍率调整："},
 		},
 		{
 			name: "only rate enabled globally", events: `{"group_name_change":false,"group_description_change":false,"group_rate_change":true}`,

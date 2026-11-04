@@ -146,7 +146,7 @@ func TestLocalGroupDispatchFiltersIndependentChangesBeforeSending(t *testing.T) 
 
 	require.Equal(t, 1, sender.delivered)
 	require.Equal(t, 1, sender.recipientCalls)
-	require.Equal(t, "【来至外星球的通知】\n分组描述调整：New Pro，原描述「稳定线路」，描述已清空\n分组倍率调整：New Pro，0.02x → 0.023x（上调）\n通知时间：2026-10-22 11:26:35", sender.notices[0].AstrBotText)
+	require.Equal(t, "【来至外星球的通知】\n分组描述调整：New Pro，描述已清空\n分组倍率调整：New Pro，0.02x → 0.023x（上调）\n通知时间：2026-10-22 11:26:35", sender.notices[0].AstrBotText)
 	require.Equal(t, 1, store.completed)
 	require.NoError(t, store.completionErr)
 }

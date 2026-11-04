@@ -88,14 +88,14 @@ func TestRenderLocalGroupChangeNoticeBuildsAstrBotTemplates(t *testing.T) {
 			event: LocalGroupChangeEvent{Kind: LocalGroupChangeUpdated,
 				Before: `{"name":"GPT Pro","description":"稳定线路"}`,
 				After:  `{"name":"GPT Pro","description":""}`},
-			want: "分组描述调整：GPT Pro，原描述「稳定线路」，描述已清空",
+			want: "分组描述调整：GPT Pro，描述已清空",
 		},
 		{
 			name: "description added from null",
 			event: LocalGroupChangeEvent{Kind: LocalGroupChangeUpdated,
 				Before: `{"Name":"GPT Pro","Description":null}`,
 				After:  `{"Name":"GPT Pro","Description":"新线路"}`},
-			want: "分组描述调整：GPT Pro，原描述「无描述」更改为「新线路」",
+			want: "分组描述调整：GPT Pro，新描述「新线路」",
 		},
 		{
 			name: "rate increased",
@@ -162,7 +162,7 @@ func TestRenderLocalGroupChangeNoticeCombinesIndependentChanges(t *testing.T) {
 				"【来至外星球的通知】",
 				tt.statusLine,
 				"分组名称调整：Old Pro 更改为 New Pro",
-				"分组描述调整：New Pro，原描述「旧 线路」更改为「新 线路」",
+				"分组描述调整：New Pro，新描述「新 线路」",
 				"分组倍率调整：New Pro，0.02x → 0.023x（上调）",
 				"通知时间：2026-10-22 11:26:35",
 			}, "\n"), notice.AstrBotText)
@@ -187,7 +187,7 @@ func TestRenderLocalGroupChangeNoticeFiltersEachEventIndependently(t *testing.T)
 		{"group_online", "分组上线：New Pro 上线，描述：新线路，倍率0.023x"},
 		{"group_offline", "分组下线：New Pro 下线"},
 		{"group_name_change", "分组名称调整：Old Pro 更改为 New Pro"},
-		{"group_description_change", "分组描述调整：New Pro，原描述「旧线路」更改为「新线路」"},
+		{"group_description_change", "分组描述调整：New Pro，新描述「新线路」"},
 		{"group_rate_change", "分组倍率调整：New Pro，0.02x → 0.023x（上调）"},
 	}
 	for _, tt := range tests {

@@ -42,7 +42,7 @@ func TestFastObservationCombinesSameGroupChangesWithOneFinalTimestamp(t *testing
 	notices := fastObservationChangeNotices(Site{ID: 7}, previous, observation, 2, observedAt)
 
 	require.Len(t, notices, 1)
-	require.Contains(t, notices[0].Body, "分组名称调整：旧名称 更改为 新名称\n分组描述调整：新名称，原描述「旧描述」更改为「新描述」\n分组倍率调整：新名称，0.8x → 0.9x（上调）\n通知时间：2026-10-23 09:02:03")
+	require.Contains(t, notices[0].Body, "分组名称调整：旧名称 更改为 新名称\n分组描述调整：新名称，新描述「新描述」\n分组倍率调整：新名称，0.8x → 0.9x（上调）\n通知时间：2026-10-23 09:02:03")
 }
 
 func TestFastObservationKeepsDifferentGroupsInSeparateNotices(t *testing.T) {

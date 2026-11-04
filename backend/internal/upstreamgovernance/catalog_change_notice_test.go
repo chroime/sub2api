@@ -115,7 +115,7 @@ func TestCatalogGroupNoticeDescribesRenameAndDescriptionClearing(t *testing.T) {
 		Catalog{Groups: []RemoteGroup{{ID: "42", Name: "新名称"}}},
 	)
 
-	require.Contains(t, notice.Body, "分组名称调整：旧名称 更改为 新名称\n分组描述调整：新名称，原描述「旧描述」，描述已清空")
+	require.Contains(t, notice.Body, "分组名称调整：旧名称 更改为 新名称\n分组描述调整：新名称，描述已清空")
 	require.Equal(t, 1, strings.Count(notice.Body, "通知时间："))
 	require.NotContains(t, notice.Body, "名称、描述或协议")
 }
@@ -127,7 +127,7 @@ func TestCatalogGroupNoticeDescribesNewDescriptionFromEmpty(t *testing.T) {
 		Catalog{},
 	)
 
-	require.Contains(t, notice.Body, "分组描述调整：名称，原描述「无描述」更改为「新描述」")
+	require.Contains(t, notice.Body, "分组描述调整：名称，新描述「新描述」")
 }
 
 func TestCatalogGroupNoticeDoesNotInventEventsForUnrelatedAuditChanges(t *testing.T) {
@@ -153,7 +153,7 @@ func TestCatalogGroupNoticeCannotInjectExtraEventLines(t *testing.T) {
 	)
 
 	require.Contains(t, notice.Body, "分组名称调整：旧名称 更改为 新 名称")
-	require.Contains(t, notice.Body, "分组描述调整：新 名称，原描述「旧 描述」更改为「新 描述」")
+	require.Contains(t, notice.Body, "分组描述调整：新 名称，新描述「新 描述」")
 	require.Equal(t, 1, strings.Count(notice.Body, "分组名称调整："))
 	require.Equal(t, 1, strings.Count(notice.Body, "分组描述调整："))
 	require.NotContains(t, notice.Body, "\r")

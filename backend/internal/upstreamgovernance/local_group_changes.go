@@ -218,9 +218,9 @@ func localGroupChangeDetails(event LocalGroupChangeEvent, before, after localGro
 			details = append(details, GroupChangeDetail{Kind: GroupEventNameChange, GroupName: singleLineGroupValue(after.Name), Text: fmt.Sprintf("分组名称调整：%s 更改为 %s", singleLineGroupValue(before.Name), singleLineGroupValue(after.Name))})
 		}
 		if before.Description != after.Description {
-			text := fmt.Sprintf("分组描述调整：%s，原描述「%s」更改为「%s」", name, groupNoticeDescription(before.Description), groupNoticeDescription(after.Description))
+			text := fmt.Sprintf("分组描述调整：%s，新描述「%s」", name, groupNoticeDescription(after.Description))
 			if after.Description == "" {
-				text = fmt.Sprintf("分组描述调整：%s，原描述「%s」，描述已清空", name, groupNoticeDescription(before.Description))
+				text = fmt.Sprintf("分组描述调整：%s，描述已清空", name)
 			}
 			details = append(details, GroupChangeDetail{Kind: GroupEventDescriptionChange, GroupName: name, Text: text})
 		}
