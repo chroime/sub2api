@@ -3,7 +3,10 @@ package service
 import (
 	"context"
 	"strings"
+	"sync"
 	"time"
+
+	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
 )
 
 // Spending-limit is recoverable at the end of the observed billing period.
@@ -16,6 +19,95 @@ const grokSpendingLimitProbeCooldown = 10 * time.Minute
 // xAI rejects such accounts intermittently, so a short probe interval keeps
 // the account recoverable without sending every request into a known 403.
 const grokExhaustedForbiddenCooldown = 10 * time.Minute
+
+// grokSpendingRefusalConfirmWindow is how long a first spending/credit refusal
+// on an account that still reports prepaid money is remembered. A second
+// refusal inside the window means the stored balance is stale, so xAI's
+// verdict wins and the account waits for the billing window reset.
+const grokSpendingRefusalConfirmWindow = time.Hour
+
+// grokBillingHasPrepaidHeadroom reports whether the last billing probe saw
+// money xAI draws on once the weekly included credits are used up: a positive
+// prepaid balance, or an on-demand cap that is not yet spent. Such accounts
+// keep serving with a full weekly window.
+func grokBillingHasPrepaidHeadroom(billing *xai.BillingSummary) bool {
+	if billing == nil {
+		return false
+	}
+	if billing.PrepaidBalance != nil && *billing.PrepaidBalance > 0 {
+		return true
+	}
+	if billing.OnDemandCap != nil && *billing.OnDemandCap > 0 {
+		used := 0.0
+		if billing.OnDemandUsed != nil {
+			used = *billing.OnDemandUsed
+		}
+		return used < *billing.OnDemandCap
+	}
+	return false
+}
+
+func grokAccountHasPrepaidHeadroom(account *Account) bool {
+	if account == nil {
+		return false
+	}
+	billing, err := grokBillingSnapshotFromExtra(account.Extra)
+	if err != nil {
+		return false
+	}
+	return grokBillingHasPrepaidHeadroom(billing)
+}
+
+// grokSpendingRefusalResetAt returns the rate-limit horizon for an account xAI
+// refused for spending limit or exhausted credits. While the last billing probe
+// still shows prepaid money, the first refusal only gets a short probe
+// cooldown: the balance may be shared or topped up, and locking until the
+// weekly reset would idle money that is still there. A confirmed repeat falls
+// back to the billing window reset.
+func grokSpendingRefusalResetAt(account *Account, now time.Time) time.Time {
+	if account != nil && grokAccountHasPrepaidHeadroom(account) && !confirmGrokSpendingRefusal(account.ID, now) {
+		return now.Add(grokSpendingLimitProbeCooldown)
+	}
+	return grokSpendingLimitResetAt(account, now)
+}
+
+type grokSpendingRefusalStore struct {
+	mu    sync.Mutex
+	items map[int64]time.Time // account -> first unconfirmed refusal
+}
+
+var globalGrokSpendingRefusals = &grokSpendingRefusalStore{items: make(map[int64]time.Time)}
+
+// confirmGrokSpendingRefusal records a spending refusal and reports whether an
+// earlier one inside grokSpendingRefusalConfirmWindow already happened. A
+// confirmation consumes the record. State is process-local, like the other
+// Grok soft-blocks.
+func confirmGrokSpendingRefusal(accountID int64, now time.Time) bool {
+	if accountID <= 0 {
+		return true
+	}
+	s := globalGrokSpendingRefusals
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if first, ok := s.items[accountID]; ok && now.Sub(first) <= grokSpendingRefusalConfirmWindow {
+		delete(s.items, accountID)
+		return true
+	}
+	s.items[accountID] = now
+	return false
+}
+
+// resetGrokSpendingRefusal forgets an unconfirmed refusal after the account
+// served a request successfully.
+func resetGrokSpendingRefusal(accountID int64) {
+	if accountID <= 0 {
+		return
+	}
+	s := globalGrokSpendingRefusals
+	s.mu.Lock()
+	delete(s.items, accountID)
+	s.mu.Unlock()
+}
 
 func grokSpendingLimitResetAt(account *Account, now time.Time) time.Time {
 	if account == nil {
@@ -56,6 +148,11 @@ func grokBillingWindowExhausted(account *Account) bool {
 	}
 	// A snapshot whose rolling window has already ended describes a past week.
 	if periodEnd, err := time.Parse(time.RFC3339, strings.TrimSpace(billing.PeriodEnd)); err == nil && !periodEnd.After(time.Now()) {
+		return false
+	}
+	// A full weekly window is not exhaustion while prepaid money remains: xAI
+	// keeps serving and bills the overflow against it.
+	if grokBillingHasPrepaidHeadroom(billing) {
 		return false
 	}
 	if billing.UsagePercent != nil && *billing.UsagePercent >= 100 {

@@ -1684,6 +1684,7 @@ func (s *OpenAIGatewayService) updateGrokUsageFromResponse(ctx context.Context, 
 	recordGrokForbiddenReplayUpstreamStatus(ctx, statusCode)
 	if account != nil && statusCode < http.StatusBadRequest {
 		resetGrokServerErrorStreak(account.ID)
+		resetGrokSpendingRefusal(account.ID)
 	}
 	snapshot := parseGrokQuotaSnapshot(headers, statusCode, time.Now())
 	if snapshot != nil {
@@ -2092,7 +2093,7 @@ func (s *OpenAIGatewayService) handleGrokAccountUpstreamError(ctx context.Contex
 	case http.StatusForbidden:
 		// Spending-limit already handled by body classifier when phrasing matches.
 		if isGrokSpendingLimitError(responseBody) {
-			s.rateLimitGrok(ctx, account, grokSpendingLimitResetAt(account, time.Now()))
+			s.rateLimitGrok(ctx, account, grokSpendingRefusalResetAt(account, time.Now()))
 			return
 		}
 		if isGrokAccountAccessRejection(responseBody) {

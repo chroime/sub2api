@@ -584,7 +584,7 @@ func (s *OpenAIGatewayService) applyGrokUpstreamFailureDecision(
 		if strings.Contains(low, "spending") || strings.Contains(low, "credits") {
 			// Spending-limit/credit exhaustion is a billing-window condition. Keep
 			// the account recoverable and let the normal rate-limit recovery clear it.
-			s.rateLimitGrok(ctx, account, grokSpendingLimitResetAt(account, time.Now()))
+			s.rateLimitGrok(ctx, account, grokSpendingRefusalResetAt(account, time.Now()))
 			return true
 		}
 		// Keep the historical 402/payment reason for ops UI + regression tests.
