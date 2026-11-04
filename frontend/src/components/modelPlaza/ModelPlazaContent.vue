@@ -54,7 +54,7 @@
       </aside>
 
       <section class="min-w-0 space-y-3">
-        <!-- 分组切换:全部分组只看单价,选中分组额外展示按倍率折算的实付价 -->
+        <!-- 全部分组只看官方价；选中分组后展示本站实付价与官方价对照。 -->
         <div class="flex flex-wrap items-center gap-3">
           <label for="plaza-group-select" class="text-sm font-medium text-gray-700 dark:text-dark-200">
             {{ t('modelPlaza.priceTable.groupLabel') }}

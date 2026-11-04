@@ -2,15 +2,15 @@
   <div
     class="plaza-vendor-price-table overflow-x-auto rounded-2xl border border-gray-100 bg-white shadow-card dark:border-dark-700/50 dark:bg-dark-800/50"
   >
-    <table class="w-full min-w-[720px] border-collapse text-sm tabular-nums">
+    <table class="w-full border-collapse text-sm tabular-nums" :class="group ? 'min-w-[720px]' : 'min-w-[480px]'">
       <caption class="sr-only">{{ caption }}</caption>
       <thead>
-        <!-- 两级表头：本站价与官方价同列序、同格式，便于逐项对比 -->
+        <!-- 全部分组只看官方价；选中分组后按相同列序对照本站价。 -->
         <tr class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-dark-400">
           <th scope="col" rowspan="2" class="border-r border-gray-100 py-2.5 pl-5 pr-3 text-left align-middle dark:border-dark-700/60">
             {{ t('modelPlaza.table.model') }}
           </th>
-          <th scope="colgroup" colspan="4" class="pz-bg pt-2 text-center">
+          <th v-if="group" scope="colgroup" colspan="4" class="pz-bg pt-2 text-center">
             <div class="pz-title border-b pb-2 font-semibold">
               {{ t('modelPlaza.priceTable.sitePrice') }}
               <span class="pz-unit ml-1 font-normal normal-case">{{ siteRateNote }}</span>
@@ -25,10 +25,12 @@
         <tr
           class="border-b border-gray-200 text-[11px] font-medium uppercase leading-4 tracking-wide text-gray-400 dark:border-dark-700 dark:text-dark-500"
         >
-          <th scope="col" class="pz-bg px-2.5 py-2 text-right font-medium">{{ t('modelPlaza.table.input') }}</th>
-          <th scope="col" class="pz-bg px-2.5 py-2 text-right font-medium">{{ t('modelPlaza.table.output') }}</th>
-          <th scope="col" class="pz-bg px-2.5 py-2 text-right font-medium">{{ t('modelPlaza.priceTable.cacheRead') }}</th>
-          <th scope="col" class="pz-bg px-2.5 py-2 text-right font-medium">{{ t('modelPlaza.priceTable.cacheWrite') }}</th>
+          <template v-if="group">
+            <th scope="col" class="pz-bg px-2.5 py-2 text-right font-medium">{{ t('modelPlaza.table.input') }}</th>
+            <th scope="col" class="pz-bg px-2.5 py-2 text-right font-medium">{{ t('modelPlaza.table.output') }}</th>
+            <th scope="col" class="pz-bg px-2.5 py-2 text-right font-medium">{{ t('modelPlaza.priceTable.cacheRead') }}</th>
+            <th scope="col" class="pz-bg px-2.5 py-2 text-right font-medium">{{ t('modelPlaza.priceTable.cacheWrite') }}</th>
+          </template>
           <th scope="col" class="border-l border-gray-100 px-2.5 py-2 text-right font-medium dark:border-dark-700/60">
             {{ t('modelPlaza.table.input') }}
           </th>
@@ -78,7 +80,7 @@
                 {{ t('modelPlaza.priceTable.tiered') }}
               </span>
               <span
-                v-if="row.model.long_context_basis === 'marginal'"
+                v-if="group && row.model.long_context_basis === 'marginal'"
                 class="rounded-md bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500 dark:bg-dark-700/70 dark:text-dark-300"
                 :title="t('modelPlaza.table.tierHintMarginal')"
               >
@@ -103,8 +105,8 @@
             </div>
           </th>
 
-          <!-- 本站价：已乘生效倍率；未选分组时倍率为 1，等同单价 -->
-          <template v-if="billingMode(row.model) === BILLING_MODE_TOKEN">
+          <!-- 本站价：只在选中分组时展示，已乘生效倍率。 -->
+          <template v-if="group && billingMode(row.model) === BILLING_MODE_TOKEN">
             <td
               v-for="field in TOKEN_FIELDS"
               :key="`site-${field}`"
@@ -140,7 +142,7 @@
               </template>
             </td>
           </template>
-          <td v-else colspan="4" class="pz-cell px-2.5 py-3 text-right align-middle">
+          <td v-else-if="group" colspan="4" class="pz-cell px-2.5 py-3 text-right align-middle">
             <div v-if="requestPrices(row.model).length" class="flex flex-wrap items-center justify-end gap-1.5">
               <span
                 v-for="p in requestPrices(row.model)"
@@ -223,7 +225,7 @@ import { plazaModelKey } from './plazaVendorTree'
 
 const props = defineProps<{
   models: PlazaModel[]
-  /** 选中的分组；为空时只展示单价，不计算分组实付价。 */
+  /** 选中的分组；为空时只展示官方价格。 */
   group: ModelPlazaGroup | null
   caption: string
   highlighted?: string
@@ -237,7 +239,7 @@ const PER_MILLION = 1_000_000
 const MIN_DECIMALS = 2
 const TOKEN_FIELDS = ['input_price', 'output_price', 'cache_read_price', 'cache_write_price'] as const
 
-/** 本站价列头的倍率标注；未选分组时倍率为 1。 */
+/** 选中分组时本站价列头的倍率标注。 */
 const siteRateNote = computed(() => t('modelPlaza.priceTable.siteRateNote', { rate: groupRate() }))
 
 /** 每个模型一行标准价；配置了分时倍率的模型再按时段各加一行。 */
@@ -250,7 +252,7 @@ interface PriceRow {
 const rows = computed<PriceRow[]>(() =>
   props.models.flatMap((m) => {
     const key = plazaModelKey(m)
-    const periods = (m.time_pricing?.periods ?? []).map<PriceRow>((p, idx) => ({ model: m, period: p, key: `${key}:${idx}` }))
+    const periods = (props.group ? m.time_pricing?.periods ?? [] : []).map<PriceRow>((p, idx) => ({ model: m, period: p, key: `${key}:${idx}` }))
     return [{ model: m, period: null, key }, ...periods]
   })
 )
@@ -272,7 +274,7 @@ function tokenIntervals(m: PlazaModel): UserPricingInterval[] {
 }
 
 function isTiered(m: PlazaModel): boolean {
-  return tokenIntervals(m).length > 1
+  return (props.group ? tokenIntervals(m) : officialIntervals(m)).length > 1
 }
 
 /**
@@ -302,6 +304,7 @@ function tierHint(m: PlazaModel): string {
 
 /** 思考等级倍率：仅列出配置了正倍率的等级。 */
 function reasoningMultipliers(m: PlazaModel): [string, number][] {
+  if (!props.group) return []
   const configured = m.pricing?.reasoning_effort_multipliers
   if (!configured) return []
   return REASONING_EFFORT_LEVELS.flatMap((effort) => {

@@ -741,8 +741,8 @@ export default {
     },
     priceTable: {
       groupLabel: 'Group',
-      allGroups: 'All groups (1x rate)',
-      allGroupsHint: 'Our price is shown at 1x. Pick a group to see it after that group rate',
+      allGroups: 'All groups',
+      allGroupsHint: 'Only official prices are shown. Pick a group to compare our prices with official prices',
       groupHint: 'Our price = our unit price × {rate}x',
       unitNote: 'Token prices per 1M tokens (Chinese models in CNY ¥, others in USD $)',
       sitePrice: 'Our price',

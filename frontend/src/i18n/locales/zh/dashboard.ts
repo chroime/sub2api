@@ -745,8 +745,8 @@ export default {
     },
     priceTable: {
       groupLabel: '分组',
-      allGroups: '全部分组（倍率 1x）',
-      allGroupsHint: '本站价按 1x 展示，选择分组可查看该分组倍率折算后的价格',
+      allGroups: '全部分组',
+      allGroupsHint: '仅显示官方价格，选择具体分组可查看本站价格与官方价格对照',
       groupHint: '本站价 = 本站单价 × {rate}x',
       unitNote: 'token 价格单位：/ 1M token（国产模型按人民币 ¥，其余按美元 $）',
       sitePrice: '本站价格',
