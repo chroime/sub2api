@@ -111,53 +111,103 @@ func TestHandleGrokAccountUpstreamErrorAmbiguous403KeepsPrepaidAccountSchedulabl
 	require.False(t, svc.isOpenAIAccountRuntimeBlocked(account))
 }
 
-func TestGrokSpendingRefusalOnPrepaidAccountProbesFirstThenLocksUntilReset(t *testing.T) {
+// backdateGrokSpendingRefusal moves the recorded first refusal into the past,
+// as if the probe cooldown had already run out.
+func backdateGrokSpendingRefusal(t *testing.T, accountID int64, age time.Duration) {
+	t.Helper()
+	s := globalGrokSpendingRefusals
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	first, ok := s.items[accountID]
+	require.True(t, ok, "a first refusal must be recorded")
+	s.items[accountID] = first.Add(-age)
+}
+
+func TestGrokSpendingRefusalProbesFirstThenLocksUntilReset(t *testing.T) {
 	const accountID = 4804
-	resetGrokSpendingRefusal(accountID)
 	t.Cleanup(func() { resetGrokSpendingRefusal(accountID) })
 	weekEnd := time.Now().Add(72 * time.Hour).Truncate(time.Second)
 	body := []byte(`{"code":"x","error":"You have run out of credits or need a Grok subscription."}`)
+	money := map[string]map[string]any{
+		"prepaid":       {"prepaid_balance": 12294.0},
+		"monthly limit": {"prepaid_balance": 0.0, "monthly_limit_cents": 283486.0, "used_cents": 0.0},
+		"on-demand cap": {"on_demand_cap": 500.0, "on_demand_used": 120.0},
+	}
 
-	for _, status := range []int{http.StatusPaymentRequired, http.StatusForbidden} {
-		resetGrokSpendingRefusal(accountID)
-		repo := &grokQuotaAccountRepo{}
-		svc := &OpenAIGatewayService{accountRepo: repo}
-		account := &Account{ID: accountID, Platform: PlatformGrok, Type: AccountTypeOAuth,
-			Extra: grokPrepaidBillingExtra(weekEnd.Format(time.RFC3339), map[string]any{"prepaid_balance": 12294.0})}
+	for name, fields := range money {
+		for _, status := range []int{http.StatusPaymentRequired, http.StatusForbidden} {
+			resetGrokSpendingRefusal(accountID)
+			repo := &grokQuotaAccountRepo{}
+			svc := &OpenAIGatewayService{accountRepo: repo}
+			extra := grokPrepaidBillingExtra(weekEnd.Format(time.RFC3339), fields)
+			newAccount := func() *Account {
+				return &Account{ID: accountID, Platform: PlatformGrok, Type: AccountTypeOAuth, Extra: extra}
+			}
 
-		svc.handleGrokAccountUpstreamError(context.Background(), account, status, nil, body)
-		require.Equal(t, 1, repo.rateLimitedCalls, "status %d", status)
-		require.WithinDuration(t, time.Now().Add(grokSpendingLimitProbeCooldown), repo.lastRateLimitResetAt, 2*time.Second,
-			"status %d: first refusal with prepaid left is only a probe cooldown", status)
+			svc.handleGrokAccountUpstreamError(context.Background(), newAccount(), status, nil, body)
+			require.Equal(t, 1, repo.rateLimitedCalls, "%s/%d", name, status)
+			require.WithinDuration(t, time.Now().Add(grokSpendingLimitProbeCooldown), repo.lastRateLimitResetAt, 2*time.Second,
+				"%s/%d: first refusal with money left is only a probe cooldown", name, status)
 
-		second := &Account{ID: accountID, Platform: PlatformGrok, Type: AccountTypeOAuth, Extra: account.Extra}
-		svc.handleGrokAccountUpstreamError(context.Background(), second, status, nil, body)
-		require.Equal(t, 2, repo.rateLimitedCalls, "status %d", status)
-		require.True(t, repo.lastRateLimitResetAt.Equal(weekEnd),
-			"status %d: a repeated refusal trusts xAI and waits for the weekly reset", status)
+			// Requests already in flight fail in the same burst; they must not
+			// count as the confirming repeat.
+			svc.handleGrokAccountUpstreamError(context.Background(), newAccount(), status, nil, body)
+			require.WithinDuration(t, time.Now().Add(grokSpendingLimitProbeCooldown), repo.lastRateLimitResetAt, 2*time.Second,
+				"%s/%d: a refusal in the same burst keeps the probe cooldown", name, status)
+
+			backdateGrokSpendingRefusal(t, accountID, grokSpendingLimitProbeCooldown+time.Second)
+			svc.handleGrokAccountUpstreamError(context.Background(), newAccount(), status, nil, body)
+			require.True(t, repo.lastRateLimitResetAt.Equal(weekEnd),
+				"%s/%d: a refusal after the probe cooldown trusts xAI and waits for the weekly reset", name, status)
+		}
 	}
 }
 
-func TestGrokSpendingRefusalWithoutPrepaidLocksUntilResetImmediately(t *testing.T) {
+func TestGrokSpendingRefusalWithoutMoneyLocksUntilResetImmediately(t *testing.T) {
 	const accountID = 4805
-	resetGrokSpendingRefusal(accountID)
+	t.Cleanup(func() { resetGrokSpendingRefusal(accountID) })
 	weekEnd := time.Now().Add(72 * time.Hour).Truncate(time.Second)
-	account := &Account{ID: accountID, Extra: grokPrepaidBillingExtra(weekEnd.Format(time.RFC3339), map[string]any{"prepaid_balance": 0.0})}
 
-	require.True(t, grokSpendingRefusalResetAt(account, time.Now()).Equal(weekEnd))
+	for name, fields := range map[string]map[string]any{
+		"no money fields": {"prepaid_balance": 0.0},
+		"monthly used up": {"prepaid_balance": 0.0, "monthly_limit_cents": 4000.0, "used_cents": 4016.0},
+		"on-demand spent": {"on_demand_cap": 500.0, "on_demand_used": 500.0},
+	} {
+		resetGrokSpendingRefusal(accountID)
+		account := &Account{ID: accountID, Extra: grokPrepaidBillingExtra(weekEnd.Format(time.RFC3339), fields)}
+		require.True(t, grokSpendingRefusalResetAt(account, time.Now()).Equal(weekEnd), name)
+	}
 }
 
-func TestGrokSpendingRefusalSuccessResetsConfirmation(t *testing.T) {
+// Monthly headroom only earns a probe on explicit credit refusals. An ambiguous
+// 403 on a full window still cools the account, because xAI may keep refusing
+// every request and it bills for 403s.
+func TestGrokBillingWindowExhaustedIgnoresMonthlyHeadroom(t *testing.T) {
+	future := time.Now().Add(24 * time.Hour).Format(time.RFC3339)
+	account := &Account{Extra: grokPrepaidBillingExtra(future, map[string]any{
+		"prepaid_balance": 0.0, "monthly_limit_cents": 283486.0, "used_cents": 0.0,
+	})}
+
+	require.True(t, grokBillingWindowExhausted(account))
+	require.True(t, grokAccountMayStillPay(account))
+}
+
+func TestGrokSpendingRefusalConfirmation(t *testing.T) {
 	const accountID = 4806
-	resetGrokSpendingRefusal(accountID)
 	t.Cleanup(func() { resetGrokSpendingRefusal(accountID) })
 	now := time.Now()
+	afterProbe := grokSpendingLimitProbeCooldown + time.Minute
 
+	resetGrokSpendingRefusal(accountID)
+	require.False(t, confirmGrokSpendingRefusal(accountID, now))
+	require.False(t, confirmGrokSpendingRefusal(accountID, now.Add(time.Minute)), "same burst")
+	require.True(t, confirmGrokSpendingRefusal(accountID, now.Add(afterProbe)), "a refusal after the probe confirms")
+	require.False(t, confirmGrokSpendingRefusal(accountID, now.Add(afterProbe+time.Second)), "confirmation consumes the record")
+
+	resetGrokSpendingRefusal(accountID)
 	require.False(t, confirmGrokSpendingRefusal(accountID, now))
 	resetGrokSpendingRefusal(accountID) // a request succeeded in between
-	require.False(t, confirmGrokSpendingRefusal(accountID, now.Add(time.Minute)), "success starts a fresh probe")
-	require.True(t, confirmGrokSpendingRefusal(accountID, now.Add(2*time.Minute)))
-	require.False(t, confirmGrokSpendingRefusal(accountID, now.Add(3*time.Minute)), "confirmation consumes the record")
+	require.False(t, confirmGrokSpendingRefusal(accountID, now.Add(afterProbe)), "success starts a fresh probe")
 
 	resetGrokSpendingRefusal(accountID)
 	require.False(t, confirmGrokSpendingRefusal(accountID, now))

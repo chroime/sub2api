@@ -21,9 +21,11 @@ const grokSpendingLimitProbeCooldown = 10 * time.Minute
 const grokExhaustedForbiddenCooldown = 10 * time.Minute
 
 // grokSpendingRefusalConfirmWindow is how long a first spending/credit refusal
-// on an account that still reports prepaid money is remembered. A second
-// refusal inside the window means the stored balance is stale, so xAI's
-// verdict wins and the account waits for the billing window reset.
+// on an account that may still pay is remembered. A second refusal after the
+// probe cooldown but inside the window means xAI really stopped serving, so
+// its verdict wins and the account waits for the billing window reset.
+// Refusals inside the probe cooldown are the same burst (requests already in
+// flight to the account) and do not confirm anything.
 const grokSpendingRefusalConfirmWindow = time.Hour
 
 // grokBillingHasPrepaidHeadroom reports whether the last billing probe saw
@@ -47,7 +49,25 @@ func grokBillingHasPrepaidHeadroom(billing *xai.BillingSummary) bool {
 	return false
 }
 
-func grokAccountHasPrepaidHeadroom(account *Account) bool {
+// grokBillingHasMonthlyHeadroom reports a monthly limit that is not used up.
+// xAI does not document whether an account may draw on it once the weekly
+// window is full, so it only earns a probe after an explicit credit refusal,
+// never a pass on ambiguous 403s.
+func grokBillingHasMonthlyHeadroom(billing *xai.BillingSummary) bool {
+	if billing == nil || billing.MonthlyLimitCents == nil || *billing.MonthlyLimitCents <= 0 {
+		return false
+	}
+	used := 0.0
+	if billing.UsedCents != nil {
+		used = *billing.UsedCents
+	}
+	return used < *billing.MonthlyLimitCents
+}
+
+// grokAccountMayStillPay reports whether the last billing probe saw any money
+// the account could still spend: prepaid balance, on-demand cap, or monthly
+// limit headroom.
+func grokAccountMayStillPay(account *Account) bool {
 	if account == nil {
 		return false
 	}
@@ -55,17 +75,17 @@ func grokAccountHasPrepaidHeadroom(account *Account) bool {
 	if err != nil {
 		return false
 	}
-	return grokBillingHasPrepaidHeadroom(billing)
+	return grokBillingHasPrepaidHeadroom(billing) || grokBillingHasMonthlyHeadroom(billing)
 }
 
 // grokSpendingRefusalResetAt returns the rate-limit horizon for an account xAI
 // refused for spending limit or exhausted credits. While the last billing probe
-// still shows prepaid money, the first refusal only gets a short probe
-// cooldown: the balance may be shared or topped up, and locking until the
-// weekly reset would idle money that is still there. A confirmed repeat falls
-// back to the billing window reset.
+// still shows money the account could spend, the first refusal only gets a
+// short probe cooldown: the balance may be shared or topped up, and locking
+// until the weekly reset would idle money that is still there. A confirmed
+// repeat falls back to the billing window reset.
 func grokSpendingRefusalResetAt(account *Account, now time.Time) time.Time {
-	if account != nil && grokAccountHasPrepaidHeadroom(account) && !confirmGrokSpendingRefusal(account.ID, now) {
+	if account != nil && grokAccountMayStillPay(account) && !confirmGrokSpendingRefusal(account.ID, now) {
 		return now.Add(grokSpendingLimitProbeCooldown)
 	}
 	return grokSpendingLimitResetAt(account, now)
@@ -78,8 +98,9 @@ type grokSpendingRefusalStore struct {
 
 var globalGrokSpendingRefusals = &grokSpendingRefusalStore{items: make(map[int64]time.Time)}
 
-// confirmGrokSpendingRefusal records a spending refusal and reports whether an
-// earlier one inside grokSpendingRefusalConfirmWindow already happened. A
+// confirmGrokSpendingRefusal records a spending refusal and reports whether it
+// confirms an earlier one: the earlier refusal must be older than the probe
+// cooldown (a later burst) and inside grokSpendingRefusalConfirmWindow. A
 // confirmation consumes the record. State is process-local, like the other
 // Grok soft-blocks.
 func confirmGrokSpendingRefusal(accountID int64, now time.Time) bool {
@@ -89,9 +110,15 @@ func confirmGrokSpendingRefusal(accountID int64, now time.Time) bool {
 	s := globalGrokSpendingRefusals
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if first, ok := s.items[accountID]; ok && now.Sub(first) <= grokSpendingRefusalConfirmWindow {
-		delete(s.items, accountID)
-		return true
+	if first, ok := s.items[accountID]; ok {
+		elapsed := now.Sub(first)
+		if elapsed < grokSpendingLimitProbeCooldown {
+			return false // same burst as the first refusal
+		}
+		if elapsed <= grokSpendingRefusalConfirmWindow {
+			delete(s.items, accountID)
+			return true
+		}
 	}
 	s.items[accountID] = now
 	return false
