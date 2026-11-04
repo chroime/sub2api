@@ -623,6 +623,12 @@ func (s *OpenAIGatewayService) handleErrorResponse(
 		})
 		return nil, fmt.Errorf("grok content policy rejection: %s", clientMsg)
 	}
+	if model := firstRequestedModel(requestedModel); isGrokMediaModelOnTextEndpoint(ctx, account, resp.StatusCode, body, model) {
+		setOpsUpstreamError(c, resp.StatusCode, grokMediaModelOnTextEndpointMessage(model), truncateString(string(body), 2048))
+		return nil, writeGrokMediaModelOnTextEndpointError(c, account, resp, model, func(c *gin.Context, statusCode int, errType, message string) {
+			writeStreamingACKJSONError(c, statusCode, gin.H{"error": gin.H{"type": errType, "message": message}})
+		})
+	}
 
 	upstreamMsg := strings.TrimSpace(extractUpstreamErrorMessage(body))
 	upstreamMsg = sanitizeUpstreamErrorMessage(upstreamMsg)
@@ -867,6 +873,10 @@ func (s *OpenAIGatewayService) handleCompatErrorResponse(
 		MarkResponseCommitted(c)
 		writeError(c, http.StatusForbidden, "invalid_request_error", clientMsg)
 		return nil, fmt.Errorf("grok content policy rejection: %s", clientMsg)
+	}
+	if model := firstRequestedModel(requestedModel); isGrokMediaModelOnTextEndpoint(c.Request.Context(), account, resp.StatusCode, body, model) {
+		setOpsUpstreamError(c, resp.StatusCode, grokMediaModelOnTextEndpointMessage(model), truncateString(string(body), 2048))
+		return nil, writeGrokMediaModelOnTextEndpointError(c, account, resp, model, writeError)
 	}
 
 	upstreamMsg := strings.TrimSpace(extractUpstreamErrorMessage(body))

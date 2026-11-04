@@ -364,6 +364,11 @@ func (s *RateLimitService) HandleUpstreamError(ctx context.Context, account *Acc
 		return false
 	}
 
+	// Request-scoped endpoint mismatch: no account or model state applies, so
+	// skip the temp-unschedulable rules below as well.
+	if isGrokMediaModelOnTextEndpoint(ctx, account, statusCode, responseBody, firstRequestedModel(requestedModel)) {
+		return false
+	}
 	if len(requestedModel) > 0 && s.HandleUpstreamModelNotFound(ctx, account, requestedModel[0], statusCode, responseBody) {
 		return true
 	}
@@ -2564,6 +2569,11 @@ func (s *RateLimitService) HandleUpstreamModelNotFound(ctx context.Context, acco
 		return false
 	}
 	if !account.ShouldHandleErrorCode(statusCode) {
+		return false
+	}
+	// An Imagine model on a text endpoint 404s on every account. Return false
+	// so the caller neither cools the model nor walks the pool.
+	if isGrokMediaModelOnTextEndpoint(ctx, account, statusCode, responseBody, requestedModel) {
 		return false
 	}
 	var cooldown time.Duration

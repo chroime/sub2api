@@ -3,12 +3,58 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
+	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
 )
+
+// isGrokMediaModelOnTextEndpoint reports a Grok Imagine model sent to a text
+// endpoint (chat/completions, responses, messages). xAI answers that with a
+// 404 model-not-found on every account, while the same accounts serve the
+// model over /v1/images/* and /v1/videos/*. Treating it as model-not-found
+// would cool the model on each account the request walks through and starve
+// the media endpoints, so callers must neither cool the account nor fail over.
+//
+// The media forwarder never reaches the generic model-not-found handler, and
+// the images endpoint marks its context, so a 404 there keeps its cooldown.
+func isGrokMediaModelOnTextEndpoint(ctx context.Context, account *Account, statusCode int, responseBody []byte, model string) bool {
+	if account == nil || account.Platform != PlatformGrok || OpenAIImagesEndpointFromContext(ctx) {
+		return false
+	}
+	return xai.IsGrokImagineModel(model) && isUpstreamModelNotFoundError(statusCode, responseBody)
+}
+
+// grokMediaModelOnTextEndpointMessage tells the client which endpoint serves
+// the model. The upstream body is not echoed: it carries the xAI team id.
+func grokMediaModelOnTextEndpointMessage(model string) string {
+	return "Model " + strings.TrimSpace(model) + " is a Grok Imagine media model and is not available on this endpoint. " +
+		"Use /v1/images/generations or /v1/images/edits for images, and /v1/videos/generations for videos."
+}
+
+// writeGrokMediaModelOnTextEndpointError answers the mismatch as the
+// deterministic client error it is, recording it as a plain http_error.
+func writeGrokMediaModelOnTextEndpointError(c *gin.Context, account *Account, resp *http.Response, model string, write compatErrorWriter) error {
+	message := grokMediaModelOnTextEndpointMessage(model)
+	appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+		ProxyID:            opsUpstreamProxyID(account),
+		ProxyName:          opsUpstreamProxyName(account),
+		Platform:           account.Platform,
+		AccountID:          account.ID,
+		AccountName:        account.Name,
+		UpstreamStatusCode: resp.StatusCode,
+		UpstreamRequestID:  firstNonEmpty(resp.Header.Get("x-request-id"), resp.Header.Get("xai-request-id")),
+		Kind:               "http_error",
+		Message:            message,
+	})
+	MarkResponseCommitted(c)
+	write(c, http.StatusBadRequest, "invalid_request_error", message)
+	return fmt.Errorf("grok media model on text endpoint: %s", strings.TrimSpace(model))
+}
 
 // isGrokContentPolicyRejection identifies request-scoped safety refusals from
 // xAI. These failures are caused by the prompt or media, so retrying another
