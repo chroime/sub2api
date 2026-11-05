@@ -15,8 +15,13 @@ type PlazaOfficialPricing struct {
 	CacheWritePrice   *float64 // 5m 缓存写入（= LiteLLM cache_creation）
 	CacheWrite1hPrice *float64 // 1h 缓存写入，仅计费会区分 5m/1h 时给出
 	CacheReadPrice    *float64
-	// Intervals 官方长上下文阶梯（多档时给出），不受分组开关影响。
+	// Intervals 官方长上下文阶梯（多档时给出），不受分组开关影响；
+	// 图片/视频模式下为各尺寸/分辨率档位的单价（PerRequestPrice + TierLabel）。
 	Intervals []PricingInterval
+	// BillingMode 为空表示 token 计费；图片按张、视频按秒时单价在
+	// PerRequestPrice（各档同价）或 Intervals（逐档）里。
+	BillingMode     BillingMode
+	PerRequestPrice *float64
 }
 
 // 模型广场展示定价的来源：分组模型级定价 > 渠道模型定价 > 官方目录价。
@@ -347,6 +352,112 @@ func (s *ModelPlazaService) fillDisplayPricing(ctx context.Context, m *PlazaMode
 		}
 	}
 	m.Pricing = plazaImageDisplayPricing(m.Pricing, g)
+	if m.Pricing == nil {
+		if pricing, fromGroup := s.grokMediaDisplayPricing(m.Name, g); pricing != nil {
+			m.Pricing = pricing
+			if fromGroup {
+				m.PricingSource = PlazaPricingSourceGroup
+			}
+		}
+	}
+}
+
+// plazaMediaTier 图片尺寸或视频分辨率的一个档位单价。
+type plazaMediaTier struct {
+	label string
+	price float64
+}
+
+// grokImagineVideoResolutions 列出视频模型可选的分辨率：1.5 系列到 1080p，其余到 720p。
+func grokImagineVideoResolutions(model string) []string {
+	if CanonicalGrokImagineVideoPriceFamily(model) == VideoPriceFamilyGrokImagineVideo15 {
+		return []string{VideoBillingResolution480P, VideoBillingResolution720P, VideoBillingResolution1080P}
+	}
+	return []string{VideoBillingResolution480P, VideoBillingResolution720P}
+}
+
+// grokMediaDisplayPricing 为没有渠道/分组模型级定价的 Grok Imagine 图片与视频模型合成展示定价。
+// 档位单价直接取计费函数的结果（分组图片/视频档位价 > 内置的 xAI 官方价），图片每张、视频每秒；
+// 不是 Grok Imagine 媒体模型或没有计费服务时返回 nil。fromGroup 表示有档位取自分组配置。
+func (s *ModelPlazaService) grokMediaDisplayPricing(model string, g *Group) (*ChannelModelPricing, bool) {
+	if s.billingService == nil {
+		return nil, false
+	}
+	fromGroup := false
+	if _, ok := getDefaultGrokImagineImagePrice(model, ImageBillingSize1K); ok {
+		// 与 imagePriceConfigFromAPIKey 同口径。
+		var cfg *ImagePriceConfig
+		if g != nil {
+			cfg = &ImagePriceConfig{Price1K: g.ImagePrice1K, Price2K: g.ImagePrice2K, Price4K: g.ImagePrice4K}
+		}
+		tiers := make([]plazaMediaTier, 0, 2)
+		for _, size := range []string{ImageBillingSize1K, ImageBillingSize2K} {
+			tiers = append(tiers, plazaMediaTier{label: size, price: s.billingService.getImageUnitPrice(model, size, cfg)})
+			fromGroup = fromGroup || (g != nil && g.GetImagePrice(size) != nil)
+		}
+		return plazaMediaPricing(BillingModeImage, tiers), fromGroup
+	}
+	if _, ok := getDefaultGrokImagineVideoPrice(model, VideoBillingResolution480P); ok {
+		// 与 videoPriceConfigFromAPIKey 同口径。
+		var cfg *VideoPriceConfig
+		if g != nil {
+			cfg = &VideoPriceConfig{Price480P: g.VideoPrice480P, Price720P: g.VideoPrice720P, Price1080P: g.VideoPrice1080P, ModelPrices: g.VideoModelPrices}
+		}
+		resolutions := grokImagineVideoResolutions(model)
+		tiers := make([]plazaMediaTier, 0, len(resolutions))
+		for _, res := range resolutions {
+			tiers = append(tiers, plazaMediaTier{label: strings.ToUpper(res), price: s.billingService.getVideoUnitPrice(model, res, cfg)})
+			fromGroup = fromGroup || g.GetVideoPriceForModel(model, res) != nil
+		}
+		return plazaMediaPricing(BillingModeVideo, tiers), fromGroup
+	}
+	return nil, false
+}
+
+// grokMediaOfficialPricing 返回 Grok Imagine 图片/视频模型的 xAI 官方单价：计费内置价，不含分组覆盖。
+func grokMediaOfficialPricing(model string) *PlazaOfficialPricing {
+	var mode BillingMode
+	var tiers []plazaMediaTier
+	if _, ok := getDefaultGrokImagineImagePrice(model, ImageBillingSize1K); ok {
+		mode = BillingModeImage
+		for _, size := range []string{ImageBillingSize1K, ImageBillingSize2K} {
+			price, _ := getDefaultGrokImagineImagePrice(model, size)
+			tiers = append(tiers, plazaMediaTier{label: size, price: price})
+		}
+	} else if _, ok := getDefaultGrokImagineVideoPrice(model, VideoBillingResolution480P); ok {
+		mode = BillingModeVideo
+		for _, res := range grokImagineVideoResolutions(model) {
+			price, _ := getDefaultGrokImagineVideoPrice(model, res)
+			tiers = append(tiers, plazaMediaTier{label: strings.ToUpper(res), price: price})
+		}
+	} else {
+		return nil
+	}
+	p := plazaMediaPricing(mode, tiers)
+	return &PlazaOfficialPricing{BillingMode: mode, PerRequestPrice: p.PerRequestPrice, Intervals: p.Intervals}
+}
+
+// plazaMediaPricing 把媒体档位价压成展示定价：各档同价时只给一个单价，否则逐档给出。
+func plazaMediaPricing(mode BillingMode, tiers []plazaMediaTier) *ChannelModelPricing {
+	out := &ChannelModelPricing{BillingMode: mode}
+	uniform := true
+	for _, t := range tiers[1:] {
+		if t.price != tiers[0].price {
+			uniform = false
+			break
+		}
+	}
+	if uniform {
+		price := tiers[0].price
+		out.PerRequestPrice = &price
+		return out
+	}
+	out.Intervals = make([]PricingInterval, 0, len(tiers))
+	for i, t := range tiers {
+		price := t.price
+		out.Intervals = append(out.Intervals, PricingInterval{TierLabel: t.label, PerRequestPrice: &price, SortOrder: i})
+	}
+	return out
 }
 
 // plazaPricingFromSchedule 把阶梯表压成展示用的 ChannelModelPricing：
@@ -468,6 +579,10 @@ func (s *ModelPlazaService) lookupOfficialPricing(ctx context.Context, modelName
 			result.CacheWrite1hPrice == nil && result.CacheReadPrice == nil && len(result.Intervals) == 0 {
 			result = nil
 		}
+	}
+	if result == nil {
+		// LiteLLM 目录不收录 Grok Imagine 的按张/按秒价，取计费内置的 xAI 官方价。
+		result = grokMediaOfficialPricing(modelName)
 	}
 	memo[modelName] = result
 	return result

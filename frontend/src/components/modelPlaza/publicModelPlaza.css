@@ -168,6 +168,10 @@
   --pz-title: color-mix(in srgb, var(--public-accent) 35%, var(--public-heading));
   --pz-bg: color-mix(in srgb, var(--public-accent) 5%, var(--public-surface));
   --pz-bg-hover: color-mix(in srgb, var(--public-accent) 7%, var(--public-hover));
+  --pz-surface: var(--public-surface);
+  --pz-head-surface: var(--public-surface-soft);
+  --pz-row-hover: var(--public-hover);
+  --pz-sticky-edge: var(--public-border);
 }
 
 .public-model-plaza .model-plaza-content .plaza-vendor-price-table :is(th, td, tr) {

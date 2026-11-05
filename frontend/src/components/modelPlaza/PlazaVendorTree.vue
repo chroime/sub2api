@@ -19,7 +19,25 @@
       />
     </div>
 
-    <ul class="space-y-0.5" role="tree">
+    <!-- 窄屏：厂商改为一排可横滑的标签，避免长列表把价格表挤到下面 -->
+    <div class="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 lg:hidden" data-vendor-chips>
+      <button
+        v-for="chip in chips"
+        :key="chip.key"
+        type="button"
+        class="flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-sm font-medium transition-colors"
+        :class="rowClass(vendor === chip.key)"
+        :aria-pressed="vendor === chip.key"
+        @click="emit('update:vendor', chip.key)"
+      >
+        <ModelIcon v-if="chip.sampleModel" :model="chip.sampleModel" size="14px" />
+        <Icon v-else name="grid" size="xs" class="h-3.5 w-3.5" />
+        {{ chip.label }}
+        <span class="text-xs tabular-nums opacity-70">{{ chip.count }}</span>
+      </button>
+    </div>
+
+    <ul class="hidden space-y-0.5 lg:block" role="tree">
       <li role="treeitem" :aria-selected="vendor === 'all'">
         <button
           type="button"
@@ -114,6 +132,11 @@ const emit = defineEmits<{
 const { t } = useI18n()
 
 const total = computed(() => props.vendors.reduce((sum, n) => sum + n.models.length, 0))
+
+const chips = computed(() => [
+  { key: 'all', label: t('modelPlaza.vendor.all'), count: total.value, sampleModel: '' },
+  ...props.vendors.map((n) => ({ key: n.key, label: n.label, count: n.models.length, sampleModel: n.sampleModel }))
+])
 
 const expanded = ref(new Set<string>())
 

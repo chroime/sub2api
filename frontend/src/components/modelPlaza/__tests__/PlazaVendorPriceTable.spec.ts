@@ -212,6 +212,15 @@ describe('PlazaVendorPriceTable 缓存与思考等级', () => {
     expect(mountTable([m]).text()).toContain('1h $6.00')
   })
 
+  it('1h 价与 5m 价相同时不重复显示', () => {
+    const m = tokenModel({
+      official_pricing: { input_price: 3e-6, output_price: 1.5e-5, cache_write_price: 0, cache_write_1h_price: 0, cache_read_price: null }
+    })
+    m.pricing!.cache_write_price = 0
+    m.pricing!.cache_write_1h_price = 0
+    expect(mountTable([m]).text()).not.toContain('1h')
+  })
+
   it('只列出配置了正倍率的思考等级', () => {
     const m = tokenModel()
     m.pricing!.reasoning_effort_multipliers = { high: 1.5, low: 0, medium: null } as never
@@ -290,18 +299,115 @@ describe('PlazaVendorPriceTable 分时倍率', () => {
     expect(wrapper.text()).toContain('$4.00')
   })
 
-  it('每个时段单独一行，单价按时段倍率折算', () => {
+  it('时段与倍率显示在模型名下方，不再拆成单独的行', () => {
     const m = tokenModel({
       time_pricing: {
         timezone: 'Asia/Shanghai',
-        periods: [{ start_time: '00:00:00', end_time: '08:00:00', multiplier: 0.5 }]
+        weekdays_only: true,
+        periods: [
+          { start_time: '09:00:00', end_time: '12:00:00', multiplier: 2 },
+          { start_time: '14:00:00', end_time: '18:00:00', multiplier: 2 }
+        ]
       }
     })
     const wrapper = mountTable([m])
-    expect(wrapper.findAll('tbody tr')).toHaveLength(2)
-    const text = wrapper.text()
-    expect(text).toContain('00:00–08:00')
-    expect(text).toContain('×0.5')
-    expect(text).toContain('$1.50')
+    expect(wrapper.findAll('tbody tr')).toHaveLength(1)
+    const periods = wrapper.get('[data-time-pricing]')
+    expect(periods.text()).toContain('modelPlaza.table.timePricingWeekdays')
+    expect(periods.text()).toContain('09:00–12:00×2')
+    expect(periods.text()).toContain('14:00–18:00×2')
+    expect(periods.attributes('title')).toContain('modelPlaza.table.timePricingRowHintWeekdays')
+    // 价格列只展示标准时段价，不再按时段倍率另算一行
+    expect(wrapper.text()).toContain('$3.00')
+    expect(wrapper.text()).not.toContain('$6.00')
+  })
+})
+
+describe('PlazaVendorPriceTable 按张与按秒计费', () => {
+  const videoModel = (overrides: Partial<PlazaModel> = {}): PlazaModel => ({
+    name: 'grok-imagine-video-1.5',
+    platform: 'grok',
+    pricing: {
+      billing_mode: 'video',
+      input_price: null, output_price: null, cache_write_price: null, cache_read_price: null,
+      image_input_price: null, image_output_price: null, per_request_price: null,
+      intervals: [
+        { min_tokens: 0, max_tokens: null, tier_label: '480P', input_price: null, output_price: null,
+          cache_write_price: null, cache_read_price: null, per_request_price: 0.08 },
+        { min_tokens: 0, max_tokens: null, tier_label: '720P', input_price: null, output_price: null,
+          cache_write_price: null, cache_read_price: null, per_request_price: 0.14 }
+      ]
+    },
+    pricing_source: 'official',
+    official_pricing: {
+      billing_mode: 'video',
+      input_price: null, output_price: null, cache_write_price: null, cache_read_price: null,
+      intervals: [
+        { min_tokens: 0, max_tokens: null, tier_label: '480P', input_price: null, output_price: null,
+          cache_write_price: null, cache_read_price: null, per_request_price: 0.08 },
+        { min_tokens: 0, max_tokens: null, tier_label: '720P', input_price: null, output_price: null,
+          cache_write_price: null, cache_read_price: null, per_request_price: 0.14 }
+      ]
+    },
+    ...overrides
+  })
+
+  it('全部分组按秒展示视频的官方分辨率单价，不当作阶梯', () => {
+    const wrapper = mountTable([videoModel()], null)
+    const text = wrapper.get('tbody tr').text()
+    expect(text).toContain('modelPlaza.table.perSecond')
+    expect(text).toContain('480P $0.08modelPlaza.table.perUnitSecond')
+    expect(text).toContain('720P $0.14modelPlaza.table.perUnitSecond')
+    expect(text).not.toContain('modelPlaza.priceTable.tiered')
+  })
+
+  it('选中分组后本站价按视频单价乘倍率，官方价不变', () => {
+    const text = mountTable([videoModel()], group({ rate_multiplier: 0.5 })).get('tbody tr').text()
+    expect(text).toContain('480P $0.04modelPlaza.table.perUnitSecond')
+    expect(text).toContain('720P $0.07modelPlaza.table.perUnitSecond')
+    expect(text).toContain('480P $0.08modelPlaza.table.perUnitSecond')
+  })
+
+  it('视频独立倍率覆盖分组倍率', () => {
+    const g = group({ rate_multiplier: 0.5, video_rate_independent: true, video_rate_multiplier: 2 })
+    expect(mountTable([videoModel()], g).text()).toContain('480P $0.16modelPlaza.table.perUnitSecond')
+  })
+
+  it('图片模型的官方单价按张展示', () => {
+    const m = videoModel({ name: 'grok-imagine-image', pricing: null })
+    m.official_pricing = { billing_mode: 'image', input_price: null, output_price: null,
+      cache_write_price: null, cache_read_price: null, per_request_price: 0.02 }
+    const text = mountTable([m], null).get('tbody tr').text()
+    expect(text).toContain('modelPlaza.table.perImage')
+    expect(text).toContain('$0.02modelPlaza.table.perUnitImage')
+  })
+})
+
+describe('PlazaVendorPriceTable 暂未定价', () => {
+  const unpriced = () => tokenModel({ name: 'grok-voice-tts', platform: 'grok', pricing: null, pricing_source: undefined, official_pricing: null })
+
+  it('本站与官方都没有价格时合并成一格说明', () => {
+    const all = mountTable([unpriced()], null).get('tbody tr')
+    expect(all.findAll('td')).toHaveLength(1)
+    expect(all.get('[data-unpriced]').attributes('colspan')).toBe('4')
+    expect(all.text()).toContain('modelPlaza.priceTable.unpriced')
+
+    const scoped = mountTable([unpriced()], group()).get('tbody tr')
+    expect(scoped.findAll('td')).toHaveLength(1)
+    expect(scoped.get('[data-unpriced]').attributes('colspan')).toBe('8')
+  })
+
+  it('只缺官方价时仍显示本站价', () => {
+    const wrapper = mountTable([tokenModel()], group({ rate_multiplier: 1 }))
+    expect(wrapper.find('[data-unpriced]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('$3.00')
+  })
+})
+
+describe('PlazaVendorPriceTable 窄屏', () => {
+  it('模型名一列固定在左侧', () => {
+    const wrapper = mountTable([tokenModel()])
+    expect(wrapper.get('thead th').classes()).toContain('pz-sticky')
+    expect(wrapper.get('tbody th').classes()).toContain('pz-sticky')
   })
 })

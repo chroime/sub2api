@@ -41,7 +41,8 @@
 
     <!-- 左侧厂商树 + 右侧模型价格 -->
     <div v-else class="grid gap-5 lg:grid-cols-[260px_minmax(0,1fr)]">
-      <aside class="lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:self-start lg:overflow-y-auto">
+      <!-- min-w-0：窄屏单列时横向标签栏不能把网格撑出视口 -->
+      <aside class="min-w-0 lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:self-start lg:overflow-y-auto">
         <PlazaVendorTree
           :vendors="vendorTree"
           :vendor="selectedVendor"
@@ -68,8 +69,9 @@
               @update:model-value="onGroupChange"
             />
           </div>
-          <span class="text-xs plaza-soft text-gray-400 dark:text-dark-500">
-            {{ selectedGroup ? t('modelPlaza.priceTable.groupHint', { rate: effectiveRate(selectedGroup) }) : t('modelPlaza.priceTable.allGroupsHint') }}
+          <!-- 选中分组后倍率已在下拉框和表头标出，不再重复 -->
+          <span v-if="!selectedGroup" class="text-xs plaza-soft text-gray-400 dark:text-dark-500">
+            {{ t('modelPlaza.priceTable.allGroupsHint') }}
           </span>
         </div>
 
@@ -88,7 +90,7 @@
         </p>
 
         <div class="flex items-baseline justify-between gap-3">
-          <h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ currentVendorLabel }}</h2>
+          <h2 class="shrink-0 text-base font-semibold text-gray-900 dark:text-white">{{ currentVendorLabel }}</h2>
           <span class="text-xs plaza-soft text-gray-400 dark:text-dark-500">
             {{ t('modelPlaza.priceTable.unitNote') }}
           </span>

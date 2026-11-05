@@ -717,10 +717,10 @@ export default {
       reasoningMultiplierBadge: '{effort} ×{multiplier}',
       reasoningMultiplierHint: '最终转发的思考等级为 {effort} 时，整次请求的计费与额度消耗乘以 {multiplier}；未配置的等级按 1 倍计费',
       marginalBadge: '超出部分计价',
-      timePricingRowHint: '按 {timezone} 时间，在该时段内发起的请求按本行价格计费',
+      timePricingRowHint: '按 {timezone} 时间，在这些时段内发起的请求按本站价乘对应倍率计费',
       timePricingRowHintWeekdays:
-        '按 {timezone} 时间，仅工作日（周一至周五）在该时段内发起的请求按本行价格计费，周末全天按标准价',
-      timePricingRowHintPeak: '；本行价格未含高峰倍率，与高峰时段 {window} 重叠的部分实付再乘 ×{multiplier}',
+        '按 {timezone} 时间，仅工作日（周一至周五）在这些时段内发起的请求按本站价乘对应倍率计费，周末全天按本站价',
+      timePricingRowHintPeak: '；与高峰时段 {window} 重叠的部分实付再乘 ×{multiplier}',
       timePricingWeekdays: '工作日',
       timePricingRateHint: '生效倍率 {rate} × 时段倍率 {multiplier}',
       paidPrice: '实付价格(折后)',
@@ -729,8 +729,10 @@ export default {
       unitPerMillion: '$ / 1M token',
       perUnitRequest: '/ 次',
       perUnitImage: '/ 张',
+      perUnitSecond: '/ 秒',
       perRequest: '按次计费',
-      perImage: '按图片计费'
+      perImage: '按图片计费',
+      perSecond: '按秒计费'
     },
     nav: {
       login: '登录',
@@ -747,7 +749,6 @@ export default {
       groupLabel: '分组',
       allGroups: '全部分组',
       allGroupsHint: '仅显示官方价格，选择具体分组可查看本站价格与官方价格对照',
-      groupHint: '本站价 = 本站单价 × {rate}x',
       unitNote: 'token 价格单位：/ 1M token（国产模型按人民币 ¥，其余按美元 $）',
       sitePrice: '本站价格',
       siteRateNote: '已含 {rate}x 倍率',
@@ -757,7 +758,8 @@ export default {
       cnyHint: '国产模型的渠道/分组定价按人民币计价',
       cacheRead: '缓存读取',
       cacheWrite: '缓存写入',
-      tiered: '阶梯'
+      tiered: '阶梯',
+      unpriced: '暂未定价'
     }
   },
 

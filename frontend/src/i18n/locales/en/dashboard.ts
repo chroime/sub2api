@@ -712,11 +712,11 @@ export default {
       reasoningMultiplierBadge: '{effort} ×{multiplier}',
       reasoningMultiplierHint: 'When the forwarded reasoning effort is {effort}, billing and quota usage for the request are multiplied by {multiplier}. Unconfigured levels use 1×',
       marginalBadge: 'excess-only tiers',
-      timePricingRowHint: 'Requests made within this period ({timezone} time) are billed at the prices in this row',
+      timePricingRowHint: 'Requests made within these periods ({timezone} time) are billed at our price times the multiplier',
       timePricingRowHintWeekdays:
-        'On weekdays (Mon–Fri) only, requests made within this period ({timezone} time) are billed at the prices in this row; weekends use the standard prices',
+        'On weekdays (Mon–Fri) only, requests made within these periods ({timezone} time) are billed at our price times the multiplier; weekends use our standard price',
       timePricingRowHintPeak:
-        '; prices in this row exclude the peak-hour rate — where this period overlaps the peak hours {window}, the overlapping portion is additionally multiplied by ×{multiplier}',
+        '; where a period overlaps the peak hours {window}, the overlapping portion is additionally multiplied by ×{multiplier}',
       timePricingWeekdays: 'Weekdays',
       timePricingRateHint: 'Effective rate {rate} × period multiplier {multiplier}',
       paidPrice: 'Your Price (Discounted)',
@@ -725,8 +725,10 @@ export default {
       unitPerMillion: '$ / 1M tokens',
       perUnitRequest: '/ request',
       perUnitImage: '/ image',
+      perUnitSecond: '/ sec',
       perRequest: 'Per request',
-      perImage: 'Per image'
+      perImage: 'Per image',
+      perSecond: 'Per second'
     },
     nav: {
       login: 'Sign In',
@@ -743,7 +745,6 @@ export default {
       groupLabel: 'Group',
       allGroups: 'All groups',
       allGroupsHint: 'Only official prices are shown. Pick a group to compare our prices with official prices',
-      groupHint: 'Our price = our unit price × {rate}x',
       unitNote: 'Token prices per 1M tokens (Chinese models in CNY ¥, others in USD $)',
       sitePrice: 'Our price',
       siteRateNote: 'incl. {rate}x rate',
@@ -753,7 +754,8 @@ export default {
       cnyHint: 'Channel/group prices for Chinese models are in CNY',
       cacheRead: 'Cache read',
       cacheWrite: 'Cache write',
-      tiered: 'Tiered'
+      tiered: 'Tiered',
+      unpriced: 'Not priced yet'
     }
   },
 
