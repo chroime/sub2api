@@ -51,7 +51,17 @@ type Site struct {
 	UpdatedAt            time.Time            `json:"updated_at"`
 	BalanceMonitor       BalanceMonitorConfig `json:"balance_monitor"`
 	BalanceMonitorStatus BalanceMonitorStatus `json:"balance_monitor_status"`
-	balanceState         BalanceMonitorState
+	// Balance is the upstream account balance in the latest collected
+	// snapshot, shown in the site rail. Nil until a snapshot reports one.
+	Balance      *SiteBalance `json:"balance,omitempty"`
+	balanceState BalanceMonitorState
+}
+
+// SiteBalance is a site's last collected upstream account balance.
+type SiteBalance struct {
+	Amount     float64   `json:"amount"`
+	Unit       string    `json:"unit"`
+	ObservedAt time.Time `json:"observed_at"`
 }
 
 type LoginInput struct {

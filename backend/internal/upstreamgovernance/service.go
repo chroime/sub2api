@@ -240,6 +240,18 @@ func (s *Service) ListSites(ctx context.Context) ([]Site, error) {
 			sites[i].KeyIssueCount = counts[sites[i].ID]
 		}
 	}
+	// Balances only decorate the rail; a failed read must not hide the sites.
+	if reader, ok := s.store.(SiteBalanceReader); ok {
+		balances, balanceErr := reader.LatestSiteBalances(ctx)
+		if balanceErr != nil {
+			log.Printf("[UpstreamGovernance] site rail balances: %s", ErrorCode(balanceErr))
+		}
+		for i := range sites {
+			if balance, found := balances[sites[i].ID]; found {
+				sites[i].Balance = &balance
+			}
+		}
+	}
 	visible := sites[:0]
 	for _, site := range sites {
 		if isLocalModelSite(site) {

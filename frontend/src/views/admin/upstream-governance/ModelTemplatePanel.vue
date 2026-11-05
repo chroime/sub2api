@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import PlatformIcon from '@/components/common/PlatformIcon.vue'
 import Select from '@/components/common/Select.vue'
@@ -25,6 +25,7 @@ const emit = defineEmits<{
   edited: [platform: Transport]
 }>()
 const { t } = useI18n()
+const templateLimit = 50
 const platforms = transportPlatforms
 const platform = ref<Transport>('openai')
 const collection = ref<ModelTemplateCollection>({ version: 0, templates: [] })
@@ -34,8 +35,13 @@ const error = ref('')
 const search = ref('')
 const custom = ref('')
 const templateName = ref('')
-const saveAsDefault = ref(true)
+const saveAsDefault = ref(false)
 const templateID = ref('')
+const pendingDelete = ref(false)
+// The template each protocol's selection last came from, applied automatically
+// as the default or explicitly by the administrator. Choosing another template
+// in the dropdown only previews it until it is applied.
+const applied = reactive<Partial<Record<Transport, string>>>({})
 let generation = 0
 let templatesLoaded = false
 const edited: Partial<Record<Transport, boolean>> = Object.fromEntries((props.preservePlatforms || []).map(value => [value, true]))
@@ -55,6 +61,31 @@ const templateOptions = computed(() => [
     label: `${template.name}${template.is_default ? ' · ' + t('governance.defaultTemplate') : ''}`,
   })),
 ])
+function sameModels(a: string[], b: string[]) {
+  const set = new Set(a)
+  return set.size === new Set(b).size && b.every(model => set.has(model))
+}
+const matchesSelected = computed(() =>
+  !!selectedTemplate.value && current.value.enabled && sameModels(current.value.models, selectedTemplate.value.models),
+)
+const pendingApply = computed(() =>
+  !!selectedTemplate.value && applied[platform.value] !== selectedTemplate.value.id && !matchesSelected.value,
+)
+const modified = computed(() =>
+  !!selectedTemplate.value && applied[platform.value] === selectedTemplate.value.id && !matchesSelected.value,
+)
+const templateDiff = computed(() => {
+  const template = selectedTemplate.value
+  if (!template) return null
+  const selected = new Set(current.value.models)
+  const target = new Set(template.models)
+  return {
+    name: template.name,
+    total: target.size,
+    added: template.models.filter(model => !selected.has(model)).length,
+    removed: current.value.models.filter(model => !target.has(model)).length,
+  }
+})
 function upstreamModels(p: Transport) {
   return [
     ...new Set(
@@ -67,18 +98,28 @@ function upstreamModels(p: Transport) {
     ),
   ]
 }
+const upstreamSet = computed(() => new Set(upstreamModels(platform.value)))
+// Upstream-visible models first, then the built-in list, then hand-added ones.
+// The order does not depend on the selection, so rows stay put when toggled.
 const availableModels = computed(() => [
   ...new Set([
-    ...current.value.models,
     ...upstreamModels(platform.value),
     ...getModelsByPlatform(platform.value),
+    ...current.value.models,
   ]),
 ].filter(model => platform.value !== 'openai' || isOpenAITextModel(model)))
 const filteredModels = computed(() =>
   availableModels.value.filter((model) =>
-    model.toLowerCase().includes(search.value.toLowerCase()),
+    model.toLowerCase().includes(search.value.trim().toLowerCase()),
   ),
 )
+const unselectedMatches = computed(() =>
+  search.value.trim() ? filteredModels.value.filter(model => !current.value.models.includes(model)) : [],
+)
+function platformBadge(p: Transport) {
+  const selection = props.modelValue[p]
+  return selection.enabled ? String(selection.models.length) : t('governance.modelPicker.unrestricted')
+}
 function update(models: string[], enabled = current.value.enabled) {
   edited[platform.value] = true
   emit('edited', platform.value)
@@ -94,25 +135,42 @@ function toggle(model: string) {
       : [...current.value.models, model],
   )
 }
-function loadTemplate() {
-  if (!selectedTemplate.value) return
-  update(selectedTemplate.value.models, true)
-  templateName.value = selectedTemplate.value.name
-  saveAsDefault.value = selectedTemplate.value.is_default
+function showTemplate(id: string) {
+  templateID.value = id
+  pendingDelete.value = false
+  templateName.value = selectedTemplate.value?.name || ''
+  saveAsDefault.value = selectedTemplate.value?.is_default || false
 }
 function chooseTemplate(value: string | number | boolean | null) {
-  templateID.value = typeof value === 'string' ? value : ''
-  loadTemplate()
+  showTemplate(typeof value === 'string' ? value : '')
+  // A template that already matches the selection needs no confirmation.
+  if (selectedTemplate.value && matchesSelected.value) applied[platform.value] = selectedTemplate.value.id
+}
+function applyTemplate() {
+  const template = selectedTemplate.value
+  if (!template) return
+  update(template.models, true)
+  applied[platform.value] = template.id
+}
+function showAppliedTemplate() {
+  const id = applied[platform.value]
+  showTemplate(id && availableTemplates.value.some(template => template.id === id) ? id : '')
 }
 function addCustom() {
-  const model = custom.value.trim()
-  if (!model || model.length > 200 || /[\s*\p{Cc}]/u.test(model)) {
-    error.value = t('governance.invalidModelName')
-    return
-  }
-  update([...current.value.models, model], true)
-  custom.value = ''
-  error.value = ''
+  // Model IDs never contain whitespace, so pasted lists split cleanly.
+  const entries = custom.value.split(/[\s,，;；]+/).filter(Boolean)
+  const invalid = entries.filter(model => model.length > 200 || /[\s*\p{Cc}]/u.test(model))
+  const valid = entries.filter(model => !invalid.includes(model))
+  if (valid.length) update([...current.value.models, ...valid], true)
+  custom.value = invalid.join(' ')
+  error.value = !entries.length || invalid.length ? t('governance.invalidModelName') : ''
+}
+function pasteModels(event: ClipboardEvent) {
+  const text = event.clipboardData?.getData('text') || ''
+  // Text inputs drop line breaks from pasted text, which would glue IDs together.
+  if (!/[\r\n]/.test(text)) return
+  event.preventDefault()
+  custom.value = [custom.value.trim(), text.replace(/\s+/g, ' ').trim()].filter(Boolean).join(' ')
 }
 async function load() {
   const request = ++generation
@@ -125,6 +183,7 @@ async function load() {
     collection.value = value
     templatesLoaded = true
     applyDefaults()
+    showAppliedTemplate()
     emit('ready', true)
   } catch (e) {
     if (request === generation) error.value = t(errorKey(e))
@@ -142,10 +201,12 @@ function applyDefaults() {
     )
     const models = template?.models || upstreamModels(p)
     selections[p] = { enabled: models.length > 0, models: [...models] }
+    if (template) applied[p] = template.id
+    else delete applied[p]
   }
   emit('update:modelValue', selections)
 }
-async function persist(templates: ModelTemplate[]) {
+async function persist(templates: ModelTemplate[]): Promise<boolean> {
   const request = generation
   saving.value = true
   error.value = ''
@@ -154,10 +215,11 @@ async function persist(templates: ModelTemplate[]) {
       version: collection.value.version,
       templates,
     })
-    if (request !== generation) return
+    if (request !== generation) return false
     collection.value = saved
+    return true
   } catch (e) {
-    if (request !== generation) return
+    if (request !== generation) return false
     if ((e as { status?: number }).status === 409) {
       error.value = t('governance.templateConflict')
       try {
@@ -168,11 +230,14 @@ async function persist(templates: ModelTemplate[]) {
           error.value = t('governance.templateRefreshFailed')
       }
     } else error.value = t(errorKey(e))
+    return false
   } finally {
     if (request === generation) saving.value = false
   }
 }
-async function saveTemplate() {
+async function saveTemplate(asNew: boolean) {
+  const existing = asNew ? undefined : selectedTemplate.value
+  if (!asNew && !existing) return
   if (
     !templateName.value.trim() ||
     !current.value.models.length ||
@@ -181,9 +246,13 @@ async function saveTemplate() {
     error.value = t('governance.templateInvalid')
     return
   }
+  if (asNew && collection.value.templates.length >= templateLimit) {
+    error.value = t('governance.modelPicker.limitReached')
+    return
+  }
   const request = generation
   const id =
-    selectedTemplate.value?.id ||
+    existing?.id ||
     `tpl_${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}_${Math.random().toString(36).slice(2)}`}`
   const template: ModelTemplate = {
     id,
@@ -192,32 +261,32 @@ async function saveTemplate() {
     models: [...current.value.models],
     is_default: saveAsDefault.value,
   }
-  const templates = collection.value.templates
-    .filter((item) => item.id !== id)
-    .map((item) =>
-      template.is_default && item.platform === template.platform
+  // An update keeps the template's place in the list; a new one is appended.
+  const others = collection.value.templates.map((item) =>
+    item.id === id
+      ? template
+      : template.is_default && item.platform === template.platform
         ? { ...item, is_default: false }
         : item,
-    )
-  await persist([...templates, template])
-  if (request === generation && !error.value) templateID.value = id
+  )
+  if (await persist(existing ? others : [...others, template]) && request === generation) {
+    showTemplate(id)
+    applied[platform.value] = id
+  }
 }
 async function removeTemplate() {
-  if (!selectedTemplate.value) return
+  const template = selectedTemplate.value
+  if (!template || !pendingDelete.value) return
   const request = generation
-  await persist(
-    collection.value.templates.filter((item) => item.id !== templateID.value),
-  )
-  if (request === generation && !error.value) {
-    templateID.value = ''
-    templateName.value = ''
+  if (await persist(collection.value.templates.filter((item) => item.id !== template.id)) && request === generation) {
+    if (applied[template.platform as Transport] === template.id) delete applied[template.platform as Transport]
+    showTemplate('')
   }
 }
 watch(platform, () => {
-  templateID.value = ''
-  templateName.value = ''
   search.value = ''
   custom.value = ''
+  showAppliedTemplate()
 })
 watch(() => props.groups, applyDefaults)
 onMounted(load)
@@ -251,7 +320,11 @@ onUnmounted(() => {
       >
         <PlatformIcon :platform="p" />{{
           providerLabel(p)
-        }}
+        }}<span
+          :data-test="'model-platform-count-' + p"
+          class="rounded bg-gray-100 px-1.5 text-xs tabular-nums text-gray-500 dark:bg-dark-700 dark:text-gray-300"
+          >{{ platformBadge(p) }}</span
+        >
       </button>
     </div>
     <p v-if="loading" role="status" class="text-sm text-gray-500">
@@ -291,15 +364,40 @@ onUnmounted(() => {
         <span class="text-xs text-gray-500">{{
           t('governance.modelSelectedCount', { count: current.models.length })
         }}</span>
-        <Select
-          data-test="model-template"
-          class="w-full min-w-0 sm:ml-auto sm:w-auto sm:min-w-48"
-          :model-value="templateID"
-          :options="templateOptions"
-          :disabled="disabled || loading || saving"
-          :aria-label="t('governance.modelTemplate')"
-          @update:model-value="chooseTemplate"
-        />
+        <div class="flex w-full min-w-0 items-center gap-2 sm:ml-auto sm:w-auto">
+          <span
+            v-if="modified"
+            data-test="template-modified"
+            class="shrink-0 rounded bg-amber-50 px-1.5 py-0.5 text-xs text-amber-700 dark:bg-amber-900/20 dark:text-amber-300"
+            >{{ t('governance.modelPicker.modified') }}</span
+          >
+          <Select
+            data-test="model-template"
+            class="w-full min-w-0 sm:w-auto sm:min-w-48"
+            :model-value="templateID"
+            :options="templateOptions"
+            :disabled="disabled || loading || saving"
+            :aria-label="t('governance.modelTemplate')"
+            @update:model-value="chooseTemplate"
+          />
+        </div>
+      </div>
+      <div
+        v-if="pendingApply && templateDiff"
+        data-test="template-apply-prompt"
+        role="status"
+        class="flex flex-wrap items-center gap-3 rounded-lg bg-amber-50 p-3 text-xs text-amber-800 dark:bg-amber-900/20 dark:text-amber-300"
+      >
+        <p class="min-w-0 flex-1">
+          {{ t('governance.modelPicker.applyPrompt', templateDiff) }}
+          <template v-if="!current.enabled">{{ t('governance.modelPicker.applyEnables') }}</template>
+        </p>
+        <button data-test="apply-model-template" type="button" class="btn btn-primary text-xs" @click="applyTemplate">
+          {{ t('governance.modelPicker.apply') }}
+        </button>
+        <button data-test="cancel-model-template" type="button" class="btn btn-secondary text-xs" @click="showAppliedTemplate">
+          {{ t('governance.modelPicker.cancel') }}
+        </button>
       </div>
       <p
         v-if="!current.enabled"
@@ -308,13 +406,41 @@ onUnmounted(() => {
         {{ t('governance.modelsUnrestricted') }}
       </p>
       <template v-else>
+        <div
+          v-if="current.models.length"
+          data-test="selected-models"
+          class="flex max-h-28 flex-wrap gap-1.5 overflow-y-auto"
+          :aria-label="t('governance.modelPicker.selectedModels')"
+        >
+          <span
+            v-for="model in current.models"
+            :key="model"
+            class="inline-flex max-w-full items-center gap-1 rounded-md bg-primary-50 py-0.5 pl-2 pr-1 text-xs text-primary-700 dark:bg-primary-900/20 dark:text-primary-300"
+            ><span class="truncate" :title="model">{{ model }}</span
+            ><button
+              type="button"
+              class="rounded px-1 leading-none hover:bg-primary-100 dark:hover:bg-primary-900/40"
+              :aria-label="t('governance.modelPicker.removeModel', { model })"
+              @click="toggle(model)"
+            >×</button></span
+          >
+        </div>
         <div class="flex flex-wrap gap-2">
           <input
             v-model="search"
+            data-test="model-search"
             class="input min-w-40 flex-1 text-sm"
             :placeholder="t('governance.searchModels')"
             :aria-label="t('governance.searchModels')"
           /><button
+            v-if="unselectedMatches.length"
+            data-test="select-filtered"
+            type="button"
+            class="btn btn-secondary text-xs"
+            @click="update([...current.models, ...unselectedMatches])"
+          >
+            {{ t('governance.modelPicker.selectFiltered', { count: unselectedMatches.length }) }}</button
+          ><button
             type="button"
             class="btn btn-secondary text-xs"
             @click="update(upstreamModels(platform))"
@@ -330,7 +456,7 @@ onUnmounted(() => {
           </button>
         </div>
         <div
-          class="grid max-h-44 grid-cols-1 gap-1 overflow-y-auto rounded-lg border border-gray-200 p-2 sm:grid-cols-2 dark:border-dark-600"
+          class="grid max-h-72 grid-cols-1 gap-1 overflow-y-auto rounded-lg border border-gray-200 p-2 sm:grid-cols-2 lg:grid-cols-3 dark:border-dark-600"
         >
           <label
             v-for="model in filteredModels"
@@ -342,7 +468,13 @@ onUnmounted(() => {
               :checked="current.models.includes(model)"
               :value="model"
               @change="toggle(model)"
-            /><span class="truncate" :title="model">{{ model }}</span></label
+            /><span class="truncate" :title="model">{{ model }}</span
+            ><span
+              v-if="upstreamSet.has(model)"
+              data-test="upstream-model"
+              class="ml-auto shrink-0 rounded bg-gray-100 px-1 text-[10px] text-gray-500 dark:bg-dark-700 dark:text-gray-400"
+              >{{ t('governance.modelPicker.upstreamBadge') }}</span
+            ></label
           >
         </div>
         <p
@@ -357,9 +489,10 @@ onUnmounted(() => {
             v-model="custom"
             data-test="custom-model"
             class="input min-w-0 flex-1 text-sm"
-            :placeholder="t('governance.customModel')"
+            :placeholder="t('governance.modelPicker.customModelBulk')"
             :aria-label="t('governance.customModel')"
             @keydown.enter.prevent="addCustom"
+            @paste="pasteModels"
           /><button
             data-test="add-model"
             type="button"
@@ -389,24 +522,52 @@ onUnmounted(() => {
               type="checkbox"
               class="governance-checkbox"
             />{{ t('governance.useAsDefault') }}</label
+          >
+        </div>
+        <div class="mt-3 flex flex-wrap gap-2">
+          <button
+            v-if="selectedTemplate"
+            data-test="update-template"
+            type="button"
+            class="btn btn-secondary text-xs"
+            :disabled="!current.models.length || !templateName.trim()"
+            @click="saveTemplate(false)"
+          >
+            {{ t('governance.modelPicker.updateTemplate') }}</button
           ><button
             data-test="save-template"
             type="button"
-            class="btn btn-secondary"
-            :disabled="!current.models.length || !templateName.trim()"
-            @click="saveTemplate"
+            class="btn btn-secondary text-xs"
+            :disabled="!current.models.length || !templateName.trim() || collection.templates.length >= templateLimit"
+            @click="saveTemplate(true)"
           >
-            {{ t('governance.saveTemplate') }}</button
+            {{ t('governance.modelPicker.saveAsNew') }}</button
           ><button
             v-if="selectedTemplate"
             data-test="delete-template"
             type="button"
-            class="btn btn-secondary text-red-600"
-            @click="removeTemplate"
+            class="btn btn-secondary text-xs text-red-600 dark:text-red-400"
+            @click="pendingDelete = true"
           >
-            {{ t('common.delete') }}
+            {{ t('governance.modelPicker.deleteTemplate') }}
           </button>
         </div>
+        <div
+          v-if="pendingDelete && selectedTemplate"
+          role="alert"
+          class="mt-3 flex flex-wrap items-center gap-3 rounded-lg bg-red-50 p-3 text-xs text-red-700 dark:bg-red-900/20 dark:text-red-300"
+        >
+          <p class="min-w-0 flex-1">{{ t('governance.modelPicker.deleteConfirm', { name: selectedTemplate.name }) }}</p>
+          <button data-test="confirm-delete-template" type="button" class="btn btn-danger text-xs" @click="removeTemplate">
+            {{ t('governance.modelPicker.confirmDelete') }}
+          </button>
+          <button type="button" class="btn btn-secondary text-xs" @click="pendingDelete = false">
+            {{ t('governance.modelPicker.cancel') }}
+          </button>
+        </div>
+        <p v-if="collection.templates.length >= templateLimit" class="mt-2 text-xs text-amber-700 dark:text-amber-400">
+          {{ t('governance.modelPicker.limitReached') }}
+        </p>
         <p class="mt-2 text-xs text-gray-500">
           {{ t('governance.templatePersistedHint') }}
         </p>

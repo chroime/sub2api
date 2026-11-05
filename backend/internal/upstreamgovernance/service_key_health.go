@@ -18,6 +18,12 @@ type KeyIssueCounter interface {
 	CountKeyIssues(context.Context) (map[int64]int, error)
 }
 
+// SiteBalanceReader returns each site's balance from its latest snapshot,
+// keyed by site ID. Sites whose latest snapshot has no balance are absent.
+type SiteBalanceReader interface {
+	LatestSiteBalances(context.Context) (map[int64]SiteBalance, error)
+}
+
 // inventoryForSite never creates keys and accepts only a complete inventory
 // belonging to the account that originally created the managed records.
 func (s *Service) inventoryForSite(ctx context.Context, site Site, session Session, keys []ManagedKey) (map[string]string, error) {

@@ -21,6 +21,14 @@ export interface Site extends SiteInput {
   key_issue_count?: number
   balance_monitor?: BalanceMonitor
   balance_monitor_status?: BalanceMonitorStatus
+  /** Upstream account balance from the latest collected snapshot. */
+  balance?: SiteBalance
+}
+export interface SiteBalance {
+  amount: number
+  /** 'usd' for Sub2API sites; 'quota' (not a currency) for New API sites. */
+  unit: string
+  observed_at: string
 }
 export interface BalanceMonitor {
   enabled: boolean

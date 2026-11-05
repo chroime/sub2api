@@ -131,6 +131,33 @@ GROUP BY site_id`)
 	return result, rows.Err()
 }
 
+func (s *sqlStore) LatestSiteBalances(ctx context.Context) (map[int64]SiteBalance, error) {
+	// One index lookup per site on (site_id, id DESC); the catalog itself is
+	// not read back, only the account balance and unit.
+	rows, err := s.db.QueryContext(ctx, `SELECT s.id, latest.balance, latest.unit, latest.created_at
+FROM upstream_governance_sites s
+CROSS JOIN LATERAL (
+ SELECT CASE WHEN jsonb_typeof(catalog->'account'->'balance')='number' THEN (catalog->'account'->>'balance')::double precision END AS balance,
+  COALESCE(catalog->'account'->>'unit', '') AS unit, created_at
+ FROM upstream_governance_snapshots WHERE site_id=s.id ORDER BY id DESC LIMIT 1
+) latest
+WHERE latest.balance IS NOT NULL`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := map[int64]SiteBalance{}
+	for rows.Next() {
+		var siteID int64
+		var balance SiteBalance
+		if err = rows.Scan(&siteID, &balance.Amount, &balance.Unit, &balance.ObservedAt); err != nil {
+			return nil, err
+		}
+		result[siteID] = balance
+	}
+	return result, rows.Err()
+}
+
 func validateKeyHealth(health KeyHealth) error {
 	switch health.Status {
 	case KeyHealthUnknown, KeyHealthPresent, KeyHealthSuspectedMissing, KeyHealthConfirmedMissing, KeyHealthGroupChanged:

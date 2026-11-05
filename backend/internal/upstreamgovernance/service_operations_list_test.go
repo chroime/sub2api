@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -41,6 +42,38 @@ func TestOperationsSiteNavigationInventoryIncludesSitesAfterFirstThousand(t *tes
 	require.Len(t, sites, 1001, "every workbench destination must also be reachable from the site inventory")
 	require.Equal(t, int64(1001), sites[1000].ID)
 	require.Equal(t, []int64{0, 1000}, m.cursors)
+}
+
+type balanceSitesStore struct {
+	Store
+	sites    []Site
+	balances map[int64]SiteBalance
+	err      error
+}
+
+func (m *balanceSitesStore) ListSites(context.Context) ([]Site, error) { return m.sites, nil }
+func (m *balanceSitesStore) LatestSiteBalances(context.Context) (map[int64]SiteBalance, error) {
+	return m.balances, m.err
+}
+
+func TestSiteInventoryCarriesTheLatestCollectedBalance(t *testing.T) {
+	observed := time.Date(2026, 11, 5, 15, 56, 0, 0, time.UTC)
+	m := &balanceSitesStore{
+		sites:    []Site{{ID: 1, Name: "Collected"}, {ID: 2, Name: "Never collected"}},
+		balances: map[int64]SiteBalance{1: {Amount: 8.15, Unit: "usd", ObservedAt: observed}},
+	}
+	sites, err := NewService(m, nil, nil, nil, false).ListSites(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, &SiteBalance{Amount: 8.15, Unit: "usd", ObservedAt: observed}, sites[0].Balance)
+	require.Nil(t, sites[1].Balance)
+}
+
+func TestSiteInventoryStillListsSitesWhenBalancesCannotBeRead(t *testing.T) {
+	m := &balanceSitesStore{sites: []Site{{ID: 1, Name: "Collected"}}, err: errors.New("read failure")}
+	sites, err := NewService(m, nil, nil, nil, false).ListSites(t.Context())
+	require.NoError(t, err)
+	require.Len(t, sites, 1)
+	require.Nil(t, sites[0].Balance)
 }
 
 func TestOperationsSiteNavigationInventoryDoesNotReturnTruncatedSuccessOnPageFailure(t *testing.T) {

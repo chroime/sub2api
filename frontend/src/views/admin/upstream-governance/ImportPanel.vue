@@ -686,12 +686,12 @@ const catalogWarnings: Record<string, string> = {
                             remote.models?.join(', ') || t('governance.unknown')
                           }}
                         </p>
-                        <PriceDetails :prices="remote.prices" />
                         <p class="text-xs text-gray-400">
                           {{ t('governance.source') }}: {{ remote.source }}
                         </p>
                       </div>
                     </div>
+                    <PriceDetails class="mt-4" :prices="remote.prices" />
                   </td>
                 </tr>
               </template>

@@ -25,6 +25,22 @@ func TestSaveKeyHealthRejectsInvalidObservationBeforeWrite(t *testing.T) {
 	require.ErrorIs(t, err, ErrInvalid)
 }
 
+func TestLatestSiteBalancesReadsTheNewestSnapshotAccount(t *testing.T) {
+	store, mock := storeFixture(t)
+	observed := time.Date(2026, 11, 5, 15, 56, 0, 0, time.UTC)
+	mock.ExpectQuery(`(?s)SELECT s\.id, latest\.balance.*FROM upstream_governance_snapshots WHERE site_id=s\.id ORDER BY id DESC LIMIT 1`).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "balance", "unit", "created_at"}).
+			AddRow(int64(1), 8.15, "usd", observed).
+			AddRow(int64(15), float64(69792), "quota", observed))
+	balances, err := store.(SiteBalanceReader).LatestSiteBalances(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, map[int64]SiteBalance{
+		1:  {Amount: 8.15, Unit: "usd", ObservedAt: observed},
+		15: {Amount: 69792, Unit: "quota", ObservedAt: observed},
+	}, balances)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestCountKeyIssuesReturnsConfirmedCountsOnly(t *testing.T) {
 	store, mock := storeFixture(t)
 	mock.ExpectQuery(`SELECT site_id, COUNT\(\*\) FROM upstream_governance_keys`).WillReturnRows(sqlmock.NewRows([]string{"site_id", "count"}).AddRow(int64(5), int64(2)))
