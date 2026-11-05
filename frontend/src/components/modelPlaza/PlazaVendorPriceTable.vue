@@ -501,7 +501,9 @@ defineExpose({ rowId })
   --pz-sticky-edge: theme('colors.gray.100');
 }
 
-:global(.dark) .plaza-vendor-price-table {
+/* 不能写成 :global(.dark) .plaza-vendor-price-table：Vue 的 scoped 编译会把整条选择器
+   换成 .dark，变量落到 <html> 上，又被上面直接写在表格上的浅色值盖掉 */
+.dark .plaza-vendor-price-table {
   --pz-title: theme('colors.primary.300');
   --pz-bg: theme('colors.primary.500 / 8%');
   --pz-bg-hover: theme('colors.primary.500 / 14%');

@@ -5,7 +5,7 @@
     :height="size"
     viewBox="0 0 24 24"
     xmlns="http://www.w3.org/2000/svg"
-    class="model-icon"
+    :class="['model-icon', { 'model-icon-mono': isDarkMono }]"
     fill="currentColor"
     fill-rule="evenodd"
   >
@@ -163,6 +163,24 @@ const fallbackText = computed(() => props.model.charAt(0).toUpperCase())
 const iconKey = computed(() => resolveModelVendor(props.model))
 
 const iconInfo = computed(() => iconKey.value ? iconData[iconKey.value] : null)
+
+/** 相对亮度（WCAG）。 */
+function relativeLuminance(hex: string): number | null {
+  const m = /^#([0-9a-f]{6})$/i.exec(hex)
+  if (!m) return null
+  const n = parseInt(m[1], 16)
+  const channel = (c: number) => {
+    const s = c / 255
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4
+  }
+  return 0.2126 * channel((n >> 16) & 255) + 0.7152 * channel((n >> 8) & 255) + 0.0722 * channel(n & 255)
+}
+
+/** 接近黑色的图标（OpenAI、xAI、Moonshot 等）在深色背景上看不见，深色模式下改用浅色。 */
+const isDarkMono = computed(() => {
+  const l = iconInfo.value ? relativeLuminance(iconInfo.value.color) : null
+  return l != null && l < 0.1
+})
 </script>
 
 <style scoped>
@@ -178,5 +196,13 @@ const iconInfo = computed(() => iconKey.value ? iconData[iconKey.value] : null)
   color: white;
   font-weight: 600;
   flex-shrink: 0;
+}
+</style>
+
+<style>
+/* 不放进 scoped：scoped 编译会改写 .dark 祖先选择器。:where() 把特异性压到最低，
+   使用方（如首页）为单色图标单独配的颜色仍然优先；CSS 规则本身总能盖过 path 的 fill 属性。 */
+:where(.dark) .model-icon-mono path {
+  fill: #e5e7eb;
 }
 </style>

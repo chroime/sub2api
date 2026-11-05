@@ -160,8 +160,9 @@
   color: var(--public-heading);
 }
 
-/* 公开页用自身配色覆盖表格的主色变量，避免后台主色与公开页主题冲突 */
-.public-model-plaza .model-plaza-content .plaza-vendor-price-table {
+/* 公开页用自身配色覆盖表格的主色变量，避免后台主色与公开页主题冲突；
+   多带一个 .public-theme，确保压过表格组件自带的 .dark 变量 */
+.public-theme.public-model-plaza .model-plaza-content .plaza-vendor-price-table {
   background: var(--public-surface);
   border-color: var(--public-border);
   box-shadow: var(--public-shadow);
