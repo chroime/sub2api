@@ -19,8 +19,8 @@
       />
     </div>
 
-    <!-- 窄屏：厂商改为一排可横滑的标签，避免长列表把价格表挤到下面 -->
-    <div class="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 lg:hidden" data-vendor-chips>
+    <!-- 窄屏：厂商平铺成可换行的标签，全部一眼可见，也不会像竖排列表那样把价格表挤到下面 -->
+    <div class="flex flex-wrap gap-1.5 lg:hidden" data-vendor-chips>
       <button
         v-for="chip in chips"
         :key="chip.key"
