@@ -1212,7 +1212,7 @@ func (s *AccountTestService) observeGrokTestResponse(ctx context.Context, accoun
 		return
 	}
 	if decision.Class == GrokFailureBilling && (isGrokSpendingLimitError(responseBody) || strings.Contains(strings.ToLower(decision.Reason), "credit")) {
-		persistGrokRateLimit(ctx, s.accountRepo, account, grokSpendingLimitResetAt(account, now))
+		persistGrokRateLimit(ctx, s.accountRepo, account, grokSpendingRefusalResetAt(account, now))
 		return
 	}
 	cooldown := time.Duration(0)

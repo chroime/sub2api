@@ -529,6 +529,9 @@ type OpenAIGatewayService struct {
 	// 剥离跨账号回带（openai_codex_turn_state.go）。
 	openaiCodexTurnStateOrigins sync.Map
 	openaiCodexTurnStateWrites  atomic.Uint64
+	// grokBillingProbe re-checks billing after a credit refusal; set by
+	// SetGrokBillingProber.
+	grokBillingProbe grokBillingProber
 }
 
 // NewOpenAIGatewayService creates a new OpenAIGatewayService

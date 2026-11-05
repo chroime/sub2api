@@ -12,7 +12,8 @@ import (
 
 // Spending-limit is recoverable at the end of the observed billing period.
 // When no billing snapshot is available, use a short probe rather than
-// fabricating a 24h boundary from the error arrival time.
+// fabricating a 24h boundary from the error arrival time. It is also the retry
+// lock after a credit refusal on an account that still has prepaid money.
 const grokSpendingLimitProbeCooldown = 10 * time.Minute
 
 // grokExhaustedForbiddenCooldown applies to an unclassified 403 from an
@@ -22,12 +23,17 @@ const grokSpendingLimitProbeCooldown = 10 * time.Minute
 const grokExhaustedForbiddenCooldown = 10 * time.Minute
 
 // grokSpendingRefusalConfirmWindow is how long a first spending/credit refusal
-// on an account that may still pay is remembered. A second refusal after the
-// probe cooldown but inside the window means xAI really stopped serving, so
-// its verdict wins and the account waits for the billing window reset.
-// Refusals inside the probe cooldown are the same burst (requests already in
-// flight to the account) and do not confirm anything.
+// on an account with only monthly-limit headroom is remembered. A second
+// refusal after the probe cooldown but inside the window means xAI really
+// stopped serving, so its verdict wins and the account waits for the billing
+// window reset. Refusals inside the probe cooldown are the same burst (requests
+// already in flight to the account) and do not confirm anything.
 const grokSpendingRefusalConfirmWindow = time.Hour
+
+// grokSpendingRecheckInterval spaces the billing re-checks that follow credit
+// refusals on a prepaid account, so a burst of refusals costs one probe. It is
+// a little shorter than the retry lock, so every retry cycle gets its check.
+const grokSpendingRecheckInterval = grokSpendingLimitProbeCooldown - time.Minute
 
 // grokSpendingLockReleaseTolerance absorbs the few seconds by which xAI's
 // reported billing window end drifts between probes.
@@ -185,10 +191,111 @@ func (s *grokSpendingLockReleaseStore) record(accountID int64, windowEnd time.Ti
 	s.items[accountID] = grokSpendingLockRelease{windowEnd: windowEnd, money: money}
 }
 
-func (s *grokSpendingLockReleaseStore) forget(accountID int64) {
+// grokBillingProber refreshes an account's billing snapshot from xAI. The
+// gateway gets one after construction (GrokQuotaService is built later).
+type grokBillingProber interface {
+	ProbeBilling(ctx context.Context, accountID int64) (*GrokQuotaProbeResult, error)
+}
+
+// SetGrokBillingProber lets credit refusals re-check the refused account's
+// billing.
+func (s *OpenAIGatewayService) SetGrokBillingProber(quota *GrokQuotaService) {
+	if s != nil && quota != nil {
+		s.grokBillingProbe = quota
+	}
+}
+
+// rateLimitGrokSpendingRefusal locks an account xAI refused for a spending
+// limit or exhausted credits. When the stored billing still shows prepaid
+// money, the lock is only the probe cooldown, and a background billing probe
+// checks the balance: if the money is gone, the lock is extended to the
+// billing window reset, so an account that really ran dry is not retried
+// every few minutes.
+func (s *OpenAIGatewayService) rateLimitGrokSpendingRefusal(ctx context.Context, account *Account) {
+	if s == nil || account == nil {
+		return
+	}
+	now := time.Now()
+	s.rateLimitGrok(ctx, account, grokSpendingRefusalResetAt(account, now))
+	billing, _ := grokBillingSnapshotFromExtra(account.Extra)
+	if !grokBillingHasPrepaidHeadroom(billing) || s.grokBillingProbe == nil || !globalGrokSpendingRechecks.begin(account.ID, now) {
+		return
+	}
+	refused := &Account{ID: account.ID, Platform: account.Platform, Type: account.Type}
+	go func() {
+		recheckCtx, cancel := context.WithTimeout(context.Background(), grokQuotaUpstreamTimeout+10*time.Second)
+		defer cancel()
+		s.recheckGrokSpendingRefusal(recheckCtx, refused)
+	}()
+}
+
+// recheckGrokSpendingRefusal probes the refused account's billing and, when
+// the fresh weekly answer shows no prepaid or on-demand money, applies the
+// lock a refusal without money gets.
+func (s *OpenAIGatewayService) recheckGrokSpendingRefusal(ctx context.Context, account *Account) {
+	if s == nil || s.grokBillingProbe == nil || account == nil {
+		return
+	}
+	result, err := s.grokBillingProbe.ProbeBilling(ctx, account.ID)
+	if err != nil || result == nil || result.Billing == nil {
+		return
+	}
+	billing := result.Billing
+	// Prepaid money rides the weekly (credits) answer; without a fresh one the
+	// stored balance is not proven stale.
+	if !grokBillingWeeklyFresh(billing) || grokBillingHasPrepaidHeadroom(billing) {
+		return
+	}
+	now := time.Now()
+	checked := &Account{ID: account.ID, Platform: account.Platform, Type: account.Type,
+		Extra: map[string]any{grokBillingExtraKey: billing}}
+	resetAt := grokSpendingRefusalResetAt(checked, now)
+	if !resetAt.After(now.Add(grokSpendingLimitProbeCooldown)) {
+		return
+	}
+	s.rateLimitGrok(ctx, account, resetAt)
+	slog.Info("grok_spending_refusal_lock_extended",
+		"account_id", account.ID,
+		"rate_limit_reset_at", resetAt.UTC(),
+	)
+}
+
+// grokBillingWeeklyFresh reports whether the summary's weekly (credits) fields
+// come from the probe that produced it rather than from an earlier snapshot.
+func grokBillingWeeklyFresh(billing *xai.BillingSummary) bool {
+	if billing == nil {
+		return false
+	}
+	for _, window := range billing.FailedWindows {
+		if window == "weekly" {
+			return false
+		}
+	}
+	return true
+}
+
+type grokSpendingRecheckStore struct {
+	mu    sync.Mutex
+	items map[int64]time.Time // account -> last billing re-check
+}
+
+var globalGrokSpendingRechecks = &grokSpendingRecheckStore{items: make(map[int64]time.Time)}
+
+// begin reports whether a billing re-check may start for the account now, at
+// most one per grokSpendingRecheckInterval.
+func (s *grokSpendingRecheckStore) begin(accountID int64, now time.Time) bool {
 	s.mu.Lock()
-	delete(s.items, accountID)
-	s.mu.Unlock()
+	defer s.mu.Unlock()
+	if last, ok := s.items[accountID]; ok && now.Sub(last) < grokSpendingRecheckInterval {
+		return false
+	}
+	for id, last := range s.items {
+		if now.Sub(last) >= grokSpendingRecheckInterval {
+			delete(s.items, id)
+		}
+	}
+	s.items[accountID] = now
+	return true
 }
 
 // grokBillingHasMonthlyHeadroom reports a monthly limit that is not used up.
@@ -206,29 +313,27 @@ func grokBillingHasMonthlyHeadroom(billing *xai.BillingSummary) bool {
 	return used < *billing.MonthlyLimitCents
 }
 
-// grokAccountMayStillPay reports whether the last billing probe saw any money
-// the account could still spend: prepaid balance, on-demand cap, or monthly
-// limit headroom.
-func grokAccountMayStillPay(account *Account) bool {
-	if account == nil {
-		return false
-	}
-	billing, err := grokBillingSnapshotFromExtra(account.Extra)
-	if err != nil {
-		return false
-	}
-	return grokBillingHasPrepaidHeadroom(billing) || grokBillingHasMonthlyHeadroom(billing)
-}
-
 // grokSpendingRefusalResetAt returns the rate-limit horizon for an account xAI
-// refused for spending limit or exhausted credits. While the last billing probe
-// still shows money the account could spend, the first refusal only gets a
-// short probe cooldown: the balance may be shared or topped up, and locking
-// until the weekly reset would idle money that is still there. A confirmed
-// repeat falls back to the billing window reset.
+// refused for spending limit or exhausted credits.
+//
+//   - Prepaid balance or on-demand cap left: every refusal locks only for the
+//     probe cooldown. xAI refuses such accounts for a while and then serves
+//     them again, so a lock until the weekly reset idles money that is still
+//     there. A stale balance is caught by the billing re-check that follows
+//     the refusal (see rateLimitGrokSpendingRefusal).
+//   - Only monthly-limit headroom: the first refusal is probed, and a
+//     confirmed repeat waits for the billing window reset, because xAI keeps
+//     refusing such accounts once the weekly window is full.
+//   - No money left: wait for the billing window reset.
 func grokSpendingRefusalResetAt(account *Account, now time.Time) time.Time {
-	if account != nil && grokAccountMayStillPay(account) && !confirmGrokSpendingRefusal(account.ID, now) {
-		return now.Add(grokSpendingLimitProbeCooldown)
+	if account != nil {
+		billing, _ := grokBillingSnapshotFromExtra(account.Extra)
+		if grokBillingHasPrepaidHeadroom(billing) {
+			return now.Add(grokSpendingLimitProbeCooldown)
+		}
+		if grokBillingHasMonthlyHeadroom(billing) && !confirmGrokSpendingRefusal(account.ID, now) {
+			return now.Add(grokSpendingLimitProbeCooldown)
+		}
 	}
 	return grokSpendingLimitResetAt(account, now)
 }

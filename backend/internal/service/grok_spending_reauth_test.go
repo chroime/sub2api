@@ -4,6 +4,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -126,14 +127,15 @@ func backdateGrokSpendingRefusal(t *testing.T, accountID int64, age time.Duratio
 	s.items[accountID] = first.Add(-age)
 }
 
-func TestGrokSpendingRefusalProbesFirstThenLocksUntilReset(t *testing.T) {
+// An account with prepaid money left is only ever locked for the probe
+// cooldown: xAI refuses such accounts for a while and then serves them again.
+func TestGrokSpendingRefusalWithPrepaidMoneyAlwaysRetriesShortly(t *testing.T) {
 	const accountID = 4804
 	t.Cleanup(func() { resetGrokSpendingRefusal(accountID) })
 	weekEnd := time.Now().Add(72 * time.Hour).Truncate(time.Second)
 	body := []byte(`{"code":"x","error":"You have run out of credits or need a Grok subscription."}`)
 	money := map[string]map[string]any{
 		"prepaid":       {"prepaid_balance": 12294.0},
-		"monthly limit": {"prepaid_balance": 0.0, "monthly_limit_cents": 283486.0, "used_cents": 0.0},
 		"on-demand cap": {"on_demand_cap": 500.0, "on_demand_used": 120.0},
 	}
 
@@ -143,26 +145,54 @@ func TestGrokSpendingRefusalProbesFirstThenLocksUntilReset(t *testing.T) {
 			repo := &grokQuotaAccountRepo{}
 			svc := &OpenAIGatewayService{accountRepo: repo}
 			extra := grokPrepaidBillingExtra(weekEnd.Format(time.RFC3339), fields)
-			newAccount := func() *Account {
-				return &Account{ID: accountID, Platform: PlatformGrok, Type: AccountTypeOAuth, Extra: extra}
+			account := &Account{ID: accountID, Platform: PlatformGrok, Type: AccountTypeOAuth, Extra: extra}
+
+			for i := 0; i < 3; i++ {
+				svc.handleGrokAccountUpstreamError(context.Background(), account, status, nil, body)
+				require.WithinDuration(t, time.Now().Add(grokSpendingLimitProbeCooldown), repo.lastRateLimitResetAt, 2*time.Second,
+					"%s/%d refusal %d: only the retry lock", name, status, i+1)
 			}
-
-			svc.handleGrokAccountUpstreamError(context.Background(), newAccount(), status, nil, body)
-			require.Equal(t, 1, repo.rateLimitedCalls, "%s/%d", name, status)
-			require.WithinDuration(t, time.Now().Add(grokSpendingLimitProbeCooldown), repo.lastRateLimitResetAt, 2*time.Second,
-				"%s/%d: first refusal with money left is only a probe cooldown", name, status)
-
-			// Requests already in flight fail in the same burst; they must not
-			// count as the confirming repeat.
-			svc.handleGrokAccountUpstreamError(context.Background(), newAccount(), status, nil, body)
-			require.WithinDuration(t, time.Now().Add(grokSpendingLimitProbeCooldown), repo.lastRateLimitResetAt, 2*time.Second,
-				"%s/%d: a refusal in the same burst keeps the probe cooldown", name, status)
-
-			backdateGrokSpendingRefusal(t, accountID, grokSpendingLimitProbeCooldown+time.Second)
-			svc.handleGrokAccountUpstreamError(context.Background(), newAccount(), status, nil, body)
-			require.True(t, repo.lastRateLimitResetAt.Equal(weekEnd),
-				"%s/%d: a refusal after the probe cooldown trusts xAI and waits for the weekly reset", name, status)
+			later := time.Now().Add(2 * time.Hour)
+			require.Equal(t, later.Add(grokSpendingLimitProbeCooldown), grokSpendingRefusalResetAt(account, later),
+				"%s/%d: a refusal hours later is still only the retry lock", name, status)
 		}
+	}
+}
+
+// Monthly-limit headroom only earns a probe: a refusal after the probe cooldown
+// trusts xAI and waits for the weekly reset.
+func TestGrokSpendingRefusalWithMonthlyHeadroomProbesThenLocksUntilReset(t *testing.T) {
+	const accountID = 4807
+	t.Cleanup(func() { resetGrokSpendingRefusal(accountID) })
+	weekEnd := time.Now().Add(72 * time.Hour).Truncate(time.Second)
+	body := []byte(`{"code":"x","error":"You have run out of credits or need a Grok subscription."}`)
+	extra := grokPrepaidBillingExtra(weekEnd.Format(time.RFC3339), map[string]any{
+		"prepaid_balance": 0.0, "monthly_limit_cents": 283486.0, "used_cents": 0.0,
+	})
+
+	for _, status := range []int{http.StatusPaymentRequired, http.StatusForbidden} {
+		resetGrokSpendingRefusal(accountID)
+		repo := &grokQuotaAccountRepo{}
+		svc := &OpenAIGatewayService{accountRepo: repo}
+		newAccount := func() *Account {
+			return &Account{ID: accountID, Platform: PlatformGrok, Type: AccountTypeOAuth, Extra: extra}
+		}
+
+		svc.handleGrokAccountUpstreamError(context.Background(), newAccount(), status, nil, body)
+		require.Equal(t, 1, repo.rateLimitedCalls, "%d", status)
+		require.WithinDuration(t, time.Now().Add(grokSpendingLimitProbeCooldown), repo.lastRateLimitResetAt, 2*time.Second,
+			"%d: first refusal is only a probe cooldown", status)
+
+		// Requests already in flight fail in the same burst; they must not
+		// count as the confirming repeat.
+		svc.handleGrokAccountUpstreamError(context.Background(), newAccount(), status, nil, body)
+		require.WithinDuration(t, time.Now().Add(grokSpendingLimitProbeCooldown), repo.lastRateLimitResetAt, 2*time.Second,
+			"%d: a refusal in the same burst keeps the probe cooldown", status)
+
+		backdateGrokSpendingRefusal(t, accountID, grokSpendingLimitProbeCooldown+time.Second)
+		svc.handleGrokAccountUpstreamError(context.Background(), newAccount(), status, nil, body)
+		require.True(t, repo.lastRateLimitResetAt.Equal(weekEnd),
+			"%d: a refusal after the probe cooldown waits for the weekly reset", status)
 	}
 }
 
@@ -192,7 +222,9 @@ func TestGrokBillingWindowExhaustedIgnoresMonthlyHeadroom(t *testing.T) {
 	})}
 
 	require.True(t, grokBillingWindowExhausted(account))
-	require.True(t, grokAccountMayStillPay(account))
+	billing, err := grokBillingSnapshotFromExtra(account.Extra)
+	require.NoError(t, err)
+	require.True(t, grokBillingHasMonthlyHeadroom(billing))
 }
 
 func TestGrokSpendingRefusalConfirmation(t *testing.T) {
@@ -247,7 +279,7 @@ func grokWeeklyBillingSummary(periodEnd time.Time, usage *float64) *xai.BillingS
 
 func TestReleaseGrokSpendingLockIfServable(t *testing.T) {
 	const accountID = 4811
-	t.Cleanup(func() { globalGrokSpendingLockReleases.forget(accountID) })
+	t.Cleanup(func() { forgetGrokSpendingLockRelease(accountID) })
 	now := time.Now()
 	weekEnd := now.Add(72 * time.Hour).Truncate(time.Second)
 	monthEnd := weekEnd.Add(20 * 24 * time.Hour)
@@ -307,7 +339,7 @@ func TestReleaseGrokSpendingLockIfServable(t *testing.T) {
 		}, false},
 	}
 	for _, tc := range cases {
-		globalGrokSpendingLockReleases.forget(accountID)
+		forgetGrokSpendingLockRelease(accountID)
 		repo := &grokQuotaAccountRepo{recoveryClearResult: true}
 		account := grokSpendingLockedAccount(accountID, tc.resetAt)
 
@@ -327,8 +359,8 @@ func TestReleaseGrokSpendingLockIfServable(t *testing.T) {
 // An account xAI keeps refusing must not be released on every billing refresh.
 func TestReleaseGrokSpendingLockOncePerWindowUnlessMoneyGrows(t *testing.T) {
 	const accountID = 4812
-	t.Cleanup(func() { globalGrokSpendingLockReleases.forget(accountID) })
-	globalGrokSpendingLockReleases.forget(accountID)
+	t.Cleanup(func() { forgetGrokSpendingLockRelease(accountID) })
+	forgetGrokSpendingLockRelease(accountID)
 	now := time.Now()
 	weekEnd := now.Add(72 * time.Hour).Truncate(time.Second)
 	billing := func(end time.Time, prepaid float64) *xai.BillingSummary {
@@ -360,10 +392,10 @@ func TestReleaseGrokSpendingLockOncePerWindowUnlessMoneyGrows(t *testing.T) {
 func TestReleaseGrokSpendingLockRecordsOnlyClearedLocks(t *testing.T) {
 	const accountID = 4813
 	t.Cleanup(func() {
-		globalGrokSpendingLockReleases.forget(accountID)
+		forgetGrokSpendingLockRelease(accountID)
 		resetGrokSpendingRefusal(accountID)
 	})
-	globalGrokSpendingLockReleases.forget(accountID)
+	forgetGrokSpendingLockRelease(accountID)
 	now := time.Now()
 	weekEnd := now.Add(72 * time.Hour).Truncate(time.Second)
 	b := grokWeeklyBillingSummary(weekEnd, floatPtr(26))
@@ -399,8 +431,8 @@ func (u *grokBillingBodiesUpstream) Do(req *http.Request, _ string, _ int64, _ i
 
 func TestGrokQuotaServiceProbeBillingReleasesSpendingLockWhilePrepaidRemains(t *testing.T) {
 	account := healthyGrokQuotaOAuthAccount(4814)
-	t.Cleanup(func() { globalGrokSpendingLockReleases.forget(account.ID) })
-	globalGrokSpendingLockReleases.forget(account.ID)
+	t.Cleanup(func() { forgetGrokSpendingLockRelease(account.ID) })
+	forgetGrokSpendingLockRelease(account.ID)
 	weekEnd := time.Now().Add(72 * time.Hour).UTC().Truncate(time.Second)
 	limitedAt := time.Now().Add(-8 * time.Hour).Truncate(time.Second)
 	account.RateLimitedAt, account.RateLimitResetAt = &limitedAt, &weekEnd
@@ -421,4 +453,146 @@ func TestGrokQuotaServiceProbeBillingReleasesSpendingLockWhilePrepaidRemains(t *
 	require.Equal(t, 1, repo.recoveryClearCalls)
 	require.True(t, repo.recoveryObservedAt.Equal(limitedAt))
 	require.True(t, repo.recoveryObservedReset.Equal(weekEnd))
+}
+
+func forgetGrokSpendingLockRelease(accountID int64) {
+	s := globalGrokSpendingLockReleases
+	s.mu.Lock()
+	delete(s.items, accountID)
+	s.mu.Unlock()
+}
+
+func forgetGrokSpendingRecheck(accountID int64) {
+	s := globalGrokSpendingRechecks
+	s.mu.Lock()
+	delete(s.items, accountID)
+	s.mu.Unlock()
+}
+
+// fakeGrokBillingProber answers billing probes with a fixed result.
+type fakeGrokBillingProber struct {
+	billing *xai.BillingSummary
+	err     error
+	calls   chan int64
+}
+
+func (p *fakeGrokBillingProber) ProbeBilling(_ context.Context, accountID int64) (*GrokQuotaProbeResult, error) {
+	if p.calls != nil {
+		p.calls <- accountID
+	}
+	if p.err != nil {
+		return nil, p.err
+	}
+	return &GrokQuotaProbeResult{Source: "billing_probe", Billing: p.billing}, nil
+}
+
+func TestRecheckGrokSpendingRefusal(t *testing.T) {
+	const accountID = 4815
+	t.Cleanup(func() { resetGrokSpendingRefusal(accountID) })
+	weekEnd := time.Now().Add(72 * time.Hour).Truncate(time.Second)
+	weekly := func(money func(b *xai.BillingSummary)) *xai.BillingSummary {
+		b := grokWeeklyBillingSummary(weekEnd, floatPtr(100))
+		money(b)
+		return b
+	}
+
+	cases := []struct {
+		name       string
+		billing    *xai.BillingSummary
+		err        error
+		wantLockTo time.Time // zero: the retry lock stands
+	}{
+		{"prepaid gone", weekly(func(b *xai.BillingSummary) { b.PrepaidBalance = floatPtr(0) }), nil, weekEnd},
+		{"prepaid still there", weekly(func(b *xai.BillingSummary) { b.PrepaidBalance = floatPtr(17536) }), nil, time.Time{}},
+		{"weekly answer failed", weekly(func(b *xai.BillingSummary) {
+			b.PrepaidBalance = floatPtr(0)
+			b.FailedWindows = []string{"weekly"}
+		}), nil, time.Time{}},
+		{"only monthly headroom left", weekly(func(b *xai.BillingSummary) {
+			b.PrepaidBalance = floatPtr(0)
+			b.MonthlyLimitCents, b.UsedCents = floatPtr(30000), floatPtr(0)
+		}), nil, time.Time{}},
+		{"probe failed", nil, errors.New("billing unavailable"), time.Time{}},
+	}
+	for _, tc := range cases {
+		resetGrokSpendingRefusal(accountID)
+		repo := &grokQuotaAccountRepo{}
+		svc := &OpenAIGatewayService{accountRepo: repo, grokBillingProbe: &fakeGrokBillingProber{billing: tc.billing, err: tc.err}}
+		account := &Account{ID: accountID, Platform: PlatformGrok, Type: AccountTypeOAuth}
+
+		svc.recheckGrokSpendingRefusal(context.Background(), account)
+
+		if tc.wantLockTo.IsZero() {
+			require.Zero(t, repo.rateLimitedCalls, tc.name)
+			continue
+		}
+		require.Equal(t, 1, repo.rateLimitedCalls, tc.name)
+		require.True(t, repo.lastRateLimitResetAt.Equal(tc.wantLockTo), tc.name)
+		require.True(t, svc.isOpenAIAccountRuntimeBlocked(account), tc.name)
+	}
+}
+
+func TestGrokSpendingRecheckRunsOncePerInterval(t *testing.T) {
+	const a, b = 4816, 4817
+	t.Cleanup(func() {
+		forgetGrokSpendingRecheck(a)
+		forgetGrokSpendingRecheck(b)
+	})
+	forgetGrokSpendingRecheck(a)
+	forgetGrokSpendingRecheck(b)
+	now := time.Now()
+
+	require.True(t, globalGrokSpendingRechecks.begin(a, now))
+	require.False(t, globalGrokSpendingRechecks.begin(a, now.Add(time.Minute)), "same burst")
+	require.True(t, globalGrokSpendingRechecks.begin(b, now.Add(time.Minute)), "accounts are independent")
+	require.True(t, globalGrokSpendingRechecks.begin(a, now.Add(grokSpendingRecheckInterval)), "next retry cycle")
+}
+
+func TestRateLimitGrokSpendingRefusalRechecksPrepaidBalanceOnce(t *testing.T) {
+	const accountID = 4818
+	t.Cleanup(func() { forgetGrokSpendingRecheck(accountID) })
+	forgetGrokSpendingRecheck(accountID)
+	weekEnd := time.Now().Add(72 * time.Hour).Truncate(time.Second)
+	still := grokWeeklyBillingSummary(weekEnd, floatPtr(100))
+	still.PrepaidBalance = floatPtr(17536)
+	prober := &fakeGrokBillingProber{billing: still, calls: make(chan int64, 4)}
+	repo := &grokQuotaAccountRepo{}
+	svc := &OpenAIGatewayService{accountRepo: repo, grokBillingProbe: prober}
+	account := &Account{ID: accountID, Platform: PlatformGrok, Type: AccountTypeOAuth,
+		Extra: grokPrepaidBillingExtra(weekEnd.Format(time.RFC3339), map[string]any{"prepaid_balance": 18080.0})}
+
+	svc.rateLimitGrokSpendingRefusal(context.Background(), account)
+	svc.rateLimitGrokSpendingRefusal(context.Background(), account)
+
+	select {
+	case id := <-prober.calls:
+		require.Equal(t, int64(accountID), id)
+	case <-time.After(5 * time.Second):
+		t.Fatal("a prepaid refusal must re-check billing")
+	}
+	require.Len(t, prober.calls, 0, "a refusal burst re-checks billing once")
+	require.Equal(t, 2, repo.rateLimitedCalls)
+	require.WithinDuration(t, time.Now().Add(grokSpendingLimitProbeCooldown), repo.lastRateLimitResetAt, 2*time.Second)
+}
+
+// An admin connection test refused for credits follows the same rule as
+// gateway traffic: prepaid money left means only the retry lock.
+func TestObserveGrokTestResponseCreditRefusalWithPrepaidOnlyRetriesShortly(t *testing.T) {
+	weekEnd := time.Now().Add(72 * time.Hour).Truncate(time.Second)
+	account := &Account{ID: 4819, Platform: PlatformGrok, Type: AccountTypeOAuth,
+		Extra: grokPrepaidBillingExtra(weekEnd.Format(time.RFC3339), map[string]any{"prepaid_balance": 18080.0})}
+	repo := &grokQuotaAccountRepo{mockAccountRepoForPlatform: &mockAccountRepoForPlatform{
+		accountsByID: map[int64]*Account{account.ID: account},
+	}}
+	svc := &AccountTestService{accountRepo: repo}
+	resp := &http.Response{
+		StatusCode: http.StatusPaymentRequired,
+		Header:     make(http.Header),
+		Body:       io.NopCloser(strings.NewReader(`{"code":"x","error":"You have run out of credits or need a Grok subscription."}`)),
+	}
+
+	svc.observeGrokTestResponse(context.Background(), account, resp)
+
+	require.Equal(t, 1, repo.rateLimitedCalls)
+	require.WithinDuration(t, time.Now().Add(grokSpendingLimitProbeCooldown), repo.lastRateLimitResetAt, 2*time.Second)
 }

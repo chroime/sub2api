@@ -292,9 +292,12 @@ func ProvideGrokQuotaService(
 	cfg *config.Config,
 	usageLogRepo UsageLogRepository,
 	settingService *SettingService,
+	gateway *OpenAIGatewayService,
 ) *GrokQuotaService {
 	service := NewGrokQuotaService(accountRepo, proxyRepo, tokenProvider, httpUpstream, cfg, usageLogRepo)
 	service.SetSettingService(settingService)
+	// 余额不足被拒后，网关用它复查被拒账号的计费数据。
+	gateway.SetGrokBillingProber(service)
 	return service
 }
 
