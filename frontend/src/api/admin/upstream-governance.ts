@@ -19,10 +19,30 @@ export interface Site extends SiteInput {
   last_error: string
   last_sync_at: string | null
   key_issue_count?: number
+  /** Whether the fast group/rate observation runs between full collections. */
+  fast_observe_enabled?: boolean
   balance_monitor?: BalanceMonitor
   balance_monitor_status?: BalanceMonitorStatus
   /** Upstream account balance from the latest collected snapshot. */
   balance?: SiteBalance
+}
+export type DeliveryChannel = 'email' | 'astrbot'
+/** One outbound notification: an upstream change mail or an AstrBot group message. */
+export interface DeliveryRecord {
+  id: number
+  channel: DeliveryChannel
+  site_id?: number
+  site_name?: string
+  group_id?: number
+  group_name?: string
+  kind: string
+  subject?: string
+  recipient?: string
+  status: string
+  attempts: number
+  last_error?: string
+  created_at: string
+  sent_at?: string | null
 }
 export interface SiteBalance {
   amount: number
@@ -688,8 +708,17 @@ const api = {
   async cancelBrowserAuth(id: number, jobId: string) {
     return (await apiClient.delete<{ cancelled: boolean }>(`${site(id)}/browser-auth/${encodeURIComponent(jobId)}`)).data
   },
-  async remove(id: number) {
-    await apiClient.delete(site(id))
+  /** keepAccounts deletes a site that still has imported accounts and leaves them serving. */
+  async remove(id: number, options: { keepAccounts?: boolean } = {}) {
+    const response = await apiClient.delete<{ deleted: boolean; kept_accounts?: number }>(site(id), options.keepAccounts ? { params: { keep_accounts: 'true' } } : undefined)
+    return response.data
+  },
+  async deliveryRecords(channel: DeliveryChannel, page = 1) {
+    return (
+      await apiClient.get<Page<DeliveryRecord>>('/admin/upstream-governance/delivery-records', {
+        params: { channel, page, page_size: 20 },
+      })
+    ).data
   },
   async connect(id: number, input: LoginInput) {
     return (

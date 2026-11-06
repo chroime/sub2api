@@ -150,4 +150,10 @@ describe('GovernanceSitesOverview compact mode', () => {
     const picker = wrapper.getComponent({ name: 'Select' })
     expect(picker.props('options')).toContainEqual({ value: 1, label: 'Primary · $8.15' })
   })
+
+  it('shows the collection cadence the scheduler actually runs', () => {
+    const wrapper = render({ sites: [{ ...sites[0], interval_minutes: 1, full_interval_seconds: 20, fast_interval_seconds: 1, fast_observe_enabled: true }] })
+    expect(wrapper.get('#governance-site-1').text()).toContain('Every 20s · observe 1s')
+    expect(wrapper.get('#governance-site-1').text()).not.toContain('1 min')
+  })
 })

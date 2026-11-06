@@ -6,10 +6,16 @@
       aria-orientation="horizontal"
       class="flex w-max min-w-full items-center gap-1"
     >
+      <template v-for="(entry, index) in SMART_OPERATIONS_SECTIONS" :key="entry.id">
+      <!-- Site sections first, then the sections that span every upstream. -->
+      <span
+        v-if="index > 0 && entry.scope !== SMART_OPERATIONS_SECTIONS[index - 1]!.scope"
+        data-test="tab-scope-divider"
+        class="mx-1 h-6 w-px shrink-0 bg-gray-300 dark:bg-dark-500"
+        aria-hidden="true"
+      />
       <button
-        v-for="entry in SMART_OPERATIONS_SECTIONS"
         :id="`governance-${entry.id}-tab`"
-        :key="entry.id"
         ref="tabButtons"
         type="button"
         role="tab"
@@ -28,6 +34,7 @@
         <Icon :name="entry.icon" size="sm" class="shrink-0" aria-hidden="true" />
         <span>{{ t(entry.labelKey) }}</span>
       </button>
+      </template>
     </div>
   </div>
 </template>

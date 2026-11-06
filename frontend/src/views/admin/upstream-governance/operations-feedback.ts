@@ -21,7 +21,7 @@ const timelineStatuses = new Map<string, Map<string, string>>([
   ['pricing', new Map(['prepared', 'applied', 'protected', 'rejected', 'conflict', 'failed'].map(status => [status, status]))],
   ['notification', new Map([['pending', 'pending'], ['sending', 'sending'], ['sent', 'accepted']])],
 ])
-const sections = new Map<string, OperationsSection>([['connect', 'overview'], ['keys', 'import'], ['monitor', 'monitor']])
+const sections = new Map<string, OperationsSection>([['connect', 'overview'], ['keys', 'groups'], ['monitor', 'automation']])
 
 export function operationReasonKey(reason: string): string {
   const message = reasons.get(reason)

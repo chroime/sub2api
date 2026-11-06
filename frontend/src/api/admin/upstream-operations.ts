@@ -1,10 +1,12 @@
 import { apiClient } from '../client'
+import type { SmartOperationsSection } from '@/config/smartOperations'
 
 export type OperationsSeverity = 'critical' | 'warning' | 'info'
 export type WorkbenchKind = 'authorization' | 'key' | 'balance' | 'collection' | 'fast_observation' | 'pricing' | 'notification'
 export type TimelineKind = 'event' | 'pricing' | 'notification'
 export type TimelineFilter = 'all' | TimelineKind
-export type OperationsSection = 'overview' | 'import' | 'models' | 'local-monitor' | 'monitor' | 'history' | 'settings'
+/** The smart-operations section a workbench task opens. */
+export type OperationsSection = SmartOperationsSection
 
 export interface WorkbenchItem {
   id: string

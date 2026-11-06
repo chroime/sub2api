@@ -10,7 +10,9 @@ import api, {
 import { formatGovernanceTime, formatGovernanceRate } from './format'
 import { pricingFeedback, pricingStatusKey, observationStatusKey } from './pricing-feedback'
 
-const props = withDefaults(defineProps<{ siteId: number; disabled?: boolean }>(), { disabled: false })
+// section picks which part to show: the collection cadence (automation page)
+// or the group pricing policies and their notifications (pricing page).
+const props = withDefaults(defineProps<{ siteId: number; disabled?: boolean; section?: 'all' | 'observation' | 'pricing' }>(), { disabled: false, section: 'all' })
 const emit = defineEmits<{
   'observation-saved': [value: ObservationPolicy]
   'pricing-saved': [value: PricingPoliciesConfiguration]
@@ -101,11 +103,17 @@ async function load(preserveDrafts = false) {
   clearPreviews()
   if (!preserveDrafts) { observation.value = null; pricing.value = null; observationDraft.value = null; pricingDraft.value = null; notificationVersion.value = null; notificationConflict.value = false }
   try {
-    const [observationValue, pricingValue] = await Promise.all([api.observationPolicy(props.siteId), api.pricingPolicies(props.siteId)])
+    // Each page instance reads only the part it shows.
+    const [observationValue, pricingValue] = await Promise.all([
+      props.section === 'pricing' ? null : api.observationPolicy(props.siteId),
+      props.section === 'observation' ? null : api.pricingPolicies(props.siteId),
+    ])
     if (request !== generation) return
-    observation.value = observationValue
-    if (!preserveDrafts || !observationDraft.value) observationDraft.value = cadence(observationValue.policy)
-    mergePricing(pricingValue)
+    if (observationValue) {
+      observation.value = observationValue
+      if (!preserveDrafts || !observationDraft.value) observationDraft.value = cadence(observationValue.policy)
+    }
+    if (pricingValue) mergePricing(pricingValue)
     if (preserveDrafts) saved.value = 'governance.reliability.draftsPreserved'
   } catch (e) {
     if (request === generation) reportFailure(e)
@@ -252,7 +260,7 @@ onUnmounted(() => { generation++; emit('busy', false) })
     <p v-if="saved" role="status" class="rounded-xl border border-primary-100 bg-primary-50 p-3 text-sm text-primary-800 dark:border-primary-900/40 dark:bg-primary-900/10 dark:text-primary-300">{{ t(saved) }}</p>
     <p v-if="loading" role="status" class="rounded-xl border border-dashed border-gray-200 p-5 text-sm text-gray-500 dark:border-dark-600">{{ t('common.loading') }}</p>
 
-    <section v-if="observationDraft" class="rounded-xl border border-gray-200 p-4 dark:border-dark-600 sm:p-5">
+    <section v-if="observationDraft && section !== 'pricing'" class="rounded-xl border border-gray-200 p-4 dark:border-dark-600 sm:p-5">
       <div class="flex flex-wrap items-start justify-between gap-3"><div><h3 class="font-semibold">{{ t('governance.observationPolicyTitle') }}</h3><p class="mt-1 text-sm text-gray-500">{{ t('governance.observationPolicyHint') }}</p></div><span class="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium dark:bg-dark-700">{{ t(observation?.policy.enabled ? 'governance.observationOn' : 'governance.observationOff') }}</span></div>
       <form data-test="observation-form" class="mt-5 space-y-4" @submit.prevent="saveObservation">
         <fieldset :disabled="busy || props.disabled" class="space-y-4">
@@ -273,7 +281,7 @@ onUnmounted(() => { generation++; emit('busy', false) })
       </form>
     </section>
 
-    <section v-if="pricingDraft" class="rounded-xl border border-gray-200 p-4 dark:border-dark-600 sm:p-5">
+    <section v-if="pricingDraft && section !== 'observation'" class="rounded-xl border border-gray-200 p-4 dark:border-dark-600 sm:p-5">
       <div class="flex items-start justify-between gap-3"><div><h3 class="font-semibold">{{ t('governance.pricingProtectionTitle') }}</h3><p class="mt-1 text-sm text-gray-500">{{ t('governance.reliability.pricingScopeHint') }}</p></div><Icon name="shield" size="md" class="shrink-0 text-primary-600" /></div>
       <p v-if="!pricingRows.length" class="mt-4 rounded-lg border border-dashed border-gray-200 p-4 text-sm text-gray-500 dark:border-dark-600">{{ t('governance.noPricingPolicies') }}</p>
       <article v-for="row in pricingRows" :key="row.local_group_id" class="mt-4 rounded-xl border border-gray-200 p-4 dark:border-dark-600" :data-test="`pricing-row-${row.local_group_id}`">
@@ -318,7 +326,7 @@ onUnmounted(() => { generation++; emit('busy', false) })
       </article>
     </section>
 
-    <section v-if="pricingDraft" class="rounded-xl border border-gray-200 p-4 dark:border-dark-600 sm:p-5">
+    <section v-if="pricingDraft && section !== 'observation'" class="rounded-xl border border-gray-200 p-4 dark:border-dark-600 sm:p-5">
       <div><h3 class="font-semibold">{{ t('governance.pricingNotificationsTitle') }}</h3><p class="mt-1 text-sm text-gray-500">{{ t('governance.pricingNotificationsHint') }}</p></div>
       <div v-if="notificationConflict" role="alert" class="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-900/10 dark:text-amber-200"><p>{{ t('governance.reliability.notificationConflict') }}</p><p class="mt-2 text-xs">{{ t('governance.reliability.reloadNotificationsHint') }}</p><button data-test="reload-notifications" class="btn btn-secondary mt-3 text-sm" type="button" :disabled="busy || props.disabled" @click="reloadNotifications">{{ t('governance.reliability.reloadNotifications') }}</button></div>
       <form data-test="notification-form" class="mt-4 space-y-4" @submit.prevent="saveNotifications"><fieldset :disabled="busy || props.disabled" class="space-y-4"><label class="governance-checkbox-label flex items-center gap-3 rounded-lg bg-gray-50 p-3 text-sm font-medium dark:bg-dark-900"><input v-model="pricingDraft.notifications.enabled" data-test="notification-enabled" type="checkbox" class="governance-checkbox" />{{ t('governance.enablePricingNotifications') }}</label><div class="grid gap-3 sm:grid-cols-2"><label v-for="key in (['group_changes', 'rate_changes', 'pricing_changes', 'protection_changes'] as const)" :key="key" class="governance-checkbox-label flex items-center gap-2 text-sm"><input v-model="pricingDraft.notifications[key]" type="checkbox" class="governance-checkbox" />{{ t(`governance.notification_${key}`) }}</label></div><label class="block text-sm">{{ t('governance.notificationRecipients') }}<textarea :value="pricingDraft.notifications.recipients.join('\n')" data-test="notification-recipients" class="input mt-1 min-h-24 w-full" :placeholder="t('governance.emailRecipientsPlaceholder')" @input="pricingDraft.notifications.recipients = ($event.target as HTMLTextAreaElement).value.split(/[\n,]/)" /></label><button class="btn btn-primary" type="submit">{{ t('common.save') }}</button></fieldset></form>

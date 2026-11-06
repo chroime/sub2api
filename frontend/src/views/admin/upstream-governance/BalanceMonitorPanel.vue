@@ -9,7 +9,8 @@ import api, {
 import { formatGovernanceTime } from './format'
 import { errorKey } from './feedback'
 import { intervalValidationKey } from './interval'
-const props = defineProps<{ site: Site; unit?: string; disabled?: boolean }>()
+// embedded drops the card frame when the panel sits inside the balance card.
+const props = defineProps<{ site: Site; unit?: string; disabled?: boolean; embedded?: boolean }>()
 const emit = defineEmits<{ saved: [site: Site]; busy: [value: boolean] }>()
 const { t } = useI18n()
 const editing = ref(false),
@@ -102,7 +103,7 @@ async function save() {
 }
 </script>
 <template>
-  <section class="rounded-xl border border-gray-200 p-5 dark:border-dark-600">
+  <section :class="embedded ? '' : 'rounded-xl border border-gray-200 p-5 dark:border-dark-600'">
     <div class="flex flex-wrap items-start gap-3">
       <div
         class="rounded-lg bg-primary-50 p-2 text-primary-700 dark:bg-primary-900/20 dark:text-primary-300"

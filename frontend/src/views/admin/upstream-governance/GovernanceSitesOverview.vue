@@ -8,6 +8,7 @@ import sub2apiLogo from '@/assets/governance/sub2api.svg'
 import newapiLogo from '@/assets/governance/newapi.png'
 import { formatGovernanceTime } from './format'
 import { siteStateKeys } from './feedback'
+import { cadenceText } from './cadence'
 const props = withDefaults(defineProps<{
   sites: Site[]
   disabled?: boolean
@@ -49,7 +50,7 @@ function balanceClass(site: Site): string {
   if (site.balance_monitor_status?.state === 'low') return 'text-amber-700 dark:text-amber-400'
   return 'text-gray-700 dark:text-gray-200'
 }
-const collection = (site: Site) => site.enabled ? t('governance.siteRail.every', { n: site.interval_minutes }) : t('governance.siteRail.collectionPaused')
+const collection = (site: Site) => site.enabled ? cadenceText(site, t) : t('governance.siteRail.collectionPaused')
 interface SiteIssue { key: string; text: string; severe: boolean; test?: string }
 // Only states that need an administrator are spelled out; healthy sites show
 // their collection cadence instead.
@@ -85,7 +86,7 @@ function lastSync(value: string | null): string {
 const siteTooltip = (site: Site) => [
   site.name,
   site.base_url,
-  `${platformName(site)} · ${t(site.enabled ? 'governance.autoOn' : 'governance.autoOff')}${site.enabled ? ` · ${site.interval_minutes} ${t('governance.minutes')}` : ''}`,
+  `${platformName(site)} · ${t(site.enabled ? 'governance.autoOn' : 'governance.autoOff')}${site.enabled ? ` · ${cadenceText(site, t)}` : ''}`,
   t('governance.siteRail.lastSync', { time: formatGovernanceTime(site.last_sync_at) }),
   site.balance ? t('governance.siteRail.balanceAt', { amount: `${site.balance.amount} ${site.balance.unit}`.trim(), time: formatGovernanceTime(site.balance.observed_at) }) : '',
 ].filter(Boolean).join('\n')

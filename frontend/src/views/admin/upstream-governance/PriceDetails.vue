@@ -4,7 +4,8 @@ import { useI18n } from 'vue-i18n'
 import type { RemotePrice } from '@/api/admin/upstream-governance'
 import { providerLabel } from './providers'
 
-const props = defineProps<{ prices?: RemotePrice[] }>()
+// open starts the price list expanded (the pricing page lists one group at a time).
+const props = defineProps<{ prices?: RemotePrice[]; open?: boolean }>()
 const { t } = useI18n()
 const query = ref('')
 const showRaw = ref(false)
@@ -176,7 +177,7 @@ const sections = computed(() => {
 })
 </script>
 <template>
-  <details class="text-xs">
+  <details class="text-xs" :open="open">
     <summary class="cursor-pointer text-primary-700 dark:text-primary-300">
       {{ t('governance.prices') }}
       <span class="text-gray-400">{{ prices?.length || '—' }}</span>

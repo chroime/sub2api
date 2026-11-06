@@ -21,8 +21,6 @@ const props = defineProps<{
   mode?: 'bindings' | 'history'
 }>()
 const emit = defineEmits<{
-  configure: [binding: Binding, action: 'check' | 'monitor']
-  acknowledge: [id: number]
   page: [kind: 'events' | 'checks', page: number]
 }>()
 const { t } = useI18n()
@@ -66,7 +64,7 @@ function eventSummary(event: GovernanceEvent): string {
             bindings.length
           }}</span>
         </h3>
-        <p class="mt-1 text-xs text-gray-500">{{ t('governance.billable') }}</p>
+        <p class="mt-1 text-xs text-gray-500">{{ t('governance.groupsTab.accountsHint') }}</p>
       </div>
       <p
         v-if="!bindings.length"
@@ -98,33 +96,10 @@ function eventSummary(event: GovernanceEvent): string {
             {{ t('governance.localGroup') }}：
             {{ (binding.local_group_ids?.length ? binding.local_group_ids : [binding.local_group_id]).map(id => groups?.find(group => group.id === id)?.name || '#' + id).join('、') }}
           </p>
-          <p class="mt-1 text-xs text-gray-500">
-            {{
-              binding.probe_enabled
-                ? t('governance.monitorOn')
-                : t('governance.monitorOff')
-            }}
-            · {{ binding.probe_model || '—' }}
-          </p>
-        </div>
-        <div class="flex w-full flex-wrap gap-2 sm:w-auto">
-        <button
-          class="btn btn-secondary text-xs"
-          :disabled="disabled || binding.account_id <= 0 || binding.account_deleted"
-          @click="emit('configure', binding, 'check')"
-        >
-          {{ t('governance.check') }}</button
-        ><button
-          class="btn btn-secondary text-xs"
-          :disabled="disabled || binding.account_id <= 0 || binding.account_deleted"
-          @click="emit('configure', binding, 'monitor')"
-        >
-          {{ t('governance.monitor') }}
-        </button>
         </div>
       </article>
     </section>
-    <nav v-if="mode === 'history'" class="flex flex-wrap gap-2" :aria-label="t('governance.historyTitle')"><button v-for="kind in (['events', 'checks'] as const)" :key="kind" type="button" class="rounded-lg px-3 py-2 text-sm" :class="historyTab === kind ? 'bg-primary-50 font-medium text-primary-700 dark:bg-primary-900/20 dark:text-primary-300' : 'text-gray-500'" :aria-pressed="historyTab === kind" @click="historyTab = kind">{{ t('governance.' + kind) }}</button></nav>
+    <nav v-if="mode === 'history' && checks?.total" class="flex flex-wrap gap-2" :aria-label="t('governance.historyTitle')"><button v-for="kind in (['events', 'checks'] as const)" :key="kind" type="button" class="rounded-lg px-3 py-2 text-sm" :class="historyTab === kind ? 'bg-primary-50 font-medium text-primary-700 dark:bg-primary-900/20 dark:text-primary-300' : 'text-gray-500'" :aria-pressed="historyTab === kind" @click="historyTab = kind">{{ t('governance.' + kind) }}</button></nav>
     <section v-if="events && mode !== 'bindings' && (mode !== 'history' || historyTab === 'events')" class="space-y-3">
       <h3 class="font-semibold">
         {{ t('governance.events') }}
@@ -151,20 +126,7 @@ function eventSummary(event: GovernanceEvent): string {
             }}</span></span
           ><time class="text-xs tabular-nums text-gray-400">{{
             formatGovernanceTime(event.created_at)
-          }}</time
-          ><button
-            class="rounded-md px-2 py-1 text-xs text-primary-700 hover:bg-primary-50 disabled:text-gray-400 dark:text-primary-300 dark:hover:bg-primary-900/20"
-            :disabled="disabled || event.acknowledged"
-            @click="emit('acknowledge', event.id)"
-          >
-            {{
-              t(
-                event.acknowledged
-                  ? 'governance.acknowledged'
-                  : 'governance.ack',
-              )
-            }}
-          </button>
+          }}</time>
         </div>
         <p data-test="event-summary" class="mt-3 text-sm leading-6 text-gray-700 dark:text-gray-200">{{ eventSummary(event) }}</p>
         <details

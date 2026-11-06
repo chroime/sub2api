@@ -67,8 +67,8 @@ describe('imported binding names', () => {
     await wrapper.setProps({ remoteGroups: [{ id: 'upstream-7', name: 'Renamed upstream group' }], bindings: [{ ...binding, account_name: 'Custom account name' }] })
     expect(wrapper.get('[data-test=binding-upstream]').text()).toContain('Renamed upstream group')
     expect(wrapper.get('[data-test=binding-account]').text()).toContain('Custom account name')
-    await wrapper.findAll('button')[0]!.trigger('click')
-    expect(wrapper.emitted('configure')?.[0]).toEqual([{ ...binding, account_name: 'Custom account name' }, 'check'])
+    // Active checks are retired: the imported account list offers no probe actions.
+    expect(wrapper.findAll('button')).toHaveLength(0)
     wrapper.unmount()
   })
 
@@ -81,18 +81,22 @@ describe('imported binding names', () => {
     expect(wrapper.findAll('[data-test=binding-targets]')[0]!.text()).toContain('#3、#4')
     const pending = wrapper.findAll('article')[1]!
     expect(pending.text()).toContain('governance.pendingImport')
-    expect(pending.findAll('button').every(button => button.attributes('disabled') !== undefined)).toBe(true)
     wrapper.unmount()
   })
 
-  it('retains a deleted account name and disables checks for that historical binding', async () => {
+  it('retains a deleted account name for that historical binding', () => {
     const wrapper = mount(GovernanceHistory, { props: { mode: 'bindings', bindings: [{ ...binding, account_deleted: true }], events: null, checks: null } })
     expect(wrapper.get('[data-test=binding-account]').text()).toContain(binding.account_name)
     expect(wrapper.get('[data-test=binding-account]').text()).toContain('governance.accountDeleted')
-    const buttons = wrapper.findAll('button')
-    expect(buttons.every(button => button.attributes('disabled') !== undefined)).toBe(true)
-    await buttons[0]!.trigger('click')
-    expect(wrapper.emitted('configure')).toBeUndefined()
+    wrapper.unmount()
+  })
+
+  it('lists raw events without a read action and hides the retired check history when it is empty', () => {
+    const page = { items: [{ id: 3, site_id: 1, kind: 'rate_changed', resource: '7', before: '', after: '', acknowledged: false, created_at: '2026-09-30T08:00:00Z' }], total: 1, page: 1, page_size: 20, pages: 1 }
+    const wrapper = mount(GovernanceHistory, { props: { mode: 'history', bindings: [], events: page, checks: { items: [], total: 0, page: 1, page_size: 20, pages: 1 } } })
+    expect(wrapper.find('nav').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('governance.ack')
+    expect(wrapper.findAll('article')).toHaveLength(1)
     wrapper.unmount()
   })
 })
