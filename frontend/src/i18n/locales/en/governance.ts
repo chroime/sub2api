@@ -1274,8 +1274,8 @@ export default {
   previous: 'Previous',
   next: 'Next',
   deleteNotice:
-    'Delete this site? Historical bindings are removed only when their local accounts are deleted or missing. Linked accounts, unfinished imports, or managed API keys prevent deletion; disable discovery and monitoring first.',
-  siteInUse: 'This site still has linked accounts, unfinished imports, or managed API keys and cannot be deleted. You can disable discovery and monitoring.',
+    'Delete this site? Its collected snapshots, records and policies are deleted with it. A site that still has imported accounts or managed keys can only be deleted with “Keep local accounts” selected below.',
+  siteInUse: 'This site still has imported accounts, unfinished imports or managed keys. Select “Keep local accounts” and delete again.',
   compositeGroup: 'Composite group',
   protocolMismatch: 'Does not match the upstream platform',
   targetProtocolMismatch: 'Does not match the selected protocol',

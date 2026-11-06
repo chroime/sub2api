@@ -23,7 +23,7 @@
         :aria-selected="modelValue === entry.id"
         :tabindex="!disabled && focusedSection === entry.id ? 0 : -1"
         :disabled="disabled"
-        class="flex min-h-[44px] flex-1 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-500 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:focus-visible:ring-gray-400 dark:focus-visible:ring-offset-dark-800 sm:px-5"
+        class="flex min-h-10 flex-1 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-500 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:focus-visible:ring-gray-400 dark:focus-visible:ring-offset-dark-800 2xl:px-4"
         :class="modelValue === entry.id
           ? 'bg-gray-800 text-white shadow-sm dark:bg-dark-600 dark:text-gray-50'
           : 'text-gray-500 hover:bg-gray-200/70 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-dark-700 dark:hover:text-gray-100'"
@@ -31,7 +31,8 @@
         @click="selectSection(entry.id)"
         @keydown="onKeydown($event, entry.id)"
       >
-        <Icon :name="entry.icon" size="sm" class="shrink-0" aria-hidden="true" />
+        <!-- Icons only fit beside the labels on very wide screens. -->
+        <Icon :name="entry.icon" size="sm" class="hidden shrink-0 2xl:block" aria-hidden="true" />
         <span>{{ t(entry.labelKey) }}</span>
       </button>
       </template>
