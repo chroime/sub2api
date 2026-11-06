@@ -257,6 +257,12 @@ describe('model monitoring configuration and persistent work', () => {
     wrapper.findAllComponents(Select).find(select => select.attributes('data-test') === 'model-stats-window')!.vm.$emit('update:modelValue', 30)
     await flushPromises(); expect(api.stats).toHaveBeenLastCalledWith(1, 30)
   })
+  it('leaves out long-term trends for local group monitoring and does not read them', async () => {
+    const wrapper = mount(ModelMonitorPanel, { global: { stubs: { teleport: true, transition: false } }, props: { siteId: 99, localOnly: true, localTargets: [], remoteGroups: [], managedKeys: [] } })
+    await flushPromises()
+    expect(wrapper.find('[data-test=model-stats]').exists()).toBe(false)
+    expect(api.stats).not.toHaveBeenCalled()
+  })
   it('runs a saved policy once from the policy list with its stored configuration', async () => {
     vi.mocked(api.policies).mockResolvedValue([modelPolicy])
     vi.mocked(api.startBatch).mockResolvedValue({ id: 'policy-batch', total: 1, concurrency: 1 })
