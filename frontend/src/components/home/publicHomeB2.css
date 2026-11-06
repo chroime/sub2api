@@ -128,7 +128,9 @@ html.dark .public-home-b2 .provider img.mono { filter: invert(1); }
   .public-home-b2 .shell { width: calc(100% - 40px); }
   .public-home-b2 .hero { padding-block: 26px 0; min-height: 0; }
   .public-home-b2 .hero-copy { width: 100%; padding: 0; text-align: center; }
-  .public-home-b2 h1 { margin-inline: auto; font-size: 40px; }
+  /* 窄屏下按钮、吉祥物都居中，标题三行也逐行居中，避免整块居中、行内左对齐造成的参差 */
+  .public-home-b2 h1 { align-items: center; margin-inline: auto; font-size: 40px; line-height: 1.16; }
+  .public-home-b2 .hero-title-line { gap: .14em; }
   .public-home-b2 .story-english h1 { font-size: 32px; }
   .public-home-b2 .hero-actions { justify-content: center; gap: 21px; margin-top: 22px; }
   .public-home-b2 .primary-link { gap: 12px; min-height: 42px; padding: 8px 13px; font-size: 13px; }
@@ -166,7 +168,7 @@ html.dark .public-home-b2 .provider img.mono { filter: invert(1); }
   .public-home-b2 .footer-contacts { gap: 12px 20px; font-size: 11px; }
   .public-home-b2 .footer-contacts b { margin-left: 5px; }
 }
-@media (min-width: 421px) and (max-width: 720px) { .public-home-b2 h1 { font-size: 42px; } }
+@media (min-width: 421px) and (max-width: 720px) { .public-home-b2 h1 { font-size: 40px; } }
 @media (max-width: 379px) {
   .public-home-b2 h1 { font-size: 36px; }
 }
