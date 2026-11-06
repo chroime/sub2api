@@ -55,7 +55,9 @@ describe('Smart Operations tabs', () => {
 
     expect(tablist.attributes('aria-label')).toBe('智能运维')
     expect(tablist.attributes('aria-orientation')).toBe('horizontal')
-    expect(tabs.map(tab => tab.text())).toEqual(['概览', '分组与密钥', '价格与倍率', '采集与自动化', '记录', '模型监测', '账号质量', '设置'])
+    // Every Chinese label is four characters.
+    expect(tabs.every(tab => [...tab.text()].length === 4)).toBe(true)
+    expect(tabs.map(tab => tab.text())).toEqual(['运维总览', '分组密钥', '价格倍率', '自动策略', '运行记录', '模型监测', '账号质量', '全局设置'])
     expect(tabs.map(tab => tab.attributes('id'))).toEqual([
       'governance-overview-tab', 'governance-groups-tab', 'governance-pricing-tab', 'governance-automation-tab', 'governance-history-tab', 'governance-models-tab', 'governance-account-quality-tab', 'governance-settings-tab'
     ])
