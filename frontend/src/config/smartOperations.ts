@@ -18,14 +18,6 @@ export const SMART_OPERATIONS_SECTIONS = [
     scope: 'site',
   },
   {
-    id: 'pricing',
-    path: '/admin/upstream-governance/pricing',
-    labelKey: 'governance.smartOperations.sections.pricing',
-    descriptionKey: 'governance.smartOperations.descriptions.pricing',
-    icon: 'dollar',
-    scope: 'site',
-  },
-  {
     id: 'automation',
     path: '/admin/upstream-governance/automation',
     labelKey: 'governance.smartOperations.sections.automation',
@@ -72,11 +64,13 @@ export type SmartOperationsSection = (typeof SMART_OPERATIONS_SECTIONS)[number][
 /**
  * Section ids from before the regrouping. Old links, readiness items and
  * workbench tasks still use them; local-monitor opens model monitoring in its
- * local mode and notifications opens the delivery records in settings.
+ * local mode and notifications opens the delivery records in settings. The
+ * short-lived pricing page folded back into automation.
  */
 export const LEGACY_SMART_OPERATIONS_SECTIONS = {
   import: 'groups',
   monitor: 'automation',
+  pricing: 'automation',
   'local-monitor': 'models',
   notifications: 'settings',
 } as const satisfies Record<string, SmartOperationsSection>

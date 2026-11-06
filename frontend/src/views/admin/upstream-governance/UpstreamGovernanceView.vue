@@ -19,7 +19,6 @@ import GovernanceSitesOverview from './GovernanceSitesOverview.vue'
 import AutomationPolicyPanel from './AutomationPolicyPanel.vue'
 import ReconciliationPanel from './ReconciliationPanel.vue'
 import BalanceCard from './BalanceCard.vue'
-import GroupPricingOverview from './GroupPricingOverview.vue'
 import DeliveryRecords from './DeliveryRecords.vue'
 import ManagedKeysPanel from './ManagedKeysPanel.vue'
 import ModelMonitorPanel from './ModelMonitorPanel.vue'
@@ -718,14 +717,12 @@ onUnmounted(() => {
             <div v-show="groupsView === 'import'" class="min-w-0"><ImportPanel v-if="snapshot && importStateReady" :key="active.id" :site-id="active.id" :site-base-url="active.base_url" :site-platform="active.platform" :bindings="bindings" :managed-keys="managedKeys" :preview-epoch="importPreviewEpoch" :snapshot="snapshot" :groups="groups" :disabled="busy || balanceBusy || automationBusy || reconciliationBusy || keyBusy || modelBusy" @busy="importBusy = $event" @applied="reloadBindings" @manage-keys="openKeys" /><p v-else class="py-8 text-center text-sm text-gray-500">{{ busy ? t('common.loading') : t(snapshot ? 'governance.importStateUnavailable' : 'governance.noSnapshot') }}</p></div>
             <GovernanceHistory v-if="groupsView === 'accounts'" mode="bindings" :bindings="bindings" :groups="groups" :remote-groups="overviewSnapshot?.catalog.groups ?? snapshot?.catalog.groups ?? []" :events="null" :checks="null" :disabled="working" />
           </div>
-          <div v-show="tab === 'pricing'" data-test="site-pricing-tab" class="min-w-0 space-y-5 p-4 sm:p-5">
-            <GroupPricingOverview :groups="overviewSnapshot?.catalog.groups ?? snapshot?.catalog.groups ?? []" :collected-at="overviewSnapshot?.created_at ?? snapshot?.created_at" @history="tab = 'history'" />
-            <ObservationPricingPanel :key="active.id" section="pricing" :site-id="active.id" :disabled="working" @busy="pricingBusy = $event" @pricing-saved="reloadAfterPolicyChange" />
-          </div>
           <div v-show="tab === 'automation'" data-test="site-automation-tab" class="min-w-0 space-y-5 p-4 sm:p-5">
             <ObservationPricingPanel :key="active.id" section="observation" :site-id="active.id" :disabled="working" @busy="observationBusy = $event" @observation-saved="reloadAfterPolicyChange" />
             <AutomationPolicyPanel :key="active.id" :site-id="active.id" :configuration="automation" :disabled="working" @busy="automationBusy = $event" @saved="automationSaved" @reload="reloadAutomation" />
             <BalanceCard :key="active.id" :site="active" :health="balanceHealth" :balance="overviewSnapshot?.catalog.account?.balance" :unit="snapshot?.catalog.account?.unit" :disabled="working" @reload="reloadHealth" @saved="balanceSaved" @busy="balanceBusy = $event" />
+            <!-- Group pricing is a local-group sale price rule; prices themselves are in the group import details. -->
+            <ObservationPricingPanel :key="active.id" section="pricing" :site-id="active.id" :disabled="working" @busy="pricingBusy = $event" @pricing-saved="reloadAfterPolicyChange" />
           </div>
           <div v-if="tab === 'models' && !showOverview" class="min-w-0 p-4 sm:p-5"><ModelMonitorPanel :key="active.id" :site-id="active.id" :remote-groups="overviewSnapshot?.catalog.groups ?? snapshot?.catalog.groups ?? []" :managed-keys="managedKeys" :collected-at="overviewSnapshot?.created_at ?? snapshot?.created_at" :disabled="busy || importBusy || balanceBusy || editBusy || automationBusy || reconciliationBusy || keyBusy" @busy="modelBusy = $event" @manage-keys="openKeys()" /></div>
           <div v-show="tab === 'history'" class="min-w-0 space-y-5 p-4 sm:p-5">

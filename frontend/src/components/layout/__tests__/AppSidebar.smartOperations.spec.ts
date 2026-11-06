@@ -61,7 +61,6 @@ const sectionCases = [
   ['', 'overview'],
   ['/overview', 'overview'],
   ['/groups', 'groups'],
-  ['/pricing', 'pricing'],
   ['/automation', 'automation'],
   ['/history', 'history'],
   ['/models', 'models'],
@@ -72,6 +71,7 @@ const sectionCases = [
 const legacySectionCases = [
   ['/import', 'groups'],
   ['/monitor', 'automation'],
+  ['/pricing', 'automation'],
   ['/local-monitor', 'models'],
   ['/notifications', 'settings'],
 ] as const
@@ -151,7 +151,6 @@ describe('AppSidebar Smart Operations navigation', () => {
     expect(children.findAll('a').map((link) => [link.text(), link.attributes('href')])).toEqual([
       ['governance.smartOperations.sections.overview', rootPath],
       ['governance.smartOperations.sections.groups', `${rootPath}/groups`],
-      ['governance.smartOperations.sections.pricing', `${rootPath}/pricing`],
       ['governance.smartOperations.sections.automation', `${rootPath}/automation`],
       ['governance.smartOperations.sections.history', `${rootPath}/history`],
       ['governance.smartOperations.sections.models', `${rootPath}/models`],
@@ -220,7 +219,7 @@ describe('AppSidebar Smart Operations navigation', () => {
 
     expect(wrapper.get('aside').classes()).toContain('w-64')
     expect(button.attributes('aria-expanded')).toBe('true')
-    expect(wrapper.findAll(`a[href^="${rootPath}"]`)).toHaveLength(8)
+    expect(wrapper.findAll(`a[href^="${rootPath}"]`)).toHaveLength(7)
     expect(router.currentRoute.value.path).toBe('/admin/dashboard')
   })
 
@@ -277,7 +276,7 @@ describe('AppSidebar Smart Operations navigation', () => {
     const { wrapper } = await mountSidebar(rootPath)
 
     expect(smartOperationsButton(wrapper).attributes('aria-expanded')).toBe('true')
-    expect(wrapper.findAll(`a[href^="${rootPath}"]`)).toHaveLength(8)
+    expect(wrapper.findAll(`a[href^="${rootPath}"]`)).toHaveLength(7)
   })
 
   it('does not expose Smart Operations to regular users', async () => {
