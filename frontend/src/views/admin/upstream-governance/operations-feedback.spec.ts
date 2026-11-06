@@ -37,8 +37,8 @@ describe('bounded operations presentation', () => {
 
   it('only maps known workbench destinations to existing sections', () => {
     expect(targetSection('connect')).toBe('overview')
-    expect(targetSection('keys')).toBe('import')
-    expect(targetSection('monitor')).toBe('monitor')
+    expect(targetSection('keys')).toBe('groups')
+    expect(targetSection('monitor')).toBe('automation')
     expect(targetSection('https://outside.example')).toBeNull()
     expect(targetSection('__proto__')).toBeNull()
   })

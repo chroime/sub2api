@@ -73,7 +73,7 @@ describe('server-backed model templates', () => {
     })
     await flushPromises()
 
-    const labels = wrapper.findAll('label.governance-checkbox-label').map(label => label.text().trim())
+    const labels = wrapper.findAll('label.governance-checkbox-label span.truncate').map(label => label.text().trim())
     expect(labels).not.toContain('gpt-5.2')
     expect(labels).not.toContain('gpt-5.4-mini')
     expect(labels).toEqual(expect.arrayContaining(['gpt-5.5', 'gpt-5.6-sol', 'gpt-6-astra', 'gpt-5.3-codex-spark', 'gpt-latest']))
@@ -107,7 +107,12 @@ describe('server-backed model templates', () => {
     expect(option).toBeDefined()
     option!.click()
     await flushPromises()
+    // Choosing only previews the template; the selection changes on apply.
+    expect(wrapper.props('modelValue').openai.models).toEqual(['upstream-gpt'])
+    expect(wrapper.get('[data-test=template-apply-prompt]').text()).toContain('governance.modelPicker.applyPrompt')
+    await wrapper.get('[data-test=apply-model-template]').trigger('click')
     expect(wrapper.props('modelValue').openai.models).toEqual(['saved-gpt'])
+    expect(wrapper.find('[data-test=template-apply-prompt]').exists()).toBe(false)
     wrapper.unmount()
   })
   it('keeps Grok and DeepSeek templates independent from OpenAI', async () => {
@@ -165,5 +170,113 @@ describe('server-backed model templates', () => {
       expect(api.saveModelTemplates).toHaveBeenCalledWith(expect.objectContaining({ templates: [expect.objectContaining({ id: expect.stringMatching(/^tpl_[a-zA-Z0-9_-]{1,60}$/) })] }))
       wrapper.unmount()
     } finally { vi.unstubAllGlobals() }
+  })
+  it('keeps the selection when a previewed template is cancelled and marks an applied template as modified after edits', async () => {
+    vi.mocked(api.modelTemplates).mockResolvedValue({ version: 3, templates: [
+      { id: 'base', name: 'Base', platform: 'openai', models: ['upstream-gpt'], is_default: true },
+      { id: 'wide', name: 'Wide', platform: 'openai', models: ['upstream-gpt', 'gpt-5.5'], is_default: false },
+    ] })
+    const wrapper = setup()
+    await flushPromises()
+    const select = wrapper.getComponent(Select)
+    expect(select.props('modelValue')).toBe('base')
+    expect(wrapper.find('[data-test=template-modified]').exists()).toBe(false)
+
+    select.vm.$emit('update:modelValue', 'wide')
+    await flushPromises()
+    expect(wrapper.find('[data-test=template-apply-prompt]').exists()).toBe(true)
+    await wrapper.get('[data-test=cancel-model-template]').trigger('click')
+    expect(select.props('modelValue')).toBe('base')
+    expect(wrapper.props('modelValue').openai.models).toEqual(['upstream-gpt'])
+
+    await wrapper.get('[data-test=custom-model]').setValue('extra-gpt')
+    await wrapper.get('[data-test=add-model]').trigger('click')
+    expect(wrapper.get('[data-test=template-modified]').text()).toBe('governance.modelPicker.modified')
+    wrapper.unmount()
+  })
+  it('asks before deleting a template and starts new templates as non-default', async () => {
+    vi.mocked(api.modelTemplates).mockResolvedValue({ version: 4, templates: [
+      { id: 'keep', name: 'Keep', platform: 'openai', models: ['upstream-gpt'], is_default: false },
+    ] })
+    const wrapper = setup()
+    await flushPromises()
+    expect((wrapper.get('[data-test=template-default]').element as HTMLInputElement).checked).toBe(false)
+    expect(wrapper.find('[data-test=delete-template]').exists()).toBe(false)
+
+    wrapper.getComponent(Select).vm.$emit('update:modelValue', 'keep')
+    await flushPromises()
+    await wrapper.get('[data-test=delete-template]').trigger('click')
+    expect(api.saveModelTemplates).not.toHaveBeenCalled()
+    await wrapper.get('[data-test=confirm-delete-template]').trigger('click')
+    await flushPromises()
+    expect(api.saveModelTemplates).toHaveBeenCalledWith({ version: 4, templates: [] })
+    wrapper.unmount()
+  })
+  it('updates the selected template in place or saves a copy as a new template', async () => {
+    vi.mocked(api.modelTemplates).mockResolvedValue({ version: 5, templates: [
+      { id: 'first', name: 'First', platform: 'openai', models: ['upstream-gpt'], is_default: false },
+      { id: 'second', name: 'Second', platform: 'anthropic', models: ['upstream-claude'], is_default: false },
+    ] })
+    const wrapper = setup()
+    await flushPromises()
+    wrapper.getComponent(Select).vm.$emit('update:modelValue', 'first')
+    await flushPromises()
+    await wrapper.get('[data-test=custom-model]').setValue('gpt-extra')
+    await wrapper.get('[data-test=add-model]').trigger('click')
+    await wrapper.get('[data-test=update-template]').trigger('click')
+    await flushPromises()
+    expect(api.saveModelTemplates).toHaveBeenLastCalledWith({ version: 5, templates: [
+      { id: 'first', name: 'First', platform: 'openai', models: ['upstream-gpt', 'gpt-extra'], is_default: false },
+      { id: 'second', name: 'Second', platform: 'anthropic', models: ['upstream-claude'], is_default: false },
+    ] })
+
+    await wrapper.get('[data-test=template-name]').setValue('Copy')
+    await wrapper.get('[data-test=save-template]').trigger('click')
+    await flushPromises()
+    const saved = vi.mocked(api.saveModelTemplates).mock.lastCall![0]
+    expect(saved.templates).toHaveLength(3)
+    expect(saved.templates[2]).toEqual({ id: expect.stringMatching(/^tpl_/), name: 'Copy', platform: 'openai', models: ['upstream-gpt', 'gpt-extra'], is_default: false })
+    wrapper.unmount()
+  })
+  it('adds a pasted list of model IDs at once and keeps invalid entries for correction', async () => {
+    const wrapper = setup()
+    await flushPromises()
+    const input = wrapper.get('[data-test=custom-model]')
+    const paste = new Event('paste', { cancelable: true }) as ClipboardEvent
+    Object.defineProperty(paste, 'clipboardData', { value: { getData: () => 'model-a\nmodel-b\r\nbad*model' } })
+    input.element.dispatchEvent(paste)
+    await flushPromises()
+    expect(paste.defaultPrevented).toBe(true)
+    expect((input.element as HTMLInputElement).value).toBe('model-a model-b bad*model')
+    await input.setValue('model-a model-b, bad*model')
+    await wrapper.get('[data-test=add-model]').trigger('click')
+    expect(wrapper.props('modelValue').openai.models).toEqual(['upstream-gpt', 'model-a', 'model-b'])
+    expect((input.element as HTMLInputElement).value).toBe('bad*model')
+    expect(wrapper.text()).toContain('governance.invalidModelName')
+    wrapper.unmount()
+  })
+  it('selects every search match at once, shows chips and marks upstream-visible models', async () => {
+    const wrapper = mount(ModelTemplatePanel, {
+      props: {
+        modelValue: defaultModelSelections(),
+        groups: [{ ...groups[0]!, models: ['gpt-5.5', 'gpt-5.6-sol'] }, groups[1]!],
+        'onUpdate:modelValue': value => { void wrapper.setProps({ modelValue: value }) },
+      },
+    })
+    await flushPromises()
+    await wrapper.get('[data-test=clear-models]').trigger('click')
+    expect(wrapper.get('[data-test=model-platform-count-openai]').text()).toBe('0')
+    await wrapper.get('[data-test=model-search]').setValue('gpt-5.')
+    const matches = wrapper.findAll('label.governance-checkbox-label span.truncate').map(label => label.text())
+    expect(matches.length).toBeGreaterThan(1)
+    await wrapper.get('[data-test=select-filtered]').trigger('click')
+    expect(wrapper.props('modelValue').openai.models).toEqual(matches)
+    expect(wrapper.find('[data-test=select-filtered]').exists()).toBe(false)
+    expect(wrapper.get('[data-test=selected-models]').text()).toContain('gpt-5.6-sol')
+    const upstreamRows = wrapper.findAll('[data-test=upstream-model]').map(badge => badge.element.closest('label')!.textContent)
+    expect(upstreamRows).toEqual([expect.stringContaining('gpt-5.5'), expect.stringContaining('gpt-5.6-sol')])
+    await wrapper.get('[data-test=model-restriction-enabled]').setValue(false)
+    expect(wrapper.get('[data-test=model-platform-count-openai]').text()).toBe('governance.modelPicker.unrestricted')
+    wrapper.unmount()
   })
 })

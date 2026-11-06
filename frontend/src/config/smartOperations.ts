@@ -1,3 +1,5 @@
+// Site sections work on the upstream picked in the left rail; global sections
+// span every upstream (model monitoring keeps the rail for its upstream mode).
 export const SMART_OPERATIONS_SECTIONS = [
   {
     id: 'overview',
@@ -5,41 +7,23 @@ export const SMART_OPERATIONS_SECTIONS = [
     labelKey: 'governance.smartOperations.sections.overview',
     descriptionKey: 'governance.smartOperations.descriptions.overview',
     icon: 'globe',
+    scope: 'site',
   },
   {
-    id: 'import',
-    path: '/admin/upstream-governance/import',
-    labelKey: 'governance.smartOperations.sections.import',
-    descriptionKey: 'governance.smartOperations.descriptions.import',
+    id: 'groups',
+    path: '/admin/upstream-governance/groups',
+    labelKey: 'governance.smartOperations.sections.groups',
+    descriptionKey: 'governance.smartOperations.descriptions.groups',
     icon: 'upload',
+    scope: 'site',
   },
   {
-    id: 'models',
-    path: '/admin/upstream-governance/models',
-    labelKey: 'governance.smartOperations.sections.models',
-    descriptionKey: 'governance.smartOperations.descriptions.models',
-    icon: 'cpu',
-  },
-  {
-    id: 'local-monitor',
-    path: '/admin/upstream-governance/local-monitor',
-    labelKey: 'governance.smartOperations.sections.localMonitor',
-    descriptionKey: 'governance.smartOperations.descriptions.localMonitor',
-    icon: 'beaker',
-  },
-  {
-    id: 'account-quality',
-    path: '/admin/upstream-governance/account-quality',
-    labelKey: 'governance.smartOperations.sections.accountQuality',
-    descriptionKey: 'governance.smartOperations.descriptions.accountQuality',
-    icon: 'shield',
-  },
-  {
-    id: 'monitor',
-    path: '/admin/upstream-governance/monitor',
-    labelKey: 'governance.smartOperations.sections.monitor',
-    descriptionKey: 'governance.smartOperations.descriptions.monitor',
-    icon: 'chart',
+    id: 'automation',
+    path: '/admin/upstream-governance/automation',
+    labelKey: 'governance.smartOperations.sections.automation',
+    descriptionKey: 'governance.smartOperations.descriptions.automation',
+    icon: 'bolt',
+    scope: 'site',
   },
   {
     id: 'history',
@@ -47,13 +31,23 @@ export const SMART_OPERATIONS_SECTIONS = [
     labelKey: 'governance.smartOperations.sections.history',
     descriptionKey: 'governance.smartOperations.descriptions.history',
     icon: 'clock',
+    scope: 'site',
   },
   {
-    id: 'notifications',
-    path: '/admin/upstream-governance/notifications',
-    labelKey: 'governance.smartOperations.sections.notifications',
-    descriptionKey: 'governance.smartOperations.descriptions.notifications',
-    icon: 'bell',
+    id: 'models',
+    path: '/admin/upstream-governance/models',
+    labelKey: 'governance.smartOperations.sections.models',
+    descriptionKey: 'governance.smartOperations.descriptions.models',
+    icon: 'cpu',
+    scope: 'global',
+  },
+  {
+    id: 'account-quality',
+    path: '/admin/upstream-governance/account-quality',
+    labelKey: 'governance.smartOperations.sections.accountQuality',
+    descriptionKey: 'governance.smartOperations.descriptions.accountQuality',
+    icon: 'shield',
+    scope: 'global',
   },
   {
     id: 'settings',
@@ -61,11 +55,33 @@ export const SMART_OPERATIONS_SECTIONS = [
     labelKey: 'governance.smartOperations.sections.settings',
     descriptionKey: 'governance.smartOperations.descriptions.settings',
     icon: 'cog',
+    scope: 'global',
   },
 ] as const
 
 export type SmartOperationsSection = (typeof SMART_OPERATIONS_SECTIONS)[number]['id']
 
+/**
+ * Section ids from before the regrouping. Old links, readiness items and
+ * workbench tasks still use them; local-monitor opens model monitoring in its
+ * local mode and notifications opens the delivery records in settings. The
+ * short-lived pricing page folded back into automation.
+ */
+export const LEGACY_SMART_OPERATIONS_SECTIONS = {
+  import: 'groups',
+  monitor: 'automation',
+  pricing: 'automation',
+  'local-monitor': 'models',
+  notifications: 'settings',
+} as const satisfies Record<string, SmartOperationsSection>
+
+export type LegacySmartOperationsSection = keyof typeof LEGACY_SMART_OPERATIONS_SECTIONS
+
+export function isLegacySmartOperationsSection(value: unknown): value is LegacySmartOperationsSection {
+  return typeof value === 'string' && Object.prototype.hasOwnProperty.call(LEGACY_SMART_OPERATIONS_SECTIONS, value)
+}
+
 export function resolveSmartOperationsSection(value: unknown): SmartOperationsSection {
+  if (isLegacySmartOperationsSection(value)) return LEGACY_SMART_OPERATIONS_SECTIONS[value]
   return SMART_OPERATIONS_SECTIONS.find((section) => section.id === value)?.id ?? 'overview'
 }

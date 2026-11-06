@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import BaseDialog from '@/components/common/BaseDialog.vue'
 import type {
   ImportAccountConfig,
   RemoteGroup,
@@ -7,13 +9,21 @@ import type {
 } from '@/api/admin/upstream-governance'
 import type { ModelSelections } from './import-config'
 import ModelTemplatePanel from './ModelTemplatePanel.vue'
-defineProps<{
+import { providerLabel, transportPlatforms } from './providers'
+// The import parameters as a one-line summary above the group table; the
+// template picker, account parameters and model whitelist open in a dialog.
+// The dialog stays mounted so default templates still load and apply.
+const props = defineProps<{
   config: ImportAccountConfig
   models: ModelSelections
   quotaEnabled: boolean
   groups: RemoteGroup[]
   preserveModels?: Transport[]
   disabled?: boolean
+  /** The template whose parameters are in the draft, '' when none or edited. */
+  templateName?: string
+  /** Remounts the model picker for a refreshed catalog. */
+  modelsKey?: string
 }>()
 const emit = defineEmits<{
   'update:config': [value: ImportAccountConfig]
@@ -21,8 +31,17 @@ const emit = defineEmits<{
   'update:quotaEnabled': [value: boolean]
   ready: [value: boolean]
   'model-edited': [platform: Transport]
+  manage: []
 }>()
 const { t } = useI18n()
+const open = ref(false)
+const restrictedModels = computed(() => transportPlatforms
+  .filter(platform => props.models[platform]?.enabled)
+  .map(platform => t('governance.importParameters.modelCount', { platform: providerLabel(platform), count: props.models[platform].models.length })))
+function manage() {
+  open.value = false
+  emit('manage')
+}
 function number(event: Event) {
   return Number((event.target as HTMLInputElement).value)
 }
@@ -31,19 +50,21 @@ function checked(event: Event) {
 }
 </script>
 <template>
-  <details class="rounded-xl border border-gray-200 dark:border-dark-600">
-    <summary
-      class="flex cursor-pointer flex-wrap items-center justify-between gap-2 px-4 py-4"
-    >
-      <span class="font-semibold">{{ t('governance.importSettings') }}</span
-      ><span class="text-xs font-normal text-gray-500">{{
-        t('governance.importSettingsSummary', {
-          concurrency: config.concurrency,
-          priority: config.priority ?? 1,
-        })
-      }}</span>
-    </summary>
-    <div class="space-y-5 border-t border-gray-100 p-4 dark:border-dark-700">
+  <div data-test="import-parameters" class="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-dark-600">
+    <span class="font-medium">{{ t('governance.importSettings') }}</span>
+    <p data-test="import-parameters-summary" class="min-w-0 flex-1 text-xs text-gray-600 dark:text-gray-300">
+      <span>{{ t('governance.importParameters.template', { name: templateName || t('governance.importParameters.custom') }) }}</span>
+      <span> · {{ t('governance.importParameters.concurrency', { n: config.concurrency }) }}</span>
+      <span> · {{ t('governance.importParameters.priority', { n: config.priority ?? 1 }) }}</span>
+      <span v-if="quotaEnabled"> · {{ t('governance.importParameters.quota') }}</span>
+      <span> · {{ restrictedModels.length ? restrictedModels.join('，') : t('governance.importParameters.allModels') }}</span>
+    </p>
+    <slot name="actions" />
+    <button data-test="open-import-parameters" type="button" class="btn btn-secondary text-sm" :disabled="disabled" aria-haspopup="dialog" @click="open = true">{{ t('governance.importParameters.open') }}</button>
+  </div>
+  <BaseDialog :show="open" :keep-mounted="true" :title="t('governance.importSettings')" width="extra-wide" @close="open = false">
+    <div data-test="import-parameters-dialog" class="space-y-5">
+      <slot name="template" :manage="manage" />
       <fieldset :disabled="disabled" class="grid min-w-0 gap-4 sm:grid-cols-2">
         <label class="text-sm"
           >{{ t('governance.concurrency')
@@ -168,10 +189,13 @@ function checked(event: Event) {
       </fieldset>
       <div class="border-t border-gray-100 pt-5 dark:border-dark-700">
         <ModelTemplatePanel
+          :key="modelsKey"
           :model-value="models"
           :groups="groups"
           :preserve-platforms="preserveModels"
           :disabled="disabled"
+          variant="picker"
+          @manage="manage"
           @update:model-value="emit('update:models', $event)"
           @ready="emit('ready', $event)"
           @edited="emit('model-edited', $event)"
@@ -182,6 +206,7 @@ function checked(event: Event) {
       >
         {{ t('governance.nameAndNoteHint') }}
       </p>
+      <div class="flex justify-end"><button data-test="close-import-parameters" type="button" class="btn btn-primary" @click="open = false">{{ t('governance.importParameters.done') }}</button></div>
     </div>
-  </details>
+  </BaseDialog>
 </template>

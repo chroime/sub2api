@@ -48,4 +48,16 @@ describe('SiteOverview readiness integration', () => {
     await wrapper.get('[data-target="import"]').trigger('click')
     expect(wrapper.emitted('navigate')).toEqual([['import']])
   })
+
+  it('shows the real collection cadence and folds the checklist once everything is configured', () => {
+    const configured: ReadinessOverview = { ...readiness, checks: [{ key: 'bindings', state: 'configured', target_tab: 'import' }, { key: 'keys', state: 'configured', target_tab: 'import' }] }
+    const wrapper = mount(SiteOverview, {
+      props: { site: { ...site, interval_minutes: 1, full_interval_seconds: 20, fast_interval_seconds: 1, fast_observe_enabled: true }, snapshot, bindingCount: 3, readiness: configured },
+      global: { plugins: [createI18n({ legacy: false, locale: 'zh', messages: { zh: { governance: zh } } })] },
+    })
+    expect(wrapper.get('[data-test=site-cadence]').text()).toBe('每 20 秒 · 观察 1 秒')
+    const folded = wrapper.get('[data-test=readiness-complete]')
+    expect(folded.attributes('open')).toBeUndefined()
+    expect(folded.text()).toContain('2')
+  })
 })

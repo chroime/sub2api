@@ -9,7 +9,7 @@ describe('balance notification configuration', () => {
   beforeEach(() => vi.resetAllMocks())
   it('uses platform-native units, keeps notifications off until saved, and deduplicates recipients', async () => {
     vi.mocked(api.balanceMonitor).mockResolvedValue({ ...site, version: 5 })
-    const wrapper = mount(BalanceMonitorPanel, { props: { site } })
+    const wrapper = mount(BalanceMonitorPanel, { props: { site }, global: { stubs: { teleport: true, transition: false } } })
     expect(api.balanceMonitor).not.toHaveBeenCalled()
     await wrapper.get('#governance-balance-settings').trigger('click')
     expect(wrapper.get('input[readonly]').attributes('value')).toBe('QUOTA')
@@ -24,7 +24,7 @@ describe('balance notification configuration', () => {
   })
   it.each([1, 10081, 2147483647])('saves a freely entered email repeat interval of %s minutes unchanged', async minutes => {
     vi.mocked(api.balanceMonitor).mockResolvedValue({ ...site, version: 5 })
-    const wrapper = mount(BalanceMonitorPanel, { props: { site } })
+    const wrapper = mount(BalanceMonitorPanel, { props: { site }, global: { stubs: { teleport: true, transition: false } } })
     await wrapper.get('#governance-balance-settings').trigger('click')
     const input = wrapper.get('[data-test=balance-cooldown]')
     expect(input.attributes('step')).toBe('1')
@@ -37,7 +37,7 @@ describe('balance notification configuration', () => {
     wrapper.unmount()
   })
   it.each(['', '0', '-1', '1.5', 'Infinity', '1e309', '2147483648'])('rejects invalid email repeat interval %j before saving', async minutes => {
-    const wrapper = mount(BalanceMonitorPanel, { props: { site } })
+    const wrapper = mount(BalanceMonitorPanel, { props: { site }, global: { stubs: { teleport: true, transition: false } } })
     await wrapper.get('#governance-balance-settings').trigger('click')
     await wrapper.get('[data-test=balance-cooldown]').setValue(minutes)
     await wrapper.get('form').trigger('submit')
@@ -46,7 +46,7 @@ describe('balance notification configuration', () => {
     wrapper.unmount()
   })
   it('distinguishes missing balances from failed mail delivery', () => {
-    const wrapper = mount(BalanceMonitorPanel, { props: { site: { ...site, balance_monitor_status: { state: 'unknown', last_attempt_at: null, last_notified_at: null, last_error: 'balance_unavailable' } } } })
+    const wrapper = mount(BalanceMonitorPanel, { global: { stubs: { teleport: true, transition: false } }, props: { site: { ...site, balance_monitor_status: { state: 'unknown', last_attempt_at: null, last_notified_at: null, last_error: 'balance_unavailable' } } } })
     expect(wrapper.text()).toContain('governance.balanceUnavailable')
     expect(wrapper.text()).not.toContain('governance.emailDeliveryFailed')
     wrapper.unmount()
@@ -54,13 +54,16 @@ describe('balance notification configuration', () => {
   it('does not apply the previous site’s save response after switching sites', async () => {
     let finish!: (value: Site) => void
     vi.mocked(api.balanceMonitor).mockImplementation(() => new Promise(resolve => { finish = resolve }))
-    const wrapper = mount(BalanceMonitorPanel, { props: { site } })
+    const wrapper = mount(BalanceMonitorPanel, { props: { site }, global: { stubs: { teleport: true, transition: false } } })
     await wrapper.get('#governance-balance-settings').trigger('click')
     await wrapper.get('form').trigger('submit')
     await wrapper.setProps({ site: { ...site, id: 2, platform: 'sub2api' } })
     finish({ ...site, version: 5 })
     await flushPromises()
     expect(wrapper.emitted('saved')).toBeUndefined()
+    // Switching sites closes the old site's dialog.
+    expect(wrapper.find('form').exists()).toBe(false)
+    await wrapper.get('#governance-balance-settings').trigger('click')
     expect(wrapper.get('input[readonly]').attributes('value')).toBe('USD')
     wrapper.unmount()
   })

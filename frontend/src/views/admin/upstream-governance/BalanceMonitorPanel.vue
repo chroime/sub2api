@@ -2,6 +2,7 @@
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from '@/components/icons/Icon.vue'
+import BaseDialog from '@/components/common/BaseDialog.vue'
 import api, {
   type BalanceMonitor,
   type Site,
@@ -9,7 +10,8 @@ import api, {
 import { formatGovernanceTime } from './format'
 import { errorKey } from './feedback'
 import { intervalValidationKey } from './interval'
-const props = defineProps<{ site: Site; unit?: string; disabled?: boolean }>()
+// embedded drops the card frame when the panel sits inside the balance card.
+const props = defineProps<{ site: Site; unit?: string; disabled?: boolean; embedded?: boolean }>()
 const emit = defineEmits<{ saved: [site: Site]; busy: [value: boolean] }>()
 const { t } = useI18n()
 const editing = ref(false),
@@ -61,7 +63,7 @@ watch(
     recipients.value = form.value.recipients.join('\n')
     busy.value = false
     error.value = ''
-    if (!previous || current[0] !== previous[0]) saved.value = false
+    if (!previous || current[0] !== previous[0]) { saved.value = false; editing.value = false }
   },
   { immediate: true },
 )
@@ -102,7 +104,7 @@ async function save() {
 }
 </script>
 <template>
-  <section class="rounded-xl border border-gray-200 p-5 dark:border-dark-600">
+  <section :class="embedded ? '' : 'rounded-xl border border-gray-200 p-5 dark:border-dark-600'">
     <div class="flex flex-wrap items-start gap-3">
       <div
         class="rounded-lg bg-primary-50 p-2 text-primary-700 dark:bg-primary-900/20 dark:text-primary-300"
@@ -130,10 +132,10 @@ async function save() {
         type="button"
         class="btn btn-secondary text-sm"
         :disabled="busy || disabled"
-        :aria-expanded="editing"
-        @click="editing = !editing"
+        aria-haspopup="dialog"
+        @click="editing = true"
       >
-        {{ t(editing ? 'common.cancel' : 'governance.configureBalance') }}
+        {{ t('governance.configureBalance') }}
       </button>
     </div>
     <div class="mt-4 grid gap-4 text-xs sm:grid-cols-3">
@@ -181,11 +183,13 @@ async function save() {
     >
       {{ t('governance.balanceMonitorSaved') }}
     </p>
+    <BaseDialog :show="editing" :title="t('governance.balanceMonitoring')" :show-close-button="!busy" :close-on-escape="!busy" @close="editing = false">
     <form
-      v-if="editing"
-      class="mt-5 space-y-4 border-t border-gray-100 pt-5 dark:border-dark-700"
+      data-test="balance-monitor-form"
+      class="space-y-4"
       @submit.prevent="save"
     >
+      <p class="text-xs text-gray-500">{{ t('governance.balanceMonitorHint') }}</p>
       <p v-if="error" role="alert" class="text-sm text-red-600">{{ error }}</p>
       <fieldset :disabled="busy || disabled" class="min-w-0 space-y-4">
         <label class="governance-checkbox-label flex items-center gap-2 text-sm font-medium"
@@ -248,5 +252,6 @@ async function save() {
         </div>
       </fieldset>
     </form>
+    </BaseDialog>
   </section>
 </template>

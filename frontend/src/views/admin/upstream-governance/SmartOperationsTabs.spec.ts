@@ -4,6 +4,7 @@ import { createI18n } from 'vue-i18n'
 import en from '@/i18n/locales/en/governance'
 import zh from '@/i18n/locales/zh/governance'
 import SmartOperationsTabs from './SmartOperationsTabs.vue'
+import type { SmartOperationsSection } from '@/config/smartOperations'
 
 vi.hoisted(() => { vi.stubGlobal('__INTLIFY_JIT_COMPILATION__', true) })
 afterAll(() => vi.unstubAllGlobals())
@@ -17,7 +18,7 @@ function toRuntimeMessages(value: unknown): unknown {
   return value
 }
 
-function renderTabs(modelValue: 'overview' | 'import' | 'models' | 'local-monitor' | 'account-quality' | 'monitor' | 'history' | 'notifications' | 'settings' = 'overview', disabled = false, locale = 'zh') {
+function renderTabs(modelValue: SmartOperationsSection = 'overview', disabled = false, locale = 'zh') {
   return mount(SmartOperationsTabs, {
     props: { modelValue, disabled },
     attachTo: document.body,
@@ -32,10 +33,9 @@ function mockNarrowRailLayout() {
   vi.spyOn(Element.prototype, 'scrollWidth', 'get').mockReturnValue(602)
   const positions: Record<string, { left: number; width: number }> = {
     'governance-overview-tab': { left: 6, width: 112 },
-    'governance-import-tab': { left: 122, width: 112 },
+    'governance-groups-tab': { left: 122, width: 112 },
     'governance-models-tab': { left: 238, width: 112 },
-    'governance-local-monitor-tab': { left: 354, width: 126 },
-    'governance-monitor-tab': { left: 484, width: 126 },
+    'governance-automation-tab': { left: 484, width: 126 },
     'governance-history-tab': { left: 614, width: 112 }
   }
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
@@ -54,31 +54,37 @@ describe('Smart Operations tabs', () => {
 
     expect(tablist.attributes('aria-label')).toBe('智能运维')
     expect(tablist.attributes('aria-orientation')).toBe('horizontal')
-    expect(tabs.map(tab => tab.text())).toEqual(['运维总览', '分组导入', '模型监测', '本地监测', '账号质量', '自动策略', '运行记录', '通知记录', '全局设置'])
+    // Every Chinese label is four characters.
+    expect(tabs.every(tab => [...tab.text()].length === 4)).toBe(true)
+    expect(tabs.map(tab => tab.text())).toEqual(['运维总览', '分组密钥', '自动策略', '运行记录', '模型监测', '账号质量', '全局设置'])
     expect(tabs.map(tab => tab.attributes('id'))).toEqual([
-      'governance-overview-tab', 'governance-import-tab', 'governance-models-tab', 'governance-local-monitor-tab', 'governance-account-quality-tab', 'governance-monitor-tab', 'governance-history-tab', 'governance-notifications-tab', 'governance-settings-tab'
+      'governance-overview-tab', 'governance-groups-tab', 'governance-automation-tab', 'governance-history-tab', 'governance-models-tab', 'governance-account-quality-tab', 'governance-settings-tab'
     ])
     expect(tabs.map(tab => tab.attributes('aria-controls'))).toEqual([
-      undefined, undefined, 'governance-models-panel', undefined, undefined, undefined, undefined, undefined, undefined
+      undefined, undefined, undefined, undefined, 'governance-models-panel', undefined, undefined
     ])
-    expect(tabs.map(tab => tab.attributes('aria-selected'))).toEqual(['false', 'false', 'true', 'false', 'false', 'false', 'false', 'false', 'false'])
-    expect(tabs.map(tab => tab.attributes('tabindex'))).toEqual(['-1', '-1', '0', '-1', '-1', '-1', '-1', '-1', '-1'])
+    expect(tabs.map(tab => tab.attributes('aria-selected'))).toEqual(['false', 'false', 'false', 'false', 'true', 'false', 'false'])
+    expect(tabs.map(tab => tab.attributes('tabindex'))).toEqual(['-1', '-1', '-1', '-1', '0', '-1', '-1'])
+    // Site sections and the cross-site sections are separated once.
+    const order = [...tablist.element.children].map(node => (node as HTMLElement).dataset.test === 'tab-scope-divider' ? '|' : node.id)
+    expect(order.indexOf('|')).toBe(order.indexOf('governance-history-tab') + 1)
+    expect(order.filter(item => item === '|')).toHaveLength(1)
     expect(tabs.every(tab => tab.get('svg').attributes('aria-hidden') === 'true')).toBe(true)
   })
 
   it('requests selection on click and waits for its controlled model to change', async () => {
     const wrapper = renderTabs()
-    await wrapper.get('#governance-import-tab').trigger('click')
+    await wrapper.get('#governance-groups-tab').trigger('click')
 
-    expect(wrapper.emitted('update:modelValue')).toEqual([['import']])
+    expect(wrapper.emitted('update:modelValue')).toEqual([['groups']])
     expect(wrapper.get('#governance-overview-tab').attributes('aria-selected')).toBe('true')
-    expect(wrapper.get('#governance-import-tab').attributes('aria-selected')).toBe('false')
+    expect(wrapper.get('#governance-groups-tab').attributes('aria-selected')).toBe('false')
 
-    await wrapper.setProps({ modelValue: 'import' })
-    expect(wrapper.get('#governance-import-tab').attributes('aria-selected')).toBe('true')
-    expect(wrapper.get('#governance-import-tab').attributes('aria-controls')).toBe('governance-import-panel')
+    await wrapper.setProps({ modelValue: 'groups' })
+    expect(wrapper.get('#governance-groups-tab').attributes('aria-selected')).toBe('true')
+    expect(wrapper.get('#governance-groups-tab').attributes('aria-controls')).toBe('governance-groups-panel')
     expect(wrapper.get('#governance-overview-tab').attributes('aria-controls')).toBeUndefined()
-    expect(wrapper.get('#governance-import-tab').attributes('tabindex')).toBe('0')
+    expect(wrapper.get('#governance-groups-tab').attributes('tabindex')).toBe('0')
     expect(wrapper.get('#governance-overview-tab').attributes('tabindex')).toBe('-1')
   })
 
@@ -86,7 +92,7 @@ describe('Smart Operations tabs', () => {
     const wrapper = renderTabs()
     const overview = wrapper.get<HTMLButtonElement>('#governance-overview-tab')
     const history = wrapper.get<HTMLButtonElement>('#governance-settings-tab')
-    const imported = wrapper.get<HTMLButtonElement>('#governance-import-tab')
+    const imported = wrapper.get<HTMLButtonElement>('#governance-groups-tab')
     overview.element.focus()
 
     await overview.trigger('keydown', { key: 'ArrowLeft' })
@@ -121,10 +127,10 @@ describe('Smart Operations tabs', () => {
     const wrapper = renderTabs()
     await wrapper.get('#governance-overview-tab').trigger('keydown', { key: 'ArrowRight' })
     const event = new KeyboardEvent('keydown', { key, cancelable: true, bubbles: true })
-    wrapper.get('#governance-import-tab').element.dispatchEvent(event)
+    wrapper.get('#governance-groups-tab').element.dispatchEvent(event)
 
     expect(event.defaultPrevented).toBe(true)
-    expect(wrapper.emitted('update:modelValue')).toEqual([['import']])
+    expect(wrapper.emitted('update:modelValue')).toEqual([['groups']])
   })
 
   it('does not intercept vertical scrolling or ordinary typing', () => {
@@ -177,7 +183,7 @@ describe('Smart Operations tabs', () => {
     rail.scrollTop = 37
     expect(rail.scrollLeft).toBe(0)
 
-    await wrapper.setProps({ modelValue: 'import' })
+    await wrapper.setProps({ modelValue: 'groups' })
     expect(rail.scrollLeft).toBe(0)
     await wrapper.setProps({ modelValue: 'history' })
     expect(rail.scrollLeft).toBe(259)
@@ -192,10 +198,10 @@ describe('Smart Operations tabs', () => {
   it('prevents pointer and keyboard activation while disabled and restores the tab stop', async () => {
     const wrapper = renderTabs('models', true)
     const tabs = wrapper.findAll<HTMLButtonElement>('[role="tab"]')
-    expect(tabs).toHaveLength(9)
+    expect(tabs).toHaveLength(7)
     expect(tabs.every(tab => tab.element.disabled && tab.attributes('tabindex') === '-1')).toBe(true)
 
-    await wrapper.get('#governance-import-tab').trigger('click')
+    await wrapper.get('#governance-groups-tab').trigger('click')
     await wrapper.get('#governance-models-tab').trigger('keydown', { key: 'ArrowRight' })
     await wrapper.get('#governance-models-tab').trigger('keydown', { key: 'Enter' })
     expect(wrapper.emitted('update:modelValue')).toBeUndefined()
@@ -209,7 +215,7 @@ describe('Smart Operations tabs', () => {
     const wrapper = renderTabs('overview', false, 'en')
     expect(wrapper.get('[role="tablist"]').attributes('aria-label')).toBe('Smart Operations')
     expect(wrapper.findAll('[role="tab"]').map(tab => tab.text())).toEqual([
-      'Operations overview', 'Group import', 'Model monitoring', 'Local monitoring', 'Account quality', 'Automation policies', 'Run history', 'Notification records', 'Global settings'
+      'Overview', 'Groups & keys', 'Collection & automation', 'History', 'Model monitoring', 'Account quality', 'Settings'
     ])
   })
 })

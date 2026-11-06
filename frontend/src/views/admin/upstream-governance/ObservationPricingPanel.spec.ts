@@ -32,9 +32,11 @@ const preview = {
   target_sale: 0.3385, projected_margin: 0.3500738552437223, reason: 'price_ready', protected: false, blocked: false,
   sources: row.sources, bindings: [{ site_id: 4, site_name: 'Upstream A', binding_id: 8, remote_group_id: 'claude-max', account_id: 20 }, { site_id: 9, site_name: 'Upstream B', binding_id: 9, remote_group_id: 'backup', account_id: 21 }], policy: draft,
 }
+// Each settings card opens its form in a dialog; open them all for form tests.
 async function mounted() {
-  const wrapper = mount(ObservationPricingPanel, { props: { siteId: 4 } })
+  const wrapper = mount(ObservationPricingPanel, { props: { siteId: 4 }, global: { stubs: { teleport: true, transition: false } } })
   await flushPromises()
+  for (const card of ['observation-card', 'pricing-card', 'pricing-notifications-card']) await wrapper.get(`[data-test=${card}-open]`).trigger('click')
   return wrapper
 }
 describe('observation and pricing policy reliability', () => {
@@ -45,6 +47,25 @@ describe('observation and pricing policy reliability', () => {
     vi.mocked(api.previewPricingPolicy).mockResolvedValue(structuredClone(preview))
     vi.mocked(api.savePricingPolicy).mockResolvedValue({ ...structuredClone(pricing), policies: [{ ...row, ...draft }, structuredClone(pricing.policies[1])] })
     vi.mocked(api.savePricingNotifications).mockResolvedValue({ ...structuredClone(pricing), version: 6, notifications: { ...pricing.notifications, recipients: ['finance@example.test'] } })
+  })
+  it('shows each block as a summary card and keeps forms closed until asked', async () => {
+    const wrapper = mount(ObservationPricingPanel, { props: { siteId: 4 }, global: { stubs: { teleport: true, transition: false } } })
+    await flushPromises()
+    expect(wrapper.get('[data-test=observation-summary]').text()).toContain('governance.settingsCard.fullEvery')
+    expect(wrapper.get('[data-test=pricing-summary]').text()).toContain('Premium')
+    expect(wrapper.get('[data-test=pricing-notifications-summary]').text()).toContain('governance.settingsCard.recipients')
+    expect(wrapper.find('[data-test=observation-form]').exists()).toBe(false)
+    expect(wrapper.find('[data-test=pricing-row-12]').exists()).toBe(false)
+    expect(wrapper.find('[data-test=notification-form]').exists()).toBe(false)
+    await wrapper.get('[data-test=pricing-card-open]').trigger('click')
+    expect(wrapper.find('[data-test=pricing-row-12]').exists()).toBe(true)
+  })
+  it('closes the dialog after a successful cadence save', async () => {
+    vi.mocked(api.saveObservationPolicy).mockResolvedValue({ ...observation, version: 4 })
+    const wrapper = await mounted()
+    await wrapper.get('[data-test=observation-form]').trigger('submit')
+    await flushPromises()
+    expect(wrapper.find('[data-test=observation-form]').exists()).toBe(false)
   })
   it('loads configuration without issuing writes or previews', async () => {
     const wrapper = await mounted()
@@ -64,6 +85,7 @@ describe('observation and pricing policy reliability', () => {
     await wrapper.get('[data-test=observation-form]').trigger('submit')
     await flushPromises()
     expect(api.saveObservationPolicy).toHaveBeenCalledWith(4, { version: 3, policy: { enabled: true, fast_interval_seconds: 1, full_interval_seconds: 3600 } })
+    await wrapper.get('[data-test=pricing-notifications-card-open]').trigger('click')
     expect((wrapper.get('[data-test=pricing-row-13] [data-test=pricing-min-margin]').element as HTMLInputElement).value).toBe('35')
     expect((wrapper.get('[data-test=notification-recipients]').element as HTMLTextAreaElement).value).toBe('draft@example.test')
   })

@@ -179,14 +179,10 @@ onUnmounted(() => { generation++; clearLogin(); emit('busy', false) })
               <template #option="{ option }"><span class="flex min-w-0 items-center gap-2"><Icon name="globe" size="sm" class="shrink-0 text-gray-400" /><span class="truncate">{{ option.label }}</span></span></template>
             </Select>
           </div>
-          <div class="grid grid-cols-1 gap-3 rounded-xl bg-gray-50 p-3 dark:bg-dark-900 sm:grid-cols-2">
+          <!-- Collection cadence is edited in one place, on the collection & automation page. -->
+          <div class="space-y-1 rounded-xl bg-gray-50 p-3 dark:bg-dark-900">
             <label class="flex cursor-pointer items-center gap-2 text-sm"><input id="governance-edit-enabled" v-model="form.enabled" type="checkbox" />{{ t('governance.autoOn') }}</label>
-            <label class="block text-sm"><span class="mb-1 block text-xs text-gray-500">{{ t('governance.fastIntervalSeconds') }}</span><input id="governance-edit-fast-interval-seconds" v-model.number="form.fast_interval_seconds" class="input w-full text-sm" type="number" min="1" step="1" required /></label>
-            <label class="block text-sm"><span class="mb-1 block text-xs text-gray-500">{{ t('governance.fullIntervalSeconds') }}</span><input id="governance-edit-full-interval-seconds" v-model.number="form.full_interval_seconds" class="input w-full text-sm" type="number" min="1" step="1" required /></label>
-            <div class="flex items-center gap-2 sm:col-span-2">
-              <label for="governance-edit-interval" class="text-xs text-gray-500">{{ t('governance.interval') }}</label>
-              <input id="governance-edit-interval" v-model.number="form.interval_minutes" class="input w-24 text-sm" type="number" min="1" step="1" required aria-label="legacy minutes" />
-            </div>
+            <p data-test="cadence-moved-hint" class="text-xs text-gray-500">{{ t('governance.siteRail.cadenceMoved') }}</p>
           </div>
         </section>
       </fieldset>

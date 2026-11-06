@@ -2,7 +2,8 @@
   <Teleport to="body">
     <Transition name="modal">
       <div
-        v-if="show"
+        v-if="show || keepMounted"
+        v-show="show"
         class="modal-overlay"
         :style="zIndexStyle"
         :aria-labelledby="dialogId"
@@ -69,6 +70,8 @@ interface Props {
   closeOnClickOutside?: boolean
   showCloseButton?: boolean
   zIndex?: number
+  /** Keep the content mounted while hidden, for panels that load on mount. */
+  keepMounted?: boolean
 }
 
 interface Emits {
@@ -80,7 +83,8 @@ const props = withDefaults(defineProps<Props>(), {
   closeOnEscape: true,
   closeOnClickOutside: false,
   showCloseButton: true,
-  zIndex: 50
+  zIndex: 50,
+  keepMounted: false
 })
 
 const emit = defineEmits<Emits>()
