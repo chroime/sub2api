@@ -49,7 +49,8 @@ describe('model monitoring configuration and persistent work', () => {
     await wrapper.get('[data-test=model-new]').trigger('click')
     const modelSelect = wrapper.findAllComponents(Select).find(select => select.attributes('data-test') === 'model-name')!
     const names = (modelSelect.props('options') as { value: string }[]).map(option => option.value)
-    expect(names).toContain('gpt-5.6')
+    expect(names).toContain('gpt-6.1-sol')
+    expect(names).not.toContain('gpt-5.6')
     expect(names).not.toContain('gpt-image-1')
     expect(modelSelect.props('modelValue')).toBe('')
     expect(wrapper.text()).toContain('governance.modelMonitoring.candidateModelsHint')
@@ -91,13 +92,14 @@ describe('model monitoring configuration and persistent work', () => {
     expect(api.savePolicy).toHaveBeenCalledWith(1, expect.objectContaining({ id: 0, enabled: true, interval_minutes: 60, daily_request_limit: 12 }))
     expect(api.startBatch).not.toHaveBeenCalled()
   })
-  it('hides the GPT-6 family from OpenAI model choices', async () => {
+  it('offers only OpenAI releases newer than GPT-6 and keeps unversioned aliases', async () => {
     const wrapper = mount(ModelMonitorPanel, { global: { stubs: { teleport: true, transition: false } }, props: { siteId: 1, remoteGroups: [{ ...modelGroup, models: [] }], managedKeys: [modelKey] } })
     await flushPromises()
     await wrapper.get('[data-test=model-new]').trigger('click')
     const names = (wrapper.findAllComponents(Select).find(select => select.attributes('data-test') === 'model-name')!.props('options') as { value: string }[]).map(option => option.value)
-    expect(names).toContain('gpt-5.6')
-    expect(names.filter(name => name.startsWith('gpt-6'))).toEqual([])
+    expect(names).toContain('gpt-6.1-sol')
+    expect(names).toContain('codex-auto-review')
+    expect(names.filter(name => /^gpt-(?:[0-5](?:[.-]|$)|6(?:-|$))/.test(name))).toEqual([])
   })
   it('saves a new policy paused with exact cadence when long-term monitoring is unchecked, and enables it from the list', async () => {
     const wrapper = setup(); await flushPromises(); await wrapper.get('[data-test=model-new]').trigger('click')
@@ -253,6 +255,15 @@ describe('model monitoring configuration and persistent work', () => {
     expect(section.text()).toContain('987'); expect(section.text()).not.toContain('234')
     wrapper.findAllComponents(Select).find(select => select.attributes('data-test') === 'model-stats-window')!.vm.$emit('update:modelValue', 30)
     await flushPromises(); expect(api.stats).toHaveBeenLastCalledWith(1, 30)
+  })
+  it('runs a saved policy once from the policy list with its stored configuration', async () => {
+    vi.mocked(api.policies).mockResolvedValue([modelPolicy])
+    vi.mocked(api.startBatch).mockResolvedValue({ id: 'policy-batch', total: 1, concurrency: 1 })
+    const wrapper = setup(); await flushPromises()
+    await wrapper.get('[data-test=model-policy-run-8]').trigger('click'); await flushPromises()
+    expect(api.startBatch).toHaveBeenCalledWith(1, { request_id: expect.any(String), config: modelPolicy.config })
+    expect(api.savePolicy).not.toHaveBeenCalled()
+    expect(wrapper.find('[data-test=model-editor]').exists()).toBe(false)
   })
   it('keeps a later policy response from applying to a new site', async () => {
     let finish!: (value: ModelPolicy) => void
