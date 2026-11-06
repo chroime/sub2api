@@ -44,7 +44,9 @@ const comparison = ref<{ batchId: string; template: ModelTestTemplate; sample: n
 const stats = ref<ModelStats | null>(null), statsError = ref(''), statsDays = ref(7), statsExpanded = ref(false)
 let statsGeneration = 0
 const editingPolicy = ref<ModelPolicy | null>(null)
-const policyName = ref(''), interval = ref(1440), dailyLimit = ref(100), notifyEnabled = ref(false), recipients = ref(''), failureThreshold = ref(3), takeOverLegacy = ref(false)
+// New monitoring defaults to an hourly long-term policy with a small daily budget.
+const defaultInterval = 60, defaultDailyLimit = 12
+const policyName = ref(''), interval = ref(defaultInterval), dailyLimit = ref(defaultDailyLimit), policyEnabled = ref(true), notifyEnabled = ref(false), recipients = ref(''), failureThreshold = ref(3), takeOverLegacy = ref(false)
 const modes: ModelAPIMode[] = ['chat_completions', 'responses', 'anthropic', 'gemini']
 const efforts: ModelEffort[] = ['low', 'medium', 'high']
 const templates: ModelTestTemplate[] = ['candy', 'pelican', 'token_audit', 'context', 'probe']
@@ -67,16 +69,21 @@ const selectedKey = computed(() => readyKeys.value.find(key => key.id === config
 const selectedLocalTarget = computed(() => availableLocalTargets.value.find(target => target.group_id === config.value.local_group_id && target.api_key_id === config.value.local_api_key_id))
 const selectedGroup = computed(() => props.remoteGroups.find(group => group.id === selectedKey.value?.remote_group_id))
 const usingCandidateModels = computed(() => !!selectedGroup.value && !selectedGroup.value.models?.length)
+// The GPT-6 family is not offered for OpenAI monitoring; a saved policy keeps its model.
+const hiddenOpenAIModel = (model: string) => /^gpt-6(?:[.-]|$)/i.test(model)
+function offeredModels(platform: string | undefined, models: string[]) {
+  return platform === 'openai' ? models.filter(model => !hiddenOpenAIModel(model)) : models
+}
 const modelOptions = computed(() => {
   if (targetType.value === 'local_group') {
     const platform = selectedLocalTarget.value?.platform
     const models = platform ? getModelsByPlatform(platform).filter(model => !/(?:image|video|audio|realtime|imagine|cogview)/i.test(model)).filter(model => platform !== 'openai' || isOpenAITextModel(model)) : []
-    return [...new Set([...models, ...(config.value.model ? [config.value.model] : [])])].map(value => ({ value, label: value }))
+    return [...new Set([...offeredModels(platform, models), ...(config.value.model ? [config.value.model] : [])])].map(value => ({ value, label: value }))
   }
   const models = usingCandidateModels.value
     ? getModelsByPlatform(selectedKey.value!.platform).filter(model => !/(?:image|video|audio|realtime|imagine|cogview)/i.test(model)).filter(model => selectedKey.value!.platform !== 'openai' || isOpenAITextModel(model))
     : selectedGroup.value?.models || []
-  return [...new Set([...models, ...(config.value.model ? [config.value.model] : [])])].map(value => ({ value, label: value }))
+  return [...new Set([...offeredModels(selectedKey.value?.platform, models), ...(config.value.model ? [config.value.model] : [])])].map(value => ({ value, label: value }))
 })
 function modeAvailable(mode: ModelAPIMode) {
   const platform = targetType.value === 'local_group' ? selectedLocalTarget.value?.platform : selectedKey.value?.platform
@@ -217,7 +224,7 @@ function changeTokenizer(value: unknown) { if (!locked.value && ['auto', 'none',
 function newConfiguration() {
   if (locked.value) return
   localSelectionTouched = false; localModelTouched = false; localModeTouched = false
-  editingPolicy.value = null; config.value = initialConfig(); policyName.value = ''; interval.value = 1440; dailyLimit.value = 100
+  editingPolicy.value = null; config.value = initialConfig(); policyName.value = ''; interval.value = defaultInterval; dailyLimit.value = defaultDailyLimit; policyEnabled.value = true
   notifyEnabled.value = false; recipients.value = ''; failureThreshold.value = 3; takeOverLegacy.value = false
   error.value = ''; notice.value = ''; editorOpen.value = true
   if (props.localOnly) applyLocalTargetDefault()
@@ -290,7 +297,7 @@ async function start() {
     runs.value = { items: [], total: batch.total, page: 1, page_size: 20, counts: { queued: batch.total } }
   })
 }
-async function savePolicy(enableNow = false) {
+async function savePolicy() {
   if (locked.value) return
   const value = validatedConfig()
   if (!value) return
@@ -299,11 +306,12 @@ async function savePolicy(enableNow = false) {
   if (!integer(dailyLimit.value, 1000000) || !integer(failureThreshold.value, 100)) { error.value = mt('invalidPolicy'); return }
   if (dailyLimit.value < requestCount.value) { error.value = mt('dailyBudgetTooSmall'); return }
   const request = generation, id = props.siteId
-  const input: ModelPolicy = { id: editingPolicy.value?.id || 0, site_id: id, version: editingPolicy.value?.version || 0, name: policyName.value.trim() || `${targetLabel(value)} · ${value.model}`, config: value, enabled: enableNow || editingPolicy.value?.enabled || false, interval_minutes: interval.value, daily_request_limit: dailyLimit.value, notify_enabled: notifyEnabled.value, recipients: [...new Set(recipients.value.split(/[\s,;，；]+/).map(item => item.trim()).filter(Boolean))], failure_threshold: failureThreshold.value, take_over_legacy: takeOverLegacy.value }
+  const enableNow = policyEnabled.value && !editingPolicy.value?.enabled
+  const input: ModelPolicy = { id: editingPolicy.value?.id || 0, site_id: id, version: editingPolicy.value?.version || 0, name: policyName.value.trim() || `${targetLabel(value)} · ${value.model}`, config: value, enabled: policyEnabled.value, interval_minutes: interval.value, daily_request_limit: dailyLimit.value, notify_enabled: notifyEnabled.value, recipients: [...new Set(recipients.value.split(/[\s,;，；]+/).map(item => item.trim()).filter(Boolean))], failure_threshold: failureThreshold.value, take_over_legacy: takeOverLegacy.value }
   await mutate(async () => {
     const policy = await api.savePolicy(id, input)
     if (request !== generation) return
-    editingPolicy.value = policy; policyName.value = policy.name; takeOverLegacy.value = false; notice.value = mt(enableNow ? 'policyEnabled' : 'policySaved')
+    editingPolicy.value = policy; policyName.value = policy.name; policyEnabled.value = policy.enabled; takeOverLegacy.value = false; notice.value = mt(enableNow ? 'policyEnabled' : policy.enabled ? 'policyUpdated' : 'policySaved')
   })
 }
 function editPolicy(policy: ModelPolicy) {
@@ -315,7 +323,7 @@ function installPolicy(policy: ModelPolicy) {
   editingPolicy.value = policy; config.value = { ...initialConfig(), ...policy.config, efforts: [...policy.config.efforts], templates: [...policy.config.templates] }
   config.value.target_type = props.localOnly ? 'local_group' : 'upstream'
   config.value.first_content_timeout_seconds ||= 60; config.value.idle_timeout_seconds ||= 30
-  policyName.value = policy.name; interval.value = policy.interval_minutes; dailyLimit.value = policy.daily_request_limit
+  policyName.value = policy.name; interval.value = policy.interval_minutes; dailyLimit.value = policy.daily_request_limit; policyEnabled.value = policy.enabled
   notifyEnabled.value = policy.notify_enabled; recipients.value = policy.recipients.join('\n'); failureThreshold.value = policy.failure_threshold; takeOverLegacy.value = false
   editorOpen.value = true; error.value = ''; notice.value = ''
 }
@@ -324,7 +332,7 @@ async function togglePolicy(policy: ModelPolicy) {
   await mutate(async () => {
     try {
       const value = await api.savePolicy(id, { ...policy, enabled: !policy.enabled, take_over_legacy: false })
-      if (request === generation && editingPolicy.value?.id === value.id) { editingPolicy.value = value; takeOverLegacy.value = false }
+      if (request === generation && editingPolicy.value?.id === value.id) { editingPolicy.value = value; policyEnabled.value = value.enabled; takeOverLegacy.value = false }
     } catch (e) {
       if (!policy.enabled && (e as { status?: number })?.status === 409) {
         const latest = await api.policies(id).catch(() => null)
@@ -385,7 +393,9 @@ function comparisonDetail(id: string) { comparison.value = null; detailId.value 
     <BaseDialog :show="editorOpen" :title="editingPolicy ? mt('editPolicy') : mt('configureTest')" width="extra-wide" :show-close-button="!locked" :close-on-escape="!locked" @close="editorOpen = false">
     <section v-if="editorOpen" class="space-y-4" data-test="model-editor">
       <p v-if="error" role="alert" class="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">{{ error }}</p>
-      <form class="space-y-5" @submit.prevent="start"><fieldset :disabled="locked" class="min-w-0 space-y-5">
+      <form class="space-y-4" @submit.prevent="start"><fieldset :disabled="locked" class="min-w-0 space-y-4">
+        <section data-test="model-test-card" class="min-w-0 space-y-5 rounded-xl border border-gray-200 p-4 dark:border-dark-600 sm:p-5">
+        <h4 class="font-semibold">{{ mt('testConfiguration') }}</h4>
         <div class="grid gap-4 lg:grid-cols-4">
           <div class="min-w-0"><label :for="`model-target-type-${siteId}`" class="mb-1 block text-sm font-medium">{{ mt('targetType') }}</label><Select :id="`model-target-type-${siteId}`" data-test="model-target-type" :model-value="targetType" :options="targetOptions" :disabled="locked" :aria-label="mt('targetType')" @update:model-value="changeTargetType" /></div>
           <div v-if="targetType === 'upstream'" class="min-w-0"><label :for="`model-key-${siteId}`" class="mb-1 block text-sm font-medium">{{ mt('groupKey') }}</label><Select :id="`model-key-${siteId}`" data-test="model-key" :model-value="config.managed_key_id || null" :options="keyOptions" :disabled="locked" :aria-label="mt('groupKey')" @update:model-value="changeKey"><template #selected="{ option }"><span v-if="option" class="flex items-center gap-2"><PlatformIcon :platform="option.platform as Transport" size="sm" /><span class="truncate">{{ option.label }}</span></span><span v-else>{{ mt('selectKeyFirst') }}</span></template><template #option="{ option }"><span class="flex min-w-0 items-center gap-2"><PlatformIcon :platform="option.platform as Transport" size="sm" /><span class="break-words">{{ option.label }}</span></span></template></Select></div>
@@ -399,9 +409,14 @@ function comparisonDetail(id: string) { comparison.value = null; detailId.value 
         <div class="grid gap-4 sm:grid-cols-2"><label class="text-sm font-medium">{{ mt('samples') }}<input v-model.number="config.samples" data-test="model-samples" type="number" min="1" max="100" step="1" required class="input mt-1 w-full" /></label><label class="text-sm font-medium">{{ mt('concurrency') }}<input v-model.number="config.concurrency" data-test="model-concurrency" type="number" min="1" max="32" step="1" required class="input mt-1 w-full" /></label></div>
         <p class="-mt-2 text-xs text-gray-500">{{ mt('concurrencyHint') }}</p>
         <details class="rounded-lg bg-gray-50 p-3 dark:bg-dark-900"><summary class="cursor-pointer text-sm font-medium">{{ mt('advanced') }}</summary><div class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3"><label class="text-sm">{{ mt('maxOutput') }}<input v-model.number="config.max_output_tokens" data-test="model-max-output" type="number" min="1" max="65536" step="1" required class="input mt-1 w-full" /></label><label class="text-sm">{{ mt('timeoutSeconds') }}<input v-model.number="config.timeout_seconds" data-test="model-timeout" type="number" min="1" max="1800" step="1" required class="input mt-1 w-full" /></label><label class="text-sm">{{ mt('inputTokensRequested') }}<input v-model.number="config.input_tokens" data-test="model-input-tokens" type="number" :min="config.templates.some(item => item === 'context' || item === 'token_audit') ? 64 : 1" max="500000" step="1" required class="input mt-1 w-full" /></label><label class="text-sm">{{ mt('firstContentTimeout') }}<input v-model.number="config.first_content_timeout_seconds" data-test="model-first-timeout" type="number" min="1" :max="config.timeout_seconds" step="1" required class="input mt-1 w-full" /></label><label class="text-sm">{{ mt('idleTimeout') }}<input v-model.number="config.idle_timeout_seconds" data-test="model-idle-timeout" type="number" min="1" :max="config.timeout_seconds" step="1" required class="input mt-1 w-full" /></label><label class="text-sm">{{ mt('tolerance') }}<input v-model.number="config.token_tolerance_percent" data-test="model-tolerance" type="number" min="0" max="100" step="any" required class="input mt-1 w-full" /></label><div><label :for="`model-tokenizer-${siteId}`" class="mb-1 block text-sm">Tokenizer</label><Select :id="`model-tokenizer-${siteId}`" :model-value="config.tokenizer" :options="tokenizerOptions" :disabled="locked" aria-label="Tokenizer" @update:model-value="changeTokenizer" /></div></div><p class="mt-3 text-xs leading-relaxed text-gray-500">{{ mt('inputBudgetHint') }}</p></details>
-        <div class="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-primary-50 p-4 dark:bg-primary-900/20"><div><p class="text-sm font-medium" data-test="model-request-count">{{ mt('requestPreview') }}：{{ requestCount }} {{ mt('requests') }}</p><p class="mt-1 text-xs text-gray-500">{{ config.efforts.length }} {{ mt('effortUnits') }} × {{ config.templates.length }} {{ mt('templateUnits') }} × {{ config.samples }} {{ mt('sampleUnits') }} · {{ mt('maxOutputPreview') }} {{ requestCount * (Number(config.max_output_tokens) || 0) }}</p></div><button data-test="model-start" class="btn btn-primary" :disabled="locked || !canRunTarget">{{ busy ? t('common.loading') : mt('runNow') }}</button></div>
+        <div class="rounded-lg bg-gray-50 px-4 py-3 dark:bg-dark-900"><p class="text-sm font-medium" data-test="model-request-count">{{ mt('requestPreview') }}：{{ requestCount }} {{ mt('requests') }}</p><p class="mt-1 text-xs text-gray-500">{{ config.efforts.length }} {{ mt('effortUnits') }} × {{ config.templates.length }} {{ mt('templateUnits') }} × {{ config.samples }} {{ mt('sampleUnits') }} · {{ mt('maxOutputPreview') }} {{ requestCount * (Number(config.max_output_tokens) || 0) }}</p></div>
         <p class="text-xs leading-relaxed text-gray-500">{{ mt('billingHint') }}</p>
-        <details class="border-t border-gray-100 pt-4 dark:border-dark-700" :open="!!editingPolicy"><summary class="cursor-pointer text-sm font-medium">{{ mt('scheduledConfiguration') }}</summary><div class="mt-4 grid gap-4 sm:grid-cols-2"><label class="text-sm">{{ mt('policyName') }}<input v-model="policyName" data-test="model-policy-name" maxlength="120" class="input mt-1 w-full" /></label><label class="text-sm">{{ t('governance.interval') }}<input v-model.number="interval" data-test="model-policy-interval" type="number" min="1" step="1" class="input mt-1 w-full" /></label><label class="text-sm">{{ mt('dailyLimit') }}<input v-model.number="dailyLimit" data-test="model-daily-limit" type="number" min="1" max="1000000" step="1" class="input mt-1 w-full" /></label><label class="text-sm">{{ mt('failureThreshold') }}<input v-model.number="failureThreshold" type="number" min="1" max="100" step="1" class="input mt-1 w-full" /></label><label class="governance-checkbox-label flex items-center gap-2 text-sm"><input v-model="notifyEnabled" data-test="model-notify" type="checkbox" class="governance-checkbox" />{{ mt('emailNotifications') }}</label><label class="governance-checkbox-label flex items-center gap-2 text-sm"><input v-model="takeOverLegacy" data-test="model-take-over" type="checkbox" class="governance-checkbox" />{{ mt('takeOverLegacy') }}</label><label v-if="notifyEnabled" class="text-sm sm:col-span-2">{{ mt('recipients') }}<textarea v-model="recipients" data-test="model-recipients" class="input mt-1 min-h-20 w-full" /></label></div><p class="mt-3 text-xs leading-relaxed text-gray-500">{{ mt('scheduleHint') }}</p><div class="mt-3 flex flex-wrap gap-2"><button type="button" data-test="model-policy-save" class="btn btn-secondary" :disabled="locked || !canRunTarget" @click="savePolicy()">{{ mt('savePolicy') }}</button><button v-if="editingPolicy && !editingPolicy.enabled" type="button" data-test="model-policy-save-enable" class="btn btn-primary" :disabled="locked || !canRunTarget" @click="savePolicy(true)">{{ mt('saveAndEnable') }}</button></div></details>
+        </section>
+        <section data-test="model-policy-card" class="min-w-0 space-y-4 rounded-xl border border-gray-200 p-4 dark:border-dark-600 sm:p-5">
+          <div><h4 class="font-semibold">{{ mt('scheduledConfiguration') }}</h4><p class="mt-1 text-xs leading-relaxed text-gray-500">{{ mt('scheduleHint') }}</p></div>
+          <div class="grid gap-4 sm:grid-cols-2"><label class="text-sm">{{ mt('policyName') }}<input v-model="policyName" data-test="model-policy-name" maxlength="120" class="input mt-1 w-full" /></label><label class="text-sm">{{ t('governance.interval') }}<input v-model.number="interval" data-test="model-policy-interval" type="number" min="1" step="1" class="input mt-1 w-full" /></label><label class="text-sm">{{ mt('dailyLimit') }}<input v-model.number="dailyLimit" data-test="model-daily-limit" type="number" min="1" max="1000000" step="1" class="input mt-1 w-full" /></label><label class="text-sm">{{ mt('failureThreshold') }}<input v-model.number="failureThreshold" type="number" min="1" max="100" step="1" class="input mt-1 w-full" /></label><label class="governance-checkbox-label flex items-center gap-2 text-sm font-medium sm:col-span-2"><input v-model="policyEnabled" data-test="model-policy-enabled" type="checkbox" class="governance-checkbox" />{{ mt('policyEnabledLabel') }}</label><label class="governance-checkbox-label flex items-center gap-2 text-sm"><input v-model="notifyEnabled" data-test="model-notify" type="checkbox" class="governance-checkbox" />{{ mt('emailNotifications') }}</label><label class="governance-checkbox-label flex items-center gap-2 text-sm"><input v-model="takeOverLegacy" data-test="model-take-over" type="checkbox" class="governance-checkbox" />{{ mt('takeOverLegacy') }}</label><label v-if="notifyEnabled" class="text-sm sm:col-span-2">{{ mt('recipients') }}<textarea v-model="recipients" data-test="model-recipients" class="input mt-1 min-h-20 w-full" /></label></div>
+        </section>
+        <div data-test="model-editor-actions" class="flex flex-wrap items-center justify-end gap-2 border-t border-gray-100 pt-4 dark:border-dark-700"><button type="button" data-test="model-policy-save" class="btn btn-primary" :disabled="locked || !canRunTarget" @click="savePolicy()">{{ mt('savePolicy') }}</button><button data-test="model-start" type="submit" class="btn btn-secondary" :disabled="locked || !canRunTarget">{{ busy ? t('common.loading') : mt('runNow') }}</button></div>
       </fieldset></form>
     </section>
     </BaseDialog>
