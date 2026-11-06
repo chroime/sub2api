@@ -393,6 +393,71 @@ AND (b.account_id=0 OR EXISTS (SELECT 1 FROM accounts a WHERE a.id=b.account_id 
 	}
 	return tx.Commit()
 }
+
+// DeleteSiteKeepingAccounts deletes a site together with its bindings and
+// managed-key records while the imported local accounts keep serving. The
+// accounts lose only the ownership notes automation relies on (rate owner,
+// pause and reconciliation receipts); the import marker stays, so their
+// frozen model allowlist keeps its meaning. API keys, schedulability and
+// groups are untouched, and keys created upstream are not revoked. A key
+// repair still in progress blocks the deletion.
+func (s *sqlStore) DeleteSiteKeepingAccounts(ctx context.Context, id int64) (int, error) {
+	tx, e := s.db.BeginTx(ctx, nil)
+	if e != nil {
+		return 0, e
+	}
+	defer tx.Rollback()
+	var siteID int64
+	if e = tx.QueryRowContext(ctx, `SELECT id FROM upstream_governance_sites WHERE id=$1 FOR UPDATE`, id).Scan(&siteID); e != nil {
+		return 0, storeError(e)
+	}
+	var repairing bool
+	if e = tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM upstream_governance_key_repairs WHERE site_id=$1)`, id).Scan(&repairing); e != nil {
+		return 0, e
+	}
+	if repairing {
+		return 0, ErrSiteInUse
+	}
+	rows, e := tx.QueryContext(ctx, `UPDATE accounts SET extra=COALESCE(extra,'{}'::jsonb)-'upstream_governance_rate_owner'-'upstream_governance_pause'-'upstream_governance_reconcile_receipt', updated_at=NOW()
+WHERE deleted_at IS NULL AND id IN (SELECT account_id FROM upstream_governance_bindings WHERE site_id=$1 AND account_id>0)
+RETURNING id`, id)
+	if e != nil {
+		return 0, e
+	}
+	var kept []int64
+	for rows.Next() {
+		var accountID int64
+		if e = rows.Scan(&accountID); e != nil {
+			_ = rows.Close()
+			return 0, e
+		}
+		kept = append(kept, accountID)
+	}
+	if e = rows.Close(); e != nil {
+		return 0, e
+	}
+	if e = rows.Err(); e != nil {
+		return 0, e
+	}
+	// The scheduler projects these extra keys; refresh its cached accounts.
+	for _, accountID := range kept {
+		if _, e = tx.ExecContext(ctx, `INSERT INTO scheduler_outbox (event_type, account_id) VALUES ('account_changed', $1)`, accountID); e != nil {
+			return 0, e
+		}
+	}
+	if _, e = tx.ExecContext(ctx, `DELETE FROM upstream_governance_bindings WHERE site_id=$1`, id); e != nil {
+		return 0, e
+	}
+	if _, e = tx.ExecContext(ctx, `DELETE FROM upstream_governance_keys WHERE site_id=$1`, id); e != nil {
+		return 0, e
+	}
+	r, e := tx.ExecContext(ctx, `DELETE FROM upstream_governance_sites WHERE id=$1`, id)
+	if e = affected(r, e, ErrNotFound); e != nil {
+		return 0, e
+	}
+	return len(kept), tx.Commit()
+}
+
 func (s *sqlStore) ObserveSite(ctx context.Context, id int64, status, message string, last, next time.Time) error {
 	var success any
 	if !last.IsZero() {

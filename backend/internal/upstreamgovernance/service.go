@@ -1,6 +1,7 @@
 package upstreamgovernance
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -37,6 +38,7 @@ type Service struct {
 	scheduleMu           sync.Mutex
 	collectionFailures   map[int64]int
 	fastFailures         map[int64]int
+	syncFailureStreaks   map[int64]int // consecutive failed collections, any trigger
 	sessionRefreshMu     sync.Mutex
 	sessionRefreshCursor int64
 	balanceNotifier      BalanceNotifier
@@ -94,6 +96,34 @@ func (s *Service) nextCollectionAt(siteID int64, now time.Time, intervalSeconds 
 		s.collectionFailures[siteID] = failures
 	}
 	return scheduledNextAt(now, intervalSeconds, failures, siteID, scheduleCollection)
+}
+
+// syncFailureEventDue counts a failed collection and reports whether it
+// deserves a sync_failed event. A single failure between successes (an
+// upstream that rate-limits or times out now and then) only updates the site
+// status; the event is recorded once the failure repeats, and again when a
+// persistent failure changes its code. Reauthorization is reported at once
+// because collection cannot recover without an administrator. The streak is
+// process-local, so a restart can repeat one event for an ongoing failure.
+func (s *Service) syncFailureEventDue(site Site, state, code string) bool {
+	s.scheduleMu.Lock()
+	defer s.scheduleMu.Unlock()
+	if s.syncFailureStreaks == nil {
+		s.syncFailureStreaks = map[int64]int{}
+	}
+	streak := s.syncFailureStreaks[site.ID] + 1
+	s.syncFailureStreaks[site.ID] = streak
+	changed := site.Status != state || site.LastError != code
+	if state == "reauth_required" {
+		return changed
+	}
+	return streak == 2 || (streak > 2 && changed)
+}
+
+func (s *Service) resetSyncFailureStreak(siteID int64) {
+	s.scheduleMu.Lock()
+	defer s.scheduleMu.Unlock()
+	delete(s.syncFailureStreaks, siteID)
 }
 
 func (s *Service) nextFastObservationAt(siteID int64, now time.Time, intervalSeconds int64, success bool) time.Time {
@@ -582,6 +612,30 @@ func (s *Service) DeleteSite(ctx context.Context, id int64) error {
 	}
 	return s.store.DeleteSite(ctx, id)
 }
+
+// SiteDetacher deletes a site but keeps its imported local accounts.
+type SiteDetacher interface {
+	DeleteSiteKeepingAccounts(context.Context, int64) (int, error)
+}
+
+// DeleteSiteKeepingAccounts removes a site that still has imported accounts
+// or managed keys; the accounts stay as ordinary local accounts. It returns
+// how many accounts were kept.
+func (s *Service) DeleteSiteKeepingAccounts(ctx context.Context, id int64) (int, error) {
+	site, release, e := s.remoteSiteLock(ctx, id)
+	if e != nil {
+		return 0, e
+	}
+	defer release()
+	if isLocalModelSite(*site) {
+		return 0, ErrInvalid
+	}
+	detacher, ok := s.store.(SiteDetacher)
+	if !ok {
+		return 0, ErrUnsupported
+	}
+	return detacher.DeleteSiteKeepingAccounts(ctx, id)
+}
 func (s *Service) remoteSlot(ctx context.Context) (func(), error) {
 	select {
 	case s.slots <- struct{}{}:
@@ -881,7 +935,7 @@ func (s *Service) syncLockedWithAutoReauthorization(ctx context.Context, site Si
 		if oe := s.store.ObserveSite(ctx, site.ID, state, ErrorCode(e), now, next); oe != nil {
 			return nil, oe
 		}
-		if site.Status != state || site.LastError != ErrorCode(e) {
+		if s.syncFailureEventDue(site, state, ErrorCode(e)) {
 			if ae := s.store.AddEvent(ctx, &Event{SiteID: site.ID, Kind: "sync_failed", After: ErrorCode(e), CreatedAt: now}); ae != nil {
 				return nil, ae
 			}
@@ -912,6 +966,7 @@ func (s *Service) syncLockedWithAutoReauthorization(ctx context.Context, site Si
 	if e = s.store.ObserveSite(ctx, site.ID, "healthy", "", now, next); e != nil {
 		return nil, e
 	}
+	s.resetSyncFailureStreak(site.ID)
 	// Notification failures have their own persisted status and must not turn a
 	// successfully collected catalog into a failed synchronization.
 	s.reconcileSuccessfulSnapshot(ctx, site, snapshot)
@@ -1370,8 +1425,48 @@ func (s *Service) applyRow(ctx context.Context, site Site, session Session, row 
 	return account, nil
 }
 
-func canonical(v any) string            { b, _ := json.Marshal(v); return string(b) }
+// canonical renders v as JSON with every object's keys in sorted order. A
+// freshly collected catalog can hold typed structs (for example a plaza
+// time_pricing schedule) whose field order differs from the same data decoded
+// back from a stored snapshot, so the value is re-decoded before the final
+// encoding. Numbers keep their first encoding.
+func canonical(v any) string {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return ""
+	}
+	decoder := json.NewDecoder(bytes.NewReader(b))
+	decoder.UseNumber()
+	var generic any
+	if decoder.Decode(&generic) != nil {
+		return string(b)
+	}
+	normalized, err := json.Marshal(generic)
+	if err != nil {
+		return string(b)
+	}
+	return string(normalized)
+}
 func sortedStrings(s []string) []string { r := append([]string{}, s...); sort.Strings(r); return r }
+
+// sortedByCanonical orders values by their canonical encoding, computing each
+// encoding once.
+func sortedByCanonical[T any](values []T) []T {
+	type keyed struct {
+		key   string
+		value T
+	}
+	items := make([]keyed, len(values))
+	for i, value := range values {
+		items[i] = keyed{canonical(value), value}
+	}
+	sort.SliceStable(items, func(i, j int) bool { return items[i].key < items[j].key })
+	out := make([]T, len(items))
+	for i, item := range items {
+		out[i] = item.value
+	}
+	return out
+}
 func groupRates(g RemoteGroup) any {
 	return struct {
 		Name                       string
@@ -1388,9 +1483,7 @@ func comparableGroupRates(g RemoteGroup) any {
 	}{g.RateMultiplier, g.UserRateMultiplier, g.ResolvedRateMultiplier, g.PeakRateMultiplier, g.PeakRateEnabled, g.PeakStart, g.PeakEnd}
 }
 func prices(g RemoteGroup) []RemotePrice {
-	p := append([]RemotePrice{}, g.Prices...)
-	sort.Slice(p, func(i, j int) bool { return canonical(p[i]) < canonical(p[j]) })
-	return p
+	return sortedByCanonical(g.Prices)
 }
 func channels(c Catalog) []RemoteChannel {
 	r := append([]RemoteChannel{}, c.Channels...)
@@ -1398,8 +1491,7 @@ func channels(c Catalog) []RemoteChannel {
 		r[i].GroupIDs = sortedStrings(r[i].GroupIDs)
 		r[i].Models = sortedStrings(r[i].Models)
 	}
-	sort.Slice(r, func(i, j int) bool { return canonical(r[i]) < canonical(r[j]) })
-	return r
+	return sortedByCanonical(r)
 }
 func DiffCatalog(siteID int64, before, after Catalog) []Event {
 	events := []Event{}

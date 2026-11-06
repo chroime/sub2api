@@ -154,6 +154,15 @@ func (h *UpstreamGovernanceHandler) Delete(c *gin.Context) {
 	if !ok {
 		return
 	}
+	// keep_accounts=true deletes a site that still has imported accounts and
+	// leaves those accounts serving as ordinary local accounts.
+	if c.Query("keep_accounts") == "true" {
+		kept, err := h.svc.DeleteSiteKeepingAccounts(c.Request.Context(), id)
+		if !governanceError(c, err) {
+			response.Success(c, gin.H{"deleted": true, "kept_accounts": kept})
+		}
+		return
+	}
 	if !governanceError(c, h.svc.DeleteSite(c.Request.Context(), id)) {
 		response.Success(c, gin.H{"deleted": true})
 	}
@@ -270,6 +279,21 @@ func (h *UpstreamGovernanceHandler) Events(c *gin.Context) {
 	}
 	if v == nil {
 		v = []gov.Event{}
+	}
+	response.Paginated(c, v, total, page, size)
+}
+
+// DeliveryRecords lists outbound upstream change mails (channel=email) or
+// AstrBot local group messages (channel=astrbot), newest first.
+func (h *UpstreamGovernanceHandler) DeliveryRecords(c *gin.Context) {
+	c.Header("Cache-Control", "no-store")
+	page, size, ok := governancePage(c)
+	if !ok {
+		return
+	}
+	v, total, e := h.svc.DeliveryRecords(c.Request.Context(), c.DefaultQuery("channel", gov.DeliveryChannelEmail), page, size)
+	if governanceError(c, e) {
+		return
 	}
 	response.Paginated(c, v, total, page, size)
 }

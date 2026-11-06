@@ -475,6 +475,67 @@ func TestDiffIgnoresOrderingAndReportsRatesModelsAndChannels(t *testing.T) {
 	require.True(t, strings.Contains(string(all), "channels_changed"))
 }
 
+// A collected catalog holds typed schedule structs; the previous snapshot is
+// the same data decoded from storage, where object keys come back sorted.
+// Production logged a price_changed event for every collection because of it.
+func TestDiffIgnoresFieldOrderOfTypedPricingDetails(t *testing.T) {
+	type period struct {
+		Start      string   `json:"start_time"`
+		End        string   `json:"end_time"`
+		Multiplier *float64 `json:"multiplier"`
+	}
+	type schedule struct {
+		Timezone     string   `json:"timezone"`
+		WeekdaysOnly bool     `json:"weekdays_only"`
+		Periods      []period `json:"periods"`
+	}
+	collected := func(multiplier float64) Catalog {
+		input, output := 0.0000045, 0.0000135
+		return Catalog{Groups: []RemoteGroup{{ID: "g", Prices: []RemotePrice{
+			{Model: "z-model", Platform: "openai", Unit: "usd_per_token", Input: &input, Output: &output, Details: map[string]any{"billing_mode": "token"}},
+			{Model: "deepseek-v4-pro", Platform: "openai", Unit: "usd_per_token", Input: &input, Output: &output, Details: map[string]any{
+				"billing_mode": "token",
+				"input_price":  6.6e-7,
+				"time_pricing": schedule{Timezone: "Asia/Shanghai", WeekdaysOnly: true, Periods: []period{{Start: "08:00:00", End: "12:00:00", Multiplier: &multiplier}}},
+			}},
+		}}}}
+	}
+	stored := func(c Catalog) Catalog {
+		raw, err := json.Marshal(c)
+		require.NoError(t, err)
+		var decoded Catalog
+		require.NoError(t, json.Unmarshal(raw, &decoded))
+		return decoded
+	}
+
+	require.Empty(t, DiffCatalog(1, stored(collected(2)), collected(2)))
+	events := DiffCatalog(1, stored(collected(2)), collected(3))
+	require.Len(t, events, 1)
+	require.Equal(t, "price_changed", events[0].Kind)
+	require.Contains(t, events[0].After, `"multiplier":3`)
+}
+
+func TestSyncFailureEventsSkipIsolatedFailures(t *testing.T) {
+	s := NewService(nil, nil, nil, nil, false)
+	healthy := Site{ID: 7, Status: "healthy"}
+	failing := Site{ID: 7, Status: "error", LastError: "rate_limited"}
+
+	// Fail, recover, fail: an upstream that rate-limits now and then.
+	require.False(t, s.syncFailureEventDue(healthy, "error", "rate_limited"))
+	s.resetSyncFailureStreak(7)
+	require.False(t, s.syncFailureEventDue(healthy, "error", "rate_limited"))
+
+	// The failure repeats: reported once, then only when its code changes.
+	require.True(t, s.syncFailureEventDue(failing, "error", "rate_limited"))
+	require.False(t, s.syncFailureEventDue(failing, "error", "rate_limited"))
+	require.True(t, s.syncFailureEventDue(failing, "error", "timeout"))
+
+	// Other sites keep their own streak; reauthorization is reported at once.
+	require.False(t, s.syncFailureEventDue(Site{ID: 8, Status: "healthy"}, "error", "timeout"))
+	require.True(t, s.syncFailureEventDue(Site{ID: 9, Status: "healthy"}, "reauth_required", "reauth_required"))
+	require.False(t, s.syncFailureEventDue(Site{ID: 9, Status: "reauth_required", LastError: "reauth_required"}, "reauth_required", "reauth_required"))
+}
+
 func TestDiffRenameDoesNotEmitRateChangeWhenMultiplierIsUnchanged(t *testing.T) {
 	rate := 0.8
 	before := Catalog{Groups: []RemoteGroup{{ID: "g", Name: "旧名称", Platform: "openai", ResolvedRateMultiplier: &rate}}}

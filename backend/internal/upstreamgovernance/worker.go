@@ -521,7 +521,7 @@ func (s *Service) runSiteDue(ctx context.Context, siteID int64) error {
 			if err = s.store.ObserveSite(ctx, site.ID, "error", "timeout", s.now(), next); err != nil {
 				return err
 			}
-			if site.Status != "error" || site.LastError != "timeout" {
+			if s.syncFailureEventDue(*site, "error", "timeout") {
 				if err = s.store.AddEvent(ctx, &Event{SiteID: site.ID, Kind: "sync_failed", After: "timeout", CreatedAt: s.now()}); err != nil {
 					return err
 				}
