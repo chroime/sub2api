@@ -62,6 +62,39 @@ func TestClassifyGrokUpstreamFailure_ModelCapacityUsesShortCooldown(t *testing.T
 	require.False(t, d.BlockModel)
 }
 
+// Regression: xAI capacity refusals carry a resource_exhausted code and a docs
+// link containing "usage". They were read as free usage exhausted, and the
+// whole account was parked for 10 minutes while its quota was 1% used.
+func TestClassifyGrokUpstreamFailure_CapacityWithResourceExhaustedIsNotFreeUsage(t *testing.T) {
+	const msg = "The model is currently at capacity due to high demand. Please try again in a few minutes, " +
+		"or use a higher service tier for priority processing: https://docs.x.ai/developers/advanced-api-usage/priority-processing"
+	for _, body := range []string{
+		`{"error":{"code":"resource_exhausted","message":"` + msg + `"}}`,
+		`{"code":"Some resource has been exhausted","error":"` + msg + `"}`,
+		`{"error":{"message":"` + msg + `"}}`,
+	} {
+		d := classifyGrokUpstreamFailure(http.StatusTooManyRequests, []byte(body), "grok-4.7")
+		require.Equal(t, GrokFailureModelCapacity, d.Class, body)
+		require.Equal(t, time.Minute, d.Cooldown, body)
+	}
+}
+
+func TestClassifyGrokUpstreamFailure_ExplicitFreeUsageStillWinsOverCapacityWords(t *testing.T) {
+	for _, body := range []string{
+		`{"error":{"code":"subscription:free-usage-exhausted","message":"The model is at capacity for your free tier"}}`,
+		`{"error":{"message":"You've used all the included free usage; capacity resets over a rolling 24-hour window."}}`,
+	} {
+		d := classifyGrokUpstreamFailure(http.StatusTooManyRequests, []byte(body), "grok-4.5")
+		require.Equal(t, GrokFailureFreeUsage, d.Class, body)
+	}
+}
+
+func TestIsGrokFreeUsageExhaustedTextIgnoresURLWords(t *testing.T) {
+	require.False(t, isGrokFreeUsageExhaustedText(
+		"resource_exhausted the model is busy, see https://docs.x.ai/developers/advanced-api-usage/limits"))
+	require.True(t, isGrokFreeUsageExhaustedText("model usage exhausted: limit reached for grok-4.5"))
+}
+
 func TestClassifyGrokUpstreamFailure_Billing(t *testing.T) {
 	d := classifyGrokUpstreamFailure(http.StatusForbidden, []byte(`{"code":"personal-team-blocked:spending-limit","error":"spending limit reached"}`), "")
 	require.Equal(t, GrokFailureBilling, d.Class)

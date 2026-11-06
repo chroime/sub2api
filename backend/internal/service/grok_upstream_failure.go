@@ -78,7 +78,15 @@ func classifyGrokUpstreamFailure(statusCode int, responseBody []byte, requestedM
 	}
 
 	// --- Free usage / rolling quota exhausted ---
-	if isGrokFreeUsageExhaustedText(low) || isGrokFreeUsageCode(code) || isGrokFreeUsageCode(text) {
+	// A capacity refusal ("The model is currently at capacity...") arrives as
+	// 429 resource_exhausted with a docs link containing "usage"; the loose
+	// usage+exhaust heuristic would read it as free usage and park the whole
+	// account. Unless the body names free usage explicitly, capacity wins.
+	freeUsage := isGrokFreeUsageExhaustedText(low) || isGrokFreeUsageCode(code) || isGrokFreeUsageCode(text)
+	if freeUsage && isGrokModelCapacityText(low) && !isGrokExplicitFreeUsageText(low) && !isGrokFreeUsageCode(code) {
+		freeUsage = false
+	}
+	if freeUsage {
 		d := GrokUpstreamFailureDecision{
 			Class:          GrokFailureFreeUsage,
 			Model:          model,
@@ -340,6 +348,9 @@ func isGrokFreeUsageExhaustedText(low string) bool {
 			return true
 		}
 	}
+	// URLs carry words like "usage" (…/advanced-api-usage/…) that are not part
+	// of the message; keep them out of the loose keyword heuristics below.
+	low = grokURLPattern.ReplaceAllString(low, " ")
 	if (strings.Contains(low, "quota") && (strings.Contains(low, "exhaust") || strings.Contains(low, "exceed") || strings.Contains(low, "limit"))) ||
 		(strings.Contains(low, "usage") && (strings.Contains(low, "exhaust") || strings.Contains(low, "exceed")) && (strings.Contains(low, "limit") || strings.Contains(low, "free") || strings.Contains(low, "model"))) {
 		if strings.Contains(low, "free") || strings.Contains(low, "rolling") ||
@@ -461,6 +472,23 @@ func isGrokCompatibilityError(statusCode int, low, code string) bool {
 		"compaction_decode_error",
 	} {
 		if strings.Contains(combined, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+var grokURLPattern = regexp.MustCompile(`https?://\S+`)
+
+// isGrokExplicitFreeUsageText reports wording that names free/included usage
+// itself, as opposed to the generic usage/quota/exhaust heuristics.
+func isGrokExplicitFreeUsageText(low string) bool {
+	for _, p := range []string{
+		"free-usage", "free_usage", "free usage", "included free", "free quota",
+		"free tier", "free-tier", "free_tier", "usage-limit-exceeded", "usage_limit_exceeded",
+		"rolling 24", "rolling window", "免费额度", "免费用量",
+	} {
+		if strings.Contains(low, p) {
 			return true
 		}
 	}
