@@ -69,11 +69,16 @@ const selectedKey = computed(() => readyKeys.value.find(key => key.id === config
 const selectedLocalTarget = computed(() => availableLocalTargets.value.find(target => target.group_id === config.value.local_group_id && target.api_key_id === config.value.local_api_key_id))
 const selectedGroup = computed(() => props.remoteGroups.find(group => group.id === selectedKey.value?.remote_group_id))
 const usingCandidateModels = computed(() => !!selectedGroup.value && !selectedGroup.value.models?.length)
-// OpenAI monitoring offers only GPT releases newer than 6.0; GPT-6 and older
-// numeric versions are hidden. Unversioned aliases stay, and a saved policy
-// keeps its own model.
+// OpenAI monitoring offers GPT releases newer than 6.0 plus GPT-6 Astra. Plain
+// GPT-6, its other variants, older numeric versions and the Codex review
+// helper are hidden. A saved policy keeps its own model.
+const offeredOpenAIExceptions = new Set(['gpt-6-astra'])
+const hiddenOpenAIExact = new Set(['codex-auto-review'])
 function hiddenOpenAIModel(model: string) {
-  const version = model.trim().toLowerCase().match(/^gpt-(\d+)(?:\.(\d+))?(?:-|$)/)
+  const name = model.trim().toLowerCase()
+  if (offeredOpenAIExceptions.has(name)) return false
+  if (hiddenOpenAIExact.has(name)) return true
+  const version = name.match(/^gpt-(\d+)(?:\.(\d+))?(?:-|$)/)
   if (!version) return false
   const major = Number(version[1]), minor = Number(version[2] || 0)
   return major < 6 || (major === 6 && minor === 0)

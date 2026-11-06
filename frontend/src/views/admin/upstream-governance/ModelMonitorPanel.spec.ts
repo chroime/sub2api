@@ -92,14 +92,15 @@ describe('model monitoring configuration and persistent work', () => {
     expect(api.savePolicy).toHaveBeenCalledWith(1, expect.objectContaining({ id: 0, enabled: true, interval_minutes: 60, daily_request_limit: 12 }))
     expect(api.startBatch).not.toHaveBeenCalled()
   })
-  it('offers only OpenAI releases newer than GPT-6 and keeps unversioned aliases', async () => {
+  it('offers OpenAI releases newer than GPT-6 plus GPT-6 Astra, without the Codex review helper', async () => {
     const wrapper = mount(ModelMonitorPanel, { global: { stubs: { teleport: true, transition: false } }, props: { siteId: 1, remoteGroups: [{ ...modelGroup, models: [] }], managedKeys: [modelKey] } })
     await flushPromises()
     await wrapper.get('[data-test=model-new]').trigger('click')
     const names = (wrapper.findAllComponents(Select).find(select => select.attributes('data-test') === 'model-name')!.props('options') as { value: string }[]).map(option => option.value)
     expect(names).toContain('gpt-6.1-sol')
-    expect(names).toContain('codex-auto-review')
-    expect(names.filter(name => /^gpt-(?:[0-5](?:[.-]|$)|6(?:-|$))/.test(name))).toEqual([])
+    expect(names).toContain('gpt-6-astra')
+    expect(names).not.toContain('codex-auto-review')
+    expect(names.filter(name => name !== 'gpt-6-astra' && /^gpt-(?:[0-5](?:[.-]|$)|6(?:-|$))/.test(name))).toEqual([])
   })
   it('saves a new policy paused with exact cadence when long-term monitoring is unchecked, and enables it from the list', async () => {
     const wrapper = setup(); await flushPromises(); await wrapper.get('[data-test=model-new]').trigger('click')
