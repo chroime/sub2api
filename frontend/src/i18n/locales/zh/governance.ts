@@ -3,6 +3,8 @@ import balanceNotifications from './balanceNotifications'
 export default {
   balanceNotifications,
   importTemplates: {
+    manageLink: '管理模板',
+    libraryHint: '账户参数模板，导入分组时可一键填入。勾选默认的模板会自动用于新的导入草稿。',
     title: '导入配置模板',
     hint: '复用账户参数。默认模板仅填入未修改的新草稿；载入模板不会创建账户、密钥或发起上游操作。',
     select: '选择导入配置模板',
@@ -41,6 +43,25 @@ export default {
     previewInvalidated: '参数或模板变更，旧预览失效，请重新生成',
     notReady: '先加载模板或明确使用当前参数继续',
   },
+  importParameters: {
+    template: '模板：{name}', custom: '自定义',
+    concurrency: '并发 {n}', priority: '优先级 {n}', quota: '已设配额',
+    modelCount: '{platform} {count} 个模型', allModels: '不限模型',
+    open: '导入参数', done: '完成',
+  },
+  templatesTab: {
+    title: '导入模板',
+    hint: '管理分组导入时使用的模板。在分组密钥中导入时只需选择模板并填入。',
+    importDefaults: '新模板以默认参数为起点；选择已有模板会载入它的参数，修改后点“更新选中模板”保存。',
+  },
+  settingsCard: {
+    configure: '设置',
+    on: '已开启', off: '未开启',
+    fullEvery: '完整采集每 {interval}', fastEvery: '快速观察每 {interval}',
+    pricingEnabled: '{count}/{total} 个分组已启用',
+    recipients: '{count} 位收件人',
+    automationLimits: '连续 {count} 次不可见才暂停 · 涨幅超过 {percent}% 需确认',
+  },
   cadence: {
     seconds: '{n} 秒',
     minutes: '{n} 分钟',
@@ -74,6 +95,7 @@ export default {
   settingsTab: {
     settings: '全局设置',
     records: '发送记录',
+    templates: '导入模板',
   },
   siteHeader: {
     more: '更多操作',
@@ -138,6 +160,8 @@ export default {
     lastSync: '上次采集 {time}',
   },
   modelPicker: {
+    libraryTitle: '模型白名单模板',
+    libraryHint: '按协议保存模型白名单。选择模板即载入其模型，修改后可更新或另存为新模板。',
     unrestricted: '不限',
     upstreamBadge: '上游',
     selectedModels: '已选模型',
@@ -212,6 +236,8 @@ export default {
     sharedHint: '这是当前关联的共享本地分组记录，不能据此认定由本站点触发。', independent: '未提供可靠关联时，各条记录独立展示。', acceptedHint: '“发件服务已接受”不表示通知已进入收件箱。',
     recordId: '记录编号', relatedRecord: '已持久化关联记录', technicalDetails: '记录详情',
     beforeRate: '本地调整前售价倍率', afterRate: '本地调整后售价倍率', upstreamBeforeRate: '上游调整前倍率', upstreamAfterRate: '上游调整后倍率', beforeCost: '处理前成本', afterCost: '处理后观察成本', attempts: '已记录 {count} 次发送失败', sentAt: '发件服务接受时间', read: '记录已读', unread: '记录未读',
+    rateChange: '倍率 {before} → {after}', saleRateChange: '本地售价倍率 {before} → {after}', costChange: '成本 {before} → {after}',
+    titles: { keyRepairPending: '密钥修复待核对', keyRepairManualRequired: '密钥需人工修复', keyRepairAbandoned: '已放弃密钥修复' },
     kinds: { all: '全部记录', event: '采集与运维事件', pricing: '调价处理', notification: '通知投递', unknown: '其他记录' },
     status: { recorded: '已记录', read: '已读（非已解决）', prepared: '已准备，未标记执行', applied: '已应用', protected: '受保护', rejected: '已拒绝', conflict: '状态冲突', failed: '处理失败', pending: '等待发送', sending: '正在发送', accepted: '发件服务已接受', unknown: '结果待确认' },
   },

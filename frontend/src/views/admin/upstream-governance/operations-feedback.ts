@@ -32,6 +32,13 @@ export function operationReasonKey(reason: string): string {
 export function operationsSeverityKey(severity: string): string { return `governance.workbench.severity.${severities.has(severity) ? severity : 'unknown'}` }
 export function targetSection(target: string): OperationsSection | null { return sections.get(target) ?? null }
 export function timelineKindKey(kind: string): string { return `governance.timeline.kinds.${timelineKinds.has(kind) ? kind : 'unknown'}` }
+const keyRepairTitles: Record<string, string> = { key_repair_pending: 'keyRepairPending', key_repair_manual_required: 'keyRepairManualRequired', key_repair_abandoned: 'keyRepairAbandoned' }
+/** Short heading for one timeline row: the event type for events, the record kind otherwise. */
+export function timelineTitleKey(item: { kind: string; reason: string }): string {
+  if (item.kind !== 'event') return timelineKindKey(item.kind)
+  if (keyRepairTitles[item.reason]) return `governance.timeline.titles.${keyRepairTitles[item.reason]}`
+  return `governance.${Object.prototype.hasOwnProperty.call(eventKeys, item.reason) ? eventKeys[item.reason] : 'eventChange'}`
+}
 export function timelineStatusKey(kind: string, status: string): string { return `governance.timeline.status.${timelineStatuses.get(kind)?.get(status) ?? 'unknown'}` }
 export function workbenchKindKey(kind: string): string { return `governance.workbench.kinds.${workbenchKinds.has(kind) ? kind : 'unknown'}` }
 export function workbenchStatusKey(status: string): string { return `governance.workbench.status.${currentStatuses.has(status) ? status : 'unknown'}` }

@@ -8,7 +8,7 @@ vi.mock('vue-i18n', async importOriginal => ({ ...await importOriginal<typeof im
 vi.mock('@/api/admin/upstream-model-monitoring', () => ({ default: { policies: vi.fn(), runs: vi.fn(), stats: vi.fn(), localTargets: vi.fn(), startBatch: vi.fn(), savePolicy: vi.fn(), deletePolicy: vi.fn(), hideRun: vi.fn(), deleteRun: vi.fn(), cancelBatch: vi.fn(), run: vi.fn(), review: vi.fn() } }))
 enableAutoUnmount(afterEach)
 const empty: ModelRunPage = { items: [], total: 0, page: 1, page_size: 20, counts: {} }
-const setup = () => mount(ModelMonitorPanel, { props: { siteId: 1, remoteGroups: [modelGroup], managedKeys: [modelKey] } })
+const setup = () => mount(ModelMonitorPanel, { global: { stubs: { teleport: true, transition: false } }, props: { siteId: 1, remoteGroups: [modelGroup], managedKeys: [modelKey] } })
 describe('model monitoring configuration and persistent work', () => {
   beforeEach(() => { vi.resetAllMocks(); vi.mocked(api.policies).mockResolvedValue([]); vi.mocked(api.runs).mockResolvedValue(empty); vi.mocked(api.stats).mockResolvedValue({ days: 7, groups: [] }); vi.mocked(api.localTargets).mockResolvedValue([]) })
   afterEach(() => { vi.useRealTimers() })
@@ -44,7 +44,7 @@ describe('model monitoring configuration and persistent work', () => {
     expect((wrapper.get('[data-test=model-template-probe]').element as HTMLInputElement).checked).toBe(false)
   })
   it('offers platform-specific text candidates when the upstream group has no model catalog without choosing one automatically', async () => {
-    const wrapper = mount(ModelMonitorPanel, { props: { siteId: 1, remoteGroups: [{ ...modelGroup, models: [] }], managedKeys: [modelKey] } })
+    const wrapper = mount(ModelMonitorPanel, { global: { stubs: { teleport: true, transition: false } }, props: { siteId: 1, remoteGroups: [{ ...modelGroup, models: [] }], managedKeys: [modelKey] } })
     await flushPromises()
     await wrapper.get('[data-test=model-new]').trigger('click')
     const modelSelect = wrapper.findAllComponents(Select).find(select => select.attributes('data-test') === 'model-name')!
@@ -58,7 +58,7 @@ describe('model monitoring configuration and persistent work', () => {
     expect(modelSelect.props('modelValue')).toBe('gpt-5.6')
   })
   it('keeps discovered upstream models authoritative and avoids unrelated platform candidates', async () => {
-    const wrapper = mount(ModelMonitorPanel, { props: { siteId: 1, remoteGroups: [{ ...modelGroup, models: ['upstream-only'] }], managedKeys: [modelKey] } })
+    const wrapper = mount(ModelMonitorPanel, { global: { stubs: { teleport: true, transition: false } }, props: { siteId: 1, remoteGroups: [{ ...modelGroup, models: ['upstream-only'] }], managedKeys: [modelKey] } })
     await flushPromises()
     await wrapper.get('[data-test=model-new]').trigger('click')
     const modelSelect = wrapper.findAllComponents(Select).find(select => select.attributes('data-test') === 'model-name')!
@@ -66,7 +66,7 @@ describe('model monitoring configuration and persistent work', () => {
     expect(wrapper.text()).not.toContain('governance.modelMonitoring.candidateModelsHint')
   })
   it('uses the managed key protocol for fallback candidates', async () => {
-    const wrapper = mount(ModelMonitorPanel, { props: { siteId: 1, remoteGroups: [{ ...modelGroup, platform: 'anthropic', models: [] }], managedKeys: [{ ...modelKey, platform: 'anthropic' }] } })
+    const wrapper = mount(ModelMonitorPanel, { global: { stubs: { teleport: true, transition: false } }, props: { siteId: 1, remoteGroups: [{ ...modelGroup, platform: 'anthropic', models: [] }], managedKeys: [{ ...modelKey, platform: 'anthropic' }] } })
     await flushPromises()
     await wrapper.get('[data-test=model-new]').trigger('click')
     const modelSelect = wrapper.findAllComponents(Select).find(select => select.attributes('data-test') === 'model-name')!
@@ -239,7 +239,7 @@ describe('model monitoring configuration and persistent work', () => {
   })
   it('uses workspace targets for a local-only panel and sends a local-group payload without reloading targets', async () => {
     const localTarget = { group_id: 42, group_name: 'Local fixture', platform: 'openai' as const, api_key_id: 77, api_key_name: 'Local key' }
-    const wrapper = mount(ModelMonitorPanel, { props: { siteId: 99, localOnly: true, localTargets: [localTarget], remoteGroups: [], managedKeys: [] } })
+    const wrapper = mount(ModelMonitorPanel, { global: { stubs: { teleport: true, transition: false } }, props: { siteId: 99, localOnly: true, localTargets: [localTarget], remoteGroups: [], managedKeys: [] } })
     await flushPromises()
     expect(api.localTargets).not.toHaveBeenCalled()
     await wrapper.get('[data-test=model-new]').trigger('click')
@@ -257,7 +257,7 @@ describe('model monitoring configuration and persistent work', () => {
     let finish!: (value: LocalModelTarget[]) => void
     vi.mocked(api.policies).mockResolvedValue([saved])
     vi.mocked(api.localTargets).mockReturnValue(new Promise(resolve => { finish = resolve }))
-    const wrapper = mount(ModelMonitorPanel, { props: { siteId: 99, localOnly: true, remoteGroups: [], managedKeys: [] } })
+    const wrapper = mount(ModelMonitorPanel, { global: { stubs: { teleport: true, transition: false } }, props: { siteId: 99, localOnly: true, remoteGroups: [], managedKeys: [] } })
     await flushPromises()
     await wrapper.get('[data-test=model-policy-edit-8]').trigger('click')
     finish([{ group_id: 1, group_name: 'Other local group', platform: 'openai', api_key_id: 2, api_key_name: 'Other key' }])
@@ -273,7 +273,7 @@ describe('model monitoring configuration and persistent work', () => {
     vi.mocked(api.policies).mockResolvedValue([saved])
     vi.mocked(api.localTargets).mockResolvedValue([])
     vi.mocked(api.savePolicy).mockResolvedValue({ ...saved, enabled: false, version: 5 })
-    const wrapper = mount(ModelMonitorPanel, { props: { siteId: 99, localOnly: true, remoteGroups: [], managedKeys: [] } })
+    const wrapper = mount(ModelMonitorPanel, { global: { stubs: { teleport: true, transition: false } }, props: { siteId: 99, localOnly: true, remoteGroups: [], managedKeys: [] } })
     await flushPromises()
     await wrapper.get('[data-test=model-policy-toggle-8]').trigger('click')
     await flushPromises()
@@ -294,7 +294,7 @@ describe('model monitoring configuration and persistent work', () => {
   it('defaults a new local draft after delayed keys arrive while retaining a manually entered model', async () => {
     let finish!: (value: LocalModelTarget[]) => void
     vi.mocked(api.localTargets).mockReturnValue(new Promise(resolve => { finish = resolve }))
-    const wrapper = mount(ModelMonitorPanel, { props: { siteId: 99, localOnly: true, remoteGroups: [], managedKeys: [] } })
+    const wrapper = mount(ModelMonitorPanel, { global: { stubs: { teleport: true, transition: false } }, props: { siteId: 99, localOnly: true, remoteGroups: [], managedKeys: [] } })
     await flushPromises()
     await wrapper.get('[data-test=model-new]').trigger('click')
     expect(wrapper.find('[data-test=model-key]').exists()).toBe(false)
@@ -310,7 +310,7 @@ describe('model monitoring configuration and persistent work', () => {
   it('keeps a chosen compatible API mode when a local draft receives delayed default targets', async () => {
     let finish!: (value: LocalModelTarget[]) => void
     vi.mocked(api.localTargets).mockReturnValue(new Promise(resolve => { finish = resolve }))
-    const wrapper = mount(ModelMonitorPanel, { props: { siteId: 99, localOnly: true, remoteGroups: [], managedKeys: [] } })
+    const wrapper = mount(ModelMonitorPanel, { global: { stubs: { teleport: true, transition: false } }, props: { siteId: 99, localOnly: true, remoteGroups: [], managedKeys: [] } })
     await flushPromises()
     await wrapper.get('[data-test=model-new]').trigger('click')
     const mode = wrapper.findAllComponents(Select).find(select => select.attributes('data-test') === 'model-mode')!
@@ -321,7 +321,7 @@ describe('model monitoring configuration and persistent work', () => {
     expect(mode.props('modelValue')).toBe('responses')
   })
   it('shows the local empty-key state and keeps the target local even without keys', async () => {
-    const wrapper = mount(ModelMonitorPanel, { props: { siteId: 99, localOnly: true, localTargets: [], remoteGroups: [], managedKeys: [modelKey] } })
+    const wrapper = mount(ModelMonitorPanel, { global: { stubs: { teleport: true, transition: false } }, props: { siteId: 99, localOnly: true, localTargets: [], remoteGroups: [], managedKeys: [modelKey] } })
     await flushPromises()
     expect(wrapper.text()).toContain('governance.modelMonitoring.noLocalKeys')
     await wrapper.get('[data-test=model-manage-keys]').trigger('click')
@@ -334,7 +334,7 @@ describe('model monitoring configuration and persistent work', () => {
   it('keeps an edited missing local key unchanged when workspace targets are refreshed', async () => {
     const saved = { ...modelPolicy, config: { ...modelPolicy.config, target_type: 'local_group' as const, local_group_id: 404, local_api_key_id: 505, managed_key_id: 0 } }
     vi.mocked(api.policies).mockResolvedValue([saved])
-    const wrapper = mount(ModelMonitorPanel, { props: { siteId: 99, localOnly: true, localTargets: [], remoteGroups: [], managedKeys: [] } })
+    const wrapper = mount(ModelMonitorPanel, { global: { stubs: { teleport: true, transition: false } }, props: { siteId: 99, localOnly: true, localTargets: [], remoteGroups: [], managedKeys: [] } })
     await flushPromises()
     await wrapper.get('[data-test=model-policy-edit-8]').trigger('click')
     await wrapper.setProps({ localTargets: [{ group_id: 1, group_name: 'Replacement', platform: 'openai', api_key_id: 2, api_key_name: 'New key' }] })
@@ -347,7 +347,7 @@ describe('model monitoring configuration and persistent work', () => {
   it('ignores targets from an older local workspace after switching scope', async () => {
     let finish!: (value: LocalModelTarget[]) => void
     vi.mocked(api.localTargets).mockReturnValueOnce(new Promise(resolve => { finish = resolve }))
-    const wrapper = mount(ModelMonitorPanel, { props: { siteId: 99, localOnly: true, remoteGroups: [], managedKeys: [] } })
+    const wrapper = mount(ModelMonitorPanel, { global: { stubs: { teleport: true, transition: false } }, props: { siteId: 99, localOnly: true, remoteGroups: [], managedKeys: [] } })
     await wrapper.setProps({ siteId: 1, localOnly: false, remoteGroups: [modelGroup], managedKeys: [modelKey] })
     await flushPromises()
     finish([{ group_id: 42, group_name: 'Late local fixture', platform: 'openai', api_key_id: 77, api_key_name: 'Local key' }])
@@ -361,7 +361,7 @@ describe('model monitoring configuration and persistent work', () => {
     vi.mocked(api.policies).mockResolvedValue([saved])
     vi.mocked(api.localTargets).mockReturnValue(new Promise(() => {}))
     vi.mocked(api.savePolicy).mockResolvedValue({ ...saved, enabled: false, version: 5 })
-    const wrapper = mount(ModelMonitorPanel, { props: { siteId: 99, localOnly: true, remoteGroups: [], managedKeys: [] } })
+    const wrapper = mount(ModelMonitorPanel, { global: { stubs: { teleport: true, transition: false } }, props: { siteId: 99, localOnly: true, remoteGroups: [], managedKeys: [] } })
     await flushPromises()
     await wrapper.get('[data-test=model-policy-toggle-8]').trigger('click')
     await flushPromises()

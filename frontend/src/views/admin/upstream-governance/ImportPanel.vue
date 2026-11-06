@@ -49,7 +49,7 @@ const props = defineProps<{
     rate_multiplier: number
   }[]
 }>()
-const emit = defineEmits<{ applied: []; busy: [value: boolean]; manageKeys: [selections: KeySelection[]] }>()
+const emit = defineEmits<{ applied: []; busy: [value: boolean]; manageKeys: [selections: KeySelection[]]; manageTemplates: [] }>()
 const { t } = useI18n()
 type GroupChoice = Omit<Selection, 'platform' | 'local_group_id' | 'local_group_ids'> & {
   selected: boolean
@@ -74,6 +74,8 @@ const config = ref(defaultImportConfig()),
 const modelSelections = ref<ModelSelections>(defaultModelSelections())
 const editedModels = ref<Transport[]>([])
 const draftMessage = ref('')
+// The template whose parameters fill the draft; cleared by hand edits.
+const templateName = ref('')
 const draftScope = computed(() => JSON.stringify([props.siteId, props.siteBaseUrl, props.sitePlatform ?? '', props.snapshot.catalog.account?.user_id ?? null]))
 const templateSettings = computed(() => importTemplateSettings(config.value, quotaEnabled.value))
 const templatePristine = computed(() => !accountTouched.value && !preview.value && !busy.value && !applying.value)
@@ -125,6 +127,7 @@ watch(
       editedModels.value = []
       draftMessage.value = ''
       accountTouched.value = false
+      templateName.value = ''
       templatesReady.value = false
       templateBusy.value = false
     } else {
@@ -158,6 +161,7 @@ function invalidateDraftPreview(notify = false) {
 function updateAccountConfig(value: ImportAccountConfig) {
   if (working.value || props.disabled) return
   accountTouched.value = true
+  templateName.value = ''
   const hadPreview = !!preview.value
   config.value = value
   invalidateDraftPreview(hadPreview)
@@ -165,6 +169,7 @@ function updateAccountConfig(value: ImportAccountConfig) {
 function updateQuotaEnabled(value: boolean) {
   if (working.value || props.disabled) return
   accountTouched.value = true
+  templateName.value = ''
   const hadPreview = !!preview.value
   quotaEnabled.value = value
   invalidateDraftPreview(hadPreview)
@@ -273,6 +278,8 @@ function remap() {
 async function prepare() {
   if (working.value || props.disabled || !selected.value.length) return
   if (!templatesReady.value) { error.value = t('governance.importTemplates.notReady'); return }
+  // The parameter inputs live in a dialog outside this form, so check them here.
+  if (!validImportTemplateSettings(templateSettings.value)) { error.value = t('governance.importTemplates.invalidSettings'); return }
   if (
     unresolved.value.length ||
     selected.value.some(
@@ -379,17 +386,6 @@ const catalogWarnings: Record<string, string> = {
         {{ formatGovernanceTime(snapshot.created_at) }}</span
       >
     </div>
-    <ImportTemplatePanel
-      :key="draftScope"
-      :scope-key="draftScope"
-      :settings="templateSettings"
-      :pristine="templatePristine"
-      :disabled="working || disabled"
-      @apply="applyTemplate"
-      @changed="invalidateDraftPreview(true)"
-      @ready="templatesReady = $event"
-      @busy="templateBusy = $event"
-    />
     <details
       v-if="snapshot.catalog.warnings?.length"
       class="rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-xs text-amber-800 dark:border-amber-800/50 dark:bg-amber-900/10 dark:text-amber-300"
@@ -427,6 +423,39 @@ const catalogWarnings: Record<string, string> = {
       {{ error }}
     </p>
     <form v-show="!preview" class="space-y-4" @submit.prevent="prepare">
+      <ImportSettingsPanel
+        :models-key="draftScope + ':' + snapshot.id"
+        :config="config"
+        :models="modelSelections"
+        :quota-enabled="quotaEnabled"
+        :groups="resolvedGroups"
+        :preserve-models="editedModels"
+        :template-name="templateName"
+        :disabled="working || disabled"
+        @ready="modelsReady = $event"
+        @model-edited="preserveModelDraft"
+        @update:config="updateAccountConfig"
+        @update:models="updateModelSelections"
+        @update:quota-enabled="updateQuotaEnabled"
+        @manage="emit('manageTemplates')"
+      >
+        <template #template="{ manage }">
+        <ImportTemplatePanel
+          variant="picker"
+          :key="draftScope"
+          :scope-key="draftScope"
+          :settings="templateSettings"
+          :pristine="templatePristine"
+          :disabled="working || disabled"
+          @apply="applyTemplate"
+          @changed="invalidateDraftPreview(true)"
+          @ready="templatesReady = $event"
+          @busy="templateBusy = $event"
+          @template="templateName = $event"
+          @manage="manage"
+        />
+        </template>
+      </ImportSettingsPanel>
       <fieldset :disabled="working || disabled" class="min-w-0 space-y-3">
         <div class="flex flex-wrap items-center gap-3">
           <div class="relative min-w-48 flex-1">
@@ -704,20 +733,6 @@ const catalogWarnings: Record<string, string> = {
           </table>
         </div>
       </fieldset>
-      <ImportSettingsPanel
-        :key="draftScope + ':' + snapshot.id"
-        :config="config"
-        :models="modelSelections"
-        :quota-enabled="quotaEnabled"
-        :groups="resolvedGroups"
-        :preserve-models="editedModels"
-        :disabled="working || disabled"
-        @ready="modelsReady = $event"
-        @model-edited="preserveModelDraft"
-        @update:config="updateAccountConfig"
-        @update:models="updateModelSelections"
-        @update:quota-enabled="updateQuotaEnabled"
-      />
       <div
         class="flex flex-wrap items-center gap-3 rounded-xl border border-primary-100 bg-primary-50/50 p-4 dark:border-primary-900/40 dark:bg-primary-900/10"
       >

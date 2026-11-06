@@ -37,13 +37,13 @@ const platformName = (site: Site) => site.platform === 'sub2api' ? 'Sub2API' : '
 const platformLogo = (site: Site) => site.platform === 'sub2api' ? sub2apiLogo : newapiLogo
 
 const usd = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 })
-const compact = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 })
+const compactNumber = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 })
 // New API quota is not a currency, so it is never converted; it is only
 // abbreviated and labelled with its unit.
 function balanceText(balance: SiteBalance): string {
   if (balance.unit === 'usd') return usd.format(balance.amount)
   const unit = balance.unit === 'quota' ? ` ${t('governance.siteRail.quotaUnit')}` : balance.unit ? ` ${balance.unit}` : ''
-  return compact.format(balance.amount) + unit
+  return compactNumber.format(balance.amount) + unit
 }
 function balanceClass(site: Site): string {
   if ((site.balance?.amount ?? 0) < 0) return 'text-red-600 dark:text-red-400'

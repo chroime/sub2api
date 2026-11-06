@@ -2,13 +2,14 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Select from '@/components/common/Select.vue'
-import Icon from '@/components/icons/Icon.vue'
 import api, {
   type ObservationPolicy, type PricingMode, type PricingPoliciesConfiguration,
   type PricingPolicy, type PricingPolicyDraft, type PricingPolicyPreview, type PricingSource,
 } from '@/api/admin/upstream-governance'
 import { formatGovernanceTime, formatGovernanceRate } from './format'
 import { pricingFeedback, pricingStatusKey, observationStatusKey } from './pricing-feedback'
+import { intervalText } from './cadence'
+import SettingsCard from './SettingsCard.vue'
 
 // section picks which part to show: the collection cadence (automation page)
 // or the group pricing policies and their notifications (pricing page).
@@ -37,6 +38,11 @@ const error = ref('')
 const errorReason = ref('')
 const saved = ref('')
 const invalidated = ref(new Set<number>())
+// Each settings block is a summary card whose form opens in a dialog.
+const observationOpen = ref(false), pricingOpen = ref(false), notificationsOpen = ref(false)
+const messageText = computed(() => errorReason.value ? `${t(failure.value.titleKey)} ${t(failure.value.detailKey)}` : error.value)
+const enabledPricingCount = computed(() => pricing.value?.policies.filter(row => row.enabled).length ?? 0)
+const notificationEvents = computed(() => (['group_changes', 'rate_changes', 'pricing_changes', 'protection_changes'] as const).filter(key => pricing.value?.notifications[key]))
 let generation = 0
 
 const busy = computed(() => loading.value || previewing.value !== null || savingObservation.value || savingPricing.value !== null || savingNotifications.value)
@@ -139,6 +145,7 @@ async function saveObservation() {
     observationDraft.value = cadence(value.policy)
     clearPreviews()
     saved.value = 'governance.reliability.observationSaved'
+    observationOpen.value = false
     emit('observation-saved', value)
   } catch (e) { if (request === generation) reportFailure(e) }
   finally { if (request === generation) { savingObservation.value = false; emit('busy', false) } }
@@ -204,6 +211,7 @@ async function saveNotifications() {
     if (request !== generation) return
     mergePricing(value, undefined, true)
     saved.value = 'governance.reliability.notificationsSaved'
+    notificationsOpen.value = false
     emit('pricing-saved', value)
   } catch (e) {
     if (request === generation) {
@@ -252,7 +260,7 @@ onUnmounted(() => { generation++; emit('busy', false) })
 </script>
 
 <template>
-  <div class="space-y-5" data-test="observation-pricing-panel">
+  <div class="space-y-4" data-test="observation-pricing-panel">
     <div v-if="error || errorReason" role="alert" class="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900 dark:bg-red-900/10 dark:text-red-200">
       <template v-if="errorReason"><p class="font-semibold">{{ t(failure.titleKey) }}</p><p class="mt-1">{{ t(failure.detailKey) }}</p><p class="mt-2">{{ t(failure.actionKey) }}</p><button class="mt-3 underline underline-offset-2 disabled:opacity-50" type="button" :disabled="busy || props.disabled" @click="load(true)">{{ t('common.refresh') }}</button></template>
       <p v-else>{{ error }}</p>
@@ -260,9 +268,17 @@ onUnmounted(() => { generation++; emit('busy', false) })
     <p v-if="saved" role="status" class="rounded-xl border border-primary-100 bg-primary-50 p-3 text-sm text-primary-800 dark:border-primary-900/40 dark:bg-primary-900/10 dark:text-primary-300">{{ t(saved) }}</p>
     <p v-if="loading" role="status" class="rounded-xl border border-dashed border-gray-200 p-5 text-sm text-gray-500 dark:border-dark-600">{{ t('common.loading') }}</p>
 
-    <section v-if="observationDraft && section !== 'pricing'" class="rounded-xl border border-gray-200 p-4 dark:border-dark-600 sm:p-5">
-      <div class="flex flex-wrap items-start justify-between gap-3"><div><h3 class="font-semibold">{{ t('governance.observationPolicyTitle') }}</h3><p class="mt-1 text-sm text-gray-500">{{ t('governance.observationPolicyHint') }}</p></div><span class="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium dark:bg-dark-700">{{ t(observation?.policy.enabled ? 'governance.observationOn' : 'governance.observationOff') }}</span></div>
-      <form data-test="observation-form" class="mt-5 space-y-4" @submit.prevent="saveObservation">
+    <SettingsCard v-if="observationDraft && section !== 'pricing'" v-model:open="observationOpen" test-id="observation-card" :title="t('governance.observationPolicyTitle')" :status="t(observation?.policy.enabled ? 'governance.observationOn' : 'governance.observationOff')" :tone="observation?.policy.enabled ? 'on' : 'off'" :disabled="busy || props.disabled" :busy="busy" :error="observationOpen ? messageText : ''" width="normal">
+      <p data-test="observation-summary" class="text-gray-700 dark:text-gray-200">{{ t('governance.settingsCard.fullEvery', { interval: intervalText(observation?.policy.full_interval_seconds || 0, t) }) }}<template v-if="observation?.policy.enabled"> · {{ t('governance.settingsCard.fastEvery', { interval: intervalText(observation.policy.fast_interval_seconds, t) }) }}</template></p>
+          <div class="mt-3 grid gap-3 rounded-lg bg-gray-50 p-3 text-xs text-gray-500 dark:bg-dark-900 sm:grid-cols-3">
+            <p>{{ t('governance.lastFastObservation') }}<strong class="mt-1 block font-medium text-gray-700 dark:text-gray-200">{{ formatGovernanceTime(observation?.status?.last_fast_observed_at) }}</strong></p>
+            <p>{{ t('governance.nextFastObservation') }}<strong class="mt-1 block font-medium text-gray-700 dark:text-gray-200">{{ formatGovernanceTime(observation?.status?.next_fast_observation_at) }}</strong></p>
+            <p>{{ t('governance.observationStatus') }}<strong class="mt-1 block font-medium text-gray-700 dark:text-gray-200">{{ t(observationStatusKey(observation?.status?.fast_observe_status || '')) }}</strong></p>
+          </div>
+          <div v-if="observation?.status?.fast_observe_error" data-test="observation-error" class="rounded-lg bg-amber-50 p-3 text-xs leading-relaxed text-amber-800 dark:bg-amber-900/20 dark:text-amber-300"><p class="font-semibold">{{ t(pricingFeedback(observation.status.fast_observe_error).titleKey) }}</p><p class="mt-1">{{ t(pricingFeedback(observation.status.fast_observe_error).detailKey) }}</p><p class="mt-2">{{ t(pricingFeedback(observation.status.fast_observe_error).actionKey) }}</p></div>
+      <template #form>
+        <p class="text-sm text-gray-500">{{ t('governance.observationPolicyHint') }}</p>
+      <form data-test="observation-form" class="space-y-4" @submit.prevent="saveObservation">
         <fieldset :disabled="busy || props.disabled" class="space-y-4">
           <label class="governance-checkbox-label flex items-center gap-3 rounded-lg bg-gray-50 p-3 text-sm font-medium dark:bg-dark-900"><input v-model="observationDraft.enabled" data-test="observation-enabled" type="checkbox" class="governance-checkbox" />{{ t('governance.enableSecondObservation') }}</label>
           <div class="grid gap-4 sm:grid-cols-2">
@@ -270,21 +286,26 @@ onUnmounted(() => { generation++; emit('busy', false) })
             <label class="text-sm">{{ t('governance.fullCollectionInterval') }}<div class="mt-1 flex items-center gap-2"><input v-model.number="observationDraft.full_interval_seconds" data-test="full-interval-seconds" class="input w-full" type="number" min="1" step="1" required /><span class="text-xs text-gray-500">{{ t('governance.seconds') }}</span></div></label>
           </div>
           <p class="text-xs leading-relaxed text-gray-500">{{ t('governance.reliability.observationScopeHint') }}</p>
-          <div class="grid gap-3 rounded-lg bg-gray-50 p-3 text-xs text-gray-500 dark:bg-dark-900 sm:grid-cols-3">
-            <p>{{ t('governance.lastFastObservation') }}<strong class="mt-1 block font-medium text-gray-700 dark:text-gray-200">{{ formatGovernanceTime(observation?.status?.last_fast_observed_at) }}</strong></p>
-            <p>{{ t('governance.nextFastObservation') }}<strong class="mt-1 block font-medium text-gray-700 dark:text-gray-200">{{ formatGovernanceTime(observation?.status?.next_fast_observation_at) }}</strong></p>
-            <p>{{ t('governance.observationStatus') }}<strong class="mt-1 block font-medium text-gray-700 dark:text-gray-200">{{ t(observationStatusKey(observation?.status?.fast_observe_status || '')) }}</strong></p>
-          </div>
-          <div v-if="observation?.status?.fast_observe_error" data-test="observation-error" class="rounded-lg bg-amber-50 p-3 text-xs leading-relaxed text-amber-800 dark:bg-amber-900/20 dark:text-amber-300"><p class="font-semibold">{{ t(pricingFeedback(observation.status.fast_observe_error).titleKey) }}</p><p class="mt-1">{{ t(pricingFeedback(observation.status.fast_observe_error).detailKey) }}</p><p class="mt-2">{{ t(pricingFeedback(observation.status.fast_observe_error).actionKey) }}</p></div>
           <button data-test="save-observation" class="btn btn-primary" type="submit">{{ t('common.save') }}</button>
         </fieldset>
       </form>
-    </section>
+      </template>
+    </SettingsCard>
 
-    <section v-if="pricingDraft && section !== 'observation'" class="rounded-xl border border-gray-200 p-4 dark:border-dark-600 sm:p-5">
-      <div class="flex items-start justify-between gap-3"><div><h3 class="font-semibold">{{ t('governance.pricingProtectionTitle') }}</h3><p class="mt-1 text-sm text-gray-500">{{ t('governance.reliability.pricingScopeHint') }}</p></div><Icon name="shield" size="md" class="shrink-0 text-primary-600" /></div>
-      <p v-if="!pricingRows.length" class="mt-4 rounded-lg border border-dashed border-gray-200 p-4 text-sm text-gray-500 dark:border-dark-600">{{ t('governance.noPricingPolicies') }}</p>
-      <article v-for="row in pricingRows" :key="row.local_group_id" class="mt-4 rounded-xl border border-gray-200 p-4 dark:border-dark-600" :data-test="`pricing-row-${row.local_group_id}`">
+    <SettingsCard v-if="pricingDraft && section !== 'observation'" v-model:open="pricingOpen" test-id="pricing-card" :title="t('governance.pricingProtectionTitle')" :status="t('governance.settingsCard.pricingEnabled', { count: enabledPricingCount, total: pricing?.policies.length ?? 0 })" :tone="enabledPricingCount ? 'on' : 'off'" :disabled="busy || props.disabled" :busy="busy" :error="pricingOpen ? messageText : ''" :notice="pricingOpen && saved ? t(saved) : ''" width="extra-wide">
+      <p v-if="!pricing?.policies.length" class="text-gray-500">{{ t('governance.noPricingPolicies') }}</p>
+      <ul v-else data-test="pricing-summary" class="divide-y divide-gray-100 text-xs dark:divide-dark-700">
+        <li v-for="row in pricing.policies" :key="row.local_group_id" class="flex flex-wrap items-center gap-x-3 gap-y-1 py-1.5">
+          <span class="min-w-0 flex-1 truncate text-sm font-medium">{{ row.local_group_name }}</span>
+          <span class="tabular-nums text-gray-500">{{ t('governance.currentCost') }} {{ formatGovernanceRate(row.current_cost) }}</span>
+          <span class="tabular-nums text-gray-500">{{ t('governance.currentSale') }} {{ formatGovernanceRate(row.current_sale) }}</span>
+          <span class="rounded-full px-2 py-0.5" :class="row.protected ? 'bg-amber-50 text-amber-800 dark:bg-amber-900/20 dark:text-amber-300' : 'bg-gray-100 text-gray-600 dark:bg-dark-700 dark:text-gray-300'">{{ t(pricingStatusKey(row)) }}</span>
+        </li>
+      </ul>
+      <template #form>
+        <p class="text-sm text-gray-500">{{ t('governance.reliability.pricingScopeHint') }}</p>
+      <p v-if="!pricingRows.length" class="rounded-lg border border-dashed border-gray-200 p-4 text-sm text-gray-500 dark:border-dark-600">{{ t('governance.noPricingPolicies') }}</p>
+      <article v-for="row in pricingRows" :key="row.local_group_id" class="mt-4 rounded-xl border border-gray-200 p-4 first-of-type:mt-0 dark:border-dark-600" :data-test="`pricing-row-${row.local_group_id}`">
         <header class="flex flex-wrap items-start gap-3">
           <div class="min-w-0 flex-1"><h4 class="break-words font-semibold">{{ row.local_group_name }}</h4><p class="mt-1 break-words text-xs text-gray-500">{{ t('governance.pricingSources') }}：{{ row.sources.map(sourceLabel).join('、') || t('governance.unknown') }}</p></div>
           <span :data-test="`pricing-status-${row.local_group_id}`" class="rounded-full px-2.5 py-1 text-xs" :class="currentStatus(row).protected ? 'bg-amber-50 text-amber-800 dark:bg-amber-900/20 dark:text-amber-300' : 'bg-gray-100 text-gray-600 dark:bg-dark-700 dark:text-gray-300'">{{ t(pricingStatusKey(currentStatus(row))) }}</span>
@@ -324,12 +345,16 @@ onUnmounted(() => { generation++; emit('busy', false) })
         </section>
         <details class="mt-3 text-xs text-gray-500"><summary class="cursor-pointer">{{ t('governance.reliability.technicalDetails') }}</summary><p class="mt-2 break-all">{{ currentStatus(row).protection_reason || '—' }}</p><ul class="mt-2 space-y-2"><li v-for="source in (previews[row.local_group_id]?.sources || row.sources)" :key="source.source_id" class="break-words"><span>{{ sourceLabel(source) }} · {{ source.eligible && source.comparable && !source.unknown ? formatGovernanceRate(source.cost) : t(source.eligible ? 'governance.reliability.sourceNotComparable' : 'governance.reliability.sourceExcluded') }}</span><span class="ml-2">{{ formatGovernanceTime(source.observed_at) }}</span></li></ul></details>
       </article>
-    </section>
+      </template>
+    </SettingsCard>
 
-    <section v-if="pricingDraft && section !== 'observation'" class="rounded-xl border border-gray-200 p-4 dark:border-dark-600 sm:p-5">
-      <div><h3 class="font-semibold">{{ t('governance.pricingNotificationsTitle') }}</h3><p class="mt-1 text-sm text-gray-500">{{ t('governance.pricingNotificationsHint') }}</p></div>
-      <div v-if="notificationConflict" role="alert" class="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-900/10 dark:text-amber-200"><p>{{ t('governance.reliability.notificationConflict') }}</p><p class="mt-2 text-xs">{{ t('governance.reliability.reloadNotificationsHint') }}</p><button data-test="reload-notifications" class="btn btn-secondary mt-3 text-sm" type="button" :disabled="busy || props.disabled" @click="reloadNotifications">{{ t('governance.reliability.reloadNotifications') }}</button></div>
-      <form data-test="notification-form" class="mt-4 space-y-4" @submit.prevent="saveNotifications"><fieldset :disabled="busy || props.disabled" class="space-y-4"><label class="governance-checkbox-label flex items-center gap-3 rounded-lg bg-gray-50 p-3 text-sm font-medium dark:bg-dark-900"><input v-model="pricingDraft.notifications.enabled" data-test="notification-enabled" type="checkbox" class="governance-checkbox" />{{ t('governance.enablePricingNotifications') }}</label><div class="grid gap-3 sm:grid-cols-2"><label v-for="key in (['group_changes', 'rate_changes', 'pricing_changes', 'protection_changes'] as const)" :key="key" class="governance-checkbox-label flex items-center gap-2 text-sm"><input v-model="pricingDraft.notifications[key]" type="checkbox" class="governance-checkbox" />{{ t(`governance.notification_${key}`) }}</label></div><label class="block text-sm">{{ t('governance.notificationRecipients') }}<textarea :value="pricingDraft.notifications.recipients.join('\n')" data-test="notification-recipients" class="input mt-1 min-h-24 w-full" :placeholder="t('governance.emailRecipientsPlaceholder')" @input="pricingDraft.notifications.recipients = ($event.target as HTMLTextAreaElement).value.split(/[\n,]/)" /></label><button class="btn btn-primary" type="submit">{{ t('common.save') }}</button></fieldset></form>
-    </section>
+    <SettingsCard v-if="pricingDraft && section !== 'observation'" v-model:open="notificationsOpen" test-id="pricing-notifications-card" :title="t('governance.pricingNotificationsTitle')" :status="t(pricing?.notifications.enabled ? 'governance.settingsCard.on' : 'governance.settingsCard.off')" :tone="pricing?.notifications.enabled ? 'on' : 'off'" :disabled="busy || props.disabled" :busy="busy" :error="notificationsOpen ? messageText : ''">
+      <p data-test="pricing-notifications-summary" class="text-gray-700 dark:text-gray-200">{{ t('governance.settingsCard.recipients', { count: pricing?.notifications.recipients.length ?? 0 }) }}<template v-if="notificationEvents.length"> · {{ notificationEvents.map(key => t(`governance.notification_${key}`)).join('、') }}</template></p>
+      <template #form>
+        <p class="text-sm text-gray-500">{{ t('governance.pricingNotificationsHint') }}</p>
+      <div v-if="notificationConflict" role="alert" class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-900/10 dark:text-amber-200"><p>{{ t('governance.reliability.notificationConflict') }}</p><p class="mt-2 text-xs">{{ t('governance.reliability.reloadNotificationsHint') }}</p><button data-test="reload-notifications" class="btn btn-secondary mt-3 text-sm" type="button" :disabled="busy || props.disabled" @click="reloadNotifications">{{ t('governance.reliability.reloadNotifications') }}</button></div>
+      <form data-test="notification-form" class="space-y-4" @submit.prevent="saveNotifications"><fieldset :disabled="busy || props.disabled" class="space-y-4"><label class="governance-checkbox-label flex items-center gap-3 rounded-lg bg-gray-50 p-3 text-sm font-medium dark:bg-dark-900"><input v-model="pricingDraft.notifications.enabled" data-test="notification-enabled" type="checkbox" class="governance-checkbox" />{{ t('governance.enablePricingNotifications') }}</label><div class="grid gap-3 sm:grid-cols-2"><label v-for="key in (['group_changes', 'rate_changes', 'pricing_changes', 'protection_changes'] as const)" :key="key" class="governance-checkbox-label flex items-center gap-2 text-sm"><input v-model="pricingDraft.notifications[key]" type="checkbox" class="governance-checkbox" />{{ t(`governance.notification_${key}`) }}</label></div><label class="block text-sm">{{ t('governance.notificationRecipients') }}<textarea :value="pricingDraft.notifications.recipients.join('\n')" data-test="notification-recipients" class="input mt-1 min-h-24 w-full" :placeholder="t('governance.emailRecipientsPlaceholder')" @input="pricingDraft.notifications.recipients = ($event.target as HTMLTextAreaElement).value.split(/[\n,]/)" /></label><button class="btn btn-primary" type="submit">{{ t('common.save') }}</button></fieldset></form>
+      </template>
+    </SettingsCard>
   </div>
 </template>

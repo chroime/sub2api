@@ -25,28 +25,47 @@ describe('factual operations timeline', () => {
     vi.mocked(api.timeline).mockResolvedValue(structuredClone(page))
   })
 
-  it('reads real records with UTC+8 and clean rate values, without treating read as resolved', async () => {
+  it('opens on operations events and compacts each into time, event type, group and change', async () => {
     const wrapper = render({ siteId: 4, disabled: true })
     await flushPromises()
-    expect(api.timeline).toHaveBeenCalledWith(4, { kind: 'all', page: 1, page_size: 20 })
-    expect(wrapper.text()).toContain('2026-10-01 09:02:03')
-    expect(wrapper.text()).toContain('【Claude】')
-    expect(wrapper.text()).toContain('0.03')
-    expect(wrapper.text()).not.toContain('0.030000000')
-    expect(wrapper.text()).toContain('非已解决')
-    expect(wrapper.find('[data-test=timeline-related]').exists()).toBe(false)
-    expect(wrapper.text()).toContain('上游调整前倍率')
-    expect(wrapper.text()).toContain('上游调整后倍率')
-    expect(wrapper.text()).not.toContain('本地调整前售价倍率')
+    expect(api.timeline).toHaveBeenCalledWith(4, { kind: 'event', page: 1, page_size: 20 })
+    const record = wrapper.get('[data-test=timeline-record]')
+    expect(record.text()).toContain('2026-10-01 09:02:03')
+    expect(record.text()).toContain('上游倍率变更')
+    expect(record.text()).toContain('【Claude】')
+    expect(record.get('[data-test=timeline-change]').text()).toBe('倍率 0.03 → 0.04')
+    expect(record.text()).not.toContain('0.030000000')
+    // Internal record ids, status codes and the read marker are not shown.
+    expect(wrapper.find('details').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('记录编号')
+    expect(wrapper.text()).not.toContain('已读')
+    expect(wrapper.find('[data-test=timeline-record-status]').exists()).toBe(false)
+  })
+
+  it('names an event group from the collected catalog when the record only has its id', async () => {
+    vi.mocked(api.timeline).mockResolvedValue({ ...page, items: [{ ...item, reason: 'price_changed', resource_id: '74', resource_name: '', before_rate: null, after_rate: null }] })
+    const wrapper = mount(GovernanceTimeline, { props: { siteId: 4, remoteGroups: [{ id: '74', name: 'Claude Max' }] }, global: { plugins: [createI18n({ legacy: false, locale: 'zh', messages: { zh: { governance: zh } } })] } })
+    await flushPromises()
+    expect(wrapper.text()).toContain('【Claude Max】')
+    expect(wrapper.text()).not.toContain('资源 #74')
+  })
+
+  it('falls back to the reason when an event carries no measured change', async () => {
+    vi.mocked(api.timeline).mockResolvedValue({ ...page, items: [{ ...item, reason: 'sync_failed', resource_id: '', resource_name: '', before_rate: null, after_rate: null }] })
+    const wrapper = render()
+    await flushPromises()
+    expect(wrapper.text()).toContain('目录采集失败')
+    expect(wrapper.text()).toContain('站点范围')
+    // The heading already names it, so no second line repeats it.
+    expect(wrapper.find('[data-test=timeline-change]').exists()).toBe(false)
   })
 
   it('labels applied pricing values as local sale multipliers rather than upstream rates', async () => {
     vi.mocked(api.timeline).mockResolvedValue({ ...page, items: [{ ...item, kind: 'pricing', status: 'applied', reason: 'increase', acknowledged: null }] })
     const wrapper = render()
     await flushPromises()
-    expect(wrapper.text()).toContain('本地调整前售价倍率')
-    expect(wrapper.text()).toContain('本地调整后售价倍率')
-    expect(wrapper.text()).not.toContain('上游调整前倍率')
+    expect(wrapper.get('[data-test=timeline-change]').text()).toBe('本地售价倍率 0.03 → 0.04')
+    expect(wrapper.get('[data-test=timeline-record-status]').text()).toBe('已应用')
   })
 
   it('labels accepted mail as sender acceptance rather than inbox delivery', async () => {
@@ -54,7 +73,6 @@ describe('factual operations timeline', () => {
     const wrapper = render()
     await flushPromises()
     expect(wrapper.get('[data-test=timeline-record-status]').text()).toBe('发件服务已接受')
-    expect(wrapper.text()).toContain('不表示通知已进入收件箱')
     expect(wrapper.text()).toContain('2 次发送失败')
   })
 
@@ -72,8 +90,7 @@ describe('factual operations timeline', () => {
     const wrapper = render()
     await flushPromises()
     expect(wrapper.text()).toContain('不能据此认定由本站点触发')
-    expect(wrapper.text()).toContain('不能当作零成本')
-    expect(wrapper.find('[data-test=timeline-related]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('受保护')
   })
 
   it('uses server-side filters and resets the page when the category changes', async () => {
@@ -82,7 +99,7 @@ describe('factual operations timeline', () => {
     await flushPromises()
     await wrapper.get('[data-test=timeline-next]').trigger('click')
     await flushPromises()
-    expect(api.timeline).toHaveBeenLastCalledWith(4, { kind: 'all', page: 2, page_size: 20 })
+    expect(api.timeline).toHaveBeenLastCalledWith(4, { kind: 'event', page: 2, page_size: 20 })
     wrapper.getComponent(Select).vm.$emit('update:modelValue', 'notification')
     await flushPromises()
     expect(api.timeline).toHaveBeenLastCalledWith(4, { kind: 'notification', page: 1, page_size: 20 })
@@ -100,7 +117,7 @@ describe('factual operations timeline', () => {
       .mockResolvedValueOnce({ ...page, page: 1, total, items: total ? [item] : [] })
     await wrapper.get('[data-test=timeline-refresh]').trigger('click')
     await flushPromises()
-    expect(api.timeline).toHaveBeenLastCalledWith(4, { kind: 'all', page: 1, page_size: 20 })
+    expect(api.timeline).toHaveBeenLastCalledWith(4, { kind: 'event', page: 1, page_size: 20 })
     expect(wrapper.findAll('[data-test=timeline-record]')).toHaveLength(total ? 1 : 0)
     expect(wrapper.find('[data-test=timeline-empty]').exists()).toBe(total === 0)
   })
@@ -126,7 +143,7 @@ describe('factual operations timeline', () => {
     resolve(page)
     await flushPromises()
     expect(wrapper.findAll('[data-test=timeline-record]')).toHaveLength(0)
-    expect(api.timeline).toHaveBeenLastCalledWith(9, { kind: 'all', page: 1, page_size: 20 })
+    expect(api.timeline).toHaveBeenLastCalledWith(9, { kind: 'event', page: 1, page_size: 20 })
     expect(wrapper.get('[data-test=timeline-empty]').text()).toContain('没有记录不代表已执行')
     wrapper.unmount()
   })

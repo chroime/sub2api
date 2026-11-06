@@ -9,14 +9,23 @@ import api, {
 } from '@/api/admin/upstream-import-templates'
 import { validImportTemplateSettings } from './import-templates'
 
-const props = defineProps<{
+// full: pick, fill and manage in one place. picker: the import dialog, which
+// only picks and fills; templates are managed in global settings. library:
+// the global settings page, where choosing a template loads it for editing.
+const props = withDefaults(defineProps<{
   settings: ImportTemplateSettings
   scopeKey: string
   pristine: boolean
   disabled?: boolean
-}>()
+  variant?: 'full' | 'picker' | 'library'
+}>(), { variant: 'full' })
 const emit = defineEmits<{
   apply: [value: { settings: ImportTemplateSettings; automatic: boolean }]
+  /** The template whose parameters are now in the draft ('' when none). */
+  template: [name: string]
+  /** library only: the chosen template, to load into the editor. */
+  selected: [value: ImportTemplate | null]
+  manage: []
   changed: []
   ready: [value: boolean]
   busy: [value: boolean]
@@ -117,6 +126,7 @@ async function load(initial: boolean) {
         name.value = template.name
         isDefault.value = template.is_default
         emit('apply', { settings: { ...template.settings }, automatic: true })
+        emit('template', template.name)
       }
     }
     emit('ready', true)
@@ -146,6 +156,7 @@ function choose(value: string | number | boolean | null) {
   pendingApply.value = false
   pendingDelete.value = false
   saved.value = false
+  if (props.variant === 'library') emit('selected', selected.value ? { ...selected.value, settings: { ...selected.value.settings } } : null)
 }
 
 function applySelected(confirmed = false) {
@@ -161,6 +172,7 @@ function applySelected(confirmed = false) {
   if (confirmed && !pendingApply.value) return
   pendingApply.value = false
   emit('apply', { settings: { ...selected.value.settings }, automatic: false })
+  emit('template', selected.value.name)
 }
 
 async function persist(templates: ImportTemplate[]): Promise<boolean> {
@@ -251,12 +263,13 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <section data-test="import-template-panel" class="min-w-0 space-y-3 rounded-xl border border-gray-200 p-4 dark:border-dark-600">
+  <section data-test="import-template-panel" class="min-w-0 space-y-3" :class="variant === 'full' ? 'rounded-xl border border-gray-200 p-4 dark:border-dark-600' : ''">
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div class="min-w-0 flex-1">
         <h4 class="font-semibold">{{ t('governance.importTemplates.title') }}</h4>
-        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('governance.importTemplates.hint') }}</p>
+        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t(variant === 'library' ? 'governance.importTemplates.libraryHint' : 'governance.importTemplates.hint') }}</p>
       </div>
+      <button v-if="variant === 'picker'" data-test="manage-import-templates" type="button" class="text-xs font-medium text-primary-700 underline-offset-2 hover:underline dark:text-primary-300" :disabled="locked" @click="emit('manage')">{{ t('governance.importTemplates.manageLink') }}</button>
       <button data-test="reload-import-templates" type="button" class="btn btn-secondary text-xs" :disabled="locked" @click="reload">
         {{ t('governance.importTemplates.reload') }}
       </button>
@@ -274,11 +287,11 @@ onUnmounted(() => {
     <p v-if="saved" role="status" class="text-xs text-green-700 dark:text-green-400">{{ t('governance.importTemplates.saved') }}</p>
     <div class="flex flex-wrap items-center gap-3">
       <Select data-test="import-template-select" class="min-w-0 flex-1 basis-48" :model-value="selectedID" :options="options" :disabled="readBlocked" :aria-label="t('governance.importTemplates.select')" @update:model-value="choose" />
-      <button data-test="apply-import-template" type="button" class="btn btn-secondary text-xs" :disabled="readBlocked || !selected" @click="applySelected()">
+      <button v-if="variant !== 'library'" data-test="apply-import-template" type="button" class="btn btn-secondary text-xs" :disabled="readBlocked || !selected" @click="applySelected()">
         {{ t('governance.importTemplates.fillDraft') }}
       </button>
     </div>
-    <details v-if="selected" data-test="import-template-summary" class="rounded-lg bg-gray-50 px-3 py-2 dark:bg-dark-900">
+    <details v-if="selected && variant !== 'library'" data-test="import-template-summary" class="rounded-lg bg-gray-50 px-3 py-2 dark:bg-dark-900">
       <summary class="cursor-pointer break-words text-xs font-medium">{{ t('governance.importTemplates.parameterSummary', { name: selected.name }) }}</summary>
       <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">{{ t('governance.importTemplates.summaryHint') }}</p>
       <dl class="mt-2 grid grid-cols-1 gap-x-6 gap-y-2 text-xs sm:grid-cols-2">
@@ -295,7 +308,7 @@ onUnmounted(() => {
         <button data-test="cancel-import-template-apply" type="button" class="btn btn-secondary text-xs" :disabled="locked" @click="pendingApply = false">{{ t('governance.importTemplates.cancel') }}</button>
       </div>
     </div>
-    <details class="rounded-lg bg-gray-50 p-3 dark:bg-dark-900">
+    <details v-if="variant !== 'picker'" class="rounded-lg bg-gray-50 p-3 dark:bg-dark-900" :open="variant === 'library'">
       <summary class="cursor-pointer text-sm font-medium">{{ t('governance.importTemplates.manage') }}</summary>
       <div class="mt-3 space-y-3">
         <div class="flex flex-wrap items-center gap-3">

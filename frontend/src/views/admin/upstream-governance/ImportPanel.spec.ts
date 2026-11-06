@@ -1,4 +1,4 @@
-import { mount, flushPromises, enableAutoUnmount } from '@vue/test-utils'
+import { mount, flushPromises, enableAutoUnmount, config } from '@vue/test-utils'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import ImportPanel from './ImportPanel.vue'
 import api from '@/api/admin/upstream-governance'
@@ -20,6 +20,8 @@ vi.mock('@/api/admin/upstream-governance', () => ({
 vi.mock('@/api/admin/upstream-import-templates', () => ({ default: { list: vi.fn(), save: vi.fn() } }))
 vi.mock('vue-i18n', async (importOriginal) => ({ ...await importOriginal<typeof import('vue-i18n')>(), useI18n: () => ({ t: (key: string) => key }) }))
 enableAutoUnmount(afterEach)
+// The import parameters dialog is teleported; keep it inside the wrapper.
+config.global.stubs = { ...config.global.stubs, teleport: true, transition: false }
 const props = {
   siteId: 1,
   siteBaseUrl: 'https://fixture.example',

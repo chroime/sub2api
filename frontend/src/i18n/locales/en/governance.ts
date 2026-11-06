@@ -3,6 +3,8 @@ import balanceNotifications from './balanceNotifications'
 export default {
   balanceNotifications,
   importTemplates: {
+    manageLink: 'Manage templates',
+    libraryHint: 'Account parameter templates you can fill in when importing groups. The default template fills new import drafts automatically.',
     title: 'Import configuration templates',
     hint: 'Reuse account parameters. Defaults fill only untouched new drafts; loading a template never creates accounts or keys or runs upstream operations.',
     select: 'Select an import configuration template',
@@ -41,6 +43,25 @@ export default {
     previewInvalidated: 'Parameters or templates changed. The old preview is invalid; generate a new one.',
     notReady: 'Load templates or explicitly continue with current parameters first.',
   },
+  importParameters: {
+    template: 'Template: {name}', custom: 'Custom',
+    concurrency: 'concurrency {n}', priority: 'priority {n}', quota: 'quota set',
+    modelCount: '{platform} {count} models', allModels: 'all models',
+    open: 'Import parameters', done: 'Done',
+  },
+  templatesTab: {
+    title: 'Import templates',
+    hint: 'Manage the templates used for group import. Importing in Groups & keys only picks and fills a template.',
+    importDefaults: 'New templates start from the default parameters. Choosing a template loads its parameters; edit them and use "Update selected template".',
+  },
+  settingsCard: {
+    configure: 'Settings',
+    on: 'On', off: 'Off',
+    fullEvery: 'Full collection every {interval}', fastEvery: 'fast observation every {interval}',
+    pricingEnabled: '{count}/{total} groups enabled',
+    recipients: '{count} recipients',
+    automationLimits: 'Pause after {count} missing checks · rises above {percent}% need review',
+  },
   cadence: {
     seconds: '{n}s',
     minutes: '{n} min',
@@ -73,6 +94,7 @@ export default {
   },
   settingsTab: {
     settings: 'Global settings',
+    templates: 'Import templates',
     records: 'Delivery records',
   },
   siteHeader: {
@@ -138,6 +160,8 @@ export default {
     lastSync: 'Last collected {time}',
   },
   modelPicker: {
+    libraryTitle: 'Model whitelist templates',
+    libraryHint: 'Model whitelists saved per protocol. Choosing a template loads its models; update it or save a copy.',
     unrestricted: 'Any',
     upstreamBadge: 'Upstream',
     selectedModels: 'Selected models',
@@ -197,6 +221,8 @@ export default {
     sharedHint: 'This is a currently associated shared-group record. It does not establish that this site triggered it.', independent: 'Records are shown independently when no reliable persisted link is available.', acceptedHint: 'Accepted by the sending service does not mean delivered to an inbox.',
     recordId: 'Record ID', relatedRecord: 'Persisted related record', technicalDetails: 'Record details',
     beforeRate: 'Previous local sale multiplier', afterRate: 'Resulting local sale multiplier', upstreamBeforeRate: 'Previous upstream multiplier', upstreamAfterRate: 'Resulting upstream multiplier', beforeCost: 'Previous cost', afterCost: 'Cost observed after processing', attempts: '{count} sending failures recorded', sentAt: 'Accepted by sending service at', read: 'Record read', unread: 'Record unread',
+    rateChange: 'Multiplier {before} → {after}', saleRateChange: 'Local sale multiplier {before} → {after}', costChange: 'Cost {before} → {after}',
+    titles: { keyRepairPending: 'Key repair pending', keyRepairManualRequired: 'Key needs manual repair', keyRepairAbandoned: 'Key repair abandoned' },
     kinds: { all: 'All records', event: 'Collection and operations events', pricing: 'Pricing operations', notification: 'Notification delivery', unknown: 'Other record' },
     status: { recorded: 'Recorded', read: 'Read, not resolved', prepared: 'Prepared, not marked applied', applied: 'Applied', protected: 'Protected', rejected: 'Rejected', conflict: 'State conflict', failed: 'Failed', pending: 'Waiting to send', sending: 'Sending', accepted: 'Accepted by sending service', unknown: 'Result unconfirmed' },
   },

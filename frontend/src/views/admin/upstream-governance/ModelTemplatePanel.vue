@@ -13,16 +13,21 @@ import api, {
 import { isOpenAITextModel, type ModelSelections } from './import-config'
 import { errorKey } from './feedback'
 import { providerLabel, transportPlatforms } from './providers'
-const props = defineProps<{
+// full: pick and manage here. picker: the import dialog, which only picks;
+// templates are managed in global settings. library: that settings page,
+// where choosing a template loads its models for editing straight away.
+const props = withDefaults(defineProps<{
   modelValue: ModelSelections
   groups: RemoteGroup[]
   preservePlatforms?: Transport[]
   disabled?: boolean
-}>()
+  variant?: 'full' | 'picker' | 'library'
+}>(), { variant: 'full' })
 const emit = defineEmits<{
   'update:modelValue': [value: ModelSelections]
   ready: [value: boolean]
   edited: [platform: Transport]
+  manage: []
 }>()
 const { t } = useI18n()
 const templateLimit = 50
@@ -145,6 +150,7 @@ function chooseTemplate(value: string | number | boolean | null) {
   showTemplate(typeof value === 'string' ? value : '')
   // A template that already matches the selection needs no confirmation.
   if (selectedTemplate.value && matchesSelected.value) applied[platform.value] = selectedTemplate.value.id
+  else if (selectedTemplate.value && props.variant === 'library') applyTemplate()
 }
 function applyTemplate() {
   const template = selectedTemplate.value
@@ -296,11 +302,14 @@ onUnmounted(() => {
 </script>
 <template>
   <section class="space-y-4">
-    <div>
-      <h4 class="font-semibold">{{ t('governance.modelRestrictions') }}</h4>
-      <p class="mt-1 text-xs text-gray-500">
-        {{ t('governance.modelTemplateHint') }}
-      </p>
+    <div class="flex flex-wrap items-start justify-between gap-3">
+      <div class="min-w-0 flex-1">
+        <h4 class="font-semibold">{{ t(variant === 'library' ? 'governance.modelPicker.libraryTitle' : 'governance.modelRestrictions') }}</h4>
+        <p class="mt-1 text-xs text-gray-500">
+          {{ t(variant === 'library' ? 'governance.modelPicker.libraryHint' : 'governance.modelTemplateHint') }}
+        </p>
+      </div>
+      <button v-if="variant === 'picker'" data-test="manage-model-templates" type="button" class="text-xs font-medium text-primary-700 underline-offset-2 hover:underline dark:text-primary-300" :disabled="saving" @click="emit('manage')">{{ t('governance.importTemplates.manageLink') }}</button>
     </div>
     <div class="flex flex-wrap gap-2" :aria-label="t('governance.transport')">
       <button
@@ -503,7 +512,7 @@ onUnmounted(() => {
           </button>
         </div>
       </template>
-      <details class="rounded-lg bg-gray-50 p-3 text-sm dark:bg-dark-900">
+      <details v-if="variant !== 'picker'" class="rounded-lg bg-gray-50 p-3 text-sm dark:bg-dark-900" :open="variant === 'library'">
         <summary class="cursor-pointer font-medium">
           {{ t('governance.manageTemplates') }}
         </summary>

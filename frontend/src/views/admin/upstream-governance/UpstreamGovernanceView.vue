@@ -24,15 +24,13 @@ import ManagedKeysPanel from './ManagedKeysPanel.vue'
 import ModelMonitorPanel from './ModelMonitorPanel.vue'
 import ObservationPricingPanel from './ObservationPricingPanel.vue'
 import GlobalSettingsView from './GlobalSettingsView.vue'
+import ImportTemplatesView from './ImportTemplatesView.vue'
 import AccountQualityView from '../account-quality/AccountQualityView.vue'
 import Icon from '@/components/icons/Icon.vue'
 import api, {
   type Site,
   type Snapshot,
   type Binding,
-  type Page,
-  type GovernanceEvent,
-  type Check,
   type ManagedKey,
   type KeySelection,
   type AutomationConfiguration,
@@ -72,7 +70,7 @@ function chooseModelTarget(target: 'upstream' | 'local') {
   void router.push({ path: '/admin/upstream-governance/models', query })
 }
 const groupsView = ref<'import' | 'accounts'>('import')
-const settingsView = ref<'settings' | 'records'>('settings')
+const settingsView = ref<'settings' | 'templates' | 'records'>('settings')
 const recordsChannel = ref<'email' | 'astrbot' | 'users'>('email')
 // Old links (import, monitor, local-monitor, notifications) move to the
 // regrouped sections without leaving their id in the address bar.
@@ -101,7 +99,7 @@ let summaryRefreshing = false
 const automation = ref<AutomationConfiguration | null>(null), balanceHealth = ref<BalanceHealth | null>(null), readiness = ref<ReadinessOverview | null>(null)
 const readinessLoading = ref(false), readinessReadFailed = ref(false)
 const automationBusy = ref(false), observationBusy = ref(false), pricingBusy = ref(false), reconciliationBusy = ref(false), keyBusy = ref(false), modelBusy = ref(false)
-const qualityBusy = ref(false)
+const qualityBusy = ref(false), templatesBusy = ref(false)
 const siteIndependent = computed(() => tab.value === 'settings' || tab.value === 'account-quality' || localModels.value)
 const localWorkspaceLoading = ref(false), localWorkspaceError = ref('')
 const keysOpen = ref(false), keySelections = ref<KeySelection[]>([]), reconciliationEpoch = ref(0)
@@ -121,8 +119,6 @@ const sites = ref<Site[]>([]),
 const managedKeys = ref<ManagedKey[]>([]), importStateReady = ref(false)
 const groups = ref<AdminGroup[]>([]),
   proxies = ref<{ id: number; name: string }[]>([])
-const events = ref<Page<GovernanceEvent> | null>(null),
-  checks = ref<Page<Check> | null>(null)
 const busy = ref(false),
   actionBusy = ref(false),
   error = ref(''),
@@ -132,7 +128,7 @@ const busy = ref(false),
   deleting = ref(false)
 const deleteKeepAccounts = ref(false), notice = ref('')
 const siteMenuOpen = ref(false)
-const mutationBusy = computed(() => actionBusy.value || importBusy.value || balanceBusy.value || editBusy.value || automationBusy.value || observationBusy.value || pricingBusy.value || reconciliationBusy.value || keyBusy.value || modelBusy.value || qualityBusy.value)
+const mutationBusy = computed(() => actionBusy.value || importBusy.value || balanceBusy.value || editBusy.value || automationBusy.value || observationBusy.value || pricingBusy.value || reconciliationBusy.value || keyBusy.value || modelBusy.value || qualityBusy.value || templatesBusy.value)
 const working = computed(() => busy.value || mutationBusy.value)
 const navigationLocked = computed(() => mutationBusy.value || connecting.value || onboarding.value)
 // The sidebar can navigate independently of this view. Protect in-flight writes there too.
@@ -143,6 +139,11 @@ const stopNavigationGuard = router.beforeEach((to, from) => {
 })
 function chooseSite(site: Site) {
   if (navigationLocked.value) return
+  // The rail stays on pages that have no site; picking one opens its overview.
+  if (siteIndependent.value) {
+    void router.push({ path: '/admin/upstream-governance', query: { site: String(site.id) } })
+    return
+  }
   if (!showOverview.value && active.value?.id === site.id) {
     // Keep successful loads and unsaved drafts. A failed read can be retried explicitly.
     if (error.value && !working.value) void select(site)
@@ -221,13 +222,11 @@ watch(() => route.fullPath, () => {
 function failure(e: unknown) {
   error.value = t(errorKey(e))
 }
-function reportSelectionReadFailure(kind: 'catalog' | 'bindings' | 'events' | 'checks' | 'keys', e: unknown, selectedTab: SmartOperationsSection) {
+function reportSelectionReadFailure(kind: 'catalog' | 'bindings' | 'keys', e: unknown) {
   // Selecting a site hydrates several panels in parallel. A panel that is not
   // visible must not turn the whole workspace into a generic operation error;
-  // the panel itself already renders its unavailable/empty state. Keep the
-  // existing catalog semantics, and retain history diagnostics only when the
-  // administrator actually opened the history section.
-  if (kind === 'catalog' || (kind === 'events' || kind === 'checks') && selectedTab === 'history') failure(e)
+  // the panel itself already renders its unavailable/empty state.
+  if (kind === 'catalog') failure(e)
 }
 async function run(action: () => Promise<void>, writes = false) {
   const request = generation
@@ -291,7 +290,6 @@ watch([tab, localModels, showOverview, () => route.query.site], ([section, local
   }
 }, { immediate: true })
 async function refreshSiteSummaries() {
-  if (siteIndependent.value) return
   if (summaryRefreshing || navigationLocked.value || busy.value) return
   summaryRefreshing = true
   const request = generation
@@ -326,19 +324,14 @@ async function select(site: Site, collected?: Snapshot, updateLocation = true) {
   readiness.value = null
   readinessLoading.value = true
   readinessReadFailed.value = false
-  events.value = null
-  checks.value = null
   bindings.value = []
   managedKeys.value = []
   importStateReady.value = false
   busy.value = true
   error.value = ''
-  const selectedTab = tab.value
   const results = await Promise.allSettled([
     collected ? Promise.resolve(collected) : api.catalog(site.id),
     api.bindings(site.id),
-    api.events(site.id),
-    api.checks(site.id),
     api.keys(site.id),
     api.automation(site.id),
     api.balanceHealth(site.id),
@@ -347,26 +340,22 @@ async function select(site: Site, collected?: Snapshot, updateLocation = true) {
   if (request === generation && active.value?.id === site.id) {
     if (results[0].status === 'fulfilled') snapshot.value = overviewSnapshot.value = results[0].value
     else if ((results[0].reason as { status?: number }).status !== 404)
-      reportSelectionReadFailure('catalog', results[0].reason, selectedTab)
+      reportSelectionReadFailure('catalog', results[0].reason)
     if (results[1].status === 'fulfilled') bindings.value = results[1].value
-    else reportSelectionReadFailure('bindings', results[1].reason, selectedTab)
-    if (results[2].status === 'fulfilled') events.value = results[2].value
-    else reportSelectionReadFailure('events', results[2].reason, selectedTab)
-    if (results[3].status === 'fulfilled') checks.value = results[3].value
-    else reportSelectionReadFailure('checks', results[3].reason, selectedTab)
-    if (results[4].status === 'fulfilled') managedKeys.value = results[4].value
-    else reportSelectionReadFailure('keys', results[4].reason, selectedTab)
-    if (results[5].status === 'fulfilled') automation.value = results[5].value
-    if (results[6].status === 'fulfilled') balanceHealth.value = results[6].value
-    if (results[7].status === 'fulfilled') {
-      readiness.value = results[7].value
+    else reportSelectionReadFailure('bindings', results[1].reason)
+    if (results[2].status === 'fulfilled') managedKeys.value = results[2].value
+    else reportSelectionReadFailure('keys', results[2].reason)
+    if (results[3].status === 'fulfilled') automation.value = results[3].value
+    if (results[4].status === 'fulfilled') balanceHealth.value = results[4].value
+    if (results[5].status === 'fulfilled') {
+      readiness.value = results[5].value
       readinessReadFailed.value = false
     } else {
       readiness.value = null
       readinessReadFailed.value = true
     }
     readinessLoading.value = false
-    importStateReady.value = results[1].status === 'fulfilled' && results[4].status === 'fulfilled'
+    importStateReady.value = results[1].status === 'fulfilled' && results[2].status === 'fulfilled'
     busy.value = false
   }
 }
@@ -383,13 +372,12 @@ async function sync() {
   await run(async () => {
     try {
       const collected = await api.sync(id)
-      const [list, history, currentBindings, currentKeys, currentReadiness] = await Promise.all([api.list(), api.events(id), api.bindings(id), api.keys(id), api.readiness(id).catch(() => null)])
+      const [list, currentBindings, currentKeys, currentReadiness] = await Promise.all([api.list(), api.bindings(id), api.keys(id), api.readiness(id).catch(() => null)])
       if (request !== generation) return
       snapshot.value = collected
       overviewSnapshot.value = collected
       sites.value = list
       active.value = list.find((s) => s.id === id) || null
-      events.value = history
       bindings.value = currentBindings
       managedKeys.value = currentKeys
       readiness.value = currentReadiness
@@ -495,20 +483,6 @@ async function onboarded(site: Site, collected: Snapshot) {
   siteCreated(updated)
   await select(updated, collected)
 }
-async function page(kind: 'events' | 'checks', n: number) {
-  if (!active.value) return
-  const id = active.value.id,
-    request = generation
-  await run(async () => {
-    if (kind === 'events') {
-      const value = await api.events(id, n)
-      if (request === generation) events.value = value
-    } else {
-      const value = await api.checks(id, n)
-      if (request === generation) checks.value = value
-    }
-  })
-}
 // Deleting a site that still owns imported accounts needs the keep-accounts path.
 const importedAccountCount = computed(() => bindings.value.filter(binding => binding.account_id > 0 && !binding.account_deleted).length)
 function openDelete() {
@@ -519,6 +493,12 @@ function openKeys(selections: KeySelection[] = []) {
   if (working.value || !active.value) return
   keySelections.value = [...selections]
   keysOpen.value = true
+}
+// Import templates are shared settings; the import page only picks them.
+function manageImportTemplates() {
+  if (navigationLocked.value) return
+  settingsView.value = 'templates'
+  tab.value = 'settings'
 }
 function openLocalKeys() {
   if (!working.value) void router.push('/keys')
@@ -589,11 +569,8 @@ function automationSaved(value: AutomationConfiguration) {
 }
 async function reconciled() {
   if (!active.value) return
-  const id = active.value.id, request = generation
   await reloadBindings()
   await reloadHealth()
-  try { const value = await api.events(id); if (request === generation) events.value = value }
-  catch (e) { if (request === generation) failure(e) }
 }
 async function initializeSites() {
   if (sitesLoaded || sitesInitializing) return
@@ -610,10 +587,8 @@ async function initializeSites() {
   siteRefreshTimer = setInterval(() => { void refreshSiteSummaries() }, 60_000)
 }
 watch(() => active.value?.id, () => { siteMenuOpen.value = false })
-// Account quality and settings never need the upstream list.
-const needsSites = (section: SmartOperationsSection) => section !== 'account-quality' && section !== 'settings'
-watch(tab, section => { if (needsSites(section) && !sitesLoaded) void initializeSites() })
-onMounted(() => { if (needsSites(tab.value)) void initializeSites() })
+// The site rail is shown on every section, so the list always loads.
+onMounted(() => { void initializeSites() })
 onUnmounted(() => {
   generation++
   localWorkspaceGeneration++
@@ -628,13 +603,13 @@ onUnmounted(() => {
         <div class="min-w-0">
           <h2 class="text-2xl font-semibold tracking-tight">{{ t('governance.smartOperations.title') }}</h2>
         </div>
-        <div v-if="!siteIndependent" class="flex flex-wrap gap-2">
+        <div class="flex flex-wrap gap-2">
           <button class="btn btn-secondary" :disabled="working || navigationLocked" @click="load"><Icon name="refresh" size="sm" class="mr-2" />{{ t('common.refresh') }}</button>
           <button id="governance-add-site" class="btn btn-primary" :disabled="working || navigationLocked" @click="onboarding = true"><Icon name="plus" size="sm" class="mr-2" />{{ t('governance.add') }}</button>
         </div>
       </header>
-      <div class="grid min-w-0 items-start gap-5" :class="siteIndependent ? 'grid-cols-1' : 'xl:grid-cols-[17.5rem_minmax(0,1fr)]'" data-test="smart-operations-workspace">
-      <aside v-if="!siteIndependent" class="min-w-0 space-y-3 xl:sticky xl:top-24" data-test="smart-operations-site-rail" :aria-label="t('governance.upstreamSites')">
+      <div class="grid min-w-0 items-start gap-5 xl:grid-cols-[17.5rem_minmax(0,1fr)]" data-test="smart-operations-workspace">
+      <aside class="min-w-0 space-y-3 xl:sticky xl:top-24" data-test="smart-operations-site-rail" :aria-label="t('governance.upstreamSites')">
         <button id="governance-all-sites" class="flex min-h-11 w-full items-center gap-2 rounded-xl border px-4 py-3 text-left text-sm font-medium transition-colors disabled:opacity-50" :class="showOverview && tab === 'overview' ? 'border-primary-200 bg-primary-50 text-primary-800 dark:border-primary-800 dark:bg-primary-900/20 dark:text-primary-200' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-200'" type="button" :disabled="navigationLocked" :aria-current="showOverview && tab === 'overview' ? 'page' : undefined" @click="showAllSiteTasks"><Icon name="globe" size="sm" />{{ t('governance.workbench.allSitesEntry') }}</button>
         <GovernanceSitesOverview compact :sites="sites" :selected-site-id="showOverview ? null : active?.id" :disabled="navigationLocked" @select="chooseSite" />
       </aside>
@@ -646,9 +621,10 @@ onUnmounted(() => {
       <p v-if="siteNotFound" role="status" class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-300">{{ t('governance.smartOperations.siteNotFound') }}</p>
       <template v-if="tab === 'settings'">
         <div class="flex flex-wrap gap-1 rounded-lg bg-gray-100 p-1 dark:bg-dark-800" role="group" data-test="settings-views">
-          <button v-for="view in (['settings', 'records'] as const)" :key="view" type="button" :data-test="'settings-view-' + view" class="min-h-9 rounded-md px-3 text-sm transition-colors" :class="settingsView === view ? 'bg-white font-medium text-gray-900 shadow-sm dark:bg-dark-600 dark:text-gray-100' : 'text-gray-500'" :aria-pressed="settingsView === view" @click="settingsView = view">{{ t(`governance.settingsTab.${view}`) }}</button>
+          <button v-for="view in (['settings', 'templates', 'records'] as const)" :key="view" type="button" :data-test="'settings-view-' + view" class="min-h-9 rounded-md px-3 text-sm transition-colors" :class="settingsView === view ? 'bg-white font-medium text-gray-900 shadow-sm dark:bg-dark-600 dark:text-gray-100' : 'text-gray-500'" :aria-pressed="settingsView === view" @click="settingsView = view">{{ t(`governance.settingsTab.${view}`) }}</button>
         </div>
         <GlobalSettingsView v-if="settingsView === 'settings'" />
+        <ImportTemplatesView v-else-if="settingsView === 'templates'" @busy="templatesBusy = $event" />
         <DeliveryRecords v-else :initial-channel="recordsChannel" />
       </template>
       <AccountQualityView v-else-if="tab === 'account-quality'" @busy="qualityBusy = $event" />
@@ -714,8 +690,8 @@ onUnmounted(() => {
                 <button type="button" class="btn btn-secondary text-sm" :disabled="working" @click="openKeys()">{{ t('governance.groupsTab.manageKeys') }}</button>
               </div>
             </div>
-            <div v-show="groupsView === 'import'" class="min-w-0"><ImportPanel v-if="snapshot && importStateReady" :key="active.id" :site-id="active.id" :site-base-url="active.base_url" :site-platform="active.platform" :bindings="bindings" :managed-keys="managedKeys" :preview-epoch="importPreviewEpoch" :snapshot="snapshot" :groups="groups" :disabled="busy || balanceBusy || automationBusy || reconciliationBusy || keyBusy || modelBusy" @busy="importBusy = $event" @applied="reloadBindings" @manage-keys="openKeys" /><p v-else class="py-8 text-center text-sm text-gray-500">{{ busy ? t('common.loading') : t(snapshot ? 'governance.importStateUnavailable' : 'governance.noSnapshot') }}</p></div>
-            <GovernanceHistory v-if="groupsView === 'accounts'" mode="bindings" :bindings="bindings" :groups="groups" :remote-groups="overviewSnapshot?.catalog.groups ?? snapshot?.catalog.groups ?? []" :events="null" :checks="null" :disabled="working" />
+            <div v-show="groupsView === 'import'" class="min-w-0"><ImportPanel v-if="snapshot && importStateReady" :key="active.id" :site-id="active.id" :site-base-url="active.base_url" :site-platform="active.platform" :bindings="bindings" :managed-keys="managedKeys" :preview-epoch="importPreviewEpoch" :snapshot="snapshot" :groups="groups" :disabled="busy || balanceBusy || automationBusy || reconciliationBusy || keyBusy || modelBusy" @busy="importBusy = $event" @applied="reloadBindings" @manage-keys="openKeys" @manage-templates="manageImportTemplates" /><p v-else class="py-8 text-center text-sm text-gray-500">{{ busy ? t('common.loading') : t(snapshot ? 'governance.importStateUnavailable' : 'governance.noSnapshot') }}</p></div>
+            <GovernanceHistory v-if="groupsView === 'accounts'" :bindings="bindings" :groups="groups" :remote-groups="overviewSnapshot?.catalog.groups ?? snapshot?.catalog.groups ?? []" />
           </div>
           <div v-show="tab === 'automation'" data-test="site-automation-tab" class="min-w-0 space-y-5 p-4 sm:p-5">
             <ObservationPricingPanel :key="active.id" section="observation" :site-id="active.id" :disabled="working" @busy="observationBusy = $event" @observation-saved="reloadAfterPolicyChange" />
@@ -726,8 +702,7 @@ onUnmounted(() => {
           </div>
           <div v-if="tab === 'models' && !showOverview" class="min-w-0 p-4 sm:p-5"><ModelMonitorPanel :key="active.id" :site-id="active.id" :remote-groups="overviewSnapshot?.catalog.groups ?? snapshot?.catalog.groups ?? []" :managed-keys="managedKeys" :collected-at="overviewSnapshot?.created_at ?? snapshot?.created_at" :disabled="busy || importBusy || balanceBusy || editBusy || automationBusy || reconciliationBusy || keyBusy" @busy="modelBusy = $event" @manage-keys="openKeys()" /></div>
           <div v-show="tab === 'history'" class="min-w-0 space-y-5 p-4 sm:p-5">
-            <GovernanceTimeline v-if="tab === 'history' && !showOverview" :site-id="active.id" :disabled="navigationLocked" />
-            <details data-test="raw-governance-history" class="rounded-xl border border-gray-200 p-4 dark:border-dark-600"><summary class="cursor-pointer text-sm font-medium">{{ t('governance.workbench.rawHistory') }}</summary><GovernanceHistory class="mt-3" mode="history" :bindings="[]" :events="events" :checks="checks" :disabled="working" @page="page" /></details>
+            <GovernanceTimeline v-if="tab === 'history' && !showOverview" :site-id="active.id" :remote-groups="overviewSnapshot?.catalog.groups ?? snapshot?.catalog.groups ?? []" :disabled="navigationLocked" />
           </div>
         </div>
       </section>
