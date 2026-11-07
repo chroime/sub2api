@@ -12,8 +12,8 @@ func TestRenderLocalGroupChangeNoticePreservesAuditIdentity(t *testing.T) {
 	observedAt := time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC)
 	event := LocalGroupChangeEvent{
 		ID: 17, GroupID: 42, Kind: LocalGroupChangeUpdated,
-		Before:    `{"name":"旧名称","status":"active","rate_multiplier":1}`,
-		After:     `{"name":"新名称","status":"active","rate_multiplier":2}`,
+		Before:    `{"is_exclusive":false,"name":"旧名称","status":"active","rate_multiplier":1}`,
+		After:     `{"is_exclusive":false,"name":"新名称","status":"active","rate_multiplier":2}`,
 		CreatedAt: observedAt,
 	}
 
@@ -40,94 +40,94 @@ func TestRenderLocalGroupChangeNoticeBuildsAstrBotTemplates(t *testing.T) {
 		{
 			name: "active creation includes description and current rate",
 			event: LocalGroupChangeEvent{Kind: LocalGroupChangeCreated,
-				After: `{"name":"GPT Pro","status":"active","description":"稳定线路","rate_multiplier":0.06}`},
+				After: `{"is_exclusive":false,"name":"GPT Pro","status":"active","description":"稳定线路","rate_multiplier":0.06}`},
 			want: "分组上线：GPT Pro 上线，描述：稳定线路，倍率0.06x",
 		},
 		{
 			name: "empty description is explicit without a rate",
 			event: LocalGroupChangeEvent{Kind: LocalGroupChangeCreated,
-				After: `{"name":"GPT Pro","status":"active","description":""}`},
+				After: `{"is_exclusive":false,"name":"GPT Pro","status":"active","description":""}`},
 			want: "分组上线：GPT Pro 上线，描述：无描述",
 		},
 		{
 			name: "deleted",
 			event: LocalGroupChangeEvent{Kind: LocalGroupChangeDeleted,
-				Before: `{"name":"GPT Pro","status":"active","rate_multiplier":0.06}`},
+				Before: `{"is_exclusive":false,"name":"GPT Pro","status":"active","rate_multiplier":0.06}`},
 			want: "分组下线：GPT Pro 下线",
 		},
 		{
 			name: "disabled",
 			event: LocalGroupChangeEvent{Kind: LocalGroupChangeUpdated,
-				Before: `{"name":"GPT Pro","status":"active","rate_multiplier":0.06}`,
-				After:  `{"name":"GPT Pro","status":"disabled","rate_multiplier":0.06}`},
+				Before: `{"is_exclusive":false,"name":"GPT Pro","status":"active","rate_multiplier":0.06}`,
+				After:  `{"is_exclusive":false,"name":"GPT Pro","status":"disabled","rate_multiplier":0.06}`},
 			want: "分组下线：GPT Pro 下线",
 		},
 		{
 			name: "any nonactive status is offline",
 			event: LocalGroupChangeEvent{Kind: LocalGroupChangeUpdated,
-				Before: `{"name":"GPT Pro","status":"active"}`,
-				After:  `{"name":"GPT Pro","status":"archived"}`},
+				Before: `{"is_exclusive":false,"name":"GPT Pro","status":"active"}`,
+				After:  `{"is_exclusive":false,"name":"GPT Pro","status":"archived"}`},
 			want: "分组下线：GPT Pro 下线",
 		},
 		{
 			name: "reactivation includes description and rate",
 			event: LocalGroupChangeEvent{Kind: LocalGroupChangeUpdated,
-				Before: `{"name":"GPT Pro","status":"disabled","description":"稳定线路","rate_multiplier":0.06}`,
-				After:  `{"name":"GPT Pro","status":"active","description":"稳定线路","rate_multiplier":0.06}`},
+				Before: `{"is_exclusive":false,"name":"GPT Pro","status":"disabled","description":"稳定线路","rate_multiplier":0.06}`,
+				After:  `{"is_exclusive":false,"name":"GPT Pro","status":"active","description":"稳定线路","rate_multiplier":0.06}`},
 			want: "分组上线：GPT Pro 上线，描述：稳定线路，倍率0.06x",
 		},
 		{
 			name: "renamed",
 			event: LocalGroupChangeEvent{Kind: LocalGroupChangeUpdated,
-				Before: `{"name":"GPT Pro","rate_multiplier":0.06}`,
-				After:  `{"name":"GPT Pro Test","rate_multiplier":0.06}`},
+				Before: `{"is_exclusive":false,"name":"GPT Pro","rate_multiplier":0.06}`,
+				After:  `{"is_exclusive":false,"name":"GPT Pro Test","rate_multiplier":0.06}`},
 			want: "分组名称调整：GPT Pro 更改为 GPT Pro Test",
 		},
 		{
 			name: "description cleared",
 			event: LocalGroupChangeEvent{Kind: LocalGroupChangeUpdated,
-				Before: `{"name":"GPT Pro","description":"稳定线路"}`,
-				After:  `{"name":"GPT Pro","description":""}`},
+				Before: `{"is_exclusive":false,"name":"GPT Pro","description":"稳定线路"}`,
+				After:  `{"is_exclusive":false,"name":"GPT Pro","description":""}`},
 			want: "分组描述调整：GPT Pro，描述已清空",
 		},
 		{
 			name: "description added from null",
 			event: LocalGroupChangeEvent{Kind: LocalGroupChangeUpdated,
-				Before: `{"Name":"GPT Pro","Description":null}`,
-				After:  `{"Name":"GPT Pro","Description":"新线路"}`},
+				Before: `{"IsExclusive":false,"Name":"GPT Pro","Description":null}`,
+				After:  `{"IsExclusive":false,"Name":"GPT Pro","Description":"新线路"}`},
 			want: "分组描述调整：GPT Pro，新描述「新线路」",
 		},
 		{
 			name: "rate increased",
 			event: LocalGroupChangeEvent{Kind: LocalGroupChangeUpdated,
-				Before: `{"name":"GPT Pro","rate_multiplier":0.02}`,
-				After:  `{"name":"GPT Pro","rate_multiplier":0.023}`},
+				Before: `{"is_exclusive":false,"name":"GPT Pro","rate_multiplier":0.02}`,
+				After:  `{"is_exclusive":false,"name":"GPT Pro","rate_multiplier":0.023}`},
 			want: "分组倍率调整：GPT Pro，0.02x → 0.023x（上调）",
 		},
 		{
 			name: "rate decreased",
 			event: LocalGroupChangeEvent{Kind: LocalGroupChangeUpdated,
-				Before: `{"name":"GPT Pro","rate_multiplier":0.065}`,
-				After:  `{"name":"GPT Pro","rate_multiplier":0.06}`},
+				Before: `{"is_exclusive":false,"name":"GPT Pro","rate_multiplier":0.065}`,
+				After:  `{"is_exclusive":false,"name":"GPT Pro","rate_multiplier":0.06}`},
 			want: "分组倍率调整：GPT Pro，0.065x → 0.06x（下调）",
 		},
 		{
 			name: "rate provided after null",
 			event: LocalGroupChangeEvent{Kind: LocalGroupChangeUpdated,
-				Before: `{"name":"GPT Pro","rate_multiplier":null}`,
-				After:  `{"name":"GPT Pro","rate_multiplier":0.06}`},
+				Before: `{"is_exclusive":false,"name":"GPT Pro","rate_multiplier":null}`,
+				After:  `{"is_exclusive":false,"name":"GPT Pro","rate_multiplier":0.06}`},
 			want: "分组倍率调整：GPT Pro，未提供 → 0.06x",
 		},
 		{
 			name: "rate removed",
 			event: LocalGroupChangeEvent{Kind: LocalGroupChangeUpdated,
-				Before: `{"name":"GPT Pro","rate_multiplier":0.06}`,
-				After:  `{"name":"GPT Pro","rate_multiplier":null}`},
+				Before: `{"is_exclusive":false,"name":"GPT Pro","rate_multiplier":0.06}`,
+				After:  `{"is_exclusive":false,"name":"GPT Pro","rate_multiplier":null}`},
 			want: "分组倍率调整：GPT Pro，0.06x → 未提供",
 		},
 		{
 			name:  "missing group name uses stable identity",
-			event: LocalGroupChangeEvent{Kind: LocalGroupChangeDeleted, Before: `{}`},
+			event: LocalGroupChangeEvent{Kind: LocalGroupChangeDeleted, Before: `{"is_exclusive":false}`},
 			want:  "分组下线：分组 #42 下线",
 		},
 	}
@@ -154,8 +154,8 @@ func TestRenderLocalGroupChangeNoticeCombinesIndependentChanges(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			event := LocalGroupChangeEvent{
 				ID: 25, GroupID: 42, Kind: LocalGroupChangeUpdated, CreatedAt: observedAt,
-				Before: `{"name":"Old\r\nPro","status":"` + tt.beforeStatus + `","description":"旧\n线路","rate_multiplier":0.02,"updated_at":"2026-10-22T01:00:00Z"}`,
-				After:  `{"name":"New\nPro","status":"` + tt.afterStatus + `","description":"新\r\n线路","rate_multiplier":0.023,"updated_at":"2026-10-22T01:01:02Z"}`,
+				Before: `{"is_exclusive":false,"name":"Old\r\nPro","status":"` + tt.beforeStatus + `","description":"旧\n线路","rate_multiplier":0.02,"updated_at":"2026-10-22T01:00:00Z"}`,
+				After:  `{"is_exclusive":false,"name":"New\nPro","status":"` + tt.afterStatus + `","description":"新\r\n线路","rate_multiplier":0.023,"updated_at":"2026-10-22T01:01:02Z"}`,
 			}
 			notice := RenderLocalGroupChangeNotice(event)
 			require.Equal(t, strings.Join([]string{
@@ -177,8 +177,8 @@ func TestRenderLocalGroupChangeNoticeFiltersEachEventIndependently(t *testing.T)
 	observedAt := time.Date(2026, 10, 22, 3, 26, 35, 0, time.UTC)
 	event := LocalGroupChangeEvent{
 		ID: 25, GroupID: 42, Kind: LocalGroupChangeUpdated, CreatedAt: observedAt,
-		Before: `{"name":"Old Pro","status":"disabled","description":"旧线路","rate_multiplier":0.02}`,
-		After:  `{"name":"New Pro","status":"active","description":"新线路","rate_multiplier":0.023}`,
+		Before: `{"is_exclusive":false,"name":"Old Pro","status":"disabled","description":"旧线路","rate_multiplier":0.02}`,
+		After:  `{"is_exclusive":false,"name":"New Pro","status":"active","description":"新线路","rate_multiplier":0.023}`,
 	}
 	tests := []struct {
 		kind string
@@ -217,10 +217,10 @@ func TestRenderLocalGroupChangeNoticeIsSilentWithoutActualGroupEvents(t *testing
 		name  string
 		event LocalGroupChangeEvent
 	}{
-		{"disabled creation", LocalGroupChangeEvent{Kind: LocalGroupChangeCreated, After: `{"name":"GPT Pro","status":"disabled","description":"尚未上线","rate_multiplier":0.06}`}},
-		{"unchanged update", LocalGroupChangeEvent{Kind: LocalGroupChangeUpdated, Before: `{"name":"GPT Pro","status":"active","description":"稳定","rate_multiplier":0.06}`, After: `{"name":"GPT Pro","status":"active","description":"稳定","rate_multiplier":0.06}`}},
-		{"unrelated configuration update", LocalGroupChangeEvent{Kind: LocalGroupChangeUpdated, Before: `{"name":"GPT Pro","status":"active","sort_order":1,"updated_at":"2026-10-22T01:00:00Z"}`, After: `{"name":"GPT Pro","status":"active","sort_order":2,"updated_at":"2026-10-22T01:01:02Z"}`}},
-		{"inactive status remains inactive", LocalGroupChangeEvent{Kind: LocalGroupChangeUpdated, Before: `{"name":"GPT Pro","status":"disabled"}`, After: `{"name":"GPT Pro","status":"archived"}`}},
+		{"disabled creation", LocalGroupChangeEvent{Kind: LocalGroupChangeCreated, After: `{"is_exclusive":false,"name":"GPT Pro","status":"disabled","description":"尚未上线","rate_multiplier":0.06}`}},
+		{"unchanged update", LocalGroupChangeEvent{Kind: LocalGroupChangeUpdated, Before: `{"is_exclusive":false,"name":"GPT Pro","status":"active","description":"稳定","rate_multiplier":0.06}`, After: `{"is_exclusive":false,"name":"GPT Pro","status":"active","description":"稳定","rate_multiplier":0.06}`}},
+		{"unrelated configuration update", LocalGroupChangeEvent{Kind: LocalGroupChangeUpdated, Before: `{"is_exclusive":false,"name":"GPT Pro","status":"active","sort_order":1,"updated_at":"2026-10-22T01:00:00Z"}`, After: `{"is_exclusive":false,"name":"GPT Pro","status":"active","sort_order":2,"updated_at":"2026-10-22T01:01:02Z"}`}},
+		{"inactive status remains inactive", LocalGroupChangeEvent{Kind: LocalGroupChangeUpdated, Before: `{"is_exclusive":false,"name":"GPT Pro","status":"disabled"}`, After: `{"is_exclusive":false,"name":"GPT Pro","status":"archived"}`}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

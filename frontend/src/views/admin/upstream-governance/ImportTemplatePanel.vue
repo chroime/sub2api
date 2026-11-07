@@ -267,7 +267,6 @@ onUnmounted(() => {
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div class="min-w-0 flex-1">
         <h4 class="font-semibold">{{ t('governance.importTemplates.title') }}</h4>
-        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t(variant === 'library' ? 'governance.importTemplates.libraryHint' : 'governance.importTemplates.hint') }}</p>
       </div>
       <button v-if="variant === 'picker'" data-test="manage-import-templates" type="button" class="text-xs font-medium text-primary-700 underline-offset-2 hover:underline dark:text-primary-300" :disabled="locked" @click="emit('manage')">{{ t('governance.importTemplates.manageLink') }}</button>
       <button data-test="reload-import-templates" type="button" class="btn btn-secondary text-xs" :disabled="locked" @click="reload">

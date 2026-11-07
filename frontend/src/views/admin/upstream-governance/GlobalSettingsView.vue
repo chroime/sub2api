@@ -283,12 +283,8 @@ onUnmounted(() => { groupsRequest++ })
 </script>
 
 <template>
-  <section data-test="global-settings" class="min-w-0 space-y-5">
-    <header class="flex flex-wrap items-start justify-between gap-4">
-      <div>
-        <h3 class="text-xl font-semibold">{{ t('governance.smartOperations.settingsPage.title') }}</h3>
-        <p class="mt-1 max-w-3xl text-sm text-gray-500 dark:text-dark-300">{{ t('governance.smartOperations.settingsPage.description') }}</p>
-      </div>
+  <section data-test="global-settings" class="min-w-0 space-y-5" :aria-label="t('governance.smartOperations.settingsPage.title')">
+    <header class="flex justify-end">
       <button type="button" class="btn btn-primary" data-test="global-settings-save" :disabled="loading || saving" @click="save"><Icon name="check" size="sm" class="mr-2" />{{ saving ? t('common.processing') : t('governance.smartOperations.settingsPage.save') }}</button>
     </header>
     <p v-if="error" role="alert" class="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-900/20 dark:text-red-300">{{ error }}</p>
@@ -298,20 +294,18 @@ onUnmounted(() => { groupsRequest++ })
       <fieldset data-test="global-settings-fields" :disabled="saving" :aria-busy="saving" class="min-w-0 space-y-5 border-0 p-0">
       <section class="space-y-4 rounded-xl border border-gray-200 bg-white p-4 dark:border-dark-600 dark:bg-dark-800 sm:p-5">
         <header class="flex items-start justify-between gap-3">
-          <div class="flex min-w-0 flex-1 items-start gap-3">
-            <span class="shrink-0 rounded-lg bg-primary-50 p-2 text-primary-700 dark:bg-primary-900/20 dark:text-primary-300"><Icon name="mail" size="sm" /></span>
-            <div class="min-w-0"><h4 id="global-email-heading" class="font-semibold">{{ t('governance.smartOperations.settingsPage.notifications') }}</h4><p class="mt-1 text-xs text-gray-500 dark:text-dark-300">{{ t('governance.smartOperations.settingsPage.notificationsHint') }}</p></div>
-          </div>
-          <label class="flex shrink-0 cursor-pointer items-center gap-2 whitespace-nowrap text-sm"><input v-model="form.notifications.enabled" aria-describedby="global-email-heading" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500" />{{ t('governance.smartOperations.settingsPage.enabled') }}</label>
+          <h4 id="global-email-heading" class="font-semibold">{{ t('governance.smartOperations.settingsPage.notifications') }}</h4>
+          <label class="relative inline-flex min-h-9 shrink-0 cursor-pointer items-center" :title="t('governance.smartOperations.settingsPage.enabled')"><input v-model="form.notifications.enabled" aria-describedby="global-email-heading" type="checkbox" role="switch" class="peer sr-only" /><span aria-hidden="true" class="h-5 w-9 rounded-full bg-gray-300 transition-colors after:absolute after:left-0.5 after:top-2.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:shadow-sm after:transition-transform after:content-[''] peer-checked:bg-primary-500 peer-checked:after:translate-x-4 peer-focus-visible:ring-2 peer-focus-visible:ring-primary-500 peer-focus-visible:ring-offset-2 peer-disabled:opacity-50 dark:bg-dark-500" /><span class="sr-only">{{ t('governance.smartOperations.settingsPage.enabled') }}</span></label>
         </header>
         <label class="block text-sm"><span class="mb-1 block text-gray-600 dark:text-gray-300">{{ t('governance.smartOperations.settingsPage.recipients') }}</span><textarea :value="recipientsText()" rows="3" class="input w-full" :disabled="!form.notifications.enabled" @input="setRecipients" /></label>
-        <fieldset class="grid grid-cols-1 gap-2 sm:grid-cols-2"><legend class="mb-1 text-sm font-medium">{{ t('governance.smartOperations.settingsPage.events') }}</legend><label v-for="(key, index) in notificationEventKeys" :key="key" class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200"><input v-model="form.notifications.events[key]" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500" /><span>{{ t(`governance.smartOperations.settingsPage.${notificationEventLabels[index]}`) }}</span></label></fieldset>
+        <p class="text-xs text-gray-500 dark:text-dark-300">{{ t('governance.smartOperations.settingsPage.notificationsHint') }}</p>
+        <fieldset data-test="email-events" class="grid grid-cols-1 gap-2 sm:grid-cols-2"><legend class="mb-1 text-sm font-medium">{{ t('governance.smartOperations.settingsPage.events') }}</legend><label v-for="(key, index) in notificationEventKeys" :key="key" class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200"><input v-model="form.notifications.events[key]" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500" /><span>{{ t(`governance.smartOperations.settingsPage.${notificationEventLabels[index]}`) }}</span></label></fieldset>
       </section>
 
       <section class="space-y-4 rounded-xl border border-gray-200 bg-white p-4 dark:border-dark-600 dark:bg-dark-800 sm:p-5">
         <header class="flex items-start justify-between gap-3">
-          <div class="min-w-0 flex-1"><h4 id="global-local-monitor-heading" class="font-semibold">{{ t('governance.smartOperations.settingsPage.localMonitor') }}</h4><p class="mt-1 text-xs text-gray-500 dark:text-dark-300">{{ t('governance.smartOperations.settingsPage.localMonitorHint') }}</p></div>
-          <label class="flex shrink-0 cursor-pointer items-center gap-2 whitespace-nowrap text-sm"><input v-model="form.local_monitor.enabled" aria-describedby="global-local-monitor-heading" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500" />{{ t('governance.smartOperations.settingsPage.enabled') }}</label>
+          <h4 id="global-local-monitor-heading" class="font-semibold" :title="t('governance.smartOperations.settingsPage.localMonitorHint')">{{ t('governance.smartOperations.settingsPage.localMonitor') }}</h4>
+          <label class="relative inline-flex min-h-9 shrink-0 cursor-pointer items-center" :title="t('governance.smartOperations.settingsPage.enabled')"><input v-model="form.local_monitor.enabled" aria-describedby="global-local-monitor-heading" type="checkbox" role="switch" class="peer sr-only" /><span aria-hidden="true" class="h-5 w-9 rounded-full bg-gray-300 transition-colors after:absolute after:left-0.5 after:top-2.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:shadow-sm after:transition-transform after:content-[''] peer-checked:bg-primary-500 peer-checked:after:translate-x-4 peer-focus-visible:ring-2 peer-focus-visible:ring-primary-500 peer-focus-visible:ring-offset-2 peer-disabled:opacity-50 dark:bg-dark-500" /><span class="sr-only">{{ t('governance.smartOperations.settingsPage.enabled') }}</span></label>
         </header>
         <div class="grid grid-cols-1 gap-3 sm:grid-cols-2"><label class="block text-sm"><span class="mb-1 block text-gray-600 dark:text-gray-300">{{ t('governance.smartOperations.settingsPage.intervalSeconds') }}</span><input v-model.number="form.local_monitor.interval_seconds" class="input w-full" type="number" min="1" step="1" /></label></div>
       </section>
@@ -320,10 +314,10 @@ onUnmounted(() => { groupsRequest++ })
 
       <section class="space-y-4 rounded-xl border border-gray-200 bg-white p-4 dark:border-dark-600 dark:bg-dark-800 sm:p-5">
         <header class="flex items-start justify-between gap-3">
-          <div class="min-w-0 flex-1"><h4 id="global-astrbot-heading" class="font-semibold">{{ t('governance.smartOperations.settingsPage.astrbot') }}</h4><p class="mt-1 text-xs text-gray-500 dark:text-dark-300">{{ t('governance.smartOperations.settingsPage.astrbotHint') }}</p></div>
-          <label class="flex shrink-0 cursor-pointer items-center gap-2 whitespace-nowrap text-sm"><input v-model="form.astrbot.enabled" aria-describedby="global-astrbot-heading" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500" />{{ t('governance.smartOperations.settingsPage.enabled') }}</label>
+          <h4 id="global-astrbot-heading" class="font-semibold" :title="t('governance.smartOperations.settingsPage.astrbotHint')">{{ t('governance.smartOperations.settingsPage.astrbot') }}</h4>
+          <label class="relative inline-flex min-h-9 shrink-0 cursor-pointer items-center" :title="t('governance.smartOperations.settingsPage.enabled')"><input v-model="form.astrbot.enabled" aria-describedby="global-astrbot-heading" type="checkbox" role="switch" class="peer sr-only" /><span aria-hidden="true" class="h-5 w-9 rounded-full bg-gray-300 transition-colors after:absolute after:left-0.5 after:top-2.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:shadow-sm after:transition-transform after:content-[''] peer-checked:bg-primary-500 peer-checked:after:translate-x-4 peer-focus-visible:ring-2 peer-focus-visible:ring-primary-500 peer-focus-visible:ring-offset-2 peer-disabled:opacity-50 dark:bg-dark-500" /><span class="sr-only">{{ t('governance.smartOperations.settingsPage.enabled') }}</span></label>
         </header>
-        <fieldset class="grid grid-cols-1 gap-2 sm:grid-cols-2"><legend class="mb-1 text-sm font-medium">{{ t('governance.smartOperations.settingsPage.astrbotEvents') }}</legend><label v-for="(key, index) in notificationEventKeys" :key="key" class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200"><input v-model="form.astrbot.events[key]" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500" /><span>{{ t(`governance.smartOperations.settingsPage.${notificationEventLabels[index]}`) }}</span></label></fieldset>
+        <fieldset data-test="astrbot-events" class="grid grid-cols-1 gap-2 sm:grid-cols-2"><legend class="mb-1 text-sm font-medium">{{ t('governance.smartOperations.settingsPage.astrbotEvents') }}</legend><label v-for="(key, index) in notificationEventKeys" :key="key" class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200"><input v-model="form.astrbot.events[key]" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500" /><span>{{ t(`governance.smartOperations.settingsPage.${notificationEventLabels[index]}`) }}</span></label></fieldset>
         <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label class="block text-sm"><span class="mb-1 block text-gray-600 dark:text-gray-300">{{ t('governance.smartOperations.settingsPage.baseUrl') }}</span><input v-model="form.astrbot.base_url" data-test="astrbot-base-url" class="input w-full" type="url" /></label>
           <label class="block text-sm"><span class="mb-1 block text-gray-600 dark:text-gray-300">{{ t('governance.smartOperations.settingsPage.endpointPath') }}</span><input v-model="form.astrbot.endpoint_path" class="input w-full" /></label>

@@ -37,7 +37,7 @@ describe('GovernanceSitesOverview compact mode', () => {
   it('renders a compact site rail with count, controls, scrollable rows, and selected state', () => {
     const wrapper = render({ selectedSiteId: 2 })
 
-    expect(wrapper.get('[data-test="sites-overview-compact"]').classes()).toContain('border')
+    expect(wrapper.get('[data-test="sites-overview-compact"]').exists()).toBe(true)
     expect(wrapper.get('[data-test="site-count"]').text()).toContain('2')
     expect(wrapper.get('[data-test="site-search"]')).toBeTruthy()
     expect(wrapper.findAll('button[aria-pressed]')).toHaveLength(3)

@@ -99,6 +99,9 @@ func RenderLocalGroupChangeNotice(event LocalGroupChangeEvent) LocalGroupChangeN
 // RenderLocalGroupChangeNoticeWithEvents filters independent group details
 // before rendering. A nil policy preserves the all-events direct-call default.
 func RenderLocalGroupChangeNoticeWithEvents(event LocalGroupChangeEvent, events *GlobalNotificationEvents) LocalGroupChangeNotice {
+	if !localGroupChangeHasPublicSnapshots(event) {
+		return LocalGroupChangeNotice{}
+	}
 	label := "本地分组修改"
 	severity := "info"
 	switch event.Kind {
@@ -142,6 +145,46 @@ func RenderLocalGroupChangeNoticeWithEvents(event LocalGroupChangeEvent, events 
 		GroupChanges: details,
 		ObservedAt:   observedAt,
 	}
+}
+
+// A missing visibility flag is not evidence that an old snapshot was public.
+// Check both sides, including a soft-delete after snapshot, so returning a
+// private group to public never publishes its previous private configuration.
+func localGroupChangeHasPublicSnapshots(event LocalGroupChangeEvent) bool {
+	switch event.Kind {
+	case LocalGroupChangeCreated:
+		return localGroupSnapshotIsPublic(event.Before, false) && localGroupSnapshotIsPublic(event.After, true)
+	case LocalGroupChangeUpdated:
+		return localGroupSnapshotIsPublic(event.Before, true) && localGroupSnapshotIsPublic(event.After, true)
+	case LocalGroupChangeDeleted:
+		return localGroupSnapshotIsPublic(event.Before, true) && localGroupSnapshotIsPublic(event.After, false)
+	default:
+		return false
+	}
+}
+
+func localGroupSnapshotIsPublic(payload string, required bool) bool {
+	payload = strings.TrimSpace(payload)
+	if payload == "" {
+		return !required
+	}
+	var values map[string]json.RawMessage
+	if json.Unmarshal([]byte(payload), &values) != nil || values == nil {
+		return false
+	}
+	if len(values) == 0 {
+		return !required
+	}
+	known := false
+	for _, key := range []string{"is_exclusive", "IsExclusive"} {
+		if raw, ok := values[key]; ok {
+			known = true
+			if strings.TrimSpace(string(raw)) != "false" {
+				return false
+			}
+		}
+	}
+	return known
 }
 
 type localGroupSnapshot struct {
@@ -239,6 +282,9 @@ type LocalGroupChangeStore interface {
 	DueLocalGroupChanges(context.Context, time.Time, int) ([]LocalGroupChangeEvent, error)
 	ClaimLocalGroupChange(context.Context, int64, time.Time, time.Time) (bool, error)
 	CompleteLocalGroupChange(context.Context, int64, time.Time, error, time.Time) error
+	// Recheck current visibility and later audit history before sending. A
+	// false result consumes the event permanently; an error keeps it retryable.
+	LocalGroupChangeIsPublic(context.Context, LocalGroupChangeEvent) (bool, error)
 }
 
 // LocalGroupChangeNotifier is the transport-neutral adapter used by global
@@ -315,30 +361,7 @@ func (q *LocalGroupChangeQueue) Dispatch(ctx context.Context, limit int) error {
 		var sendErr error
 		notice := RenderLocalGroupChangeNoticeWithEvents(item, q.Events)
 		if len(notice.GroupChanges) > 0 {
-			if q.Sender == nil {
-				sendErr = errors.New("local group change notifier is unavailable")
-			} else {
-				recipients, recipientsErr := q.Sender.Recipients(ctx)
-				if recipientsErr != nil {
-					sendErr = recipientsErr
-				} else {
-					validRecipients := 0
-					for _, recipient := range recipients {
-						recipient = strings.TrimSpace(recipient)
-						if recipient == "" {
-							continue
-						}
-						validRecipients++
-						if err := q.Sender.SendLocalGroupChange(ctx, recipient, notice); err != nil {
-							sendErr = err
-							break
-						}
-					}
-					if validRecipients == 0 {
-						sendErr = errors.New("local group change notification has no configured recipient")
-					}
-				}
-			}
+			sendErr = q.sendPublicChange(ctx, item, notice)
 		}
 		next := now
 		if sendErr != nil {
@@ -349,6 +372,41 @@ func (q *LocalGroupChangeQueue) Dispatch(ctx context.Context, limit int) error {
 		}
 	}
 	return firstErr
+}
+
+func (q *LocalGroupChangeQueue) sendPublicChange(ctx context.Context, event LocalGroupChangeEvent, notice LocalGroupChangeNotice) error {
+	allowed, err := q.store.LocalGroupChangeIsPublic(ctx, event)
+	if err != nil || !allowed {
+		return err
+	}
+	if q.Sender == nil {
+		return errors.New("local group change notifier is unavailable")
+	}
+	recipients, err := q.Sender.Recipients(ctx)
+	if err != nil {
+		return err
+	}
+	validRecipients := 0
+	for _, recipient := range recipients {
+		recipient = strings.TrimSpace(recipient)
+		if recipient == "" {
+			continue
+		}
+		validRecipients++
+		// Recipient resolution and earlier sends can take time. Do not reuse
+		// the visibility decision across recipients or retry attempts.
+		allowed, err := q.store.LocalGroupChangeIsPublic(ctx, event)
+		if err != nil || !allowed {
+			return err
+		}
+		if err := q.Sender.SendLocalGroupChange(ctx, recipient, notice); err != nil {
+			return err
+		}
+	}
+	if validRecipients == 0 {
+		return errors.New("local group change notification has no configured recipient")
+	}
+	return nil
 }
 
 func localGroupChangeRetry(now time.Time, attempts int) time.Time {

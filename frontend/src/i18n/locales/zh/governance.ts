@@ -1087,6 +1087,7 @@ export default {
   plazaUnavailable: '上游模型广场暂不可用，已保留其他可用来源的采集结果和价格。',
   channelsUnavailable: '上游渠道列表暂不可用，仍展示已返回的分组和其他价格来源。',
   channelsPricingUnavailable: '上游渠道及其价格信息暂不可用，已采集的分组仍可使用，缺失价格显示为未知。',
+  officialPricingUnavailable: '部分模型的官方参考价无效，已跳过；分组、模型和有效的上游定价已正常采集。',
   channelsNotExposed: '此 New API 站点不向当前用户开放渠道详情，仍展示其可见分组及可获取的价格。',
   pricingUnavailable: '未能读取上游价格，缺失的价格保持为未知。',
   complexPricingNotFlattened: '部分上游价格包含阶梯、表达式或其他计费规则，已保留补充计价信息，未将其简化为单一单价。',

@@ -250,6 +250,7 @@ export default {
     passwordMinLength: '密码至少需要 6 个字符',
     loginFailed: '登录失败，请检查您的凭据后重试。',
     errors: {
+      INVALID_CREDENTIALS: '邮箱或密码不正确',
       USER_NOT_ACTIVE: '账号已被禁用',
       EMAIL_BLOCKED: '该邮箱不允许注册，请更换其他邮箱。',
     },

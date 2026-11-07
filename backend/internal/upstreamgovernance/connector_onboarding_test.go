@@ -61,9 +61,147 @@ func TestConnectorAccountAndPlazaCollection(t *testing.T) {
 	if p.Details["long_context_basis"] != "whole_request" || p.Details["time_pricing"] == nil {
 		t.Fatal("lost pricing conditions")
 	}
+	official, ok := p.Details["official_reference_pricing"].(map[string]any)
+	if !ok || official["input_price"] != float64(99) {
+		t.Fatal("valid official reference pricing lost")
+	}
+	for _, warning := range cat.Warnings {
+		if warning == "sub2api_official_pricing_unavailable" {
+			t.Fatal("valid official reference pricing reported unavailable")
+		}
+	}
 	if strings.Contains(string(raw), "secret-canary") || strings.Contains(string(raw), "hidden-model") {
 		t.Fatal("non-allowlisted data escaped")
 	}
+}
+
+func TestConnectorPlazaDiscardsInvalidOfficialPricing(t *testing.T) {
+	for _, tc := range []struct{ name, official string }{
+		{"negative_price", `{"input_price":-1}`},
+		{"negative_tier", `{"input_price":99,"intervals":[{"min_tokens":200000,"cache_read_price":-1}]}`},
+		{"invalid_price_shape", `{"input_price":{"amount":99}}`},
+		{"invalid_tiers_shape", `{"input_price":99,"intervals":{}}`},
+		{"array", `[99]`},
+		{"string", `"invalid-reference-canary"`},
+		{"number", `99`},
+		{"boolean", `true`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body := `{"code":0,"data":{"groups":[{"id":7,"models":[` +
+				`{"name":"first-model","platform":"openai","pricing":{"billing_mode":"token","input_price":0.000002,"output_price":0.000008},"official_pricing":` + tc.official + `},` +
+				`{"name":"second-model","platform":"openai","pricing":{"billing_mode":"token","input_price":0.000002,"output_price":0.000008},"official_pricing":` + tc.official + `}` +
+				`] }]}}`
+			cat, err := discoverPlazaResponseFixture(t, http.StatusOK, body)
+			if err != nil {
+				t.Fatalf("optional official pricing blocked collection: %v", err)
+			}
+			if len(cat.Groups) != 1 || cat.Groups[0].ID != "7" || len(cat.Groups[0].Models) != 2 || len(cat.Groups[0].Prices) != 2 {
+				t.Fatalf("valid site catalog lost: %+v", cat)
+			}
+			for _, price := range cat.Groups[0].Prices {
+				if price.Input == nil || *price.Input != 0.000002 || price.Output == nil || *price.Output != 0.000008 || price.Unit != "usd_per_token" {
+					t.Fatal("official reference error changed valid site pricing")
+				}
+				if _, ok := price.Details["official_reference_pricing"]; ok {
+					t.Fatal("invalid official reference was retained or partially replaced")
+				}
+			}
+			warnings := 0
+			for _, warning := range cat.Warnings {
+				if warning == "sub2api_official_pricing_unavailable" {
+					warnings++
+				}
+			}
+			if warnings != 1 {
+				t.Fatalf("expected one warning across invalid models, got %d", warnings)
+			}
+			raw, err := json.Marshal(cat)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(string(raw), "invalid-reference-canary") {
+				t.Fatal("raw invalid official reference escaped")
+			}
+		})
+	}
+}
+
+func TestConnectorPlazaMissingOfficialPricingDoesNotWarn(t *testing.T) {
+	for _, tc := range []struct{ name, field string }{
+		{"absent", ""},
+		{"null", `,"official_pricing":null`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body := `{"code":0,"data":{"groups":[{"id":7,"models":[{"name":"model","platform":"openai","pricing":{"input_price":0.1}` + tc.field + `}]}]}}`
+			cat, err := discoverPlazaResponseFixture(t, http.StatusOK, body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(cat.Groups) != 1 || len(cat.Groups[0].Prices) != 1 {
+				t.Fatal("site pricing lost without official reference")
+			}
+			if _, ok := cat.Groups[0].Prices[0].Details["official_reference_pricing"]; ok {
+				t.Fatal("missing official reference was synthesized")
+			}
+			for _, warning := range cat.Warnings {
+				if warning == "sub2api_official_pricing_unavailable" {
+					t.Fatal("absent optional reference reported as invalid")
+				}
+			}
+		})
+	}
+}
+
+func TestConnectorPlazaRejectsInvalidSitePricing(t *testing.T) {
+	for _, tc := range []struct{ name, pricing string }{
+		{"negative_price", `{"input_price":-1}`},
+		{"negative_tier", `{"input_price":0.1,"intervals":[{"min_tokens":200000,"cache_read_price":-1}]}`},
+		{"invalid_shape", `[]`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body := `{"code":0,"data":{"groups":[{"id":7,"models":[{"name":"model","platform":"openai","pricing":` + tc.pricing + `,"official_pricing":{"input_price":-1}}]}]}}`
+			_, err := discoverPlazaResponseFixture(t, http.StatusOK, body)
+			if !errors.Is(err, ErrUnsupported) {
+				t.Fatalf("invalid site pricing accepted: %v", err)
+			}
+		})
+	}
+}
+
+func TestConnectorPlazaRejectsMalformedResponse(t *testing.T) {
+	for _, body := range []string{
+		`{"code":0,"data":{"groups":null}}`,
+		`{"code":0,"data":{"groups":{}}}`,
+		`{"code":0,"data":{"groups":[{"id":7,"models":[{"name":"model","platform":"openai","pricing":{"input_price":0.1},"official_pricing":{"input_price":-1},"time_pricing":{"periods":[{"multiplier":-1}]}}]}]}}`,
+		`{"code":0,"data":`,
+	} {
+		_, err := discoverPlazaResponseFixture(t, http.StatusOK, body)
+		if !errors.Is(err, ErrUnsupported) {
+			t.Fatalf("invalid main response accepted: %v", err)
+		}
+	}
+}
+
+func discoverPlazaResponseFixture(t *testing.T, status int, body string) (Catalog, error) {
+	t.Helper()
+	c := fixtureConnector(t, func(r *http.Request) (int, string) {
+		switch r.URL.Path {
+		case "/api/v1/user/profile":
+			return 200, `{"code":0,"data":{"id":42}}`
+		case "/api/v1/groups/available":
+			return 200, `{"code":0,"data":[{"id":7,"name":"Bindable","platform":"openai"}]}`
+		case "/api/v1/groups/rates":
+			return 200, `{"code":0,"data":{}}`
+		case "/api/v1/channels/available":
+			return 200, `{"code":0,"data":[]}`
+		case "/api/v1/model-plaza":
+			return status, body
+		default:
+			t.Fatalf("unexpected path %s", r.URL.Path)
+			return 500, ""
+		}
+	})
+	return c.Discover(context.Background(), Site{Platform: "sub2api", BaseURL: "https://upstream.example"}, Session{AccessToken: "fixture", UserID: 42})
 }
 
 func TestConnectorAccountMissingAndQuotaUnits(t *testing.T) {

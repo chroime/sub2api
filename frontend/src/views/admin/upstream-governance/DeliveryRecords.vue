@@ -3,6 +3,7 @@ import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import api, { type DeliveryChannel, type DeliveryRecord, type Page } from '@/api/admin/upstream-governance'
 import BalanceNotificationRecords from './BalanceNotificationRecords.vue'
+import StatusIndicator from './StatusIndicator.vue'
 import { formatGovernanceTime } from './format'
 
 // Every outbound notification in one place: upstream change mails, AstrBot
@@ -16,10 +17,13 @@ const loading = ref(false)
 const failed = ref(false)
 let generation = 0
 
-const statusClass: Record<string, string> = {
-  sent: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300',
-  pending: 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300',
-  sending: 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300',
+const statusTone = {
+  sent: 'success',
+  pending: 'warning',
+  sending: 'info',
+} as const
+function deliveryTone(status: string) {
+  return statusTone[status as keyof typeof statusTone] || 'neutral'
 }
 const knownStatuses = new Set(['sent', 'pending', 'sending'])
 const statusLabel = (status: string) => t(`governance.deliveryRecords.status.${knownStatuses.has(status) ? status : 'unknown'}`)
@@ -61,10 +65,9 @@ onUnmounted(() => { generation++ })
     </div>
     <BalanceNotificationRecords v-if="channel === 'users'" />
     <template v-else>
-      <p class="text-xs text-gray-500">{{ t(`governance.deliveryRecords.hints.${channel}`) }}</p>
       <p v-if="failed" role="alert" class="rounded-lg bg-red-50 p-3 text-sm text-red-600 dark:bg-red-900/10">{{ t('governance.deliveryRecords.readFailed') }}</p>
       <p v-else-if="loading && !result" role="status" class="p-6 text-center text-sm text-gray-500">{{ t('common.loading') }}</p>
-      <div v-else-if="result" class="overflow-x-auto rounded-xl border border-gray-200 dark:border-dark-600">
+      <div v-else-if="result" class="min-w-0 max-w-full overflow-x-auto rounded-xl border border-gray-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-500 dark:border-dark-600" role="region" tabindex="0" :aria-label="t('governance.deliveryRecords.channels.' + channel)">
         <table class="w-full min-w-[640px] text-left text-sm">
           <thead class="bg-gray-50 text-xs text-gray-500 dark:bg-dark-900">
             <tr>
@@ -82,7 +85,7 @@ onUnmounted(() => { generation++ })
               <td class="max-w-md px-3 py-2"><span class="line-clamp-2 break-words">{{ title(record) }}</span></td>
               <td v-if="channel === 'email'" class="px-3 py-2 text-xs text-gray-500">{{ record.recipient || '—' }}</td>
               <td class="px-3 py-2">
-                <span class="rounded-full px-2 py-0.5 text-xs font-medium" :class="statusClass[record.status] || 'bg-gray-100 text-gray-600 dark:bg-dark-700 dark:text-gray-300'">{{ statusLabel(record.status) }}</span>
+                <StatusIndicator :label="statusLabel(record.status)" :tone="deliveryTone(record.status)" />
                 <span v-if="record.attempts > 0 && record.status !== 'sent'" class="ml-1 text-xs text-gray-500">{{ t('governance.deliveryRecords.attempts', { count: record.attempts }) }}</span>
                 <p v-if="record.last_error" class="mt-1 break-all text-xs text-red-600 dark:text-red-400">{{ record.last_error }}</p>
               </td>

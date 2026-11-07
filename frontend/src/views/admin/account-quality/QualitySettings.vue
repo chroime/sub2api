@@ -41,8 +41,8 @@ async function save() {
 </script>
 
 <template>
-  <form class="space-y-5" data-test="quality-settings" @submit.prevent="save">
-    <div class="flex flex-wrap items-center justify-between gap-3"><h3 class="font-semibold">{{ t('accountQuality.settings') }}</h3><button type="submit" data-test="quality-settings-save" class="btn btn-primary btn-sm" :disabled="saving">{{ t('accountQuality.save') }}</button></div>
+  <form class="space-y-5" data-test="quality-settings" :aria-label="t('accountQuality.settings')" @submit.prevent="save">
+    <div class="flex justify-end"><button type="submit" data-test="quality-settings-save" class="btn btn-primary btn-sm" :disabled="saving">{{ t('accountQuality.save') }}</button></div>
     <p v-if="error" role="alert" class="text-sm text-red-600">{{ error }}</p><p v-if="saved" role="status" class="text-sm text-emerald-600">{{ t('accountQuality.saved') }}</p>
     <section class="grid gap-4 rounded-xl border border-gray-200 p-4 dark:border-dark-600 sm:grid-cols-3">
       <label class="text-sm"><span class="mb-1 block">{{ t('accountQuality.concurrency') }}</span><input v-model.number="draft.concurrency" class="input w-full" type="number" min="1" max="20" step="1" required /></label>
@@ -50,8 +50,7 @@ async function save() {
       <label class="text-sm"><span class="mb-1 block">{{ t('accountQuality.dailyCost') }}</span><input v-model.number="draft.daily_cost_limit_usd" class="input w-full" type="number" min="0" step="0.01" required /></label>
       <p class="text-xs text-gray-500 sm:col-span-3">{{ t('accountQuality.costHint') }}</p>
     </section>
-    <p class="text-sm leading-relaxed text-gray-500">{{ t('accountQuality.notificationHint') }}</p>
-    <div class="grid gap-4 lg:grid-cols-2">
+    <div class="grid gap-4 lg:grid-cols-2" :title="t('accountQuality.notificationHint')">
       <section class="space-y-3 rounded-xl border border-gray-200 p-4 dark:border-dark-600"><label class="flex items-center gap-2 text-sm font-semibold"><input v-model="draft.notifications.email_enabled" data-test="quality-email-enabled" type="checkbox" class="rounded" />{{ t('accountQuality.emailEnabled') }}</label><label class="block text-sm"><span class="mb-1 block">{{ t('accountQuality.recipients') }}</span><textarea v-model="recipients" class="input w-full" rows="3" :disabled="!draft.notifications.email_enabled" /></label></section>
       <section class="space-y-3 rounded-xl border border-gray-200 p-4 dark:border-dark-600"><label class="flex items-center gap-2 text-sm font-semibold"><input v-model="draft.notifications.qq_enabled" data-test="quality-qq-enabled" type="checkbox" class="rounded" />{{ t('accountQuality.qqEnabled') }}</label><div class="flex items-center justify-between gap-2"><span class="text-sm">{{ t('accountQuality.qqTargets') }}</span><button type="button" class="btn btn-secondary btn-sm" :disabled="groupsLoading || !draft.notifications.qq_enabled" @click="loadGroups">{{ t('accountQuality.chooseQQGroups') }}</button></div><div v-if="targetOptions.length" class="max-h-48 space-y-2 overflow-y-auto"><label v-for="target in targetOptions" :key="target.umo" class="flex items-start gap-2 text-sm"><input v-model="draft.notifications.qq_targets" :value="target.umo" type="checkbox" class="mt-1 rounded" :disabled="!draft.notifications.qq_enabled" /><span class="break-all">{{ target.label }}</span></label></div><p v-else-if="groupsLoaded" class="text-xs text-gray-500">{{ t('accountQuality.qqGroupsEmpty') }}</p><p v-if="groupsError" role="alert" class="text-xs text-amber-600">{{ groupsError }}</p><p class="text-xs leading-relaxed text-gray-500">{{ t('accountQuality.qqHint') }}</p></section>
     </div>

@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import PlatformIcon from '@/components/common/PlatformIcon.vue'
+import StatusIndicator from './StatusIndicator.vue'
 import type { Binding, Transport } from '@/api/admin/upstream-governance'
 // Imported accounts of one upstream. Event history lives in the operations timeline.
 const props = defineProps<{
@@ -15,19 +16,11 @@ const remoteNames = computed(() => new Map(props.remoteGroups?.map(group => [gro
 <template>
   <section class="space-y-6">
     <section class="min-w-0 space-y-3">
-      <div>
-        <h3 class="font-semibold">
-          {{ t('governance.bindings') }}
-          <span class="ml-1 text-sm font-normal text-gray-400">{{
-            bindings.length
-          }}</span>
-        </h3>
-        <p class="mt-1 text-xs text-gray-500">{{ t('governance.groupsTab.accountsHint') }}</p>
-      </div>
-      <p
-        v-if="!bindings.length"
-        class="rounded-xl border border-dashed border-gray-200 p-6 text-center text-sm text-gray-400 dark:border-dark-600"
-      >
+      <h3 class="font-semibold">
+        {{ t('governance.bindings') }}
+        <span class="ml-1 text-sm font-normal text-gray-400">{{ bindings.length }}</span>
+      </h3>
+      <p v-if="!bindings.length" class="rounded-xl border border-dashed border-gray-200 p-6 text-center text-sm text-gray-400 dark:border-dark-600">
         {{ t('governance.noBindings') }}
       </p>
       <article
@@ -46,7 +39,7 @@ const remoteNames = computed(() => new Map(props.remoteGroups?.map(group => [gro
             <template v-if="binding.account_id > 0">
               {{ binding.account_name || t('governance.accountNameUnavailable') }}
               <span class="ml-1 text-gray-400">#{{ binding.account_id }}</span>
-              <span v-if="binding.account_deleted" class="ml-2 rounded bg-gray-100 px-1.5 py-0.5 text-gray-500 dark:bg-dark-700 dark:text-gray-400">{{ t('governance.accountDeleted') }}</span>
+              <StatusIndicator v-if="binding.account_deleted" class="ml-2 align-middle" :label="t('governance.accountDeleted')" tone="neutral" icon="xCircle" />
             </template>
             <template v-else>{{ t('governance.pendingImport') }}</template>
           </p>

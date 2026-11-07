@@ -1072,6 +1072,7 @@ export default {
   plazaUnavailable: 'The upstream model plaza was unavailable. Catalog collection succeeded with the other available pricing sources.',
   channelsUnavailable: 'The upstream channel listing was unavailable. Groups and any other returned pricing sources are still shown.',
   channelsPricingUnavailable: 'Upstream channels and their pricing are unavailable. The collected groups remain available; missing prices are shown as unknown.',
+  officialPricingUnavailable: 'Invalid official reference prices were skipped for some models. Groups, models and valid upstream prices were collected normally.',
   channelsNotExposed: 'This New API site does not expose channel details to the current user. Its visible groups and any available prices are still shown.',
   pricingUnavailable: 'Upstream pricing could not be read. Missing prices remain unknown.',
   complexPricingNotFlattened: 'Some upstream prices use tiers, expressions or additional billing rules. Their details are preserved instead of being reduced to a single unit price.',

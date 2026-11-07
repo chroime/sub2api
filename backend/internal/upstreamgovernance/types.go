@@ -137,6 +137,7 @@ type RemoteGroup struct {
 	ID                     string        `json:"id"`
 	Name                   string        `json:"name"`
 	Description            string        `json:"description,omitempty"`
+	IsExclusive            bool          `json:"is_exclusive"`
 	Platform               string        `json:"platform"`
 	RateMultiplier         *float64      `json:"rate_multiplier"`
 	UserRateMultiplier     *float64      `json:"user_rate_multiplier"`
@@ -299,13 +300,16 @@ type Preview struct {
 	Result      *ApplyResult `json:"result,omitempty"`
 }
 type Event struct {
-	ID           int64     `json:"id"`
-	SiteID       int64     `json:"site_id"`
-	Kind         string    `json:"kind"`
-	Resource     string    `json:"resource"`
-	ResourceName string    `json:"resource_name,omitempty"`
-	Before       string    `json:"before"`
-	After        string    `json:"after"`
+	ID           int64  `json:"id"`
+	SiteID       int64  `json:"site_id"`
+	Kind         string `json:"kind"`
+	Resource     string `json:"resource"`
+	ResourceName string `json:"resource_name,omitempty"`
+	Before       string `json:"before"`
+	After        string `json:"after"`
+	// Exclusive is the in-memory notification projection of either side of
+	// a group diff. The durable audit retains the original values separately.
+	Exclusive    bool      `json:"exclusive,omitempty"`
 	Acknowledged bool      `json:"acknowledged"`
 	CreatedAt    time.Time `json:"created_at"`
 }

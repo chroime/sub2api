@@ -60,6 +60,7 @@ func (c *platformConnector) subCatalog(ctx context.Context, s Site, session Sess
 		ID          int64    `json:"id"`
 		Name        string   `json:"name"`
 		Description string   `json:"description"`
+		IsExclusive bool     `json:"is_exclusive"`
 		Platform    string   `json:"platform"`
 		Rate        *float64 `json:"rate_multiplier"`
 		PeakEnabled bool     `json:"peak_rate_enabled"`
@@ -101,7 +102,7 @@ func (c *platformConnector) subCatalog(ctx context.Context, s Site, session Sess
 		if len(g.Description) > 300 {
 			return Catalog{}, ErrUnsupported
 		}
-		r := RemoteGroup{ID: id, Name: g.Name, Description: g.Description, Platform: g.Platform, RateMultiplier: g.Rate, ResolvedRateMultiplier: g.Rate, PeakRateEnabled: g.PeakEnabled, PeakStart: g.PeakStart, PeakEnd: g.PeakEnd, PeakRateMultiplier: g.PeakRate, Models: []string{}, Prices: []RemotePrice{}, Source: "sub2api:user-visible-groups"}
+		r := RemoteGroup{ID: id, Name: g.Name, Description: g.Description, IsExclusive: g.IsExclusive, Platform: g.Platform, RateMultiplier: g.Rate, ResolvedRateMultiplier: g.Rate, PeakRateEnabled: g.PeakEnabled, PeakStart: g.PeakStart, PeakEnd: g.PeakEnd, PeakRateMultiplier: g.PeakRate, Models: []string{}, Prices: []RemotePrice{}, Source: "sub2api:user-visible-groups"}
 		if override, ok := rates[id]; ok {
 			if override == nil || !connectorValidRate(override) {
 				return Catalog{}, ErrUnsupported
@@ -222,6 +223,7 @@ func (c *platformConnector) newCatalog(ctx context.Context, s Site, session Sess
 		Ratio       json.RawMessage `json:"ratio"`
 		Desc        string          `json:"desc"`
 		Description string          `json:"description"`
+		IsExclusive bool            `json:"is_exclusive"`
 	}
 	if e := c.data(ctx, s, session, "GET", "/api/user/self/groups", nil, &groups); e != nil {
 		return Catalog{}, e
@@ -271,7 +273,7 @@ func (c *platformConnector) newCatalog(ctx context.Context, s Site, session Sess
 		if name == "" {
 			name = id
 		}
-		catalog.Groups = append(catalog.Groups, RemoteGroup{ID: id, Name: name, Description: g.Description, Platform: "unknown", ResolvedRateMultiplier: rate, UserRateMultiplier: rate, Models: models, Prices: []RemotePrice{}, Source: "newapi:user-self-groups"})
+		catalog.Groups = append(catalog.Groups, RemoteGroup{ID: id, Name: name, Description: g.Description, IsExclusive: g.IsExclusive, Platform: "unknown", ResolvedRateMultiplier: rate, UserRateMultiplier: rate, Models: models, Prices: []RemotePrice{}, Source: "newapi:user-self-groups"})
 	}
 	var prices []map[string]json.RawMessage
 	pricingResponse, pricingRaw, e := c.request(ctx, s, session, "GET", "/api/pricing", nil, nil, true)

@@ -9,6 +9,7 @@ import newapiLogo from '@/assets/governance/newapi.png'
 import { formatGovernanceTime } from './format'
 import { siteStateKeys } from './feedback'
 import { cadenceText } from './cadence'
+import StatusIndicator from './StatusIndicator.vue'
 const props = withDefaults(defineProps<{
   sites: Site[]
   disabled?: boolean
@@ -126,7 +127,7 @@ function pick(value: string | number | boolean | null) {
             <span v-if="site.balance" data-test="site-balance" class="shrink-0 text-xs font-semibold tabular-nums" :class="balanceClass(site)">{{ balanceText(site.balance) }}</span>
           </span>
           <span class="mt-0.5 flex min-w-0 items-center gap-1.5 pl-[1.625rem] text-xs">
-            <span v-for="issue in issues(site)" :key="issue.key" :data-test="issue.test" class="shrink-0 font-medium" :class="issue.severe ? 'text-red-600 dark:text-red-400' : 'text-amber-700 dark:text-amber-400'">{{ issue.text }}</span>
+            <StatusIndicator v-for="issue in issues(site)" :key="issue.key" :data-test="issue.test" :label="issue.text" :tone="issue.severe ? 'danger' : 'warning'" tabindex="-1" />
             <span class="min-w-0 flex-1 truncate text-gray-500 dark:text-dark-300">{{ collection(site) }}</span>
             <time class="shrink-0 text-[11px] tabular-nums text-gray-400" :datetime="site.last_sync_at || undefined">{{ lastSync(site.last_sync_at) }}</time>
           </span>

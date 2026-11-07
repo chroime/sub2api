@@ -958,6 +958,108 @@ describe('governance page', () => {
     expect(wrapper.getComponent(BalanceMonitorPanel).props('site').id).toBe(2)
     wrapper.unmount()
   })
+  it.each([
+    { status: 'error', stored: 'unsupported_contract', failed: 'unsupported_contract' },
+    { status: 'reauth_required', stored: 'authorization_expired', failed: 'reauth_required' },
+    { status: 'error', stored: 'unknown_same', failed: 'unknown_same' },
+  ])('shows a repeated collection error once for $status / $stored', async ({ status, stored, failed }) => {
+    const site: Site = { id: 1, name: 'Failed collection', platform: 'sub2api', base_url: 'https://fixture.example', enabled: true, interval_minutes: 15, proxy_id: null, version: 1, has_credential: true, status, last_error: stored, last_sync_at: null }
+    vi.mocked(api.list).mockResolvedValue([site])
+    vi.mocked(api.catalog).mockRejectedValue({ status: 404 })
+    vi.mocked(api.bindings).mockResolvedValue([])
+    vi.mocked(api.sync).mockRejectedValueOnce({ reason: failed })
+    await router.push('/admin/upstream-governance?site=1')
+    const wrapper = mount(View, { global: { stubs: { BaseDialog: true } } })
+    await flushPromises()
+    await wrapper.get('#governance-collect').trigger('click')
+    await flushPromises()
+    expect(wrapper.findAll('[role=alert]').filter(alert => alert.isVisible())).toHaveLength(1)
+    expect(wrapper.get('#governance-collect').attributes('disabled')).toBeUndefined()
+  })
+  it.each([
+    { stored: 'unsupported_contract', failure: { reason: 'timeout' } },
+    { stored: 'unknown_stored', failure: { reason: 'unknown_current' } },
+    { stored: 'operation_failed', failure: { status: 503 } },
+  ])('keeps a distinct collection error alongside stored $stored', async ({ stored, failure }) => {
+    const site: Site = { id: 1, name: 'Two collection errors', platform: 'sub2api', base_url: 'https://fixture.example', enabled: true, interval_minutes: 15, proxy_id: null, version: 1, has_credential: true, status: 'error', last_error: stored, last_sync_at: null }
+    vi.mocked(api.list).mockResolvedValue([site])
+    vi.mocked(api.catalog).mockRejectedValue({ status: 404 })
+    vi.mocked(api.bindings).mockResolvedValue([])
+    vi.mocked(api.sync).mockRejectedValueOnce(failure)
+    await router.push('/admin/upstream-governance?site=1')
+    const wrapper = mount(View, { global: { stubs: { BaseDialog: true } } })
+    await flushPromises()
+    await wrapper.get('#governance-collect').trigger('click')
+    await flushPromises()
+    expect(wrapper.findAll('[role=alert]').filter(alert => alert.isVisible())).toHaveLength(2)
+  })
+  it('keeps a metadata read failure separate from the stored collection failure', async () => {
+    const site: Site = { id: 1, name: 'Metadata failure', platform: 'sub2api', base_url: 'https://fixture.example', enabled: true, interval_minutes: 15, proxy_id: null, version: 1, has_credential: true, status: 'error', last_error: 'timeout', last_sync_at: null }
+    vi.mocked(api.list).mockResolvedValue([site])
+    vi.mocked(api.catalog).mockRejectedValue({ status: 404 })
+    vi.mocked(api.bindings).mockResolvedValue([])
+    vi.mocked(api.sync).mockResolvedValueOnce({ id: 1, site_id: 1, site_version: 1, created_at: '', catalog: { groups: [], channels: [], warnings: [] } })
+    await router.push('/admin/upstream-governance?site=1')
+    const wrapper = mount(View, { global: { stubs: { BaseDialog: true } } })
+    await flushPromises()
+    vi.mocked(api.bindings).mockRejectedValueOnce({ reason: 'timeout' })
+    await wrapper.get('#governance-collect').trigger('click')
+    await flushPromises()
+    expect(wrapper.findAll('[role=alert]').filter(alert => alert.isVisible())).toHaveLength(2)
+  })
+  it('keeps deletion failures inside their dialog without importing the page collection error', async () => {
+    const site: Site = { id: 1, name: 'Delete scope', platform: 'sub2api', base_url: 'https://fixture.example', enabled: true, interval_minutes: 15, proxy_id: null, version: 1, has_credential: true, status: 'healthy', last_error: '', last_sync_at: null }
+    vi.mocked(api.list).mockResolvedValue([site])
+    vi.mocked(api.catalog).mockRejectedValue({ status: 404 })
+    vi.mocked(api.bindings).mockResolvedValue([])
+    vi.mocked(api.sync).mockRejectedValueOnce({ reason: 'timeout' })
+    vi.mocked(api.remove).mockRejectedValueOnce({ reason: 'site_in_use', status: 409 })
+    await router.push('/admin/upstream-governance?site=1')
+    const wrapper = mount(View, { global: { stubs: { BaseDialog: { name: 'BaseDialog', props: ['show'], template: '<div v-if="show" data-test="delete-dialog"><slot /></div>' } } } })
+    await flushPromises()
+    await wrapper.get('#governance-collect').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-test=site-delete]').trigger('click')
+    expect(wrapper.get('[data-test=delete-dialog]').text()).not.toContain('governance.timeout')
+    await wrapper.get('[data-test=confirm-delete-site]').trigger('click')
+    await flushPromises()
+    const dialog = wrapper.get('[data-test=delete-dialog]')
+    expect(dialog.text()).toContain('governance.siteInUse')
+    expect(dialog.text()).not.toContain('governance.timeout')
+    const pageAlerts = wrapper.findAll('[role=alert]').filter(alert => !dialog.element.contains(alert.element) && alert.isVisible())
+    expect(pageAlerts.map(alert => alert.text())).toEqual(['governance.timeout'])
+    wrapper.findAllComponents({ name: 'BaseDialog' }).find(dialog => dialog.props('show'))!.vm.$emit('close')
+    await flushPromises()
+    await wrapper.get('[data-test=site-delete]').trigger('click')
+    expect(wrapper.get('[data-test=delete-dialog]').text()).not.toContain('governance.siteInUse')
+    vi.mocked(api.remove).mockResolvedValueOnce(undefined)
+    vi.mocked(api.list).mockResolvedValueOnce([])
+    await wrapper.get('[data-test=confirm-delete-site]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-test=governance-error]').exists()).toBe(false)
+    expect(wrapper.find('[data-test=delete-dialog]').exists()).toBe(false)
+  })
+  it('keeps an editor save failure in the editor while retaining the earlier page error', async () => {
+    const site: Site = { id: 1, name: 'Edit scope', platform: 'sub2api', base_url: 'https://fixture.example', enabled: true, interval_minutes: 15, proxy_id: null, version: 1, has_credential: true, status: 'healthy', last_error: '', last_sync_at: null }
+    vi.mocked(api.list).mockResolvedValue([site])
+    vi.mocked(api.catalog).mockRejectedValue({ status: 404 })
+    vi.mocked(api.bindings).mockResolvedValue([])
+    vi.mocked(api.sync).mockRejectedValueOnce({ reason: 'timeout' })
+    vi.mocked(api.loginCredentials).mockResolvedValueOnce({ version: 1, username: '', password: '' })
+    vi.mocked(api.update).mockRejectedValueOnce({ reason: 'unsupported_contract' })
+    await router.push('/admin/upstream-governance?site=1')
+    const wrapper = mount(View, { global: { stubs: { BaseDialog: { props: ['show'], template: '<div v-if="show"><slot /></div>' } } } })
+    await flushPromises()
+    await wrapper.get('#governance-collect').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-test=site-edit]').trigger('click')
+    await flushPromises()
+    await wrapper.get('#governance-edit-form').trigger('submit')
+    await flushPromises()
+    expect(wrapper.getComponent(SiteEditDialog).get('[role=alert]').text()).toContain('governance.unsupported')
+    expect(wrapper.get('[data-test=governance-error]').text()).toBe('governance.timeout')
+    expect(wrapper.get('#governance-collect').attributes('disabled')).toBeUndefined()
+  })
   it('retains newly connected authorization when automatic collection fails so collection can be retried', async () => {
     const site = { id: 1, name: 'Disconnected site', platform: 'sub2api' as const, base_url: 'https://fixture.example', enabled: true, interval_minutes: 15, proxy_id: null, version: 1, has_credential: false, status: 'disconnected', last_error: '', last_sync_at: null }
     vi.mocked(api.list).mockResolvedValue([site])

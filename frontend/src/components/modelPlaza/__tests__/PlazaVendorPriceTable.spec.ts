@@ -132,7 +132,8 @@ describe('PlazaVendorPriceTable 本站价与官方价', () => {
     })
     const wrapper = mountTable([m], group())
     expect(wrapper.get('thead').text()).toContain('modelPlaza.priceTable.sitePrice')
-    expect(wrapper.get('tbody tr').findAll('td')).toHaveLength(8)
+    expect(wrapper.get('tbody tr').findAll('td')).toHaveLength(4)
+    expect(wrapper.findAll('[data-site-price]')).toHaveLength(4)
     expect(wrapper.text()).toContain('$1.50')
 
     await wrapper.setProps({ group: null })
@@ -143,7 +144,8 @@ describe('PlazaVendorPriceTable 本站价与官方价', () => {
 
     await wrapper.setProps({ group: group() })
     expect(wrapper.get('thead').text()).toContain('modelPlaza.priceTable.sitePrice')
-    expect(wrapper.get('tbody tr').findAll('td')).toHaveLength(8)
+    expect(wrapper.get('tbody tr').findAll('td')).toHaveLength(4)
+    expect(wrapper.findAll('[data-site-price]')).toHaveLength(4)
     expect(wrapper.text()).toContain('$1.50')
   })
 
@@ -163,6 +165,53 @@ describe('PlazaVendorPriceTable 本站价与官方价', () => {
     ).text()
     expect(text).toContain('$0.60')
     expect(text).not.toContain('$1.50')
+  })
+
+  it('每个项目对比真实折后金额，不能把分组倍率当作官方折扣', () => {
+    const m = tokenModel({ official_pricing: { input_price: 3e-6, output_price: 1e-5, cache_write_price: null, cache_read_price: null } })
+    m.pricing!.input_price = 5e-6
+    const wrapper = mountTable([m], group({ rate_multiplier: 0.5 }))
+    const input = wrapper.get('tbody td')
+    expect(input.get('[data-reference-price]').text()).toBe('$3.00')
+    expect(input.get('[data-site-price]').text()).toBe('$2.50')
+    expect(input.get('[data-price-difference]').text()).toContain('$0.50')
+    expect(input.get('[data-price-difference]').text()).toContain('16.66%')
+    expect(input.get('[data-price-difference]').text()).not.toContain('50%')
+  })
+
+  it('同价和比官方更贵时如实显示，不展示节省', () => {
+    const m = tokenModel({ official_pricing: { input_price: 3e-6, output_price: 1e-5, cache_write_price: null, cache_read_price: null } })
+    const wrapper = mountTable([m], group({ rate_multiplier: 1 }))
+    const cells = wrapper.get('tbody tr').findAll('td')
+    expect(cells[0].get('[data-comparison]').attributes('data-comparison')).toBe('equal')
+    expect(cells[1].get('[data-comparison]').attributes('data-comparison')).toBe('higher')
+    expect(cells[1].get('[data-price-difference]').text()).toContain('modelPlaza.comparison.extraAmount')
+    expect(cells[1].get('[data-price-difference]').text()).toContain('$5.00')
+    expect(cells[1].find('[data-reference-price].line-through').exists()).toBe(false)
+  })
+
+  it('缺参考价不展示优惠，明确零元本站价可省100%', () => {
+    const missing = mountTable([tokenModel()], group())
+    expect(missing.findAll('[data-price-difference]')).toHaveLength(0)
+    const m = tokenModel({ official_pricing: { input_price: 3e-6, output_price: 1.5e-5, cache_write_price: null, cache_read_price: null } })
+    const free = mountTable([m], group({ user_rate_multiplier: 0 }))
+    expect(free.get('[data-site-price]').text()).toBe('$0.00')
+    expect(free.get('[data-price-difference]').text()).toContain('100%')
+  })
+
+  it('正的本站价格不会因百分比舍入展示为100%优惠', () => {
+    const m = tokenModel({ official_pricing: { input_price: 3e-6, output_price: 1.5e-5, cache_write_price: null, cache_read_price: null } })
+    const wrapper = mountTable([m], group({ rate_multiplier: 0.000001 }))
+    expect(wrapper.get('[data-price-difference]').text()).toContain('99.99%')
+    expect(wrapper.get('[data-price-difference]').text()).not.toContain('100%')
+  })
+
+  it('整百分比优惠不会因浮点噪音少显示0.01%', () => {
+    const m = tokenModel({ official_pricing: { input_price: 0.01e-6, output_price: null, cache_write_price: null, cache_read_price: null } })
+    m.pricing!.input_price = 0.009e-6
+    const wrapper = mountTable([m], group({ rate_multiplier: 1 }))
+    expect(wrapper.get('[data-price-difference]').text()).toContain('10%')
+    expect(wrapper.get('[data-price-difference]').text()).not.toContain('9.99%')
   })
 })
 
@@ -209,7 +258,9 @@ describe('PlazaVendorPriceTable 缓存与思考等级', () => {
   it('支持 5m/1h 分档时显示 1h 缓存写入价', () => {
     const m = tokenModel()
     m.pricing!.cache_write_1h_price = 6e-6
-    expect(mountTable([m]).text()).toContain('1h $6.00')
+    const cache = mountTable([m]).get('tbody tr').findAll('td')[3]
+    const oneHour = cache.findAll('.plaza-price-pair').find((pair) => pair.find('[data-price-tier]').exists() && pair.get('[data-price-tier]').text().includes('1h'))!
+    expect(oneHour.get('[data-site-price]').text()).toBe('$6.00')
   })
 
   it('1h 价与 5m 价相同时不重复显示', () => {
@@ -260,9 +311,11 @@ describe('PlazaVendorPriceTable 币种', () => {
         cache_write_price: null, cache_read_price: null, per_request_price: null }
     ]
     const text = mountTable([m]).text()
-    // 档位标签只出现在输入列：本站价、官方价两侧各一次
-    expect(text.match(/≤32K/g)).toHaveLength(2)
-    expect(text.match(/>32K/g)).toHaveLength(2)
+    // 每项单价的参考与折后价共用相同档位标签。
+    expect(text.match(/≤32K/g)).toHaveLength(4)
+    expect(text.match(/>32K/g)).toHaveLength(4)
+    expect(text).toContain('modelPlaza.comparison.configuredReference')
+    expect(text).not.toContain('modelPlaza.comparison.officialReference')
   })
 })
 
@@ -362,15 +415,17 @@ describe('PlazaVendorPriceTable 按张与按秒计费', () => {
   })
 
   it('选中分组后本站价按视频单价乘倍率，官方价不变', () => {
-    const text = mountTable([videoModel()], group({ rate_multiplier: 0.5 })).get('tbody tr').text()
-    expect(text).toContain('480P $0.04modelPlaza.table.perUnitSecond')
-    expect(text).toContain('720P $0.07modelPlaza.table.perUnitSecond')
-    expect(text).toContain('480P $0.08modelPlaza.table.perUnitSecond')
+    const pairs = mountTable([videoModel()], group({ rate_multiplier: 0.5 })).findAll('.plaza-price-pair')
+    expect(pairs[0].get('[data-price-tier]').text()).toBe('480P')
+    expect(pairs[0].get('[data-site-price]').text()).toBe('$0.04modelPlaza.table.perUnitSecond')
+    expect(pairs[0].get('[data-reference-price]').text()).toBe('$0.08modelPlaza.table.perUnitSecond')
+    expect(pairs[1].get('[data-price-tier]').text()).toBe('720P')
+    expect(pairs[1].get('[data-site-price]').text()).toBe('$0.07modelPlaza.table.perUnitSecond')
   })
 
   it('视频独立倍率覆盖分组倍率', () => {
     const g = group({ rate_multiplier: 0.5, video_rate_independent: true, video_rate_multiplier: 2 })
-    expect(mountTable([videoModel()], g).text()).toContain('480P $0.16modelPlaza.table.perUnitSecond')
+    expect(mountTable([videoModel()], g).get('[data-site-price]').text()).toBe('$0.16modelPlaza.table.perUnitSecond')
   })
 
   it('图片模型的官方单价按张展示', () => {
@@ -394,7 +449,7 @@ describe('PlazaVendorPriceTable 暂未定价', () => {
 
     const scoped = mountTable([unpriced()], group()).get('tbody tr')
     expect(scoped.findAll('td')).toHaveLength(1)
-    expect(scoped.get('[data-unpriced]').attributes('colspan')).toBe('8')
+    expect(scoped.get('[data-unpriced]').attributes('colspan')).toBe('4')
   })
 
   it('只缺官方价时仍显示本站价', () => {

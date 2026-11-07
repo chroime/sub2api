@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -19,6 +20,8 @@ const (
 type ChangeNotification struct {
 	ID              int64      `json:"id"`
 	SiteID          int64      `json:"site_id"`
+	GroupResource   string     `json:"group_resource,omitempty"`
+	LocalGroupID    int64      `json:"local_group_id,omitempty"`
 	DedupKey        string     `json:"dedup_key"`
 	Recipient       string     `json:"recipient"`
 	Kind            string     `json:"kind"`
@@ -50,6 +53,7 @@ type ChangeNotice struct {
 	// GroupChanges are filtered before enqueueing the rendered durable body.
 	GroupChanges  []GroupChangeDetail
 	GroupResource string
+	LocalGroupID  int64
 	// AstrBotText is an optional compact rendering for QQ/AstrBot delivery.
 	// Email delivery continues to use Subject and Body so operators retain the
 	// detailed audit description there.
@@ -122,7 +126,8 @@ func renderPricingOperationNotice(site Site, op PricingOperation) ChangeNotice {
 	}
 	return ChangeNotice{
 		SiteID: site.ID, SiteName: site.Name, BaseURL: site.BaseURL,
-		Kind: kind, Severity: severity,
+		LocalGroupID: op.LocalGroupID,
+		Kind:         kind, Severity: severity,
 		DedupKey:        fmt.Sprintf("site:%d:pricing:group:%d:revision:%d", site.ID, op.LocalGroupID, op.CostFactRevision),
 		Subject:         subject,
 		Body:            fmt.Sprintf("上游名称：%s\n站点URL：%s\n本地分组编号：%d\n处理结果：%s\n处理原因：%s\n观察成本：%.8g\n目标售价：%.8g。", site.Name, site.BaseURL, op.LocalGroupID, pricingOperationStatusText(op.Status), pricingOperationReasonText(op.Reason), op.Decision.Cost, op.Decision.TargetSale),
@@ -174,6 +179,59 @@ type ChangeNotificationStore interface {
 	CompleteChangeNotification(context.Context, int64, time.Time, error, time.Time) error
 }
 
+// A visibility read is required for group notices; unavailable reads must not
+// authorize delivery. SQL checks current attributes and later private history.
+type ChangeNotificationPrivacyReader interface {
+	ChangeNotificationIsPublic(context.Context, ChangeNotification) (bool, error)
+}
+
+func changeNotificationGroupScoped(item ChangeNotification) bool {
+	if item.GroupResource != "" || item.LocalGroupID > 0 || strings.HasPrefix(item.Kind, "group_") {
+		return true
+	}
+	switch item.Kind {
+	case "catalog_change", "rate_change", "price_change", "pricing_change", "protection_change", "model_change":
+		return true
+	}
+	return false
+}
+
+// Old pricing rows have a structured key. Catalog keys are hashes and cannot
+// safely identify a group; do not infer group identity from rendered text.
+func locateChangeNotification(item *ChangeNotification) {
+	item.GroupResource = strings.TrimSpace(item.GroupResource)
+	if item.LocalGroupID != 0 || (item.Kind != "pricing_change" && item.Kind != "protection_change") {
+		return
+	}
+	parts := strings.Split(item.DedupKey, ":")
+	if len(parts) != 7 || parts[0] != "site" || parts[2] != "pricing" || parts[3] != "group" || parts[5] != "revision" {
+		return
+	}
+	siteID, siteErr := strconv.ParseInt(parts[1], 10, 64)
+	groupID, groupErr := strconv.ParseInt(parts[4], 10, 64)
+	revision, revisionErr := strconv.ParseInt(parts[6], 10, 64)
+	if siteErr == nil && groupErr == nil && revisionErr == nil && siteID == item.SiteID && groupID > 0 && revision >= 0 {
+		item.LocalGroupID = groupID
+	}
+}
+
+func (q *ChangeNotificationQueue) notificationIsPublic(ctx context.Context, item ChangeNotification) (bool, error) {
+	if item.InitialBaseline {
+		return false, nil
+	}
+	if !changeNotificationGroupScoped(item) {
+		return true, nil
+	}
+	if item.GroupResource == "" && item.LocalGroupID <= 0 {
+		return false, nil
+	}
+	reader, ok := q.store.(ChangeNotificationPrivacyReader)
+	if !ok {
+		return false, errors.New("change notification visibility reader is unavailable")
+	}
+	return reader.ChangeNotificationIsPublic(ctx, item)
+}
+
 type ChangeNotificationSender interface {
 	Send(context.Context, ChangeNotification) error
 }
@@ -186,6 +244,7 @@ func (s changeNotificationSender) Send(ctx context.Context, item ChangeNotificat
 	}
 	return s.notifier.SendChange(ctx, item.Recipient, ChangeNotice{
 		SiteID: item.SiteID, Kind: item.Kind, Severity: item.Severity,
+		GroupResource: item.GroupResource, LocalGroupID: item.LocalGroupID,
 		DedupKey: item.DedupKey, Subject: item.Subject, Body: item.Body,
 		InitialBaseline: item.InitialBaseline, ObservedAt: item.CreatedAt,
 	})
@@ -232,6 +291,10 @@ func (q *ChangeNotificationQueue) Enqueue(ctx context.Context, item ChangeNotifi
 	if item.NextAttemptAt.IsZero() {
 		item.NextAttemptAt = item.CreatedAt
 	}
+	locateChangeNotification(&item)
+	if public, err := q.notificationIsPublic(ctx, item); err != nil || !public {
+		return err
+	}
 	return q.store.EnqueueChangeNotification(ctx, item)
 }
 
@@ -263,6 +326,7 @@ func (q *ChangeNotificationQueue) EnqueueNotice(ctx context.Context, notice Chan
 	for _, recipient := range normalized {
 		if err := q.Enqueue(ctx, ChangeNotification{
 			SiteID: notice.SiteID, DedupKey: notice.DedupKey,
+			GroupResource: notice.GroupResource, LocalGroupID: notice.LocalGroupID,
 			Recipient: recipient, Kind: notice.Kind, Severity: notice.Severity,
 			Subject: notice.Subject, Body: notice.Body,
 			InitialBaseline: notice.InitialBaseline, CreatedAt: created,
@@ -345,8 +409,12 @@ func (q *ChangeNotificationQueue) Dispatch(ctx context.Context, limit int) error
 		if !claimed {
 			continue
 		}
-		var sendErr error
-		if q.sender == nil {
+		locateChangeNotification(&item)
+		public, sendErr := q.notificationIsPublic(ctx, item)
+		if sendErr != nil || !public {
+			// A private or unlocatable notice is consumed silently. A failed
+			// visibility query stays pending for retry, without sending content.
+		} else if q.sender == nil {
 			sendErr = errors.New("change notification sender is unavailable")
 		} else {
 			sendCtx, cancel := context.WithTimeout(ctx, 20*time.Second)

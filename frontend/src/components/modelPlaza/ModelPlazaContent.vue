@@ -1,24 +1,24 @@
 <template>
-  <div class="model-plaza-content space-y-5">
+  <div class="model-plaza-content space-y-6">
     <!-- 页头(独立形态下展示标题;后台形态 AppHeader 已有页面标题) -->
     <div v-if="!embedded">
-      <h1 class="text-2xl font-bold tracking-tight plaza-heading text-gray-900 dark:text-white sm:text-3xl">{{ t('modelPlaza.title') }}</h1>
-      <p class="mt-1.5 text-sm plaza-muted text-gray-500 dark:text-dark-400">{{ t('modelPlaza.description') }}</p>
+      <h1 class="text-3xl font-bold tracking-tight plaza-heading text-gray-900 dark:text-white sm:text-4xl">{{ t('modelPlaza.title') }}</h1>
+      <p class="mt-2 text-base leading-relaxed plaza-muted text-gray-500 dark:text-dark-400">{{ t('modelPlaza.description') }}</p>
     </div>
 
     <!-- 全局价格说明(管理员配置,Markdown) -->
     <div
       v-if="descriptionHtml"
-      class="plaza-description rounded-2xl border border-gray-100 bg-white px-5 py-4 text-sm shadow-card dark:border-dark-700/50 dark:bg-dark-800/50"
+      class="plaza-description rounded-2xl border border-gray-100 bg-white px-5 py-4 text-[15px] shadow-card dark:border-dark-700/50 dark:bg-dark-800/50 sm:text-base"
       v-html="descriptionHtml"
     ></div>
 
     <!-- 未登录提示 -->
     <p
       v-if="!isAuthenticated"
-      class="flex items-center gap-1.5 text-xs plaza-soft text-gray-400 dark:text-dark-500"
+      class="flex items-center gap-2 text-sm leading-relaxed plaza-soft text-gray-400 dark:text-dark-500"
     >
-      <Icon name="infoCircle" size="xs" class="h-3.5 w-3.5" />
+      <Icon name="infoCircle" size="sm" class="h-4 w-4 shrink-0" />
       {{ t('modelPlaza.anonymousHint') }}
     </p>
 
@@ -28,13 +28,13 @@
     </div>
     <div
       v-else-if="error"
-      class="plaza-error rounded-2xl border border-red-200 bg-red-50 px-5 py-8 text-center text-sm text-red-600 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"
+      class="plaza-error rounded-2xl border border-red-200 bg-red-50 px-5 py-8 text-center text-base text-red-600 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"
     >
       {{ t('modelPlaza.loadFailed') }}
     </div>
     <div
       v-else-if="groups.length === 0"
-      class="plaza-empty rounded-2xl border border-dashed border-gray-300 px-5 py-12 text-center text-sm plaza-muted text-gray-500 dark:border-dark-600 dark:text-dark-400"
+      class="plaza-empty rounded-2xl border border-dashed border-gray-300 px-5 py-12 text-center text-base plaza-muted text-gray-500 dark:border-dark-600 dark:text-dark-400"
     >
       {{ t('modelPlaza.empty') }}
     </div>
@@ -54,44 +54,49 @@
         />
       </aside>
 
-      <section class="min-w-0 space-y-3">
+      <section class="min-w-0 space-y-4">
         <!-- 全部分组只看官方价；选中分组后展示本站实付价与官方价对照。 -->
         <div class="flex flex-wrap items-center gap-3">
-          <label for="plaza-group-select" class="text-sm font-medium text-gray-700 dark:text-dark-200">
+          <label for="plaza-group-select" class="text-base font-semibold text-gray-700 dark:text-dark-200">
             {{ t('modelPlaza.priceTable.groupLabel') }}
           </label>
-          <div class="w-full sm:w-72">
+          <div class="plaza-group-select min-w-0 w-full sm:w-80">
             <Select
               id="plaza-group-select"
               :model-value="selectedGroupId"
               :options="groupSelectOptions"
               :search-placeholder="t('modelPlaza.priceTable.groupLabel')"
               @update:model-value="onGroupChange"
-            />
+            >
+              <template #option="{ option, selected }">
+                <span class="min-w-0 flex-1 truncate text-left text-[15px] leading-6">{{ option.label }}</span>
+                <Icon v-if="selected" name="check" size="sm" class="shrink-0 text-primary-500" :stroke-width="2" />
+              </template>
+            </Select>
           </div>
           <!-- 选中分组后倍率已在下拉框和表头标出，不再重复 -->
-          <span v-if="!selectedGroup" class="text-xs plaza-soft text-gray-400 dark:text-dark-500">
+          <span v-if="!selectedGroup" class="text-sm leading-relaxed plaza-soft text-gray-400 dark:text-dark-500">
             {{ t('modelPlaza.priceTable.allGroupsHint') }}
           </span>
         </div>
 
         <p
           v-if="selectedGroup?.description"
-          class="text-sm plaza-muted text-gray-500 dark:text-dark-400"
+          class="text-[15px] leading-relaxed plaza-muted text-gray-500 dark:text-dark-400"
         >
           {{ selectedGroup.description }}
         </p>
         <p
           v-if="peakNote"
-          class="inline-flex items-center gap-1 text-xs plaza-warning text-amber-600 dark:text-amber-400"
+          class="inline-flex items-center gap-1.5 text-sm leading-relaxed plaza-warning text-amber-600 dark:text-amber-400"
         >
-          <Icon name="clock" size="xs" class="h-3 w-3" />
+          <Icon name="clock" size="sm" class="h-4 w-4 shrink-0" />
           {{ peakNote }}
         </p>
 
-        <div class="flex items-baseline justify-between gap-3">
-          <h2 class="shrink-0 text-base font-semibold text-gray-900 dark:text-white">{{ currentVendorLabel }}</h2>
-          <span class="text-xs plaza-soft text-gray-400 dark:text-dark-500">
+        <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
+          <h2 class="shrink-0 text-xl font-semibold text-gray-900 dark:text-white">{{ currentVendorLabel }}</h2>
+          <span class="text-sm leading-relaxed plaza-soft text-gray-400 dark:text-dark-500">
             {{ t('modelPlaza.priceTable.unitNote') }}
           </span>
         </div>
@@ -106,7 +111,7 @@
         />
         <div
           v-else
-          class="plaza-empty rounded-2xl border border-dashed border-gray-300 px-5 py-12 text-center text-sm plaza-muted text-gray-500 dark:border-dark-600 dark:text-dark-400"
+          class="plaza-empty rounded-2xl border border-dashed border-gray-300 px-5 py-12 text-center text-base plaza-muted text-gray-500 dark:border-dark-600 dark:text-dark-400"
         >
           {{ searchActive ? t('modelPlaza.noSearchResult') : t('modelPlaza.detail.noModels') }}
         </div>
@@ -240,6 +245,12 @@ async function focusModel(model: PlazaModel, vendor: string) {
 </script>
 
 <style scoped>
+.plaza-group-select :deep(.select-trigger) {
+  min-height: 2.75rem;
+  font-size: 1rem;
+  line-height: 1.5rem;
+}
+
 .plaza-description {
   line-height: 1.7;
   overflow-wrap: anywhere;
@@ -272,7 +283,7 @@ async function focusModel(model: PlazaModel, vendor: string) {
 }
 
 .plaza-description :deep(code) {
-  @apply rounded bg-gray-100 px-1.5 py-0.5 font-mono text-xs dark:bg-dark-800;
+  @apply rounded bg-gray-100 px-1.5 py-0.5 font-mono text-sm dark:bg-dark-800;
 }
 
 .plaza-description :deep(blockquote) {

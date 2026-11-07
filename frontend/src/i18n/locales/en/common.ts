@@ -250,6 +250,7 @@ export default {
     passwordMinLength: 'Password must be at least 6 characters',
     loginFailed: 'Login failed. Please check your credentials and try again.',
     errors: {
+      INVALID_CREDENTIALS: 'Invalid email or password.',
       USER_NOT_ACTIVE: 'Account has been disabled.',
       EMAIL_BLOCKED: 'This email address is not allowed. Please use a different one.',
     },

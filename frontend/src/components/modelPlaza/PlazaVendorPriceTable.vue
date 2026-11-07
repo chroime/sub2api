@@ -1,12 +1,22 @@
 <template>
   <div
-    class="plaza-vendor-price-table overflow-x-auto rounded-2xl border border-gray-100 bg-white shadow-card dark:border-dark-700/50 dark:bg-dark-800/50"
+    class="plaza-vendor-price-table relative max-w-full overflow-x-auto rounded-2xl border border-gray-100 bg-white shadow-card focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-500 dark:border-dark-700/50 dark:bg-dark-800/50"
+    role="region"
+    tabindex="0"
+    :aria-label="caption"
   >
-    <table class="w-full border-collapse text-sm tabular-nums" :class="group ? 'min-w-[720px]' : 'min-w-[480px]'">
+    <div v-if="group" class="pz-comparison-heading flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 px-5 py-4 dark:border-dark-700">
+      <div class="min-w-0">
+        <p class="pz-title text-base font-semibold">{{ t('modelPlaza.comparison.title') }}</p>
+        <p class="mt-1 text-sm text-gray-500 dark:text-dark-300">{{ t('modelPlaza.comparison.subtitle') }}</p>
+      </div>
+      <span class="pz-rate-badge shrink-0 rounded-lg px-3 py-1.5 text-sm font-semibold" :title="t('modelPlaza.comparison.rateDetails')">{{ siteRateNote }}</span>
+    </div>
+    <table class="w-full border-collapse text-sm tabular-nums" :class="group ? 'min-w-[780px]' : 'min-w-[560px]'">
       <caption class="sr-only">{{ caption }}</caption>
       <thead>
         <!-- 全部分组只看官方价；选中分组后按相同列序对照本站价。 -->
-        <tr class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-dark-400">
+        <tr class="text-sm font-semibold tracking-wide text-gray-500 dark:text-dark-400">
           <th
             scope="col"
             rowspan="2"
@@ -18,30 +28,24 @@
           <th v-if="group" scope="colgroup" colspan="4" class="pz-bg pt-2 text-center">
             <div class="pz-title border-b pb-2 font-semibold">
               {{ t('modelPlaza.priceTable.sitePrice') }}
-              <span class="pz-unit ml-1 font-normal normal-case">{{ siteRateNote }}</span>
+              <span class="pz-unit ml-1 font-normal normal-case">{{ t('modelPlaza.comparison.standardPeriod') }}</span>
             </div>
           </th>
-          <th scope="colgroup" colspan="4" class="border-l border-gray-100 pt-2 text-center dark:border-dark-700/60">
+          <th v-else scope="colgroup" colspan="4" class="border-l border-gray-100 pt-2 text-center dark:border-dark-700/60">
             <div class="border-b border-gray-200 pb-2 text-gray-400 dark:border-dark-600 dark:text-dark-500">
               {{ t('modelPlaza.priceTable.official') }}
             </div>
           </th>
         </tr>
         <tr
-          class="border-b border-gray-200 text-[11px] font-medium uppercase leading-4 tracking-wide text-gray-400 dark:border-dark-700 dark:text-dark-500"
+          class="border-b border-gray-200 text-sm font-medium leading-5 text-gray-400 dark:border-dark-700 dark:text-dark-500"
         >
-          <template v-if="group">
-            <th scope="col" class="pz-bg px-2.5 py-2 text-right font-medium">{{ t('modelPlaza.table.input') }}</th>
-            <th scope="col" class="pz-bg px-2.5 py-2 text-right font-medium">{{ t('modelPlaza.table.output') }}</th>
-            <th scope="col" class="pz-bg px-2.5 py-2 text-right font-medium">{{ t('modelPlaza.priceTable.cacheRead') }}</th>
-            <th scope="col" class="pz-bg px-2.5 py-2 text-right font-medium">{{ t('modelPlaza.priceTable.cacheWrite') }}</th>
-          </template>
-          <th scope="col" class="border-l border-gray-100 px-2.5 py-2 text-right font-medium dark:border-dark-700/60">
+          <th scope="col" class="border-l border-gray-100 px-3 py-2 text-right font-medium dark:border-dark-700/60" :class="{ 'pz-bg': group }">
             {{ t('modelPlaza.table.input') }}
           </th>
-          <th scope="col" class="px-2.5 py-2 text-right font-medium">{{ t('modelPlaza.table.output') }}</th>
-          <th scope="col" class="px-2.5 py-2 text-right font-medium">{{ t('modelPlaza.priceTable.cacheRead') }}</th>
-          <th scope="col" class="px-2.5 py-2 pr-5 text-right font-medium">{{ t('modelPlaza.priceTable.cacheWrite') }}</th>
+          <th scope="col" class="px-3 py-2 text-right font-medium" :class="{ 'pz-bg': group }">{{ t('modelPlaza.table.output') }}</th>
+          <th scope="col" class="px-3 py-2 text-right font-medium" :class="{ 'pz-bg': group }">{{ t('modelPlaza.priceTable.cacheRead') }}</th>
+          <th scope="col" class="px-3 py-2 pr-5 text-right font-medium" :class="{ 'pz-bg': group }">{{ t('modelPlaza.priceTable.cacheWrite') }}</th>
         </tr>
       </thead>
       <tbody>
@@ -57,31 +61,34 @@
           <th scope="row" class="pz-sticky py-3 pl-5 pr-3 text-left align-middle font-normal">
             <div class="flex flex-wrap items-center gap-1.5">
               <ModelIcon :model="m.name" size="16px" />
-              <span class="font-mono text-[13px] font-medium text-gray-900 dark:text-white">{{ m.name }}</span>
+              <span class="break-all font-mono text-[15px] font-semibold text-gray-900 dark:text-white">{{ m.name }}</span>
               <span
                 v-if="billingMode(m) !== BILLING_MODE_TOKEN"
-                class="rounded-md bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500 dark:bg-dark-700/70 dark:text-dark-300"
+                class="rounded-md bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-500 dark:bg-dark-700/70 dark:text-dark-300"
               >
                 {{ unitBadge(billingMode(m)) }}
               </span>
               <span
                 v-if="isTiered(m)"
-                class="rounded-md bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500 dark:bg-dark-700/70 dark:text-dark-300"
+                class="rounded-md bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-500 dark:bg-dark-700/70 dark:text-dark-300"
                 :title="tierHint(m)"
               >
                 {{ t('modelPlaza.priceTable.tiered') }}
               </span>
               <span
                 v-if="group && m.long_context_basis === 'marginal'"
-                class="rounded-md bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500 dark:bg-dark-700/70 dark:text-dark-300"
+                class="rounded-md bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-500 dark:bg-dark-700/70 dark:text-dark-300"
                 :title="t('modelPlaza.table.tierHintMarginal')"
               >
                 {{ t('modelPlaza.table.marginalBadge') }}
               </span>
+              <span v-if="independentRate(m) != null" class="pz-rate-badge rounded-md px-1.5 py-0.5 text-xs font-medium">
+                {{ t('modelPlaza.comparison.independentRate', { rate: independentRate(m) }) }}
+              </span>
               <span
                 v-for="[effort, multiplier] in reasoningMultipliers(m)"
                 :key="effort"
-                class="rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/20 dark:text-amber-300"
+                class="rounded-md bg-amber-50 px-1.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/20 dark:text-amber-300"
                 :title="t('modelPlaza.table.reasoningMultiplierHint', { effort, multiplier })"
                 :data-reasoning-effort="effort"
               >
@@ -89,7 +96,7 @@
               </span>
               <span
                 v-if="isCny(m)"
-                class="rounded-md bg-red-50 px-1.5 py-0.5 text-[10px] font-medium text-red-600 dark:bg-red-900/20 dark:text-red-300"
+                class="rounded-md bg-red-50 px-1.5 py-0.5 text-xs font-medium text-red-600 dark:bg-red-900/20 dark:text-red-300"
                 :title="t('modelPlaza.priceTable.cnyHint')"
               >
                 CNY
@@ -98,7 +105,7 @@
             <!-- 分时倍率：时段内发起的请求整单乘倍率，只影响本站价 -->
             <div
               v-if="timePeriods(m).length"
-              class="mt-1.5 flex flex-wrap items-center gap-1 text-[11px] text-amber-700 dark:text-amber-300"
+              class="mt-1.5 flex flex-wrap items-center gap-1 text-xs text-amber-700 dark:text-amber-300"
               :title="periodHint(m)"
               data-time-pricing
             >
@@ -116,122 +123,98 @@
           <!-- 本站与官方都没有价格：合并成一格说明，避免整行破折号 -->
           <td
             v-if="isUnpriced(m)"
-            :colspan="group ? 8 : 4"
-            class="px-2.5 py-3 pr-5 text-center align-middle text-xs text-gray-400 dark:text-dark-500"
+            colspan="4"
+            class="px-2.5 py-3 pr-5 text-center align-middle text-sm text-gray-400 dark:text-dark-500"
             data-unpriced
           >
             {{ t('modelPlaza.priceTable.unpriced') }}
           </td>
           <template v-else>
-            <!-- 本站价：只在选中分组时展示，已乘生效倍率。 -->
-            <template v-if="group && billingMode(m) === BILLING_MODE_TOKEN">
-              <td
-                v-for="field in TOKEN_FIELDS"
-                :key="`site-${field}`"
-                class="pz-cell px-2.5 py-3 text-right align-middle font-mono"
-              >
-                <template v-if="isTiered(m)">
-                  <div
-                    v-for="(iv, idx) in tokenIntervals(m)"
-                    :key="idx"
-                    class="whitespace-nowrap text-xs leading-5"
-                    :title="tierHint(m)"
-                  >
-                    <span
-                      v-if="field === 'input_price'"
-                      class="mr-1 font-sans font-normal text-gray-400 dark:text-dark-500"
-                    >{{ tierLabel(iv) }}</span>
-                    <span class="font-semibold text-gray-900 dark:text-gray-50">
-                      {{ sitePrice(m, iv[field]) }}
-                    </span>
+            <!-- 每个计费项就地对照参考价与折后价，避免跨八列找差价。 -->
+            <template v-if="group">
+              <template v-if="billingMode(m) === BILLING_MODE_TOKEN">
+                <td v-for="field in TOKEN_FIELDS" :key="field" class="pz-cell px-3 py-4 text-right align-top">
+                  <div class="space-y-5">
+                    <PlazaPriceComparisonCell
+                      v-for="price in getTokenComparisons(m, group, field)"
+                      :key="price.key"
+                      :price="price"
+                    />
                   </div>
-                </template>
-                <template v-else>
-                  <div class="font-semibold text-gray-900 dark:text-gray-50">
-                    {{ sitePrice(m, m.pricing?.[field]) }}
-                  </div>
-                  <div
-                    v-if="field === 'cache_write_price' && site1hPrice(m) != null"
-                    class="mt-0.5 whitespace-nowrap text-[11px] font-normal text-gray-500 dark:text-dark-400"
-                    :title="t('modelPlaza.priceTable.cacheWrite1hHint')"
-                  >
-                    1h {{ sitePrice(m, site1hPrice(m)) }}
-                  </div>
-                </template>
+                </td>
+              </template>
+              <td v-else colspan="4" class="pz-cell px-4 py-4 align-top">
+                <div v-if="getUnitComparisons(m, group).length" class="flex flex-wrap justify-end gap-x-8 gap-y-4">
+                  <PlazaPriceComparisonCell
+                    v-for="price in getUnitComparisons(m, group)"
+                    :key="price.key"
+                    :price="price"
+                    :unit="unitSuffix(price.billingMode)"
+                    class="min-w-28 text-right"
+                  />
+                </div>
+                <p v-else class="text-right text-xs text-gray-400 dark:text-dark-400">—</p>
               </td>
             </template>
-            <td v-else-if="group" colspan="4" class="pz-cell px-2.5 py-3 text-right align-middle">
-              <div v-if="unitPrices(m.pricing).length" class="flex flex-wrap items-center justify-end gap-1.5">
-                <span
-                  v-for="p in unitPrices(m.pricing)"
-                  :key="p.label"
-                  class="inline-flex items-center gap-1 rounded-md bg-gray-100 px-2 py-0.5 font-mono text-xs text-gray-800 dark:bg-dark-700/60 dark:text-gray-200"
+            <template v-else>
+              <!-- 官方价：不乘倍率，列序与本站价一致 -->
+              <template v-if="officialTokenRow(m)">
+                <td
+                  v-for="(field, fieldIdx) in TOKEN_FIELDS"
+                  :key="`official-${field}`"
+                  class="px-2.5 py-3 text-right align-middle font-mono text-base text-gray-500 dark:text-dark-400"
+                  :class="[fieldIdx === 0 ? 'border-l border-gray-100 dark:border-dark-700/60' : '',
+                           fieldIdx === TOKEN_FIELDS.length - 1 ? 'pr-5' : '']"
                 >
-                  <span v-if="p.label" class="font-sans text-gray-400 dark:text-dark-500">{{ p.label }}</span>
-                  {{ money(m, p.price * siteRate(m), 1)
-                  }}<span class="font-sans text-gray-400 dark:text-dark-500">{{ unitSuffix(billingMode(m)) }}</span>
-                </span>
-              </div>
-              <span v-else class="text-gray-400 dark:text-dark-500">-</span>
-            </td>
-
-            <!-- 官方价：不乘倍率，列序与本站价一致 -->
-            <template v-if="officialTokenRow(m)">
+                  <template v-if="officialIntervals(m).length > 1">
+                    <div
+                      v-for="(iv, idx) in officialIntervals(m)"
+                      :key="idx"
+                      class="whitespace-nowrap leading-5"
+                      :title="t('modelPlaza.table.tierHint')"
+                    >
+                      <span
+                        v-if="field === 'input_price'"
+                        class="mr-1 font-sans text-gray-400 dark:text-dark-500"
+                      >{{ tierLabel(iv) }}</span>
+                      <span>{{ official(m, iv[field]) }}</span>
+                    </div>
+                  </template>
+                  <template v-else>
+                    <div :title="isCny(m) ? t('modelPlaza.priceTable.officialCnyHint') : undefined">
+                      {{ official(m, officialPrices(m)![field]) }}
+                    </div>
+                    <div
+                      v-if="field === 'cache_write_price' && official1hPrice(m) != null"
+                      class="mt-0.5 whitespace-nowrap text-sm text-gray-400 dark:text-dark-500"
+                      :title="t('modelPlaza.priceTable.cacheWrite1hHint')"
+                    >
+                      1h {{ official(m, official1hPrice(m)) }}
+                    </div>
+                  </template>
+                </td>
+              </template>
               <td
-                v-for="(field, fieldIdx) in TOKEN_FIELDS"
-                :key="`official-${field}`"
-                class="px-2.5 py-3 text-right align-middle font-mono text-xs text-gray-500 dark:text-dark-400"
-                :class="[fieldIdx === 0 ? 'border-l border-gray-100 dark:border-dark-700/60' : '',
-                         fieldIdx === TOKEN_FIELDS.length - 1 ? 'pr-5' : '']"
+                v-else-if="officialUnitPrices(m).length"
+                colspan="4"
+                class="border-l border-gray-100 px-2.5 py-3 pr-5 text-right align-middle dark:border-dark-700/60"
               >
-                <template v-if="officialIntervals(m).length > 1">
-                  <div
-                    v-for="(iv, idx) in officialIntervals(m)"
-                    :key="idx"
-                    class="whitespace-nowrap leading-5"
-                    :title="t('modelPlaza.table.tierHint')"
+                <div class="flex flex-wrap items-center justify-end gap-1.5">
+                  <span
+                    v-for="p in officialUnitPrices(m)"
+                    :key="p.label"
+                    class="inline-flex items-center gap-1 rounded-md px-2 py-0.5 font-mono text-base text-gray-500 ring-1 ring-inset ring-gray-200 dark:text-dark-400 dark:ring-dark-700"
                   >
-                    <span
-                      v-if="field === 'input_price'"
-                      class="mr-1 font-sans text-gray-400 dark:text-dark-500"
-                    >{{ tierLabel(iv) }}</span>
-                    <span>{{ official(m, iv[field]) }}</span>
-                  </div>
-                </template>
-                <template v-else>
-                  <div :title="isCny(m) ? t('modelPlaza.priceTable.officialCnyHint') : undefined">
-                    {{ official(m, officialPrices(m)![field]) }}
-                  </div>
-                  <div
-                    v-if="field === 'cache_write_price' && official1hPrice(m) != null"
-                    class="mt-0.5 whitespace-nowrap text-[11px] text-gray-400 dark:text-dark-500"
-                    :title="t('modelPlaza.priceTable.cacheWrite1hHint')"
-                  >
-                    1h {{ official(m, official1hPrice(m)) }}
-                  </div>
-                </template>
+                    <span v-if="p.label" class="font-sans text-gray-400 dark:text-dark-500">{{ p.label }}</span>
+                    {{ money(m, p.price, 1)
+                    }}<span class="font-sans text-gray-400 dark:text-dark-500">{{ unitSuffix(officialMode(m)) }}</span>
+                  </span>
+                </div>
+              </td>
+              <td v-else colspan="4" class="border-l border-gray-100 px-2.5 py-3 pr-5 text-right align-middle text-sm text-gray-400 dark:border-dark-700/60 dark:text-dark-500">
+                -
               </td>
             </template>
-            <td
-              v-else-if="officialUnitPrices(m).length"
-              colspan="4"
-              class="border-l border-gray-100 px-2.5 py-3 pr-5 text-right align-middle dark:border-dark-700/60"
-            >
-              <div class="flex flex-wrap items-center justify-end gap-1.5">
-                <span
-                  v-for="p in officialUnitPrices(m)"
-                  :key="p.label"
-                  class="inline-flex items-center gap-1 rounded-md px-2 py-0.5 font-mono text-xs text-gray-500 ring-1 ring-inset ring-gray-200 dark:text-dark-400 dark:ring-dark-700"
-                >
-                  <span v-if="p.label" class="font-sans text-gray-400 dark:text-dark-500">{{ p.label }}</span>
-                  {{ money(m, p.price, 1)
-                  }}<span class="font-sans text-gray-400 dark:text-dark-500">{{ unitSuffix(officialMode(m)) }}</span>
-                </span>
-              </div>
-            </td>
-            <td v-else colspan="4" class="border-l border-gray-100 px-2.5 py-3 pr-5 text-right align-middle text-xs text-gray-400 dark:border-dark-700/60 dark:text-dark-500">
-              -
-            </td>
           </template>
         </tr>
       </tbody>
@@ -243,6 +226,8 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ModelIcon from '@/components/common/ModelIcon.vue'
+import PlazaPriceComparisonCell from './PlazaPriceComparison.vue'
+import { getTokenComparisons, getUnitComparisons } from './plazaPriceComparison'
 import { formatScaled, resolveIntervalPrices } from '@/utils/pricing'
 import { isDomesticModelVendor, modelVendorOf } from '@/utils/modelVendor'
 import {
@@ -374,24 +359,10 @@ function groupRate(): number {
   return props.group.user_rate_multiplier ?? props.group.rate_multiplier
 }
 
-/** 本站生效倍率；图片/视频开启独立倍率时覆盖分组倍率，与计费口径一致。 */
-function siteRate(m: PlazaModel): number {
-  const g = props.group
-  if (!g) return 1
-  if (billingMode(m) === BILLING_MODE_IMAGE && g.image_rate_independent) return g.image_rate_multiplier ?? 1
-  if (billingMode(m) === BILLING_MODE_VIDEO && g.video_rate_independent) return Math.max(0, g.video_rate_multiplier ?? 1)
-  return groupRate()
-}
-
-/** 本站价：渠道/分组单价 × 本站倍率，与官方价同口径（/ 1M token）。 */
-function sitePrice(m: PlazaModel, value: number | null | undefined): string {
-  return value == null ? '-' : money(m, value * siteRate(m), PER_MILLION)
-}
-
-/** 1h 缓存写入价只在与 5m 价不同时有意义（计费区分 5m/1h）。 */
-function site1hPrice(m: PlazaModel): number | null {
-  const v = m.pricing?.cache_write_1h_price
-  return v != null && v !== m.pricing?.cache_write_price ? v : null
+function independentRate(m: PlazaModel): number | null {
+  if (billingMode(m) === BILLING_MODE_IMAGE && props.group?.image_rate_independent) return props.group.image_rate_multiplier
+  if (billingMode(m) === BILLING_MODE_VIDEO && props.group?.video_rate_independent) return props.group.video_rate_multiplier
+  return null
 }
 
 type OfficialTokenPrices = Pick<
@@ -556,4 +527,11 @@ tbody tr.pz-row-highlight > .pz-sticky {
 .pz-unit {
   color: color-mix(in srgb, var(--pz-title) 62%, transparent);
 }
+
+.pz-rate-badge {
+  color: var(--pz-title);
+  background: var(--public-accent-soft, var(--pz-bg));
+}
+
+.pz-comparison-heading { background: var(--pz-surface); }
 </style>

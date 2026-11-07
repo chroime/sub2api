@@ -28,7 +28,6 @@ const routes: RouteRecordRaw[] = [
       requiresAdmin: true,
       title: 'Smart Operations',
       titleKey: 'governance.smartOperations.title',
-      descriptionKey: 'governance.smartOperations.description',
     },
   },
   // ==================== Setup Routes ====================

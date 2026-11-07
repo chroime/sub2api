@@ -126,7 +126,8 @@ describe('global smart operations settings', () => {
   ])('renders exactly five group-event options for each channel in $locale', async ({ locale, labels }) => {
     const wrapper = mountView(locale)
     await flushPromises()
-    const [emailEvents, astrbotEvents] = wrapper.findAll('section > fieldset')
+    const emailEvents = wrapper.get('[data-test=email-events]')
+    const astrbotEvents = wrapper.get('[data-test=astrbot-events]')
     for (const fieldset of [emailEvents, astrbotEvents]) {
       expect(fieldset.findAll('input[type="checkbox"]')).toHaveLength(5)
       expect(fieldset.findAll('label').map(label => label.text())).toEqual(labels)
@@ -136,7 +137,8 @@ describe('global smart operations settings', () => {
   it('saves all ten switches independently without changing either channel destination or cadence', async () => {
     const wrapper = mountView()
     await flushPromises()
-    const [emailEvents, astrbotEvents] = wrapper.findAll('section > fieldset')
+    const emailEvents = wrapper.get('[data-test=email-events]')
+    const astrbotEvents = wrapper.get('[data-test=astrbot-events]')
     const emailInputs = emailEvents.findAll('input[type="checkbox"]')
     const astrbotInputs = astrbotEvents.findAll('input[type="checkbox"]')
     expect(emailInputs).toHaveLength(5)

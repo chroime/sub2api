@@ -387,10 +387,10 @@ describe('import confirmation', () => {
     wrapper.unmount()
   })
   it('translates known partial-collection warnings instead of showing internal warning codes', () => {
-    const warnings = ['sub2api_channels_pricing_unavailable', 'newapi_channels_not_exposed', 'newapi_pricing_unavailable', 'sub2api_complex_pricing_not_flattened', 'newapi_complex_pricing_not_flattened', 'sub2api_model_plaza_unavailable', 'sub2api_channels_unavailable']
+    const warnings = ['sub2api_channels_pricing_unavailable', 'newapi_channels_not_exposed', 'newapi_pricing_unavailable', 'sub2api_complex_pricing_not_flattened', 'newapi_complex_pricing_not_flattened', 'sub2api_model_plaza_unavailable', 'sub2api_channels_unavailable', 'sub2api_official_pricing_unavailable']
     const wrapper = mount(ImportPanel, { props: { ...props, snapshot: { ...props.snapshot, catalog: { ...props.snapshot.catalog, warnings } } } })
     for (const warning of warnings) expect(wrapper.text()).not.toContain(warning)
-    for (const key of ['channelsPricingUnavailable', 'channelsNotExposed', 'pricingUnavailable', 'complexPricingNotFlattened', 'plazaUnavailable', 'channelsUnavailable']) expect(wrapper.text()).toContain('governance.' + key)
+    for (const key of ['channelsPricingUnavailable', 'channelsNotExposed', 'pricingUnavailable', 'complexPricingNotFlattened', 'plazaUnavailable', 'channelsUnavailable', 'officialPricingUnavailable']) expect(wrapper.text()).toContain('governance.' + key)
   })
   it('keeps upstream prices in the frozen preview with token units converted to million tokens', async () => {
     const remote = { ...props.snapshot.catalog.groups[0]!, prices: [{ model: 'priced-model', platform: 'openai', unit: 'usd_per_token', input: 0.000002, output: 0, per_request: null, details: { time_pricing: [{ multiplier: 1.5 }] } }] }

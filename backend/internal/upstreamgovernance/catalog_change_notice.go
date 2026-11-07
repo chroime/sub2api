@@ -103,10 +103,21 @@ func groupRate(group RemoteGroup) *float64 {
 // Protocol, model, pricing and peak-only changes remain in audit history but
 // are deliberately not described as one of these events.
 func catalogEventDetails(event Event, catalog Catalog) []GroupChangeDetail {
+	if event.Exclusive {
+		return nil
+	}
+	for _, group := range catalog.Groups {
+		if group.ID == event.Resource && group.IsExclusive {
+			return nil
+		}
+	}
 	name := catalogGroupName(catalog, event.Resource)
 	switch event.Kind {
 	case "group_added":
 		group := catalogGroupFromJSON(event.After)
+		if group.IsExclusive {
+			return nil
+		}
 		if group.Name != "" {
 			name = singleLineGroupValue(group.Name)
 		}
@@ -117,6 +128,9 @@ func catalogEventDetails(event Event, catalog Catalog) []GroupChangeDetail {
 		return []GroupChangeDetail{detail}
 	case "group_removed":
 		group := catalogGroupFromJSON(event.Before)
+		if group.IsExclusive {
+			return nil
+		}
 		if group.Name != "" {
 			name = singleLineGroupValue(group.Name)
 		}

@@ -11,8 +11,9 @@ import AccountQualityRunDetail from '@/components/admin/account/AccountQualityRu
 import QualityPolicyDialog from './QualityPolicyDialog.vue'
 import QualityAssignmentDialog from './QualityAssignmentDialog.vue'
 import QualitySettings from './QualitySettings.vue'
+import StatusIndicator from '../upstream-governance/StatusIndicator.vue'
 import api, { type Binding, type ControlAction, type Overview, type Policy, type Run } from '@/api/admin/account-quality'
-import { dateTime, duration, newSettings, qualityError, queueChecks, requestId } from './quality'
+import { dateTime, duration, newSettings, qualityError, queueChecks, requestId, sampleTone } from './quality'
 
 const emit = defineEmits<{ busy: [boolean] }>()
 const { t } = useI18n(), route = useRoute()
@@ -26,6 +27,7 @@ let generation = 0, historyGeneration = 0
 const mutationBusy = computed(() => queueing.value || settingsBusy.value || deletingBusy.value || policyBusy.value || assignmentBusy.value || detailBusy.value || evidenceBusy.value)
 watch(mutationBusy, value => emit('busy', value))
 const label = (kind: string, value?: string) => { const key = `accountQuality.${kind}_${value}`; const result = t(key); return result === key ? value || '—' : result }
+const historyTone = (run: Run) => ({ pass: 'success', fail: 'danger', error: 'warning', unknown: 'neutral' } as const)[sampleTone(run)]
 const filtered = computed(() => overview.value.bindings.filter(binding => (!state.value || binding.state === state.value) && (!policyFilter.value || binding.policy_id === Number(policyFilter.value)) && (!search.value.trim() || `${binding.account_name} ${binding.account_id} ${binding.model} ${binding.platform}`.toLowerCase().includes(search.value.trim().toLowerCase()))))
 const states = computed(() => [...new Set(overview.value.bindings.map(binding => binding.state))])
 const stateOptions = computed(() => [
@@ -115,12 +117,8 @@ onUnmounted(() => { generation++; historyGeneration++; emit('busy', false) })
 </script>
 
 <template>
-  <div class="min-w-0 max-w-full space-y-5" data-test="account-quality-view">
+  <div class="min-w-0 max-w-full space-y-5" data-test="account-quality-view" :aria-label="t('accountQuality.title')">
     <header class="flex flex-wrap items-center justify-between gap-3">
-      <div class="min-w-0">
-        <h3 class="text-lg font-semibold tracking-tight text-gray-900 dark:text-dark-50">{{ t('accountQuality.title') }}</h3>
-        <p class="mt-1 max-w-3xl text-xs leading-relaxed text-gray-500 dark:text-dark-300">{{ t('accountQuality.description') }}</p>
-      </div>
       <div class="flex flex-wrap items-center gap-2">
         <button type="button" class="btn btn-secondary btn-sm" :disabled="loading || mutationBusy" @click="load(); tab === 'history' && loadHistory()"><Icon name="refresh" size="sm" class="mr-1.5" />{{ t('accountQuality.refresh') }}</button>
         <button type="button" data-test="quality-new-policy" class="btn btn-secondary btn-sm" :disabled="mutationBusy" @click="openPolicy()"><Icon name="plus" size="sm" class="mr-1.5" />{{ t('accountQuality.createPolicy') }}</button>
@@ -190,7 +188,7 @@ onUnmounted(() => { generation++; historyGeneration++; emit('busy', false) })
         <article v-for="policy in overview.policies" :key="policy.id" class="rounded-xl border border-gray-200 dark:border-dark-600">
           <div class="flex flex-wrap items-start justify-between gap-3 p-4">
             <div class="min-w-0 space-y-1.5">
-              <div class="flex flex-wrap items-center gap-2"><h4 class="break-words font-semibold text-gray-900 dark:text-dark-50">{{ policy.name }}</h4><button type="button" role="switch" :data-test="`quality-policy-toggle-${policy.id}`" :aria-checked="policy.enabled" :aria-label="t(policy.enabled ? 'accountQuality.policyDisable' : 'accountQuality.policyEnable')" :title="t(policy.enabled ? 'accountQuality.policyDisable' : 'accountQuality.policyEnable')" :disabled="mutationBusy" class="relative inline-flex h-5 w-9 shrink-0 rounded-full border border-transparent transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500 disabled:cursor-not-allowed disabled:opacity-40" :class="policy.enabled ? 'bg-primary-500' : 'bg-gray-300 dark:bg-dark-500'" @click="togglePolicy(policy)"><span aria-hidden="true" class="mt-0.5 block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform" :class="policy.enabled ? 'translate-x-[1.125rem]' : 'translate-x-0.5'" /></button><span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium" :class="policy.enabled ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300' : 'bg-gray-100 text-gray-500 dark:bg-dark-700 dark:text-dark-300'"><span class="h-1 w-1 rounded-full bg-current" aria-hidden="true" />{{ t(policy.enabled ? 'accountQuality.active' : 'accountQuality.disabled') }}</span></div>
+              <div class="flex flex-wrap items-center gap-2"><h4 class="break-words font-semibold text-gray-900 dark:text-dark-50">{{ policy.name }}</h4><button type="button" role="switch" :data-test="`quality-policy-toggle-${policy.id}`" :aria-checked="policy.enabled" :aria-label="t(policy.enabled ? 'accountQuality.policyDisable' : 'accountQuality.policyEnable')" :title="t(policy.enabled ? 'accountQuality.policyDisable' : 'accountQuality.policyEnable')" :disabled="mutationBusy" class="relative inline-flex h-5 w-9 shrink-0 rounded-full border border-transparent transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500 disabled:cursor-not-allowed disabled:opacity-40" :class="policy.enabled ? 'bg-primary-500' : 'bg-gray-300 dark:bg-dark-500'" @click="togglePolicy(policy)"><span aria-hidden="true" class="mt-0.5 block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform" :class="policy.enabled ? 'translate-x-[1.125rem]' : 'translate-x-0.5'" /></button><StatusIndicator :label="t(policy.enabled ? 'accountQuality.active' : 'accountQuality.disabled')" :tone="policy.enabled ? 'success' : 'neutral'" /></div>
               <p class="break-all text-xs text-gray-500 dark:text-dark-300">{{ policy.platform }} · {{ policy.model }} · {{ policy.api_mode }}<span v-if="policy.effort"> · {{ policy.effort }}</span></p>
             </div>
             <div class="flex flex-wrap gap-2"><button type="button" class="btn btn-secondary btn-sm" :disabled="mutationBusy" @click="assign(policy.id)">{{ t('accountQuality.assignment') }}</button><button type="button" class="btn btn-secondary btn-sm" :disabled="mutationBusy" @click="openPolicy(policy)">{{ t('accountQuality.edit') }}</button><button type="button" class="btn btn-secondary btn-sm text-red-600 dark:text-red-400" :disabled="mutationBusy" @click="deleting = policy">{{ t('accountQuality.delete') }}</button></div>
@@ -201,7 +199,7 @@ onUnmounted(() => { generation++; historyGeneration++; emit('busy', false) })
       <section v-if="tab === 'history'" class="space-y-2 p-4">
         <p v-if="historyLoading" role="status" class="text-sm text-gray-500">{{ t('accountQuality.loading') }}</p>
         <p v-else-if="!history.length" class="py-8 text-center text-sm text-gray-500 dark:text-dark-300">{{ t('accountQuality.noRuns') }}</p>
-        <button v-for="run in history" :key="run.id" type="button" class="flex w-full flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 p-3 text-left text-sm transition-colors hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-500 dark:border-dark-600 dark:hover:bg-dark-700" @click="evidence = run.id"><span class="min-w-0"><span class="font-medium">{{ run.account_name || `#${run.account_id}` }}</span><span class="ml-2 break-all text-gray-500 dark:text-dark-300">{{ run.model }} · {{ run.template }}</span><time class="mt-1 block text-xs text-gray-500 dark:text-dark-300">{{ dateTime(run.finished_at || run.started_at || run.created_at) }}</time></span><span class="text-xs">{{ label('execution', run.execution_status) }} · {{ label('verdict', run.quality_verdict) }} · {{ duration(run.duration_ms) }}</span></button>
+        <button v-for="run in history" :key="run.id" type="button" class="flex w-full flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 p-3 text-left text-sm transition-colors hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-500 dark:border-dark-600 dark:hover:bg-dark-700" @click="evidence = run.id"><span class="min-w-0"><span class="font-medium">{{ run.account_name || `#${run.account_id}` }}</span><span class="ml-2 break-all text-gray-500 dark:text-dark-300">{{ run.model }} · {{ run.template }}</span><time class="mt-1 block text-xs text-gray-500 dark:text-dark-300">{{ dateTime(run.finished_at || run.started_at || run.created_at) }}</time></span><span class="flex items-center gap-3 text-xs tabular-nums text-gray-500 dark:text-dark-300"><StatusIndicator :label="`${label('execution', run.execution_status)} · ${label('verdict', run.quality_verdict)}`" :tone="historyTone(run)" tabindex="-1" />{{ duration(run.duration_ms) }}</span></button>
       </section>
       <div v-if="tab === 'settings' && !loading" class="p-4"><QualitySettings :key="overview.settings.version" :settings="overview.settings" @saved="overview.settings = $event" @busy="settingsBusy = $event" /></div>
     </div>

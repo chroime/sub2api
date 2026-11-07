@@ -1495,10 +1495,16 @@ func channels(c Catalog) []RemoteChannel {
 }
 func DiffCatalog(siteID int64, before, after Catalog) []Event {
 	events := []Event{}
+	exclusiveGroups := map[string]bool{}
+	for _, group := range append(append([]RemoteGroup(nil), before.Groups...), after.Groups...) {
+		if group.IsExclusive {
+			exclusiveGroups[group.ID] = true
+		}
+	}
 	add := func(kind, resource string, b, a any) {
 		old, new := canonical(b), canonical(a)
 		if old != new {
-			events = append(events, Event{SiteID: siteID, Kind: kind, Resource: resource, Before: old, After: new})
+			events = append(events, Event{SiteID: siteID, Kind: kind, Resource: resource, Before: old, After: new, Exclusive: exclusiveGroups[resource]})
 		}
 	}
 	old := map[string]RemoteGroup{}
@@ -1509,7 +1515,11 @@ func DiffCatalog(siteID int64, before, after Catalog) []Event {
 		prior, ok := old[g.ID]
 		if !ok {
 			add("group_added", g.ID, nil, g)
+			if g.IsExclusive {
+				add("group_visibility_changed", g.ID, false, true)
+			}
 		} else {
+			add("group_visibility_changed", g.ID, prior.IsExclusive, g.IsExclusive)
 			if canonical(comparableGroupRates(prior)) != canonical(comparableGroupRates(g)) {
 				add("rate_changed", g.ID, groupRates(prior), groupRates(g))
 			}
@@ -1523,6 +1533,11 @@ func DiffCatalog(siteID int64, before, after Catalog) []Event {
 	}
 	for id, g := range old {
 		add("group_removed", id, g, nil)
+		// Retain the last visibility after deletion: public offline notices
+		// remain verifiable when old snapshots expire, and a deleted private
+		// source must not authorize later changes from a bound local group.
+		events = append(events, Event{SiteID: siteID, Kind: "group_visibility_changed", Resource: id,
+			Before: canonical(g.IsExclusive), After: canonical(g.IsExclusive), Exclusive: g.IsExclusive})
 	}
 	add("channels_changed", "channels", channels(before), channels(after))
 	sort.Slice(events, func(i, j int) bool { return events[i].Kind+events[i].Resource < events[j].Kind+events[j].Resource })

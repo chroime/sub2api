@@ -204,7 +204,7 @@ func TestUpstreamSitePricingAndProtectionRemainIndependentOfGlobalGroupSwitches(
 	for _, kind := range []string{"pricing_change", "protection_change"} {
 		t.Run(kind, func(t *testing.T) {
 			svc, store, _, _ := newUpstreamGroupNoticeService(t, `{"group_online":false,"group_offline":false,"group_name_change":false,"group_description_change":false,"group_rate_change":false,"pricing_change":false,"protection_change":false}`, PricingNotificationPolicy{Enabled: true, PricingChanges: true, ProtectionChanges: true, Recipients: []string{"site@example.test"}})
-			require.NoError(t, svc.EnqueueChangeNotice(t.Context(), ChangeNotice{SiteID: 1, Kind: kind, DedupKey: kind, Subject: "独立站点通知", Body: "自动调价结果"}))
+			require.NoError(t, svc.EnqueueChangeNotice(t.Context(), ChangeNotice{SiteID: 1, LocalGroupID: 7, Kind: kind, DedupKey: kind, Subject: "独立站点通知", Body: "自动调价结果"}))
 			require.Len(t, store.items, 1)
 			for _, item := range store.items {
 				require.Equal(t, "site@example.test", item.Recipient)

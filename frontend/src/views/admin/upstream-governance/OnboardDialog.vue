@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import Select from '@/components/common/Select.vue'
 import Icon from '@/components/icons/Icon.vue'
+import UpstreamPlatformIcon from './UpstreamPlatformIcon.vue'
 import ConnectionFields from './ConnectionFields.vue'
 import BrowserAuthorizationDialog from './BrowserAuthorizationDialog.vue'
 import { newConnectionForm, connectionInput, clearConnectionSecrets, clearConnectionProofs, continueChallenge, connectionBlocked } from './connection-form'
@@ -159,8 +160,8 @@ async function onboard() {
         <div>
           <label class="mb-1 block" for="governance-onboard-platform">{{ t('governance.platform') }}</label>
           <Select id="governance-onboard-platform" v-model="platform" :options="platformOptions" :searchable="false" :disabled="busy || !!savedSite" :aria-label="t('governance.platform')">
-            <template #selected="{ option }"><span class="flex min-w-0 items-center gap-2"><Icon name="server" size="sm" class="shrink-0 text-primary-600" /><span class="truncate">{{ option?.label }}</span></span></template>
-            <template #option="{ option }"><span class="flex min-w-0 items-center gap-2"><Icon name="server" size="sm" class="shrink-0 text-primary-600" /><span class="truncate">{{ option.label }}</span></span></template>
+            <template #selected="{ option }"><span class="flex min-w-0 items-center gap-2"><UpstreamPlatformIcon :platform="String(option?.value ?? '')" /><span class="truncate">{{ option?.label }}</span></span></template>
+            <template #option="{ option }"><span class="flex min-w-0 items-center gap-2"><UpstreamPlatformIcon :platform="String(option.value ?? '')" /><span class="truncate">{{ option.label }}</span></span></template>
           </Select>
         </div>
         <label class="block" for="governance-onboard-name">{{ t('governance.name') }}<input id="governance-onboard-name" v-model="name" class="input w-full" maxlength="100" :placeholder="t('governance.autoDetect')" /></label>

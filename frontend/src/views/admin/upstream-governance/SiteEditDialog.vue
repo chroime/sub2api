@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import Select from '@/components/common/Select.vue'
 import Icon from '@/components/icons/Icon.vue'
+import UpstreamPlatformIcon from './UpstreamPlatformIcon.vue'
 import api, { type LoginCredentials, type Site, type SiteInput } from '@/api/admin/upstream-governance'
 import { errorKey } from './feedback'
 import { intervalValidationKey } from './interval'
@@ -146,8 +147,8 @@ onUnmounted(() => { generation++; clearLogin(); emit('busy', false) })
             <div>
               <label for="governance-edit-platform" class="mb-1.5 block text-sm text-gray-600 dark:text-gray-300">{{ t('governance.platform') }}</label>
               <Select id="governance-edit-platform" v-model="form.platform" :options="platformOptions" :disabled="locked" :searchable="false" :aria-label="t('governance.platform')">
-                <template #selected="{ option }"><span class="flex items-center gap-2"><Icon name="server" size="sm" class="shrink-0 text-primary-600" />{{ option?.label }}</span></template>
-                <template #option="{ option }"><span class="flex items-center gap-2"><Icon name="server" size="sm" class="shrink-0 text-primary-600" />{{ option.label }}</span></template>
+                <template #selected="{ option }"><span class="flex items-center gap-2"><UpstreamPlatformIcon :platform="String(option?.value ?? '')" />{{ option?.label }}</span></template>
+                <template #option="{ option }"><span class="flex items-center gap-2"><UpstreamPlatformIcon :platform="String(option.value ?? '')" />{{ option.label }}</span></template>
               </Select>
             </div>
           </div>

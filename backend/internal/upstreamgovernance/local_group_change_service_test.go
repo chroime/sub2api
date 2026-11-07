@@ -70,10 +70,14 @@ func (s *localGroupPolicyStore) DueLocalGroupChanges(context.Context, time.Time,
 	if s.events != nil {
 		return s.events, nil
 	}
-	return []LocalGroupChangeEvent{{ID: 1, GroupID: 2, Kind: LocalGroupChangeCreated, After: `{"name":"GPT Pro","status":"active","rate_multiplier":0.06}`}}, nil
+	return []LocalGroupChangeEvent{{ID: 1, GroupID: 2, Kind: LocalGroupChangeCreated, After: `{"is_exclusive":false,"name":"GPT Pro","status":"active","rate_multiplier":0.06}`}}, nil
 }
 
 func (*localGroupPolicyStore) ClaimLocalGroupChange(context.Context, int64, time.Time, time.Time) (bool, error) {
+	return true, nil
+}
+
+func (*localGroupPolicyStore) LocalGroupChangeIsPublic(context.Context, LocalGroupChangeEvent) (bool, error) {
 	return true, nil
 }
 
@@ -135,8 +139,8 @@ func TestLocalGroupDispatchFiltersIndependentChangesBeforeSending(t *testing.T) 
 	observedAt := time.Date(2026, 10, 22, 3, 26, 35, 0, time.UTC)
 	store := &localGroupPolicyStore{events: []LocalGroupChangeEvent{{
 		ID: 2, GroupID: 42, Kind: LocalGroupChangeUpdated, CreatedAt: observedAt,
-		Before: `{"name":"Old Pro","status":"active","description":"稳定线路","rate_multiplier":0.02}`,
-		After:  `{"name":"New Pro","status":"disabled","description":"","rate_multiplier":0.023}`,
+		Before: `{"is_exclusive":false,"name":"Old Pro","status":"active","description":"稳定线路","rate_multiplier":0.02}`,
+		After:  `{"is_exclusive":false,"name":"New Pro","status":"disabled","description":"","rate_multiplier":0.023}`,
 	}}}
 	sender := &localGroupPolicySender{}
 	svc := NewService(store, nil, nil, nil, false)
@@ -186,8 +190,8 @@ func TestLocalGroupQueueConsumesUnrelatedEventsWithoutResolvingRecipients(t *tes
 	now := time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC)
 	store := &localGroupPolicyStore{events: []LocalGroupChangeEvent{{
 		ID: 2, GroupID: 42, Kind: LocalGroupChangeUpdated,
-		Before: `{"name":"GPT Pro","status":"active","sort_order":1}`,
-		After:  `{"name":"GPT Pro","status":"active","sort_order":2}`,
+		Before: `{"is_exclusive":false,"name":"GPT Pro","status":"active","sort_order":1}`,
+		After:  `{"is_exclusive":false,"name":"GPT Pro","status":"active","sort_order":2}`,
 	}}}
 	sender := &localGroupEmptyRecipientSender{}
 	queue := NewLocalGroupChangeQueue(store, sender, func() time.Time { return now })
@@ -205,7 +209,7 @@ func TestLocalGroupQueueConsumesSilentCreationWithoutSender(t *testing.T) {
 	now := time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC)
 	store := &localGroupPolicyStore{events: []LocalGroupChangeEvent{{
 		ID: 2, GroupID: 42, Kind: LocalGroupChangeCreated,
-		After: `{"name":"GPT Pro","status":"disabled"}`,
+		After: `{"is_exclusive":false,"name":"GPT Pro","status":"disabled"}`,
 	}}}
 	queue := NewLocalGroupChangeQueue(store, nil, func() time.Time { return now })
 
@@ -221,7 +225,7 @@ func TestLocalGroupQueueKeepsDeliveryErrorsRetryable(t *testing.T) {
 	observedAt := now.Add(-time.Hour)
 	store := &localGroupPolicyStore{events: []LocalGroupChangeEvent{{
 		ID: 2, GroupID: 42, Kind: LocalGroupChangeCreated, CreatedAt: observedAt,
-		After: `{"name":"GPT Pro","status":"active"}`,
+		After: `{"is_exclusive":false,"name":"GPT Pro","status":"active"}`,
 	}}}
 	sender := &localGroupPolicySender{sendErr: errors.New("transport unavailable")}
 	queue := NewLocalGroupChangeQueue(store, sender, func() time.Time { return now })

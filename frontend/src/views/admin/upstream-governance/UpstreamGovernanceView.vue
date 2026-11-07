@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { SMART_OPERATIONS_SECTIONS, LEGACY_SMART_OPERATIONS_SECTIONS, isLegacySmartOperationsSection, resolveSmartOperationsSection, type SmartOperationsSection } from '@/config/smartOperations'
 import SmartOperationsTabs from './SmartOperationsTabs.vue'
 import GovernanceWorkbench from './GovernanceWorkbench.vue'
+import StatusIndicator from './StatusIndicator.vue'
 import GovernanceTimeline from './GovernanceTimeline.vue'
 import { errorKey, siteStateKeys } from './feedback'
 import { useI18n } from 'vue-i18n'
@@ -127,6 +128,15 @@ const busy = ref(false),
   editing = ref(false),
   deleting = ref(false)
 const deleteKeepAccounts = ref(false), notice = ref('')
+const deleteError = ref('')
+// Only a direct collection failure can repeat the site's persisted error.
+// Metadata reads may fail independently even when their error text is equal.
+const collectionError = ref<{ reason: string; siteId: number } | null>(null)
+const activeErrorReason = computed(() => active.value?.status === 'reauth_required' ? 'reauth_required' : active.value?.last_error || '')
+const showSiteError = computed(() => {
+  const repeated = error.value && collectionError.value && collectionError.value.siteId === active.value?.id && collectionError.value.reason === activeErrorReason.value
+  return Boolean(activeErrorReason.value) && !repeated
+})
 const siteMenuOpen = ref(false)
 const mutationBusy = computed(() => actionBusy.value || importBusy.value || balanceBusy.value || editBusy.value || automationBusy.value || observationBusy.value || pricingBusy.value || reconciliationBusy.value || keyBusy.value || modelBusy.value || qualityBusy.value || templatesBusy.value)
 const working = computed(() => busy.value || mutationBusy.value)
@@ -219,8 +229,14 @@ watch(() => route.fullPath, () => {
   // the dialog's close button, including when the site is cached behind the picker.
   if (refreshKeys && previousSite === active.value?.id) void reloadBindings()
 })
-function failure(e: unknown) {
+function clearFailure() {
+  error.value = ''
+  collectionError.value = null
+}
+function failure(e: unknown, collectionSiteId?: number) {
   error.value = t(errorKey(e))
+  const reason = (e as { reason?: unknown } | null)?.reason
+  collectionError.value = collectionSiteId && typeof reason === 'string' && reason !== '' ? { reason, siteId: collectionSiteId } : null
 }
 function reportSelectionReadFailure(kind: 'catalog' | 'bindings' | 'keys', e: unknown) {
   // Selecting a site hydrates several panels in parallel. A panel that is not
@@ -228,15 +244,20 @@ function reportSelectionReadFailure(kind: 'catalog' | 'bindings' | 'keys', e: un
   // the panel itself already renders its unavailable/empty state.
   if (kind === 'catalog') failure(e)
 }
-async function run(action: () => Promise<void>, writes = false) {
+async function run(action: () => Promise<void>, writes = false, options: { scope?: 'delete'; onFailure?: (e: unknown) => void } = {}) {
   const request = generation
   busy.value = true
   if (writes) actionBusy.value = true
-  error.value = ''
+  if (options.scope === 'delete') deleteError.value = ''
+  else clearFailure()
   try {
     await action()
   } catch (e) {
-    if (request === generation) failure(e)
+    if (request === generation) {
+      if (options.scope === 'delete') deleteError.value = t(errorKey(e))
+      else if (options.onFailure) options.onFailure(e)
+      else failure(e)
+    }
   } finally {
     if (writes) actionBusy.value = false
     if (request === generation) busy.value = false
@@ -328,7 +349,7 @@ async function select(site: Site, collected?: Snapshot, updateLocation = true) {
   managedKeys.value = []
   importStateReady.value = false
   busy.value = true
-  error.value = ''
+  clearFailure()
   const results = await Promise.allSettled([
     collected ? Promise.resolve(collected) : api.catalog(site.id),
     api.bindings(site.id),
@@ -369,9 +390,10 @@ async function sync() {
   if (!active.value) return
   const id = active.value.id
   const request = generation
+  let collectionFailed = false
   await run(async () => {
     try {
-      const collected = await api.sync(id)
+      const collected = await api.sync(id).catch((e: unknown) => { collectionFailed = true; throw e })
       const [list, currentBindings, currentKeys, currentReadiness] = await Promise.all([api.list(), api.bindings(id), api.keys(id), api.readiness(id).catch(() => null)])
       if (request !== generation) return
       snapshot.value = collected
@@ -387,7 +409,7 @@ async function sync() {
       if (request === generation) importStateReady.value = false
       throw e
     }
-  }, true)
+  }, true, { onFailure: e => failure(e, collectionFailed ? id : undefined) })
 }
 async function remove() {
   if (!active.value) return
@@ -402,6 +424,7 @@ async function remove() {
     const list = await api.list()
     if (request !== generation) return
     active.value = null
+    clearFailure()
     deleting.value = false
     sites.value = list
     snapshot.value = null
@@ -412,7 +435,7 @@ async function remove() {
     showOverview.value = true
     nextSite = list[0]
     removed = true
-  }, true)
+  }, true, { scope: 'delete' })
   // Internal post-delete navigation must happen after releasing the write lock.
   if (removed) {
     if (nextSite) await select(nextSite)
@@ -486,6 +509,7 @@ async function onboarded(site: Site, collected: Snapshot) {
 // Deleting a site that still owns imported accounts needs the keep-accounts path.
 const importedAccountCount = computed(() => bindings.value.filter(binding => binding.account_id > 0 && !binding.account_deleted).length)
 function openDelete() {
+  deleteError.value = ''
   deleteKeepAccounts.value = importedAccountCount.value > 0 || managedKeys.value.length > 0
   deleting.value = true
 }
@@ -616,7 +640,7 @@ onUnmounted(() => {
       <div class="min-w-0 space-y-4" data-test="smart-operations-content">
       <SmartOperationsTabs v-model="tab" :disabled="navigationLocked" />
       <div :id="`governance-${tab}-panel`" role="tabpanel" :aria-labelledby="`governance-${tab}-tab`" tabindex="0" class="min-w-0 space-y-5 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500">
-      <p v-if="error" role="alert" class="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-600 dark:border-red-900 dark:bg-red-900/10">{{ error }}</p>
+      <p v-if="error" role="alert" data-test="governance-error" class="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-600 dark:border-red-900 dark:bg-red-900/10">{{ error }}</p>
       <p v-if="notice" role="status" data-test="governance-notice" class="rounded-xl border border-primary-100 bg-primary-50 p-3 text-sm text-primary-800 dark:border-primary-900/40 dark:bg-primary-900/10 dark:text-primary-300">{{ notice }}</p>
       <p v-if="siteNotFound" role="status" class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-300">{{ t('governance.smartOperations.siteNotFound') }}</p>
       <template v-if="tab === 'settings'">
@@ -633,14 +657,14 @@ onUnmounted(() => {
         <div class="flex flex-wrap gap-1 rounded-lg bg-gray-100 p-1 dark:bg-dark-800" role="group" data-test="model-target-switch" :aria-label="t('governance.modelsTab.target')">
           <button v-for="target in (['upstream', 'local'] as const)" :key="target" type="button" :data-test="'model-target-' + target" class="min-h-9 rounded-md px-3 text-sm transition-colors disabled:opacity-50" :class="modelTarget === target ? 'bg-white font-medium text-gray-900 shadow-sm dark:bg-dark-600 dark:text-gray-100' : 'text-gray-500'" :aria-pressed="modelTarget === target" :disabled="navigationLocked" @click="chooseModelTarget(target)">{{ t(`governance.modelsTab.${target}`) }}</button>
         </div>
-        <p class="text-xs text-gray-500">{{ t(`governance.modelsTab.${modelTarget}Hint`) }}</p>
+
       </div>
       <section v-if="localModels && showOverview && localWorkspaceLoading" data-test="local-model-workspace-loading" class="min-w-0 rounded-xl border border-dashed border-gray-200 bg-white p-8 text-center text-sm text-gray-500 dark:border-dark-600 dark:bg-dark-800">{{ t('governance.modelMonitoring.localWorkspaceLoading') }}</section>
       <section v-else-if="localModels && showOverview && localWorkspaceError" data-test="local-model-workspace-error" class="min-w-0 rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-300">
         <p>{{ localWorkspaceError }}</p><p class="mt-2 text-xs">{{ t('governance.modelMonitoring.localWorkspaceUnavailableHint') }}</p><div class="mt-4 flex flex-wrap gap-3"><button type="button" class="btn btn-secondary text-sm" data-test="local-workspace-retry" :disabled="navigationLocked" @click="retryLocalWorkspace">{{ t('governance.modelMonitoring.retry') }}</button><button type="button" class="btn btn-secondary text-sm" data-test="local-workspace-manage-keys" :disabled="navigationLocked" @click="openLocalKeys">{{ t('governance.viewKeys') }}</button></div>
       </section>
       <section v-else-if="localModels && showOverview && localWorkspace" data-test="local-model-workspace" class="min-w-0 space-y-4 rounded-xl border border-gray-200 bg-white p-4 dark:border-dark-600 dark:bg-dark-800 sm:p-5">
-        <div><h3 class="text-lg font-semibold">{{ t('governance.modelMonitoring.localWorkspace') }}</h3><p class="mt-1 text-sm leading-relaxed text-gray-500 dark:text-dark-300">{{ t('governance.modelMonitoring.localWorkspaceHint') }}</p></div>
+
         <ModelMonitorPanel :key="`local-${localWorkspace.site.id}`" :site-id="localWorkspace.site.id" :remote-groups="[]" :managed-keys="[]" :local-only="true" :local-targets="localWorkspace.targets || []" :disabled="working" @busy="modelBusy = $event" @manage-keys="openLocalKeys" />
       </section>
       <div v-if="showOverview && sites.length && tab !== 'overview' && !siteIndependent" data-test="site-selection-empty" class="flex min-h-64 flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-gray-200 bg-white p-8 text-center dark:border-dark-600 dark:bg-dark-800">
@@ -654,7 +678,7 @@ onUnmounted(() => {
           <div class="min-w-0 flex-1">
             <div class="flex min-w-0 flex-wrap items-center gap-2">
               <h3 class="truncate text-base font-semibold" :title="active.base_url">{{ active.name }}</h3>
-              <span class="rounded-full bg-gray-100 px-2 py-0.5 text-xs dark:bg-dark-700">{{ t('governance.' + (siteStateKeys[active.status] || 'unknown')) }}</span>
+              <StatusIndicator :label="t('governance.' + (siteStateKeys[active.status] || 'unknown'))" :tone="active.status === 'healthy' ? 'success' : active.status === 'error' ? 'danger' : 'warning'" />
               <span class="text-xs text-gray-500">{{ active.platform === 'sub2api' ? 'Sub2API' : 'New API' }}</span>
             </div>
             <p class="mt-0.5 truncate text-xs text-gray-500">{{ active.base_url }}</p>
@@ -672,7 +696,7 @@ onUnmounted(() => {
             </div>
           </div>
         </div>
-        <p v-if="active.status === 'reauth_required'" role="alert" class="rounded-lg bg-amber-50 p-3 text-sm text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">{{ t('governance.reauth') }}</p><p v-else-if="active.last_error" role="alert" class="text-sm text-red-600">{{ t(errorKey({ reason: active.last_error })) }}</p>
+        <p v-if="showSiteError && active.status === 'reauth_required'" role="alert" data-test="site-error" class="rounded-lg bg-amber-50 p-3 text-sm text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">{{ t('governance.reauth') }}</p><p v-else-if="showSiteError && active.last_error" role="alert" data-test="site-error" class="text-sm text-red-600">{{ t(errorKey({ reason: active.last_error })) }}</p>
         <div class="min-w-0 overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-dark-600 dark:bg-dark-800">
           <div v-show="tab === 'overview'" data-test="site-overview-tab" class="min-w-0 space-y-5 p-4 sm:p-5">
             <SiteOverview :site="active" :snapshot="overviewSnapshot" :binding-count="bindings.filter(binding => binding.account_id > 0).length" :balance-health="balanceHealth" :readiness="readiness" :readiness-loading="readinessLoading" :readiness-read-failed="readinessReadFailed" @navigate="navigateFromReadiness" @retry-readiness="reloadReadiness" />
@@ -745,7 +769,7 @@ onUnmounted(() => {
             >{{ t('governance.deleteDialog.keepAccounts', { count: importedAccountCount }) }}<span class="mt-1 block text-xs text-gray-500">{{ t('governance.deleteDialog.keepAccountsHint') }}</span></span
           ></label
         >
-        <p v-if="error" class="mt-3 text-red-600">{{ error }}</p>
+        <p v-if="deleteError" role="alert" data-test="delete-error" class="mt-3 text-red-600">{{ deleteError }}</p>
         <button data-test="confirm-delete-site" class="btn btn-danger mt-4" :disabled="busy" @click="remove">
           {{ t(deleteKeepAccounts ? 'governance.deleteDialog.confirmKeep' : 'common.delete') }}
         </button></BaseDialog

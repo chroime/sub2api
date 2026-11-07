@@ -2,6 +2,7 @@ package upstreamgovernance
 
 import (
 	"context"
+	"database/sql"
 	"time"
 )
 
@@ -87,6 +88,36 @@ WHERE id=$1 AND status IN ('pending','sending') AND next_attempt_at <= $3`, id, 
 	}
 	count, err := result.RowsAffected()
 	return count == 1, err
+}
+
+// LocalGroupChangeIsPublic deliberately checks all later audit rows, including
+// consumed ones. A public -> exclusive -> public transition permanently
+// invalidates older queued notices even when no worker ran during that period.
+// The trigger records full before/after rows atomically with every mutation.
+func (s *sqlStore) LocalGroupChangeIsPublic(ctx context.Context, event LocalGroupChangeEvent) (bool, error) {
+	if !localGroupChangeHasPublicSnapshots(event) {
+		return false, nil
+	}
+	var exclusive sql.NullBool
+	var privateHistory bool
+	err := s.db.QueryRowContext(ctx, `SELECT (SELECT is_exclusive FROM groups WHERE id=$1 AND deleted_at IS NULL), EXISTS (
+		SELECT 1 FROM upstream_governance_local_group_changes
+		WHERE group_id=$1 AND id>$2
+		AND (before_value->'is_exclusive' = 'true'::jsonb OR before_value->'IsExclusive' = 'true'::jsonb
+			OR after_value->'is_exclusive' = 'true'::jsonb OR after_value->'IsExclusive' = 'true'::jsonb)
+	)`, event.GroupID, event.ID).Scan(&exclusive, &privateHistory)
+	if err != nil {
+		return false, err
+	}
+	if privateHistory || exclusive.Bool {
+		return false, nil
+	}
+	// A removed group cannot authorize old creates/updates. Its deletion
+	// notice can still use an explicitly public before snapshot.
+	if !exclusive.Valid && event.Kind != LocalGroupChangeDeleted {
+		return false, nil
+	}
+	return s.changeNotificationLocalGroupRemoteSourcesArePublic(ctx, event.GroupID, event.CreatedAt)
 }
 
 func (s *sqlStore) CompleteLocalGroupChange(ctx context.Context, id int64, processedAt time.Time, sendErr error, next time.Time) error {

@@ -18,6 +18,7 @@ import TransportSelect from './TransportSelect.vue'
 import TargetGroupSelect from './TargetGroupSelect.vue'
 import { initialTransport, providerLabel, transportUnavailable } from './providers'
 import PriceDetails from './PriceDetails.vue'
+import StatusIndicator from './StatusIndicator.vue'
 import Icon from '@/components/icons/Icon.vue'
 import PlatformIcon from '@/components/common/PlatformIcon.vue'
 import type { GroupPlatform } from '@/types'
@@ -363,6 +364,7 @@ const catalogWarnings: Record<string, string> = {
   sub2api_model_plaza_unavailable: 'plazaUnavailable',
   sub2api_channels_unavailable: 'channelsUnavailable',
   sub2api_channels_pricing_unavailable: 'channelsPricingUnavailable',
+  sub2api_official_pricing_unavailable: 'officialPricingUnavailable',
   newapi_channels_not_exposed: 'channelsNotExposed',
   newapi_pricing_unavailable: 'pricingUnavailable',
   sub2api_complex_pricing_not_flattened: 'complexPricingNotFlattened',
@@ -373,14 +375,6 @@ const catalogWarnings: Record<string, string> = {
   <section class="space-y-5">
     <p v-if="draftMessage" data-test="import-draft-notice" role="status" class="rounded-lg border border-primary-100 bg-primary-50 p-3 text-sm text-primary-800 dark:border-primary-900 dark:bg-primary-900/20 dark:text-primary-200">{{ t(draftMessage) }}</p>
     <div class="flex flex-wrap items-center justify-between gap-3">
-      <div>
-        <h3 class="text-base font-semibold">
-          {{ t('governance.groupImport') }}
-        </h3>
-        <p class="mt-1 text-xs text-gray-500">
-          {{ t('governance.importWorkflow') }}
-        </p>
-      </div>
       <span class="text-xs tabular-nums text-gray-500"
         >{{ t('governance.snapshot') }} ·
         {{ formatGovernanceTime(snapshot.created_at) }}</span
@@ -749,9 +743,6 @@ const catalogWarnings: Record<string, string> = {
               t('governance.mappingUnresolved', { count: unresolved.length })
             }}
           </p>
-          <p v-else class="mt-1 text-xs text-gray-500">
-            {{ t('governance.previewHint') }}
-          </p>
           <p
             v-if="emptyWhitelist"
             role="alert"
@@ -881,12 +872,11 @@ const catalogWarnings: Record<string, string> = {
       <p class="text-xs text-gray-500">{{ t('governance.applyResultSummary', { succeeded: result.items.filter(item => item.status === 'applied').length, failed: result.items.filter(item => item.status !== 'applied').length }) }}</p>
       <p v-if="result.items.some(item => item.status !== 'applied')" class="text-xs text-amber-700 dark:text-amber-400">{{ t('governance.partialNotice') }}</p>
       <div v-for="item in result.items" :key="item.remote_group_id + ':' + item.platform" data-test="import-result-item" class="border-t border-gray-200 pt-3 text-sm dark:border-dark-600">
-        <div class="flex flex-wrap items-start justify-between gap-2"><div class="min-w-0"><p class="break-all font-medium">{{ resultRow(item.remote_group_id, item.platform)?.remote_group.name || item.remote_group_id }}</p><p class="mt-0.5 text-xs text-gray-500">{{ providerLabel(item.platform) }} · {{ t('governance.localAccount') }}: {{ resultRow(item.remote_group_id, item.platform)?.selection.account_name || t('governance.accountNameUnavailable') }}<span v-if="item.account_id"> · #{{ item.account_id }}</span></p></div><span class="text-xs font-medium" :class="item.status === 'applied' ? 'text-primary-700 dark:text-primary-300' : 'text-red-600 dark:text-red-400'">{{ t(item.status === 'applied' ? 'governance.success' : 'governance.failed') }}</span></div>
-        <p v-if="item.status === 'applied'" class="mt-1 text-xs text-gray-500">{{ t('governance.importResultApplied') }}</p>
-        <p v-else class="mt-2 text-xs text-red-600 dark:text-red-400">{{ t('governance.resultFailureReason') }}: {{ t(errorKey({ reason: item.error })) }}<span v-if="item.error" class="ml-1 text-gray-500">({{ item.error }})</span></p>
+        <div class="flex flex-wrap items-start justify-between gap-2"><div class="min-w-0"><p class="break-all font-medium">{{ resultRow(item.remote_group_id, item.platform)?.remote_group.name || item.remote_group_id }}</p><p class="mt-0.5 text-xs text-gray-500">{{ providerLabel(item.platform) }} · {{ t('governance.localAccount') }}: {{ resultRow(item.remote_group_id, item.platform)?.selection.account_name || t('governance.accountNameUnavailable') }}<span v-if="item.account_id"> · #{{ item.account_id }}</span></p></div><StatusIndicator :label="t(item.status === 'applied' ? 'governance.success' : 'governance.failed')" :tone="item.status === 'applied' ? 'success' : 'danger'" /></div>
+        <p v-if="item.status !== 'applied'" class="mt-2 text-xs text-red-600 dark:text-red-400">{{ t('governance.resultFailureReason') }}: {{ t(errorKey({ reason: item.error })) }}<span v-if="item.error" class="ml-1 text-gray-500">({{ item.error }})</span></p>
       </div>
     </section>
-    <div class="flex flex-wrap items-center gap-3 rounded-xl bg-gray-50 px-4 py-3 dark:bg-dark-900"><p class="min-w-0 flex-1 text-xs text-gray-500">{{ t('governance.keysWorkspaceHint') }}</p><button id="governance-import-keys" data-test="manage-keys" type="button" class="btn btn-secondary text-sm" :disabled="working || disabled || !!preview" @click="emit('manageKeys', keySelections.filter((selection): selection is KeySelection => !!selection.platform))">{{ t('governance.viewKeys') }}</button></div>
+    <div class="flex flex-wrap items-center gap-3 rounded-xl bg-gray-50 px-4 py-3 dark:bg-dark-900"><button id="governance-import-keys" data-test="manage-keys" type="button" class="btn btn-secondary text-sm" :disabled="working || disabled || !!preview" @click="emit('manageKeys', keySelections.filter((selection): selection is KeySelection => !!selection.platform))">{{ t('governance.viewKeys') }}</button></div>
     <details
       v-if="snapshot.catalog.channels?.length"
       class="rounded-xl border border-gray-200 p-4 text-sm dark:border-dark-600"

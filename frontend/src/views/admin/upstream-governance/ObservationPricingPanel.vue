@@ -10,6 +10,7 @@ import { formatGovernanceTime, formatGovernanceRate } from './format'
 import { pricingFeedback, pricingStatusKey, observationStatusKey } from './pricing-feedback'
 import { intervalText } from './cadence'
 import SettingsCard from './SettingsCard.vue'
+import StatusIndicator from './StatusIndicator.vue'
 
 // section picks which part to show: the collection cadence (automation page)
 // or the group pricing policies and their notifications (pricing page).
@@ -273,7 +274,7 @@ onUnmounted(() => { generation++; emit('busy', false) })
           <div class="mt-3 grid gap-3 rounded-lg bg-gray-50 p-3 text-xs text-gray-500 dark:bg-dark-900 sm:grid-cols-3">
             <p>{{ t('governance.lastFastObservation') }}<strong class="mt-1 block font-medium text-gray-700 dark:text-gray-200">{{ formatGovernanceTime(observation?.status?.last_fast_observed_at) }}</strong></p>
             <p>{{ t('governance.nextFastObservation') }}<strong class="mt-1 block font-medium text-gray-700 dark:text-gray-200">{{ formatGovernanceTime(observation?.status?.next_fast_observation_at) }}</strong></p>
-            <p>{{ t('governance.observationStatus') }}<strong class="mt-1 block font-medium text-gray-700 dark:text-gray-200">{{ t(observationStatusKey(observation?.status?.fast_observe_status || '')) }}</strong></p>
+            <p >{{ t('governance.observationStatus') }}<StatusIndicator :label="t(observationStatusKey(observation?.status?.fast_observe_status || ''))" :tone="observation?.status?.fast_observe_status === 'healthy' ? 'success' : observation?.status?.fast_observe_status === 'running' ? 'info' : ['error', 'reauth_required'].includes(observation?.status?.fast_observe_status || '') ? 'danger' : observation?.status?.fast_observe_status === 'rate_limited' ? 'warning' : 'neutral'" /></p>
           </div>
           <div v-if="observation?.status?.fast_observe_error" data-test="observation-error" class="rounded-lg bg-amber-50 p-3 text-xs leading-relaxed text-amber-800 dark:bg-amber-900/20 dark:text-amber-300"><p class="font-semibold">{{ t(pricingFeedback(observation.status.fast_observe_error).titleKey) }}</p><p class="mt-1">{{ t(pricingFeedback(observation.status.fast_observe_error).detailKey) }}</p><p class="mt-2">{{ t(pricingFeedback(observation.status.fast_observe_error).actionKey) }}</p></div>
       <template #form>
@@ -299,7 +300,7 @@ onUnmounted(() => { generation++; emit('busy', false) })
           <span class="min-w-0 flex-1 truncate text-sm font-medium">{{ row.local_group_name }}</span>
           <span class="tabular-nums text-gray-500">{{ t('governance.currentCost') }} {{ formatGovernanceRate(row.current_cost) }}</span>
           <span class="tabular-nums text-gray-500">{{ t('governance.currentSale') }} {{ formatGovernanceRate(row.current_sale) }}</span>
-          <span class="rounded-full px-2 py-0.5" :class="row.protected ? 'bg-amber-50 text-amber-800 dark:bg-amber-900/20 dark:text-amber-300' : 'bg-gray-100 text-gray-600 dark:bg-dark-700 dark:text-gray-300'">{{ t(pricingStatusKey(row)) }}</span>
+          <StatusIndicator :label="t(pricingStatusKey(row))" :tone="!row.enabled ? 'neutral' : row.manual_owner ? 'info' : row.protected ? 'warning' : 'success'" :icon="!row.enabled ? 'eyeOff' : undefined" />
         </li>
       </ul>
       <template #form>
@@ -308,7 +309,7 @@ onUnmounted(() => { generation++; emit('busy', false) })
       <article v-for="row in pricingRows" :key="row.local_group_id" class="mt-4 rounded-xl border border-gray-200 p-4 first-of-type:mt-0 dark:border-dark-600" :data-test="`pricing-row-${row.local_group_id}`">
         <header class="flex flex-wrap items-start gap-3">
           <div class="min-w-0 flex-1"><h4 class="break-words font-semibold">{{ row.local_group_name }}</h4><p class="mt-1 break-words text-xs text-gray-500">{{ t('governance.pricingSources') }}：{{ row.sources.map(sourceLabel).join('、') || t('governance.unknown') }}</p></div>
-          <span :data-test="`pricing-status-${row.local_group_id}`" class="rounded-full px-2.5 py-1 text-xs" :class="currentStatus(row).protected ? 'bg-amber-50 text-amber-800 dark:bg-amber-900/20 dark:text-amber-300' : 'bg-gray-100 text-gray-600 dark:bg-dark-700 dark:text-gray-300'">{{ t(pricingStatusKey(currentStatus(row))) }}</span>
+          <StatusIndicator :data-test="`pricing-status-${row.local_group_id}`" :label="t(pricingStatusKey(currentStatus(row)))" :tone="!currentStatus(row).enabled ? 'neutral' : currentStatus(row).manual_owner ? 'info' : currentStatus(row).protected ? 'warning' : 'success'" :icon="!currentStatus(row).enabled ? 'eyeOff' : undefined" />
         </header>
         <div class="mt-4 grid grid-cols-2 gap-3 rounded-lg bg-gray-50 p-3 text-sm dark:bg-dark-900 lg:grid-cols-4">
           <p class="text-xs text-gray-500">{{ t('governance.currentCost') }}<strong class="mt-1 block text-sm font-medium text-gray-900 dark:text-gray-100">{{ formatGovernanceRate(row.current_cost) }}</strong></p>

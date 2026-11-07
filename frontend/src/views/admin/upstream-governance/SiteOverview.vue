@@ -6,6 +6,7 @@ import ReadinessChecklist from './ReadinessChecklist.vue'
 import { formatGovernanceTime } from './format'
 import { siteStateKeys } from './feedback'
 import { cadenceText } from './cadence'
+import StatusIndicator from './StatusIndicator.vue'
 const props = defineProps<{
   site: Site
   snapshot: Snapshot | null
@@ -41,7 +42,6 @@ const readinessComplete = computed(() =>
     <div class="min-w-0 bg-white p-3 dark:bg-dark-800">
       <dt class="text-xs text-gray-500">{{ t('governance.visibleGroups') }}</dt>
       <dd class="mt-1 text-lg font-semibold tabular-nums">{{ snapshot?.catalog.groups.length ?? '—' }}<span class="ml-1.5 text-sm font-normal text-gray-400">/ {{ bindingCount }} {{ t('governance.imported') }}</span></dd>
-      <p class="mt-0.5 truncate text-xs text-gray-500">{{ t('governance.catalogSummary') }}</p>
     </div>
     <div class="min-w-0 bg-white p-3 dark:bg-dark-800">
       <dt class="text-xs text-gray-500">{{ t('governance.snapshot') }}</dt>
@@ -50,8 +50,7 @@ const readinessComplete = computed(() =>
     </div>
     <div class="min-w-0 bg-white p-3 dark:bg-dark-800">
       <dt class="text-xs text-gray-500">{{ t('governance.overviewPage.status') }}</dt>
-      <dd class="mt-1 text-sm font-medium">{{ t('governance.' + (siteStateKeys[site.status] || 'unknown')) }}</dd>
-      <p class="mt-0.5 truncate text-xs text-gray-500">{{ site.has_credential ? t('governance.overviewPage.authorized') : t('governance.overviewPage.notAuthorized') }}</p>
+      <dd class="mt-1 flex items-center gap-2"><StatusIndicator :label="t('governance.' + (siteStateKeys[site.status] || 'unknown'))" :tone="site.status === 'healthy' ? 'success' : site.status === 'error' ? 'danger' : 'warning'" /><StatusIndicator :label="t(site.has_credential ? 'governance.overviewPage.authorized' : 'governance.overviewPage.notAuthorized')" :tone="site.has_credential ? 'success' : 'neutral'" /></dd>
     </div>
   </dl>
   <details v-if="readinessComplete" data-test="readiness-complete" class="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-dark-600">

@@ -235,7 +235,8 @@ func (s *sqlStore) ObserveFastResult(ctx context.Context, siteID int64, observed
 	defer tx.Rollback()
 	var previousFingerprint string
 	var revision int64
-	err = tx.QueryRowContext(ctx, `SELECT fingerprint,revision FROM upstream_governance_fast_observations WHERE site_id=$1 FOR UPDATE`, siteID).Scan(&previousFingerprint, &revision)
+	var previousGroupsRaw []byte
+	err = tx.QueryRowContext(ctx, `SELECT fingerprint,revision,groups FROM upstream_governance_fast_observations WHERE site_id=$1 FOR UPDATE`, siteID).Scan(&previousFingerprint, &revision, &previousGroupsRaw)
 	if errors.Is(err, sql.ErrNoRows) {
 		previousFingerprint = ""
 		revision = 0
@@ -252,6 +253,15 @@ func (s *sqlStore) ObserveFastResult(ctx context.Context, siteID int64, observed
 	}
 	_, err = tx.ExecContext(ctx, `INSERT INTO upstream_governance_fast_observations(site_id,revision,fingerprint,source_user_id,groups_complete,groups,observed_at,updated_at) VALUES($1,$2,$3,$4,true,$5::jsonb,$6,NOW()) ON CONFLICT(site_id) DO UPDATE SET revision=EXCLUDED.revision,fingerprint=EXCLUDED.fingerprint,source_user_id=EXCLUDED.source_user_id,groups_complete=EXCLUDED.groups_complete,groups=EXCLUDED.groups,observed_at=EXCLUDED.observed_at,updated_at=NOW()`, siteID, revision, fingerprint, observation.SourceUserID, string(raw), observedAt)
 	if err != nil {
+		return FastObservationResult{}, err
+	}
+	var previousGroups []RemoteGroup
+	if len(previousGroupsRaw) > 0 {
+		if err = json.Unmarshal(previousGroupsRaw, &previousGroups); err != nil {
+			return FastObservationResult{}, err
+		}
+	}
+	if err = recordFastGroupVisibility(ctx, tx, siteID, observedAt, previousGroups, observation.Groups); err != nil {
 		return FastObservationResult{}, err
 	}
 	_, err = tx.ExecContext(ctx, `UPDATE upstream_governance_sites SET fast_observe_status=$2,fast_observe_error=$3,last_fast_observe_at=$4,next_fast_observe_at=$5,fast_observe_reserved_at=NULL,fast_observe_source_user_id=$6,fast_observe_complete=true,fast_observe_revision=$7,updated_at=NOW() WHERE id=$1`, siteID, status, message, observedAt, nextAt, observation.SourceUserID, revision)
@@ -580,7 +590,8 @@ func (s *sqlStore) SaveSnapshot(ctx context.Context, v *Snapshot, events []Event
 	return e
 }
 
-const pruneEvents = `DELETE FROM upstream_governance_events WHERE site_id=$1 AND id NOT IN (SELECT id FROM upstream_governance_events WHERE site_id=$1 ORDER BY id DESC LIMIT 1000)`
+// Visibility evidence must outlive pending deliveries and snapshot rotation.
+const pruneEvents = `DELETE FROM upstream_governance_events WHERE site_id=$1 AND kind<>'group_visibility_changed' AND id NOT IN (SELECT id FROM upstream_governance_events WHERE site_id=$1 AND kind<>'group_visibility_changed' ORDER BY id DESC LIMIT 1000)`
 
 func pageBounds(page, size int) (int, int) {
 	if page < 1 {

@@ -3,7 +3,7 @@
     class="plaza-vendor-tree rounded-2xl border border-gray-100 bg-white p-3 shadow-card dark:border-dark-700/50 dark:bg-dark-800/50"
     :aria-label="t('modelPlaza.vendor.treeLabel')"
   >
-    <div class="relative mb-3">
+    <div class="relative mb-3.5">
       <Icon
         name="search"
         size="sm"
@@ -12,7 +12,7 @@
       <input
         :value="search"
         type="search"
-        class="plaza-search input rounded-lg py-1.5 pl-9 text-sm"
+        class="plaza-search input rounded-lg py-2.5 pl-9 text-[15px] leading-5"
         :placeholder="t('modelPlaza.filters.searchPlaceholder')"
         :aria-label="t('modelPlaza.filters.searchPlaceholder')"
         @input="emit('update:search', ($event.target as HTMLInputElement).value)"
@@ -20,20 +20,20 @@
     </div>
 
     <!-- 窄屏：厂商平铺成可换行的标签，全部一眼可见，也不会像竖排列表那样把价格表挤到下面 -->
-    <div class="flex flex-wrap gap-1.5 lg:hidden" data-vendor-chips>
+    <div class="flex flex-wrap gap-2 lg:hidden" data-vendor-chips>
       <button
         v-for="chip in chips"
         :key="chip.key"
         type="button"
-        class="flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-sm font-medium transition-colors"
+        class="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-[15px] font-medium transition-colors"
         :class="rowClass(vendor === chip.key)"
         :aria-pressed="vendor === chip.key"
         @click="emit('update:vendor', chip.key)"
       >
-        <ModelIcon v-if="chip.sampleModel" :model="chip.sampleModel" size="14px" />
-        <Icon v-else name="grid" size="xs" class="h-3.5 w-3.5" />
+        <ModelIcon v-if="chip.sampleModel" :model="chip.sampleModel" size="16px" />
+        <Icon v-else name="grid" size="sm" class="h-4 w-4" />
         {{ chip.label }}
-        <span class="text-xs tabular-nums opacity-70">{{ chip.count }}</span>
+        <span class="text-sm tabular-nums opacity-70">{{ chip.count }}</span>
       </button>
     </div>
 
@@ -41,13 +41,13 @@
       <li role="treeitem" :aria-selected="vendor === 'all'">
         <button
           type="button"
-          class="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors"
+          class="flex w-full items-center gap-2 rounded-lg px-2.5 py-2.5 text-[15px] font-medium transition-colors"
           :class="rowClass(vendor === 'all')"
           @click="emit('update:vendor', 'all')"
         >
           <Icon name="grid" size="sm" class="h-4 w-4 shrink-0" />
           <span class="flex-1 truncate text-left">{{ t('modelPlaza.vendor.all') }}</span>
-          <span class="text-xs tabular-nums opacity-70">{{ total }}</span>
+          <span class="text-sm tabular-nums opacity-70">{{ total }}</span>
         </button>
       </li>
 
@@ -61,7 +61,7 @@
         <div class="flex items-center gap-0.5">
           <button
             type="button"
-            class="flex h-7 w-6 shrink-0 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-dark-500 dark:hover:bg-dark-700 dark:hover:text-gray-200"
+            class="flex h-8 w-7 shrink-0 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-dark-500 dark:hover:bg-dark-700 dark:hover:text-gray-200"
             :aria-label="t(isExpanded(node.key) ? 'modelPlaza.vendor.collapse' : 'modelPlaza.vendor.expand', { vendor: node.label })"
             @click="toggle(node.key)"
           >
@@ -69,13 +69,13 @@
           </button>
           <button
             type="button"
-            class="flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-2 text-sm font-medium transition-colors"
+            class="flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-2.5 text-[15px] font-medium transition-colors"
             :class="rowClass(vendor === node.key)"
             @click="selectVendor(node.key)"
           >
             <ModelIcon :model="node.sampleModel" size="16px" />
             <span class="flex-1 truncate text-left">{{ node.label }}</span>
-            <span class="text-xs tabular-nums opacity-70">{{ node.models.length }}</span>
+            <span class="text-sm tabular-nums opacity-70">{{ node.models.length }}</span>
           </button>
         </div>
         <ul
@@ -86,7 +86,7 @@
           <li v-for="m in node.models" :key="plazaModelKey(m)" role="treeitem" :aria-selected="highlighted === plazaModelKey(m)">
             <button
               type="button"
-              class="block w-full truncate rounded-md px-2 py-1 text-left font-mono text-xs transition-colors"
+              class="block w-full truncate rounded-md px-2 py-1.5 text-left font-mono text-sm leading-6 transition-colors"
               :class="highlighted === plazaModelKey(m)
                 ? 'bg-primary-50 text-primary-700 dark:bg-primary-500/15 dark:text-primary-300'
                 : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 dark:text-dark-300 dark:hover:bg-dark-700/60 dark:hover:text-white'"
@@ -100,7 +100,7 @@
       </li>
     </ul>
 
-    <p v-if="vendors.length === 0" class="px-2 py-6 text-center text-xs plaza-soft text-gray-400 dark:text-dark-500">
+    <p v-if="vendors.length === 0" class="px-2 py-6 text-center text-sm plaza-soft text-gray-400 dark:text-dark-500">
       {{ t('modelPlaza.noSearchResult') }}
     </p>
   </nav>

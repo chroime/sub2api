@@ -14,6 +14,10 @@ type changeNotificationMemoryStore struct {
 	nextID int64
 }
 
+func (m *changeNotificationMemoryStore) ChangeNotificationIsPublic(_ context.Context, item ChangeNotification) (bool, error) {
+	return item.GroupResource != "" || item.LocalGroupID > 0, nil
+}
+
 func (m *changeNotificationMemoryStore) EnqueueChangeNotification(_ context.Context, item ChangeNotification) error {
 	for _, existing := range m.items {
 		if existing.DedupKey == item.DedupKey && existing.Recipient == item.Recipient {
@@ -81,8 +85,8 @@ func TestChangeNotificationQueueSuppressesBaselineAndDeduplicates(t *testing.T) 
 	queue := NewChangeNotificationQueue(store, &changeNotificationMemorySender{}, func() time.Time { return time.Unix(100, 0).UTC() })
 	baseline := ChangeNotification{SiteID: 5, DedupKey: "baseline:5", Recipient: "admin@example.test", InitialBaseline: true, Kind: "group_change", Subject: "baseline", Body: "baseline"}
 	require.NoError(t, queue.Enqueue(context.Background(), baseline))
-	require.NoError(t, queue.Enqueue(context.Background(), ChangeNotification{SiteID: 5, DedupKey: "rate:5:group:1:v2", Recipient: "admin@example.test", Kind: "rate_change", Subject: "rate", Body: "rate"}))
-	require.NoError(t, queue.Enqueue(context.Background(), ChangeNotification{SiteID: 5, DedupKey: "rate:5:group:1:v2", Recipient: "admin@example.test", Kind: "rate_change", Subject: "rate duplicate", Body: "rate duplicate"}))
+	require.NoError(t, queue.Enqueue(context.Background(), ChangeNotification{SiteID: 5, GroupResource: "1", DedupKey: "rate:5:group:1:v2", Recipient: "admin@example.test", Kind: "rate_change", Subject: "rate", Body: "rate"}))
+	require.NoError(t, queue.Enqueue(context.Background(), ChangeNotification{SiteID: 5, GroupResource: "1", DedupKey: "rate:5:group:1:v2", Recipient: "admin@example.test", Kind: "rate_change", Subject: "rate duplicate", Body: "rate duplicate"}))
 	require.Len(t, store.items, 1)
 }
 
@@ -91,7 +95,7 @@ func TestChangeNotificationQueueRetriesFailedDeliveryAndSurvivesRestart(t *testi
 	sender := &changeNotificationMemorySender{fail: true}
 	now := time.Unix(100, 0).UTC()
 	queue := NewChangeNotificationQueue(store, sender, func() time.Time { return now })
-	require.NoError(t, queue.Enqueue(context.Background(), ChangeNotification{SiteID: 5, DedupKey: "rate:v2", Recipient: "admin@example.test", Kind: "rate_change", Subject: "rate", Body: "rate"}))
+	require.NoError(t, queue.Enqueue(context.Background(), ChangeNotification{SiteID: 5, GroupResource: "1", DedupKey: "rate:v2", Recipient: "admin@example.test", Kind: "rate_change", Subject: "rate", Body: "rate"}))
 	require.NoError(t, queue.Dispatch(context.Background(), 10))
 	require.Equal(t, ChangeNotificationPending, store.items[1].Status)
 	require.NotEmpty(t, store.items[1].LastError)

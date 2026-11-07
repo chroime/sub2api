@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import Icon from '@/components/icons/Icon.vue'
 import BaseDialog from '@/components/common/BaseDialog.vue'
+import StatusIndicator from './StatusIndicator.vue'
 import api, {
   type BalanceMonitor,
   type Site,
@@ -106,28 +106,11 @@ async function save() {
 <template>
   <section :class="embedded ? '' : 'rounded-xl border border-gray-200 p-5 dark:border-dark-600'">
     <div class="flex flex-wrap items-start gap-3">
-      <div
-        class="rounded-lg bg-primary-50 p-2 text-primary-700 dark:bg-primary-900/20 dark:text-primary-300"
-      >
-        <Icon name="bell" size="md" />
-      </div>
       <div class="min-w-0 flex-1">
         <h3 class="font-semibold">{{ t('governance.balanceMonitoring') }}</h3>
-        <p class="mt-1 text-xs text-gray-500">
-          {{ t('governance.balanceMonitorHint') }}
-        </p>
       </div>
-      <span
-        class="rounded-full px-2.5 py-1 text-xs font-medium"
-        :class="
-          state === 'low'
-            ? 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300'
-            : state === 'healthy'
-              ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/20 dark:text-primary-300'
-              : 'bg-gray-100 text-gray-600 dark:bg-dark-700 dark:text-gray-300'
-        "
-        >{{ t(`governance.balanceState_${state}`) }}</span
-      ><button
+      <StatusIndicator :label="t(`governance.balanceState_${state}`)" :tone="state === 'low' ? 'danger' : state === 'healthy' ? 'success' : 'neutral'" :icon="state === 'disabled' ? 'eyeOff' : undefined" />
+      <button
         id="governance-balance-settings"
         type="button"
         class="btn btn-secondary text-sm"

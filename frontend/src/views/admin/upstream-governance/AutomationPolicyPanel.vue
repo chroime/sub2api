@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import api, { type AutomationConfiguration, type AutomationPolicy } from '@/api/admin/upstream-governance'
 import { errorKey } from './feedback'
 import SettingsCard from './SettingsCard.vue'
+import StatusIndicator from './StatusIndicator.vue'
 const props = defineProps<{ siteId: number; configuration: AutomationConfiguration | null; disabled?: boolean }>()
 const emit = defineEmits<{ saved: [value: AutomationConfiguration]; busy: [value: boolean]; reload: [] }>()
 const { t } = useI18n()
@@ -43,8 +44,8 @@ async function save() {
     <p v-if="!draft" class="text-gray-500">{{ t('governance.automationUnavailable') }} <button type="button" class="text-primary-700 dark:text-primary-300" :disabled="disabled" @click="emit('reload')">{{ t('common.refresh') }}</button></p>
     <template v-else>
       <p v-if="saved" role="status" class="mb-2 text-primary-700 dark:text-primary-300">{{ t('governance.automationSaved') }}</p>
-      <ul data-test="automation-summary" class="flex flex-wrap gap-1.5 text-xs">
-        <li v-for="option in options" :key="option" class="rounded-full px-2 py-0.5" :class="configuration?.policy[option] ? 'bg-gray-100 text-gray-700 dark:bg-dark-700 dark:text-gray-200' : 'bg-gray-50 text-gray-400 line-through dark:bg-dark-900'">{{ t(`governance.automation_${option}`) }}</li>
+      <ul data-test="automation-summary" class="flex flex-wrap gap-x-5 gap-y-2 text-xs text-gray-600 dark:text-gray-300">
+        <li v-for="option in options" :key="option" class="flex items-center gap-1.5"><StatusIndicator :label="t(configuration?.policy[option] ? 'governance.settingsCard.on' : 'governance.settingsCard.off')" :tone="configuration?.policy[option] ? 'success' : 'neutral'" :icon="configuration?.policy[option] ? 'checkCircle' : 'eyeOff'" />{{ t(`governance.automation_${option}`) }}</li>
       </ul>
       <p class="mt-2 text-xs text-gray-500">{{ t('governance.settingsCard.automationLimits', { count: configuration?.policy.missing_confirmations ?? 0, percent: configuration?.policy.max_rate_increase_percent ?? 0 }) }}</p>
     </template>

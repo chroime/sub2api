@@ -1,6 +1,7 @@
 package upstreamgovernance
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -23,7 +24,7 @@ func (c *platformConnector) supplementPlaza(ctx context.Context, site Site, sess
 				Name        string                     `json:"name"`
 				Platform    string                     `json:"platform"`
 				Pricing     map[string]json.RawMessage `json:"pricing"`
-				Official    map[string]json.RawMessage `json:"official_pricing"`
+				Official    json.RawMessage            `json:"official_pricing"`
 				Basis       string                     `json:"long_context_basis"`
 				TimePricing json.RawMessage            `json:"time_pricing"`
 			} `json:"models"`
@@ -96,12 +97,17 @@ func (c *platformConnector) supplementPlaza(ctx context.Context, site Site, sess
 			if pg.LongContext != nil {
 				price.Details["long_context_pricing_enabled"] = *pg.LongContext
 			}
-			if model.Official != nil {
-				official, e := connectorSubPricingDetails(model.Official)
-				if e != nil {
-					return e
+			if rawOfficial := bytes.TrimSpace(model.Official); len(rawOfficial) > 0 && string(rawOfficial) != "null" {
+				fields, e := connectorMetadataObject(rawOfficial)
+				var official map[string]any
+				if e == nil {
+					official, e = connectorSubPricingDetails(fields)
 				}
-				price.Details["official_reference_pricing"] = official
+				if e != nil {
+					catalog.Warnings = appendUniqueWarning(catalog.Warnings, "sub2api_official_pricing_unavailable")
+				} else {
+					price.Details["official_reference_pricing"] = official
+				}
 			}
 			if len(model.TimePricing) > 0 && string(model.TimePricing) != "null" {
 				schedule, e := connectorPlazaSchedule(model.TimePricing)

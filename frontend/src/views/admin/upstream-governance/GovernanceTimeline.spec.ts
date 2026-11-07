@@ -144,7 +144,7 @@ describe('factual operations timeline', () => {
     await flushPromises()
     expect(wrapper.findAll('[data-test=timeline-record]')).toHaveLength(0)
     expect(api.timeline).toHaveBeenLastCalledWith(9, { kind: 'event', page: 1, page_size: 20 })
-    expect(wrapper.get('[data-test=timeline-empty]').text()).toContain('没有记录不代表已执行')
+    expect(wrapper.get('[data-test=timeline-empty]').text()).toContain('当前类别下暂无记录')
     wrapper.unmount()
   })
 

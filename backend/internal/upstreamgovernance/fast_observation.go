@@ -39,6 +39,7 @@ func (c *platformConnector) fastSubGroups(ctx context.Context, s Site, session S
 		ID          int64    `json:"id"`
 		Name        string   `json:"name"`
 		Description string   `json:"description"`
+		IsExclusive bool     `json:"is_exclusive"`
 		Platform    string   `json:"platform"`
 		Rate        *float64 `json:"rate_multiplier"`
 		PeakEnabled bool     `json:"peak_rate_enabled"`
@@ -81,7 +82,7 @@ func (c *platformConnector) fastSubGroups(ctx context.Context, s Site, session S
 		if resolved == nil || !connectorValidRate(resolved) {
 			return nil, ErrUnsupported
 		}
-		out = append(out, RemoteGroup{ID: id, Name: group.Name, Description: group.Description, Platform: group.Platform, RateMultiplier: group.Rate, UserRateMultiplier: override, ResolvedRateMultiplier: resolved, PeakRateEnabled: group.PeakEnabled, PeakStart: group.PeakStart, PeakEnd: group.PeakEnd, PeakRateMultiplier: group.PeakRate, Models: []string{}, Prices: []RemotePrice{}, Source: "sub2api:user-visible-groups"})
+		out = append(out, RemoteGroup{ID: id, Name: group.Name, Description: group.Description, IsExclusive: group.IsExclusive, Platform: group.Platform, RateMultiplier: group.Rate, UserRateMultiplier: override, ResolvedRateMultiplier: resolved, PeakRateEnabled: group.PeakEnabled, PeakStart: group.PeakStart, PeakEnd: group.PeakEnd, PeakRateMultiplier: group.PeakRate, Models: []string{}, Prices: []RemotePrice{}, Source: "sub2api:user-visible-groups"})
 	}
 	return out, nil
 }
@@ -91,6 +92,7 @@ func (c *platformConnector) fastNewAPIGroups(ctx context.Context, s Site, sessio
 		Ratio       json.RawMessage `json:"ratio"`
 		Desc        string          `json:"desc"`
 		Description string          `json:"description"`
+		IsExclusive bool            `json:"is_exclusive"`
 	}
 	if err := c.data(ctx, s, session, "GET", "/api/user/self/groups", nil, &groups); err != nil {
 		return nil, err
@@ -116,7 +118,7 @@ func (c *platformConnector) fastNewAPIGroups(ctx context.Context, s Site, sessio
 		if name == "" {
 			name = id
 		}
-		out = append(out, RemoteGroup{ID: id, Name: name, Description: groups[id].Description, Platform: "unknown", RateMultiplier: value, UserRateMultiplier: value, ResolvedRateMultiplier: value, Models: []string{}, Prices: []RemotePrice{}, Source: "newapi:user-self-groups"})
+		out = append(out, RemoteGroup{ID: id, Name: name, Description: groups[id].Description, IsExclusive: groups[id].IsExclusive, Platform: "unknown", RateMultiplier: value, UserRateMultiplier: value, ResolvedRateMultiplier: value, Models: []string{}, Prices: []RemotePrice{}, Source: "newapi:user-self-groups"})
 	}
 	return out, nil
 }
@@ -156,6 +158,7 @@ func groupObservationFingerprint(observation GroupObservation) (string, error) {
 		ID           string   `json:"id"`
 		Name         string   `json:"name"`
 		Description  string   `json:"description,omitempty"`
+		IsExclusive  bool     `json:"is_exclusive"`
 		Platform     string   `json:"platform"`
 		Rate         *float64 `json:"rate"`
 		DeclaredRate *float64 `json:"declared_rate,omitempty"`
@@ -167,7 +170,7 @@ func groupObservationFingerprint(observation GroupObservation) (string, error) {
 	}
 	facts := make([]fact, 0, len(groups))
 	for _, group := range groups {
-		facts = append(facts, fact{ID: group.ID, Name: group.Name, Description: group.Description, Platform: group.Platform, Rate: group.ResolvedRateMultiplier, DeclaredRate: group.RateMultiplier, UserRate: group.UserRateMultiplier, PeakEnabled: group.PeakRateEnabled, PeakStart: group.PeakStart, PeakEnd: group.PeakEnd, PeakRate: group.PeakRateMultiplier})
+		facts = append(facts, fact{ID: group.ID, Name: group.Name, Description: group.Description, IsExclusive: group.IsExclusive, Platform: group.Platform, Rate: group.ResolvedRateMultiplier, DeclaredRate: group.RateMultiplier, UserRate: group.UserRateMultiplier, PeakEnabled: group.PeakRateEnabled, PeakStart: group.PeakStart, PeakEnd: group.PeakEnd, PeakRate: group.PeakRateMultiplier})
 	}
 	raw, err := json.Marshal(facts)
 	if err != nil {

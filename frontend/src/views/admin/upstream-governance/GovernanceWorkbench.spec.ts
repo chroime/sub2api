@@ -29,7 +29,7 @@ describe('current operations workbench', () => {
     await flushPromises()
     expect(api.workbench).toHaveBeenCalledWith({ page: 1, page_size: 20 })
     expect(wrapper.text()).toContain('测试上游')
-    expect(wrapper.text()).toContain('2026-10-01 09:02:03')
+    expect(wrapper.get('[data-test=workbench-refresh]').attributes('title')).toContain('2026-10-01 10:00:00')
     expect(wrapper.get('[data-test=workbench-go-auth-4]').attributes('disabled')).toBeDefined()
     await wrapper.setProps({ disabled: false })
     await wrapper.get('[data-test=workbench-go-auth-4]').trigger('click')
@@ -58,14 +58,36 @@ describe('current operations workbench', () => {
     expect(wrapper.get('[data-test=workbench-empty]').text()).toContain('不等于全部上游健康')
   })
 
-  it('labels affected resources accurately and does not repeat the site name as its resource', async () => {
-    vi.mocked(api.workbench).mockResolvedValue({ ...page, items: [{ ...item, resource_name: item.site_name }] })
+  it('keeps the failure reason and shared impact warning while removing repeated card metadata', async () => {
+    vi.mocked(api.workbench).mockResolvedValue({ ...page, items: [{ ...item, resource_name: item.site_name, shared: true }] })
     const wrapper = render()
     await flushPromises()
     const card = wrapper.get('[data-test=workbench-item]')
-    expect(card.get('dt').text()).toBe('涉及对象')
-    expect(card.get('dd').text()).toContain('2 个关联对象')
+    expect(card.text()).toContain('当前授权需要更新或重新验证。')
+    expect(card.text()).toContain('共享本地分组：影响可能涉及多个上游。')
+    expect(card.get('[role=img]').attributes('aria-label')).toContain('需要处理')
+    expect(card.text()).toContain('授权')
+    expect(card.find('dl').exists()).toBe(false)
+    expect(card.text()).not.toContain('fixture.example')
+    expect(card.text()).not.toContain('关联对象')
+    expect(card.text()).not.toContain('2026-10-01')
+    expect(wrapper.get('[data-test=workbench-summary]').text()).toContain('1')
     expect(card.text().match(/测试上游/g)).toHaveLength(1)
+  })
+
+  it('distinguishes pricing tasks for different groups on the same site with compact resource labels', async () => {
+    vi.mocked(api.workbench).mockResolvedValue({ ...page, total: 2, items: [
+      { ...item, id: 'pricing-1', kind: 'pricing', resource_name: 'Claude Max', reason: 'increase_review', target_tab: 'monitor' },
+      { ...item, id: 'pricing-2', kind: 'pricing', resource_name: '【Gemini Pro】', reason: 'unknown_cost', target_tab: 'monitor' },
+    ] })
+    const wrapper = render()
+    await flushPromises()
+    const cards = wrapper.findAll('[data-test=workbench-item]')
+    expect(cards.map(card => card.get('[data-test=workbench-resource]').text())).toEqual(['【Claude Max】', '【Gemini Pro】'])
+    expect(cards[0].text()).toContain('成本涨幅超过保护阈值')
+    expect(cards[1].text()).toContain('未知或不可比较成本')
+    await cards[1].get('button').trigger('click')
+    expect(wrapper.emitted('navigate')).toEqual([[{ siteId: 4, section: 'automation' }]])
   })
 
   it.each([5, 0])('returns from a disappeared last page when total shrinks to %s', async total => {

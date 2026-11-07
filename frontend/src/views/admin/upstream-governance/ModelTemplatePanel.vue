@@ -305,9 +305,7 @@ onUnmounted(() => {
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div class="min-w-0 flex-1">
         <h4 class="font-semibold">{{ t(variant === 'library' ? 'governance.modelPicker.libraryTitle' : 'governance.modelRestrictions') }}</h4>
-        <p class="mt-1 text-xs text-gray-500">
-          {{ t(variant === 'library' ? 'governance.modelPicker.libraryHint' : 'governance.modelTemplateHint') }}
-        </p>
+        <p v-if="variant !== 'library'" class="mt-1 text-xs text-gray-500">{{ t('governance.modelTemplateHint') }}</p>
       </div>
       <button v-if="variant === 'picker'" data-test="manage-model-templates" type="button" class="text-xs font-medium text-primary-700 underline-offset-2 hover:underline dark:text-primary-300" :disabled="saving" @click="emit('manage')">{{ t('governance.importTemplates.manageLink') }}</button>
     </div>

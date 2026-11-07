@@ -2,14 +2,18 @@ package upstreamgovernance
 
 import (
 	"context"
+	"database/sql"
 	"time"
 )
 
-const changeNotificationColumns = `id,site_id,dedup_key,recipient,kind,severity,subject,body,initial_baseline,status,attempts,next_attempt_at,sent_at,last_error,created_at`
+const changeNotificationColumns = `id,site_id,dedup_key,recipient,kind,severity,subject,body,initial_baseline,status,attempts,next_attempt_at,sent_at,last_error,created_at,group_resource,local_group_id`
 
 func scanChangeNotification(row rowScanner) (ChangeNotification, error) {
 	var item ChangeNotification
-	err := row.Scan(&item.ID, &item.SiteID, &item.DedupKey, &item.Recipient, &item.Kind, &item.Severity, &item.Subject, &item.Body, &item.InitialBaseline, &item.Status, &item.Attempts, &item.NextAttemptAt, &item.SentAt, &item.LastError, &item.CreatedAt)
+	var resource sql.NullString
+	var groupID sql.NullInt64
+	err := row.Scan(&item.ID, &item.SiteID, &item.DedupKey, &item.Recipient, &item.Kind, &item.Severity, &item.Subject, &item.Body, &item.InitialBaseline, &item.Status, &item.Attempts, &item.NextAttemptAt, &item.SentAt, &item.LastError, &item.CreatedAt, &resource, &groupID)
+	item.GroupResource, item.LocalGroupID = resource.String, groupID.Int64
 	return item, storeError(err)
 }
 
@@ -30,14 +34,16 @@ func (s *sqlStore) EnqueueChangeNotification(ctx context.Context, item ChangeNot
 		item.NextAttemptAt = item.CreatedAt
 	}
 	var err error
+	resource := sql.NullString{String: item.GroupResource, Valid: item.GroupResource != ""}
+	groupID := sql.NullInt64{Int64: item.LocalGroupID, Valid: item.LocalGroupID > 0}
 	if item.ID > 0 {
 		_, err = s.db.ExecContext(ctx, `INSERT INTO upstream_governance_change_notifications (`+changeNotificationColumns+`)
-VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
-ON CONFLICT(dedup_key,recipient) DO NOTHING`, item.ID, item.SiteID, item.DedupKey, item.Recipient, item.Kind, item.Severity, item.Subject, item.Body, item.InitialBaseline, item.Status, item.Attempts, item.NextAttemptAt, item.SentAt, item.LastError, item.CreatedAt)
+VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+ON CONFLICT(dedup_key,recipient) DO NOTHING`, item.ID, item.SiteID, item.DedupKey, item.Recipient, item.Kind, item.Severity, item.Subject, item.Body, item.InitialBaseline, item.Status, item.Attempts, item.NextAttemptAt, item.SentAt, item.LastError, item.CreatedAt, resource, groupID)
 	} else {
-		_, err = s.db.ExecContext(ctx, `INSERT INTO upstream_governance_change_notifications (site_id,dedup_key,recipient,kind,severity,subject,body,initial_baseline,status,attempts,next_attempt_at,sent_at,last_error,created_at)
-VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
-ON CONFLICT(dedup_key,recipient) DO NOTHING`, item.SiteID, item.DedupKey, item.Recipient, item.Kind, item.Severity, item.Subject, item.Body, item.InitialBaseline, item.Status, item.Attempts, item.NextAttemptAt, item.SentAt, item.LastError, item.CreatedAt)
+		_, err = s.db.ExecContext(ctx, `INSERT INTO upstream_governance_change_notifications (site_id,dedup_key,recipient,kind,severity,subject,body,initial_baseline,status,attempts,next_attempt_at,sent_at,last_error,created_at,group_resource,local_group_id)
+VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+ON CONFLICT(dedup_key,recipient) DO NOTHING`, item.SiteID, item.DedupKey, item.Recipient, item.Kind, item.Severity, item.Subject, item.Body, item.InitialBaseline, item.Status, item.Attempts, item.NextAttemptAt, item.SentAt, item.LastError, item.CreatedAt, resource, groupID)
 	}
 	return err
 }

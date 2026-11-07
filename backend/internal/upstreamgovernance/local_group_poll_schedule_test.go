@@ -105,7 +105,7 @@ func TestLocalGroupWorkerPollKeepsOutboxRetryDeadline(t *testing.T) {
 	sender := &localGroupPolicySender{sendErr: errors.New("transport unavailable")}
 	svc, _ := localGroupPollFixture(t, store, sender, &now, 300, false)
 	queue := svc.NewLocalGroupChangeQueue(sender)
-	require.NoError(t, queue.Enqueue(t.Context(), LocalGroupChangeEvent{GroupID: 42, Kind: LocalGroupChangeCreated, After: `{"name":"GPT Pro","status":"active"}`}))
+	require.NoError(t, queue.Enqueue(t.Context(), LocalGroupChangeEvent{GroupID: 42, Kind: LocalGroupChangeCreated, After: `{"is_exclusive":false,"name":"GPT Pro","status":"active"}`}))
 	require.NoError(t, svc.runDue(t.Context()))
 	require.Equal(t, 1, sender.delivered)
 	require.Equal(t, localGroupChangePending, store.events[0].Status)
@@ -257,6 +257,10 @@ func (s *localGroupPollMemoryStore) EnqueueLocalGroupChange(_ context.Context, e
 	event.ID = int64(len(s.events) + 1)
 	s.events = append(s.events, event)
 	return nil
+}
+
+func (*localGroupPollMemoryStore) LocalGroupChangeIsPublic(context.Context, LocalGroupChangeEvent) (bool, error) {
+	return true, nil
 }
 
 func (s *localGroupPollMemoryStore) DueLocalGroupChanges(_ context.Context, now time.Time, limit int) ([]LocalGroupChangeEvent, error) {

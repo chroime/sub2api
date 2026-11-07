@@ -31,14 +31,9 @@ function number(event: Event) { return Number((event.target as HTMLInputElement)
 function checked(event: Event) { return (event.target as HTMLInputElement).checked }
 </script>
 <template>
-  <div data-test="import-templates-view" class="min-w-0 space-y-5">
-    <div>
-      <h3 class="text-lg font-semibold">{{ t('governance.templatesTab.title') }}</h3>
-      <p class="mt-1 text-sm text-gray-500">{{ t('governance.templatesTab.hint') }}</p>
-    </div>
+  <div data-test="import-templates-view" class="min-w-0 space-y-5" :aria-label="t('governance.templatesTab.title')">
     <section class="min-w-0 space-y-4 rounded-xl border border-gray-200 bg-white p-4 dark:border-dark-600 dark:bg-dark-800 sm:p-5">
       <ImportTemplatePanel variant="library" scope-key="library" :settings="settings" :pristine="false" @selected="load" @busy="setBusy" />
-      <p class="text-xs text-gray-500">{{ t('governance.templatesTab.importDefaults') }}</p>
       <fieldset data-test="template-parameters" :disabled="busy" class="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <label class="text-sm">{{ t('governance.concurrency') }}<input :value="config.concurrency" data-test="concurrency" type="number" min="1" max="2147483647" class="input mt-1 w-full" @input="config = { ...config, concurrency: number($event) }" /></label>
         <label class="text-sm">{{ t('governance.accountPriority') }}<input :value="config.priority ?? 1" data-test="priority" type="number" min="0" max="2147483647" step="1" class="input mt-1 w-full" @input="config = { ...config, priority: number($event) }" /></label>
