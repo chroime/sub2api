@@ -116,6 +116,8 @@ func provideCleanup(
 	billingMaintenance *service.BillingMaintenanceService,
 	billingStorageMonitor *service.BillingStorageMonitor,
 	usageLogRecovery *service.UsageLogRecoveryService,
+	balanceNotify *service.BalanceNotifyService,
+	digestSessions *service.DigestSessionStore,
 	subscriptionService *service.SubscriptionService,
 	oauth *service.OAuthService,
 	openaiOAuth *service.OpenAIOAuthService,
@@ -167,6 +169,18 @@ func provideCleanup(
 			{"BillingMaintenance", func() error { billingMaintenance.Stop(); return nil }},
 			{"BillingStorageMonitor", func() error { billingStorageMonitor.Stop(); return nil }},
 			{"UsageLogRecovery", func() error { usageLogRecovery.Stop(); return nil }},
+			{"DigestSessionStore", func() error {
+				if digestSessions != nil {
+					digestSessions.Close()
+				}
+				return nil
+			}},
+			{"BalanceNotifyService", func() error {
+				if balanceNotify != nil {
+					balanceNotify.Stop()
+				}
+				return nil
+			}},
 			{"PluginManager", func() error {
 				if pluginManager != nil {
 					pluginManager.Stop()

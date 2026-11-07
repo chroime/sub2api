@@ -61,7 +61,7 @@ func balanceRecordFixture(t *testing.T) (*NotificationEmailService, *BalanceNoti
 
 func TestBalanceRecordsAutomaticSMTPAndDailySuppression(t *testing.T) {
 	_, svc, _, store, smtp := balanceRecordFixture(t)
-	svc.sendBalanceLowEmails([]string{"notify@example.test"}, 7, "用户7", "user@example.test", 0.065, 1, "Test", "https://example.test/pay")
+	svc.sendBalanceLowEmails(t.Context(), []string{"notify@example.test"}, 7, "用户7", "user@example.test", 0.065, 1, "Test", "https://example.test/pay")
 	r := store.only(t)
 	require.Equal(t, "sent", r.Status)
 	require.Equal(t, "user@example.test", r.UserEmail)
@@ -74,7 +74,7 @@ func TestBalanceRecordsAutomaticSMTPAndDailySuppression(t *testing.T) {
 	// SMTP normalizes line endings to CRLF; the stored HTML is the rendered
 	// content before transport encoding.
 	require.Equal(t, strings.TrimSpace(r.Body), strings.TrimSpace(strings.ReplaceAll(smtp.lastMessageBody(t), "\r\n", "\n")))
-	svc.sendBalanceLowEmails([]string{"notify@example.test"}, 7, "用户7", "user@example.test", 0.06, 1, "Test", "https://example.test/pay")
+	svc.sendBalanceLowEmails(t.Context(), []string{"notify@example.test"}, 7, "用户7", "user@example.test", 0.06, 1, "Test", "https://example.test/pay")
 	require.Len(t, store.rows, 2)
 	states := map[string]int{}
 	for _, r := range store.rows {
@@ -87,19 +87,19 @@ func TestBalanceRecordsAutomaticSMTPAndDailySuppression(t *testing.T) {
 func TestBalanceRecordsUnsubscribeNoRecipientAndFallback(t *testing.T) {
 	n, svc, repo, store, smtp := balanceRecordFixture(t)
 	require.NoError(t, repo.Set(t.Context(), notificationEmailPreferenceKey(NotificationEmailEventBalanceLow, "notify@example.test"), "unsubscribed"))
-	svc.sendBalanceLowEmails([]string{"notify@example.test"}, 7, "用户", "u@example.test", 0.1, 1, "Test", "")
+	svc.sendBalanceLowEmails(t.Context(), []string{"notify@example.test"}, 7, "用户", "u@example.test", 0.1, 1, "Test", "")
 	r := store.only(t)
 	require.Equal(t, "suppressed", r.Status)
 	require.Equal(t, "unsubscribed", r.SuppressionReason)
 	require.Zero(t, r.Attempts)
 	require.Equal(t, int64(0), smtp.messageCount())
 	store.rows = nil
-	svc.sendBalanceLowEmails(nil, 7, "用户", "u@example.test", 0.1, 1, "Test", "")
+	svc.sendBalanceLowEmails(t.Context(), nil, 7, "用户", "u@example.test", 0.1, 1, "Test", "")
 	require.Equal(t, "no_recipient", store.only(t).SuppressionReason)
 	store.rows = nil
 	require.NoError(t, repo.Delete(t.Context(), notificationEmailPreferenceKey(NotificationEmailEventBalanceLow, "notify@example.test")))
 	require.NoError(t, repo.Set(t.Context(), notificationEmailTemplateKey(NotificationEmailEventBalanceLow, "en"), `{"subject":"{{unsupported}}","html":"invalid"}`))
-	svc.sendBalanceLowEmails([]string{"notify@example.test"}, 7, "用户", "u@example.test", 0.1, 1, "Test", "")
+	svc.sendBalanceLowEmails(t.Context(), []string{"notify@example.test"}, 7, "用户", "u@example.test", 0.1, 1, "Test", "")
 	r = store.only(t)
 	require.Equal(t, "sent", r.Status)
 	require.Equal(t, 1, r.Attempts)
@@ -199,6 +199,6 @@ func TestBalanceRecordsSMTPFailureAndMarkerFailurePreserveFacts(t *testing.T) {
 func TestBalanceRecordStorageFailureStillSendsMail(t *testing.T) {
 	_, svc, _, store, smtp := balanceRecordFixture(t)
 	store.err = errors.New("audit storage offline")
-	svc.sendBalanceLowEmails([]string{"user@example.test"}, 7, "用户", "user@example.test", 0.1, 1, "Test", "")
+	svc.sendBalanceLowEmails(t.Context(), []string{"user@example.test"}, 7, "用户", "user@example.test", 0.1, 1, "Test", "")
 	require.Equal(t, int64(1), smtp.messageCount())
 }
