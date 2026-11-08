@@ -6,10 +6,9 @@ import Select from '@/components/common/Select.vue'
 import Icon from '@/components/icons/Icon.vue'
 import UpstreamPlatformIcon from './UpstreamPlatformIcon.vue'
 import ConnectionFields from './ConnectionFields.vue'
-import BrowserAuthorizationDialog from './BrowserAuthorizationDialog.vue'
 import { newConnectionForm, connectionInput, clearConnectionSecrets, clearConnectionProofs, continueChallenge, connectionBlocked } from './connection-form'
 import { errorKey } from './feedback'
-import api, { type AuthorizationStatus, type Site, type SiteInput, type Snapshot } from '@/api/admin/upstream-governance'
+import api, { type Site, type SiteInput, type Snapshot } from '@/api/admin/upstream-governance'
 
 const props = defineProps<{ proxies: { id: number; name: string }[] }>()
 const emit = defineEmits<{ close: []; created: [site: Site]; completed: [site: Site, snapshot: Snapshot] }>()
@@ -18,8 +17,7 @@ const url = ref(''), name = ref(''), platform = ref<SiteInput['platform'] | ''>(
 const advanced = ref(false), form = ref(newConnectionForm()), savedSite = ref<Site | null>(null)
 const connected = ref(false), busy = ref(false), error = ref(''), challenge = ref('')
 const stage = ref('')
-const browserOpen = ref(false), browserStatus = ref<AuthorizationStatus | null>(null), targetStale = ref(false)
-const browserBlocked = computed(() => busy.value || targetStale.value || !browserStatus.value?.browser.available || browserStatus.value.session.site_version !== savedSite.value?.version || form.value.mode !== 'password' || !form.value.username.trim() || !form.value.password)
+const targetStale = ref(false)
 const platformOptions = computed(() => [
   { value: '', label: t('governance.autoDetect') },
   { value: 'sub2api', label: 'Sub2API' },
@@ -29,42 +27,20 @@ const proxyOptions = computed(() => [
   { value: null, label: t('governance.direct') },
   ...props.proxies.map(proxy => ({ value: proxy.id, label: proxy.name })),
 ])
-let disposed = false, statusGeneration = 0
-onUnmounted(() => { disposed = true; statusGeneration++; clearConnectionSecrets(form.value) })
+let disposed = false
+onUnmounted(() => { disposed = true; clearConnectionSecrets(form.value) })
 function close() {
-  disposed = true; statusGeneration++; browserOpen.value = false
+  disposed = true
   clearConnectionSecrets(form.value)
   emit('close')
 }
-async function loadBrowserStatus(siteId: number) {
-  const request = ++statusGeneration
-  browserStatus.value = null
-  try {
-    const status = await api.authStatus(siteId)
-    if (!disposed && request === statusGeneration && savedSite.value?.id === siteId && status.session.site_id === siteId && status.session.site_version === savedSite.value.version) browserStatus.value = status
-  } catch { /* Browser capability is optional; manual authorization remains available. */ }
-}
-function openBrowser() {
-  if (disposed || browserBlocked.value) return
-  clearConnectionProofs(form.value)
-  browserOpen.value = true
-}
 function invalidateTarget() {
-  browserOpen.value = false; targetStale.value = true
+  targetStale.value = true
   clearConnectionSecrets(form.value)
   error.value = t('governance.loginTargetChanged')
 }
-function browserConnected(site?: Site) {
-  if (disposed || !browserOpen.value || !savedSite.value) return
-  browserOpen.value = false
-  savedSite.value = site || { ...savedSite.value, has_credential: true, status: 'connected', last_error: '' }
-  void loadBrowserStatus(savedSite.value.id)
-  connected.value = true; challenge.value = ''
-  emit('created', savedSite.value)
-  void onboard()
-}
 async function onboard() {
-  if (disposed || busy.value || browserOpen.value || targetStale.value || connectionBlocked(form.value, challenge.value)) return
+  if (disposed || busy.value || targetStale.value || (!connected.value && connectionBlocked(form.value, challenge.value))) return
   busy.value = true
   error.value = ''
   try {
@@ -92,7 +68,12 @@ async function onboard() {
       })
       if (disposed) return
       emit('created', savedSite.value)
-      void loadBrowserStatus(savedSite.value.id)
+      if (form.value.mode === 'password' && detected.captcha_required === true) {
+        challenge.value = 'captcha'
+        continueChallenge(form.value, { kind: 'captcha', provider: detected.captcha_provider })
+        stage.value = 'challengePending'
+        return
+      }
     }
     if (!connected.value) {
       stage.value = 'connecting'
@@ -105,10 +86,10 @@ async function onboard() {
         return
       }
       savedSite.value = result.site || { ...savedSite.value, has_credential: true, status: 'connected', last_error: '' }
-      void loadBrowserStatus(savedSite.value.id)
       emit('created', savedSite.value)
       connected.value = true
       challenge.value = ''
+      clearConnectionSecrets(form.value)
     }
     stage.value = 'collecting'
     const snapshot = await api.sync(savedSite.value.id)
@@ -123,8 +104,6 @@ async function onboard() {
       connected.value = false
       if (savedSite.value) {
         const site = savedSite.value
-        await loadBrowserStatus(site.id)
-        if (disposed || savedSite.value?.id !== site.id) return
         if (form.value.mode === 'password') {
           try {
             const credentials = await api.loginCredentials(site.id)
@@ -144,7 +123,7 @@ async function onboard() {
 </script>
 
 <template>
-  <BaseDialog :show="!browserOpen" :title="t('governance.add')" :close-on-escape="!busy" :show-close-button="!busy" @close="close">
+  <BaseDialog :show="true" :title="t('governance.add')" :close-on-escape="!busy" :show-close-button="!busy" @close="close">
     <form id="governance-onboard-form" class="space-y-4" @submit.prevent="onboard">
       <p class="text-sm text-gray-500">{{ t('governance.onboardHint') }}</p>
       <p v-if="error" role="alert" class="rounded-lg border border-red-300 p-3 text-red-600">{{ error }}</p>
@@ -154,7 +133,7 @@ async function onboard() {
         {{ t('governance.url') }}
         <input id="governance-onboard-url" v-model="url" class="input w-full" type="url" placeholder="https://upstream.example" required :disabled="busy || !!savedSite" />
       </label>
-      <ConnectionFields v-if="!connected" v-model="form" id-prefix="governance-onboard" :challenge="challenge" :disabled="busy || browserOpen || targetStale" />
+      <ConnectionFields v-if="!connected" v-model="form" id-prefix="governance-onboard" :challenge="challenge" :disabled="busy || targetStale" :site-url="savedSite?.base_url || url" :platform="savedSite?.platform || platform || undefined" />
       <button id="governance-onboard-advanced" type="button" class="text-sm text-primary-600 underline" :aria-expanded="advanced" :disabled="busy" @click="advanced = !advanced">{{ t('governance.advancedSite') }}</button>
       <fieldset v-if="advanced" :disabled="busy || !!savedSite" class="space-y-3 rounded-lg border p-3 dark:border-dark-600">
         <div>
@@ -176,13 +155,10 @@ async function onboard() {
       </fieldset>
       <p class="text-xs text-gray-500">{{ t('governance.secretNotice') }}</p>
       <div class="flex flex-wrap gap-2">
-        <button id="governance-onboard-submit" class="btn btn-primary" :disabled="busy || browserOpen || targetStale || connectionBlocked(form, challenge)">
-          {{ t(busy ? 'common.processing' : connected ? 'governance.retryCollection' : challenge ? 'governance.continueConnection' : 'governance.connectAndCollect') }}
+        <button id="governance-onboard-submit" class="btn btn-primary" :disabled="busy || targetStale || (!connected && connectionBlocked(form, challenge))">
+          {{ t(busy ? 'common.processing' : connected ? 'governance.retryCollection' : form.mode === 'session' ? 'governance.importSessionAndCollect' : challenge ? 'governance.continueConnection' : 'governance.connectAndCollect') }}
         </button>
-        <button v-if="savedSite && !connected" id="governance-onboard-browser" type="button" class="btn btn-secondary" :disabled="browserBlocked" @click="openBrowser"><Icon name="globe" size="sm" class="mr-2" />{{ t('governance.browserAuthorization') }}</button>
       </div>
-      <p v-if="savedSite && !connected && !browserStatus?.browser.available" class="text-xs text-gray-500">{{ t(browserStatus ? 'governance.browserUnavailable' : 'governance.authorizationStatusUnavailable') }}</p>
     </form>
   </BaseDialog>
-  <BrowserAuthorizationDialog v-if="browserOpen && savedSite" :site-id="savedSite.id" :site-version="savedSite.version" :username="form.username" :password="form.password" @close="browserOpen = false" @connected="browserConnected" @invalidated="invalidateTarget" />
 </template>

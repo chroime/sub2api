@@ -103,11 +103,15 @@ func (s *Service) RevealKey(ctx context.Context, siteID, keyID int64) (*RevealKe
 	if !s.durableKey || s.cipher == nil {
 		return nil, ErrEncryption
 	}
-	_, release, err := s.remoteSiteLock(ctx, siteID)
+	// Revealing a retained key only reads one committed local row. It must
+	// not compete with remote collection or session refresh for the site lock.
+	site, err := s.store.GetSite(ctx, siteID)
 	if err != nil {
 		return nil, err
 	}
-	defer release()
+	if isLocalModelSite(*site) {
+		return nil, ErrInvalid
+	}
 	managed, err := s.store.GetManagedKey(ctx, siteID, keyID)
 	if err != nil {
 		return nil, err

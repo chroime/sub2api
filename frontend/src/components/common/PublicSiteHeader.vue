@@ -1,5 +1,5 @@
 <template>
-  <header class="public-site-header public-site-header-dark" :class="{ 'public-site-header-story': variant === 'story' }">
+  <header class="public-site-header public-site-header-dark" :class="{ 'public-site-header-story': variant === 'story', 'public-site-header-app': variant === 'app' }">
     <nav class="public-header-inner">
       <RouterLink to="/home" class="public-brand">
         <SiteLogo :id="variant === 'story' ? 'brand-logo' : undefined" :src="siteLogo" :alt="siteName" class="public-brand-icon" />
@@ -8,6 +8,12 @@
       </RouterLink>
       <div class="public-header-actions">
         <slot />
+        <details v-if="variant === 'app'" class="public-mobile-menu">
+          <summary :aria-label="t('home.experience.navigationMenu')" :title="t('home.experience.navigationMenu')">
+            <Icon name="menu" size="md" aria-hidden="true" />
+          </summary>
+          <div class="public-mobile-menu-panel"><slot /></div>
+        </details>
         <button :id="variant === 'story' ? 'theme-toggle' : undefined" type="button" class="public-theme-toggle" :aria-label="isDark ? t('home.switchToLight') : t('home.switchToDark')" :title="isDark ? t('home.switchToLight') : t('home.switchToDark')" @click="toggleTheme">
           <Icon v-if="isDark" name="sun" size="md" aria-hidden="true" />
           <Icon v-else name="moon" size="md" aria-hidden="true" />
@@ -37,7 +43,7 @@ defineProps<{
   destination: RouteLocationRaw
   authenticated: boolean
   animatedMascot?: boolean
-  variant?: 'default' | 'story'
+  variant?: 'default' | 'story' | 'app'
 }>()
 const { t } = useI18n()
 const emit = defineEmits<{ 'theme-change': [isDark: boolean] }>()
@@ -157,5 +163,55 @@ onBeforeUnmount(() => themeObserver?.disconnect())
 @media (max-width: 359px) {
   .public-site-header-story .public-header-inner { width: calc(100% - 32px); }
   .public-site-header-story .public-brand-subtitle { max-width: 80px; padding-left: 7px; font-size: 10px; }
+}
+
+.public-site-header-app {
+  background: color-mix(in srgb, var(--public-surface) 92%, transparent);
+  box-shadow: 0 1px 0 rgb(15 23 42 / .015);
+  font-family: inherit;
+}
+.public-site-header-app .public-header-inner { width: 100%; max-width: 1280px; min-height: 76px; padding: 16px 20px; }
+.public-site-header-app .public-brand { gap: 10px; }
+.public-site-header-app .public-brand-icon { width: 32px; height: 32px; border-radius: 9px; }
+.public-site-header-app .public-brand-name { font-size: 21px; font-weight: 700; letter-spacing: -.035em; }
+.public-site-header-app .public-brand-subtitle { padding-left: 14px; font-size: 12px; }
+.public-site-header-app .public-header-actions { gap: 8px; }
+.public-site-header-app .public-mobile-menu { display: none; }
+.public-site-header-app .public-header-actions :deep(.public-nav-link) { min-height: 40px; padding: 0 12px; border-radius: 9px; font-size: 14px; font-weight: 500; transition: color 160ms ease, background-color 160ms ease; }
+.public-site-header-app .public-header-actions :deep(.public-nav-link:hover) { color: var(--public-accent); background: var(--public-hover); }
+.public-site-header-app .public-header-actions :deep(.public-nav-link:focus-visible) { outline: 2px solid var(--public-accent); outline-offset: 3px; }
+.public-site-header-app .public-nav-cta { min-width: 84px; min-height: 42px; padding: 10px 16px; border-radius: 10px; font-family: inherit; font-size: 14px; line-height: 20px; box-shadow: 0 3px 10px rgb(13 148 136 / .12); }
+@media (min-width: 640px) {
+  .public-site-header-app .public-header-inner { padding-right: 32px; padding-left: 32px; }
+}
+@media (min-width: 1024px) {
+  .public-site-header-app .public-header-inner { padding-right: 40px; padding-left: 40px; }
+}
+@media (max-width: 767px) {
+  .public-site-header-app .public-header-inner { gap: 10px; }
+  .public-site-header-app .public-header-actions { position: relative; gap: 4px; }
+  .public-site-header-app .public-brand-name { max-width: 130px; font-size: 18px; }
+  .public-site-header-app .public-mobile-menu { display: block; order: -1; }
+  .public-site-header-app .public-mobile-menu summary { display: flex; width: 36px; height: 40px; align-items: center; justify-content: center; border-radius: 9px; color: var(--header-text); cursor: pointer; list-style: none; }
+  .public-site-header-app .public-mobile-menu summary::-webkit-details-marker { display: none; }
+  .public-site-header-app .public-mobile-menu summary:hover,
+  .public-site-header-app .public-mobile-menu[open] summary { background: var(--header-hover); color: var(--header-strong); }
+  .public-site-header-app .public-mobile-menu summary:focus-visible { outline: 2px solid var(--public-accent); outline-offset: 3px; }
+  .public-site-header-app .public-mobile-menu-panel { position: absolute; top: calc(100% + 12px); right: 0; z-index: 40; width: min(240px, calc(100vw - 40px)); border: 1px solid var(--public-border); border-radius: 12px; background: var(--public-surface); padding: 8px; box-shadow: 0 12px 32px rgb(15 23 42 / .12); }
+  .public-site-header-app .public-mobile-menu-panel :deep(.public-nav-link) { display: flex; width: 100%; min-height: 44px; gap: 8px; padding: 10px 12px; }
+  .public-site-header-app .public-header-locale :deep(> button) { width: 40px; justify-content: center; padding: 8px; }
+  .public-site-header-app .public-header-locale :deep(> button > span),
+  .public-site-header-app .public-header-locale :deep(> button > svg) { display: none; }
+}
+@media (max-width: 479px) {
+  .public-site-header-app .public-brand { gap: 8px; }
+  .public-site-header-app .public-brand-name { min-width: 0; font-size: 17px; }
+  .public-site-header-app .public-nav-cta { min-width: 0; padding-right: 12px; padding-left: 12px; }
+}
+@media (max-width: 359px) {
+  .public-site-header-app .public-brand-name { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .public-site-header-app .public-header-actions :deep(.public-nav-link) { transition: none; }
 }
 </style>

@@ -91,11 +91,14 @@ onUnmounted(() => {
     <header class="flex flex-wrap items-center justify-between gap-3">
       <div class="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
         <h3 class="font-semibold">{{ t('governance.workbench.title') }}</h3>
-        <div v-if="result" data-test="workbench-summary" class="flex flex-wrap items-center gap-2 text-xs tabular-nums">
-          <strong class="text-gray-700 dark:text-gray-200" :aria-label="t('governance.workbench.count', { count: result.total })">{{ result.total }}</strong>
-          <span v-for="severity in (['critical', 'warning', 'info'] as const)" :key="severity" class="inline-flex items-center gap-0.5"><StatusIndicator :label="t(operationsSeverityKey(severity))" :tone="severity === 'critical' ? 'danger' : severity === 'warning' ? 'warning' : 'info'" />{{ result.summary[severity] }}</span>
+        <div v-if="result" data-test="workbench-summary" class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs leading-none tabular-nums">
+          <strong class="inline-flex h-6 items-center text-gray-700 dark:text-gray-200" :aria-label="t('governance.workbench.count', { count: result.total })">{{ result.total }}</strong>
+          <span v-for="severity in (['critical', 'warning', 'info'] as const)" :key="severity" class="inline-flex h-6 shrink-0 items-center gap-1">
+            <StatusIndicator :label="t(operationsSeverityKey(severity))" :tone="severity === 'critical' ? 'danger' : severity === 'warning' ? 'warning' : 'info'" />
+            <span class="inline-flex h-6 min-w-[1ch] items-center justify-center">{{ result.summary[severity] }}</span>
+          </span>
         </div>
-        <span class="text-xs text-gray-500 dark:text-gray-400">{{ t(siteId ? 'governance.workbench.scopeSite' : 'governance.workbench.scopeAll') }}</span>
+        <span class="inline-flex h-6 items-center text-xs leading-none text-gray-500 dark:text-gray-400">{{ t(siteId ? 'governance.workbench.scopeSite' : 'governance.workbench.scopeAll') }}</span>
       </div>
       <button data-test="workbench-refresh" class="btn btn-secondary flex h-9 w-9 shrink-0 items-center justify-center !p-0" type="button" :title="result ? t('governance.workbench.evaluatedAt', { time: formatGovernanceTime(result.evaluated_at) }) : t('governance.workbench.refresh')" :aria-label="t('governance.workbench.refresh')" :disabled="loading || disabled" @click="refresh"><Icon name="refresh" size="sm" aria-hidden="true" /></button>
     </header>

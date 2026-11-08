@@ -129,6 +129,7 @@ const busy = ref(false),
   deleting = ref(false)
 const deleteKeepAccounts = ref(false), notice = ref('')
 const deleteError = ref('')
+const collectionBusyNotice = ref<number | null>(null)
 // Only a direct collection failure can repeat the site's persisted error.
 // Metadata reads may fail independently even when their error text is equal.
 const collectionError = ref<{ reason: string; siteId: number } | null>(null)
@@ -217,6 +218,7 @@ function restoreLocation() {
   void select(site, undefined, false)
 }
 watch(() => route.fullPath, () => {
+  collectionBusyNotice.value = null
   // Do not leave an old site's credentials or action dialog over a new route.
   const refreshKeys = keysOpen.value
   const previousSite = active.value?.id
@@ -232,6 +234,7 @@ watch(() => route.fullPath, () => {
 function clearFailure() {
   error.value = ''
   collectionError.value = null
+  collectionBusyNotice.value = null
 }
 function failure(e: unknown, collectionSiteId?: number) {
   error.value = t(errorKey(e))
@@ -391,6 +394,7 @@ async function sync() {
   const id = active.value.id
   const request = generation
   let collectionFailed = false
+  const directCollectionBusy = (e: unknown) => collectionFailed && (e as { reason?: string } | null)?.reason === 'site_busy'
   await run(async () => {
     try {
       const collected = await api.sync(id).catch((e: unknown) => { collectionFailed = true; throw e })
@@ -406,10 +410,13 @@ async function sync() {
       importStateReady.value = true
       await reloadHealth()
     } catch (e) {
-      if (request === generation) importStateReady.value = false
+      if (request === generation && !directCollectionBusy(e)) importStateReady.value = false
       throw e
     }
-  }, true, { onFailure: e => failure(e, collectionFailed ? id : undefined) })
+  }, true, { onFailure: e => {
+    if (directCollectionBusy(e)) collectionBusyNotice.value = id
+    else failure(e, collectionFailed ? id : undefined)
+  } })
 }
 async function remove() {
   if (!active.value) return
@@ -641,6 +648,7 @@ onUnmounted(() => {
       <SmartOperationsTabs v-model="tab" :disabled="navigationLocked" />
       <div :id="`governance-${tab}-panel`" role="tabpanel" :aria-labelledby="`governance-${tab}-tab`" tabindex="0" class="min-w-0 space-y-5 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500">
       <p v-if="error" role="alert" data-test="governance-error" class="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-600 dark:border-red-900 dark:bg-red-900/10">{{ error }}</p>
+      <p v-if="collectionBusyNotice === active?.id" role="status" data-test="collection-busy-notice" class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-900/10 dark:text-amber-300">{{ t('governance.collectionBusy') }}</p>
       <p v-if="notice" role="status" data-test="governance-notice" class="rounded-xl border border-primary-100 bg-primary-50 p-3 text-sm text-primary-800 dark:border-primary-900/40 dark:bg-primary-900/10 dark:text-primary-300">{{ notice }}</p>
       <p v-if="siteNotFound" role="status" class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-300">{{ t('governance.smartOperations.siteNotFound') }}</p>
       <template v-if="tab === 'settings'">
@@ -745,6 +753,8 @@ onUnmounted(() => {
         v-if="connecting && active"
         :site-id="active.id"
         :site-version="active.version"
+        :site-url="active.base_url"
+        :platform="active.platform"
         @close="connecting = false"
         @connected="connected"
       />

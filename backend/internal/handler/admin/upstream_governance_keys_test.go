@@ -18,13 +18,14 @@ type governanceKeyHandlerStore struct {
 	gov.Store
 	site gov.Site
 	key  gov.ManagedKey
+	busy bool
 }
 
 func (s *governanceKeyHandlerStore) GetSite(context.Context, int64) (*gov.Site, error) {
 	return &s.site, nil
 }
 func (s *governanceKeyHandlerStore) LockSite(context.Context, int64) (func(), bool, error) {
-	return func() {}, true, nil
+	return func() {}, !s.busy, nil
 }
 func (s *governanceKeyHandlerStore) ListManagedKeys(context.Context, int64) ([]gov.ManagedKey, error) {
 	if s.key.ID == 0 {
@@ -82,6 +83,7 @@ func TestGovernanceKeyRevealIsExplicitAndMetadataHidesCiphertext(t *testing.T) {
 	require.NotContains(t, listed.Body.String(), "inference-key-canary")
 	require.NotContains(t, listed.Body.String(), ciphertext)
 	require.NotContains(t, listed.Body.String(), "owner_user_id")
+	store.busy = true
 	revealed := httptest.NewRecorder()
 	r.ServeHTTP(revealed, httptest.NewRequest("POST", "/sites/1/keys/2/reveal", strings.NewReader(`{}`)))
 	require.Equal(t, 200, revealed.Code)
@@ -93,6 +95,7 @@ func TestGovernanceKeyRevealIsExplicitAndMetadataHidesCiphertext(t *testing.T) {
 	require.Equal(t, 404, otherSite.Code)
 	require.Equal(t, "no-store", otherSite.Header().Get("Cache-Control"))
 	require.NotContains(t, otherSite.Body.String(), "inference-key-canary")
+	store.busy = false
 	store.key = gov.ManagedKey{}
 	session, err := json.Marshal(gov.Session{AccessToken: "session-canary", UserID: 5})
 	require.NoError(t, err)

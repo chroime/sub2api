@@ -32,12 +32,15 @@ const readinessComplete = computed(() =>
 )
 </script>
 <template>
-  <dl data-test="site-status-strip" class="grid min-w-0 gap-px overflow-hidden rounded-xl border border-gray-200 bg-gray-200 dark:border-dark-600 dark:bg-dark-600 sm:grid-cols-2 xl:grid-cols-4">
+  <dl data-test="site-status-strip" class="grid min-w-0 gap-px overflow-hidden rounded-xl border border-gray-200 bg-gray-200 dark:border-dark-600 dark:bg-dark-600 sm:grid-cols-2 2xl:grid-cols-4">
     <div class="min-w-0 bg-white p-3 dark:bg-dark-800">
       <dt class="text-xs text-gray-500">{{ t(balanceHealth?.stale ? 'governance.lastKnownBalance' : 'governance.balance') }}</dt>
       <dd data-test="account-balance" class="mt-1 break-all text-lg font-semibold tabular-nums">{{ amount(snapshot?.catalog.account?.balance) }}</dd>
       <p class="mt-0.5 truncate text-xs text-gray-500">{{ snapshot?.catalog.account?.username || snapshot?.catalog.account?.email || t('governance.upstreamAccount') }}</p>
-      <details class="mt-1 text-xs text-gray-500"><summary class="cursor-pointer">{{ t('governance.frozenBalance') }} / {{ t('governance.usedBalance') }}</summary><p data-test="account-frozen" class="mt-1 break-all tabular-nums">{{ amount(snapshot?.catalog.account?.frozen_balance) }}</p><p data-test="account-used" class="mt-0.5 break-all tabular-nums">{{ amount(snapshot?.catalog.account?.used_balance) }}</p></details>
+      <div class="mt-1 flex min-w-0 flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500">
+        <p class="inline-flex max-w-full flex-wrap items-baseline gap-x-1"><span>{{ t('governance.frozenBalance') }}</span><span data-test="account-frozen" class="break-all tabular-nums">{{ amount(snapshot?.catalog.account?.frozen_balance) }}</span></p>
+        <p class="inline-flex max-w-full flex-wrap items-baseline gap-x-1"><span>{{ t('governance.usedBalance') }}</span><span data-test="account-used" class="break-all tabular-nums">{{ amount(snapshot?.catalog.account?.used_balance) }}</span></p>
+      </div>
     </div>
     <div class="min-w-0 bg-white p-3 dark:bg-dark-800">
       <dt class="text-xs text-gray-500">{{ t('governance.visibleGroups') }}</dt>
@@ -50,7 +53,16 @@ const readinessComplete = computed(() =>
     </div>
     <div class="min-w-0 bg-white p-3 dark:bg-dark-800">
       <dt class="text-xs text-gray-500">{{ t('governance.overviewPage.status') }}</dt>
-      <dd class="mt-1 flex items-center gap-2"><StatusIndicator :label="t('governance.' + (siteStateKeys[site.status] || 'unknown'))" :tone="site.status === 'healthy' ? 'success' : site.status === 'error' ? 'danger' : 'warning'" /><StatusIndicator :label="t(site.has_credential ? 'governance.overviewPage.authorized' : 'governance.overviewPage.notAuthorized')" :tone="site.has_credential ? 'success' : 'neutral'" /></dd>
+      <dd class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+        <span class="inline-flex items-center gap-1">
+          <StatusIndicator :label="t('governance.' + (siteStateKeys[site.status] || 'unknown'))" :tone="site.status === 'healthy' ? 'success' : site.status === 'error' ? 'danger' : 'warning'" />
+          <span>{{ t('governance.' + (siteStateKeys[site.status] || 'unknown')) }}</span>
+        </span>
+        <span class="inline-flex items-center gap-1">
+          <StatusIndicator :label="t(site.has_credential ? 'governance.overviewPage.authorized' : 'governance.overviewPage.notAuthorized')" :tone="site.has_credential ? 'success' : 'neutral'" />
+          <span>{{ t(site.has_credential ? 'governance.overviewPage.authorized' : 'governance.overviewPage.notAuthorized') }}</span>
+        </span>
+      </dd>
     </div>
   </dl>
   <details v-if="readinessComplete" data-test="readiness-complete" class="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-dark-600">

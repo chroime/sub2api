@@ -5,9 +5,9 @@
   </AppLayout>
 
   <!-- 独立形态:自带导航条(logo/站名 + 登录/回后台) -->
-  <div v-else class="public-theme public-model-plaza min-h-screen">
+  <div v-else class="public-theme public-app-theme public-model-plaza min-h-screen">
     <PlazaNavBar />
-    <main class="public-model-plaza-main mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
+    <main class="public-model-plaza-main mx-auto max-w-7xl px-5 py-8 sm:px-8 lg:px-10 lg:py-10">
       <ModelPlazaContent :response="data" :loading="loading" :error="loadFailed" />
     </main>
   </div>

@@ -25,7 +25,7 @@
                 type="button"
                 role="tab"
                 :aria-selected="activeTab === tab.key"
-                :aria-controls="tab.key === 'extensions' ? 'extensions' : undefined"
+                :aria-controls="tab.key === 'extensions' ? 'extensions' : tab.key === 'email' ? 'email-settings' : undefined"
                 :tabindex="activeTab === tab.key ? 0 : -1"
                 :class="[
                   'settings-tab',
@@ -8453,7 +8453,7 @@
           />
         </div>
 
-        <div v-show="activeTab === 'email'" class="space-y-6">
+        <div id="email-settings" v-show="activeTab === 'email'" class="scroll-mt-40 space-y-6">
           <!-- Email disabled hint - show when email_verify_enabled is off -->
           <div v-if="!form.email_verify_enabled" class="card">
             <div class="p-6">
@@ -9093,8 +9093,13 @@ const extensionSettingsHashes = new Set([
   "#precharge-reviews-title",
   "#extensions",
 ]);
+function settingsTabForHash(hash: string): SettingsTab | undefined {
+  if (extensionSettingsHashes.has(hash)) return "extensions";
+  if (hash === "#email-settings") return "email";
+  return undefined;
+}
 const settingsHash = ref(window.location.hash);
-const activeTab = ref<SettingsTab>(extensionSettingsHashes.has(settingsHash.value) ? "extensions" : "general");
+const activeTab = ref<SettingsTab>(settingsTabForHash(settingsHash.value) ?? "general");
 const settingsTabs = [
   { key: "general" as SettingsTab, icon: "home" as const },
   { key: "agreement" as SettingsTab, icon: "document" as const },
@@ -9123,8 +9128,9 @@ function selectSettingsTab(tab: SettingsTab): void {
 
 function handleSettingsHashChange(): void {
   settingsHash.value = window.location.hash;
-  if (extensionSettingsHashes.has(settingsHash.value)) {
-    activeTab.value = "extensions";
+  const targetTab = settingsTabForHash(settingsHash.value);
+  if (targetTab) {
+    activeTab.value = targetTab;
   }
 }
 
@@ -9171,7 +9177,7 @@ const loading = ref(true);
 const loadFailed = ref(false);
 const saving = ref(false);
 watch([loading, activeTab, settingsHash], () => {
-  if (!loading.value && activeTab.value === "extensions" && extensionSettingsHashes.has(settingsHash.value)) {
+  if (!loading.value && activeTab.value === settingsTabForHash(settingsHash.value)) {
     document.getElementById(settingsHash.value.slice(1))?.scrollIntoView?.({ block: "start" });
   }
 }, { flush: "post" });

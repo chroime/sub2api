@@ -61,3 +61,59 @@ html.dark .public-theme {
   --public-shadow: 0 2px 8px rgb(0 0 0 / .1);
   color-scheme: dark;
 }
+
+/* The classic home, docs and model plaza share the application's teal palette.
+   Other public templates retain the palette above unless they opt in. */
+.public-theme.public-app-theme {
+  --public-bg: #f8fafc;
+  --public-surface: #ffffff;
+  --public-surface-raised: #ffffff;
+  --public-surface-soft: #f1f5f9;
+  --public-hover: #f0fdfa;
+  --public-heading: #0f172a;
+  --public-text: #334155;
+  --public-muted: #64748b;
+  --public-soft: #64748b;
+  --public-border: #e2e8f0;
+  --public-border-strong: #cbd5e1;
+  --public-accent: #0f766e;
+  --public-accent-hover: #115e59;
+  --public-accent-soft: #f0fdfa;
+  --public-accent-ink: #ffffff;
+  --public-cta-bg: #0f766e;
+  --public-cta-hover: #115e59;
+  --public-cta-ink: #ffffff;
+  --public-code-bg: #f1f5f9;
+  --public-code-text: #115e59;
+  --public-warning: #92400e;
+  --public-warning-bg: #fffbeb;
+  --public-response: #0f766e;
+  --public-shadow: 0 1px 3px rgb(15 23 42 / .04), 0 8px 24px rgb(15 23 42 / .025);
+}
+
+html.dark .public-theme.public-app-theme {
+  --public-bg: #020617;
+  --public-surface: #0f172a;
+  --public-surface-raised: #1e293b;
+  --public-surface-soft: #172235;
+  --public-hover: #1e293b;
+  --public-heading: #f1f5f9;
+  --public-text: #cbd5e1;
+  --public-muted: #94a3b8;
+  --public-soft: #94a3b8;
+  --public-border: #263448;
+  --public-border-strong: #475569;
+  --public-accent: #5eead4;
+  --public-accent-hover: #99f6e4;
+  --public-accent-soft: #103331;
+  --public-accent-ink: #042f2e;
+  --public-cta-bg: #2dd4bf;
+  --public-cta-hover: #5eead4;
+  --public-cta-ink: #042f2e;
+  --public-code-bg: #0b1220;
+  --public-code-text: #99f6e4;
+  --public-warning: #fcd34d;
+  --public-warning-bg: #332718;
+  --public-response: #5eead4;
+  --public-shadow: 0 1px 3px rgb(0 0 0 / .16), 0 8px 24px rgb(0 0 0 / .1);
+}

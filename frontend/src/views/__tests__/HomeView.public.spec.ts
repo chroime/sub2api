@@ -82,10 +82,45 @@ describe('HomeView main public home', () => {
 
     await wrapper.get('[data-testid="home-route-anthropic"]').trigger('click')
     expect(wrapper.get('[data-testid="home-route-endpoint"]').text()).toBe('POST /v1/messages')
+    expect(wrapper.get('.home-code-tool code').text()).toContain('/v1/messages')
+    expect(wrapper.get('.home-code-tool code').text()).toContain('x-api-key: YOUR_API_KEY')
+    expect(wrapper.get('.home-code-tool code').text()).toContain('anthropic-version: 2023-06-01')
+    expect(wrapper.get('.home-code-tool code').text()).toContain('"max_tokens": 1024')
     await wrapper.get('[data-testid="home-route-gemini"]').trigger('click')
     expect(wrapper.get('[data-testid="home-route-endpoint"]').text()).toBe('POST /v1beta/models/{model}:generateContent')
+    expect(wrapper.get('.home-code-tool code').text()).toContain('/v1beta/models/MODEL_ID:generateContent')
+    expect(wrapper.get('.home-code-tool code').text()).toContain('x-goog-api-key: YOUR_API_KEY')
+    expect(wrapper.get('.home-code-tool code').text()).toContain('"contents": [')
+    expect(wrapper.get('.home-code-tool code').text()).not.toContain('"messages":')
     expect(wrapper.get('[data-testid="home-route-gemini"]').attributes('aria-pressed')).toBe('true')
     expect(wrapper.get('[data-testid="home-route-anthropic"]').attributes('aria-pressed')).toBe('false')
+  })
+
+  it.each([false, true])('takes API key creation to the keys page after authentication (signed in=%s)', async (authenticated) => {
+    authStore.isAuthenticated = authenticated
+    const wrapper = await mountHome()
+    const createLink = wrapper.findAllComponents(RouterLinkStub).find(link => link.attributes('data-testid') === 'home-create-key')
+    expect(createLink?.props('to')).toEqual(authenticated ? '/keys' : { path: '/login', query: { redirect: '/keys' } })
+  })
+
+  it('does not mark a different protocol example copied when an earlier clipboard request finishes', async () => {
+    const originalClipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
+    let finishCopy!: () => void
+    const writeText = vi.fn(() => new Promise<void>(resolve => { finishCopy = resolve }))
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
+    try {
+      const wrapper = await mountHome()
+      await wrapper.get('.home-code-header button').trigger('click')
+      expect(writeText).toHaveBeenCalledWith(expect.stringContaining('/v1/chat/completions'))
+      await wrapper.get('[data-testid="home-route-anthropic"]').trigger('click')
+      finishCopy()
+      await flushPromises()
+      expect(wrapper.get('.home-copy-feedback').text()).not.toContain('已复制')
+      expect(wrapper.get('.home-code-tool code').text()).toContain('/v1/messages')
+    } finally {
+      if (originalClipboard) Object.defineProperty(navigator, 'clipboard', originalClipboard)
+      else Reflect.deleteProperty(navigator, 'clipboard')
+    }
   })
 
   it('switches the shared document theme from the restored homepage header', async () => {

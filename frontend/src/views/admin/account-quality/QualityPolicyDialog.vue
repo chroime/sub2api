@@ -15,7 +15,7 @@ const saving = ref(false), error = ref(''), unit = ref<'seconds' | 'minutes'>('m
 if (draft.value.interval_seconds % 60 !== 0) unit.value = 'seconds'
 const intervalValue = computed({ get: () => draft.value.interval_seconds / (unit.value === 'minutes' ? 60 : 1), set: value => { draft.value.interval_seconds = Number(value) * (unit.value === 'minutes' ? 60 : 1) } })
 const platforms = computed(() => [...new Set(['openai', 'anthropic', 'gemini', ...props.capabilities.map(item => item.platform), draft.value.platform])])
-const gpt6Models = computed(() => draft.value.platform === 'openai' ? ['gpt-6-astra', 'gpt-6.1-sol', 'gpt-6-sol'] : [])
+const gpt6Models = computed(() => draft.value.platform === 'openai' ? ['gpt-6-astra', 'gpt-6.1-sol'] : [])
 const modelOptions = computed<SelectOption[]>(() => gpt6Models.value.map(model => ({ value: model, label: model })))
 const modelPlaceholder = computed(() => {
   const current = draft.value.model.trim()

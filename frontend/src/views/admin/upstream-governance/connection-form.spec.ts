@@ -1,7 +1,20 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { clearConnectionSecrets, connectionBlocked, connectionInput, continueChallenge, newConnectionForm } from './connection-form'
 
 describe('typed authorization inputs', () => {
+  it.each([undefined, 'turnstile', 'tencent'] as const)('blocks manual CAPTCHA continuation without the %s single-use proof', provider => {
+    const form = newConnectionForm()
+    continueChallenge(form, { kind: 'captcha', provider })
+    expect(connectionBlocked(form, 'captcha')).toBe(true)
+    if (provider === 'tencent') {
+      form.tencentTicket = 'ticket'
+      expect(connectionBlocked(form, 'captcha')).toBe(true)
+      form.tencentRandstr = 'randstr'
+    } else form.captchaToken = 'proof'
+    expect(connectionBlocked(form, 'captcha')).toBe(false)
+    form.mode = 'session'
+    expect(connectionBlocked(form, 'captcha')).toBe(false)
+  })
   it('uses only the detected Turnstile proof field', () => {
     const form = newConnectionForm()
     form.password = 'fixture-password'
@@ -54,6 +67,42 @@ describe('typed authorization inputs', () => {
     expect(form.refreshToken).toBe('')
     expect(form.expiresIn).toBeUndefined()
     expect(form.userAgent).toBe('')
+  })
+
+  it('reduces imported lifetime by time spent editing before submitting', () => {
+    const now = Date.UTC(2026, 10, 8)
+    vi.spyOn(Date, 'now').mockReturnValue(now + 90_100)
+    try {
+      const form = newConnectionForm()
+      Object.assign(form, { mode: 'session', sessionToken: 'fixture-access', refreshToken: 'fixture-refresh', expiresIn: 120, sessionExpiresAt: now + 120_000 })
+      expect(connectionInput(form).expires_in).toBe(29)
+      clearConnectionSecrets(form)
+      expect(form.sessionExpiresAt).toBeUndefined()
+    } finally { vi.restoreAllMocks() }
+  })
+
+  it('never extends manually shortened lifetime using imported absolute metadata', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1_000_000)
+    try {
+      const form = newConnectionForm()
+      Object.assign(form, { mode: 'session', sessionToken: 'fixture-access', expiresIn: 20, sessionExpiresAt: 1_060_000 })
+      expect(connectionInput(form).expires_in).toBe(20)
+    } finally { vi.restoreAllMocks() }
+  })
+
+  it.each([999_999, 1_000_000, 1_000_500])('rejects an imported session that has expired while editing (%s)', sessionExpiresAt => {
+    vi.spyOn(Date, 'now').mockReturnValue(1_000_000)
+    try {
+      const form = newConnectionForm()
+      Object.assign(form, { mode: 'session', sessionToken: 'fixture-access', sessionExpiresAt })
+      expect(() => connectionInput(form)).toThrowError(expect.objectContaining({ reason: 'session_import_expired' }))
+    } finally { vi.restoreAllMocks() }
+  })
+
+  it.each([NaN, Infinity, -Infinity])('rejects invalid imported absolute expiry (%s)', sessionExpiresAt => {
+    const form = newConnectionForm()
+    Object.assign(form, { mode: 'session', sessionToken: 'fixture-access', sessionExpiresAt })
+    expect(() => connectionInput(form)).toThrowError(expect.objectContaining({ reason: 'session_import_invalid_expiry' }))
   })
 
   it('clears all single-use provider proofs while retaining CAPTCHA credentials', () => {

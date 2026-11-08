@@ -17,6 +17,9 @@ const reasonKeys: Record<string, string> = {
   not_found: 'notFound',
   operation_failed: 'error',
   timeout: 'timeout',
+  session_import_expired: 'sessionImport.errors.expired',
+  session_import_invalid_expiry: 'sessionImport.errors.invalid_expiry',
+  session_import_access_token_required: 'sessionImport.errors.access_token_required',
 }
 export function errorKey(error: unknown): string {
   const e = error as { reason?: string; status?: number }

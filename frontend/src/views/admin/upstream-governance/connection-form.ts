@@ -1,4 +1,5 @@
 import type { CaptchaProvider, LoginChallenge, LoginInput } from '@/api/admin/upstream-governance'
+import { SessionImportError } from './session-import'
 
 export interface ConnectionForm {
   mode: 'password' | 'session'
@@ -13,6 +14,7 @@ export interface ConnectionForm {
   sessionToken: string
   refreshToken: string
   expiresIn?: number
+  sessionExpiresAt?: number
   userAgent: string
   userId?: number
 }
@@ -22,12 +24,22 @@ export function newConnectionForm(): ConnectionForm {
 }
 
 export function connectionInput(form: ConnectionForm): LoginInput {
-  if (form.mode === 'session') return {
-    session_token: form.sessionToken,
-    user_id: form.userId,
-    ...(form.refreshToken ? { refresh_token: form.refreshToken } : {}),
-    ...(typeof form.expiresIn === 'number' && form.expiresIn > 0 ? { expires_in: form.expiresIn } : {}),
-    ...(form.userAgent ? { user_agent: form.userAgent } : {}),
+  if (form.mode === 'session') {
+    if (!form.sessionToken.trim()) throw new SessionImportError('access_token_required')
+    let expiresIn = form.expiresIn
+    if (form.sessionExpiresAt !== undefined) {
+      if (!Number.isSafeInteger(form.sessionExpiresAt)) throw new SessionImportError('invalid_expiry')
+      const remaining = Math.floor((form.sessionExpiresAt - Date.now()) / 1000)
+      if (remaining <= 0) throw new SessionImportError('expired')
+      expiresIn = typeof expiresIn === 'number' && expiresIn > 0 ? Math.min(expiresIn, remaining) : remaining
+    }
+    return {
+      session_token: form.sessionToken,
+      user_id: form.userId,
+      ...(form.refreshToken ? { refresh_token: form.refreshToken } : {}),
+      ...(typeof expiresIn === 'number' && expiresIn > 0 ? { expires_in: expiresIn } : {}),
+      ...(form.userAgent ? { user_agent: form.userAgent } : {}),
+    }
   }
   return {
     username: form.username.trim(),
@@ -54,7 +66,9 @@ export function clearConnectionSecrets(form: ConnectionForm) {
   form.sessionToken = ''
   form.refreshToken = ''
   form.expiresIn = undefined
+  form.sessionExpiresAt = undefined
   form.userAgent = ''
+  form.userId = undefined
 }
 
 export function continueChallenge(form: ConnectionForm, challenge: LoginChallenge) {
@@ -69,6 +83,9 @@ export function continueChallenge(form: ConnectionForm, challenge: LoginChalleng
 export function connectionBlocked(form: ConnectionForm, challenge: string) {
   return form.mode === 'password' && !!challenge && (
     (challenge !== 'captcha' && challenge !== 'totp') ||
-    (challenge === 'captcha' && (form.captchaProvider === 'aliyun' || form.captchaProvider === 'unknown'))
+    (challenge === 'captcha' && (
+      form.captchaProvider === 'aliyun' || form.captchaProvider === 'unknown' ||
+      (form.captchaProvider === 'tencent' ? !form.tencentTicket.trim() || !form.tencentRandstr.trim() : !form.captchaToken.trim())
+    ))
   )
 }

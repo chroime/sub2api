@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Select from '@/components/common/Select.vue'
+import Toggle from '@/components/common/Toggle.vue'
 import api, {
   type ObservationPolicy, type PricingMode, type PricingPoliciesConfiguration,
   type PricingPolicy, type PricingPolicyDraft, type PricingPolicyPreview, type PricingSource,
@@ -351,10 +352,16 @@ onUnmounted(() => { generation++; emit('busy', false) })
 
     <SettingsCard v-if="pricingDraft && section !== 'observation'" v-model:open="notificationsOpen" test-id="pricing-notifications-card" :title="t('governance.pricingNotificationsTitle')" :status="t(pricing?.notifications.enabled ? 'governance.settingsCard.on' : 'governance.settingsCard.off')" :tone="pricing?.notifications.enabled ? 'on' : 'off'" :disabled="busy || props.disabled" :busy="busy" :error="notificationsOpen ? messageText : ''">
       <p data-test="pricing-notifications-summary" class="text-gray-700 dark:text-gray-200">{{ t('governance.settingsCard.recipients', { count: pricing?.notifications.recipients.length ?? 0 }) }}<template v-if="notificationEvents.length"> · {{ notificationEvents.map(key => t(`governance.notification_${key}`)).join('、') }}</template></p>
+      <template #dialog-actions>
+        <div class="inline-flex items-center gap-2 text-xs font-medium" :class="pricingDraft.notifications.enabled ? 'text-primary-700 dark:text-primary-300' : 'text-gray-500'">
+          <span>{{ t(pricingDraft.notifications.enabled ? 'governance.settingsCard.on' : 'governance.settingsCard.off') }}</span>
+          <Toggle v-model="pricingDraft.notifications.enabled" data-test="notification-enabled" :aria-label="t('governance.enablePricingNotifications')" :disabled="busy || props.disabled" class="disabled:cursor-not-allowed disabled:opacity-50" />
+        </div>
+      </template>
       <template #form>
         <p class="text-sm text-gray-500">{{ t('governance.pricingNotificationsHint') }}</p>
       <div v-if="notificationConflict" role="alert" class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-900/10 dark:text-amber-200"><p>{{ t('governance.reliability.notificationConflict') }}</p><p class="mt-2 text-xs">{{ t('governance.reliability.reloadNotificationsHint') }}</p><button data-test="reload-notifications" class="btn btn-secondary mt-3 text-sm" type="button" :disabled="busy || props.disabled" @click="reloadNotifications">{{ t('governance.reliability.reloadNotifications') }}</button></div>
-      <form data-test="notification-form" class="space-y-4" @submit.prevent="saveNotifications"><fieldset :disabled="busy || props.disabled" class="space-y-4"><label class="governance-checkbox-label flex items-center gap-3 rounded-lg bg-gray-50 p-3 text-sm font-medium dark:bg-dark-900"><input v-model="pricingDraft.notifications.enabled" data-test="notification-enabled" type="checkbox" class="governance-checkbox" />{{ t('governance.enablePricingNotifications') }}</label><div class="grid gap-3 sm:grid-cols-2"><label v-for="key in (['group_changes', 'rate_changes', 'pricing_changes', 'protection_changes'] as const)" :key="key" class="governance-checkbox-label flex items-center gap-2 text-sm"><input v-model="pricingDraft.notifications[key]" type="checkbox" class="governance-checkbox" />{{ t(`governance.notification_${key}`) }}</label></div><label class="block text-sm">{{ t('governance.notificationRecipients') }}<textarea :value="pricingDraft.notifications.recipients.join('\n')" data-test="notification-recipients" class="input mt-1 min-h-24 w-full" :placeholder="t('governance.emailRecipientsPlaceholder')" @input="pricingDraft.notifications.recipients = ($event.target as HTMLTextAreaElement).value.split(/[\n,]/)" /></label><button class="btn btn-primary" type="submit">{{ t('common.save') }}</button></fieldset></form>
+      <form data-test="notification-form" class="space-y-4" @submit.prevent="saveNotifications"><fieldset :disabled="busy || props.disabled" class="space-y-4"><div class="grid gap-3 sm:grid-cols-2"><label v-for="key in (['group_changes', 'rate_changes', 'pricing_changes', 'protection_changes'] as const)" :key="key" class="governance-checkbox-label flex items-center gap-2 text-sm"><input v-model="pricingDraft.notifications[key]" type="checkbox" class="governance-checkbox" />{{ t(`governance.notification_${key}`) }}</label></div><label class="block text-sm">{{ t('governance.notificationRecipients') }}<textarea :value="pricingDraft.notifications.recipients.join('\n')" data-test="notification-recipients" class="input mt-1 min-h-24 w-full" :placeholder="t('governance.emailRecipientsPlaceholder')" @input="pricingDraft.notifications.recipients = ($event.target as HTMLTextAreaElement).value.split(/[\n,]/)" /></label><button class="btn btn-primary" type="submit">{{ t('common.save') }}</button></fieldset></form>
       </template>
     </SettingsCard>
   </div>

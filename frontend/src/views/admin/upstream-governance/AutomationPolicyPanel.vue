@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import Toggle from '@/components/common/Toggle.vue'
 import api, { type AutomationConfiguration, type AutomationPolicy } from '@/api/admin/upstream-governance'
 import { errorKey } from './feedback'
 import SettingsCard from './SettingsCard.vue'
@@ -49,11 +50,16 @@ async function save() {
       </ul>
       <p class="mt-2 text-xs text-gray-500">{{ t('governance.settingsCard.automationLimits', { count: configuration?.policy.missing_confirmations ?? 0, percent: configuration?.policy.max_rate_increase_percent ?? 0 }) }}</p>
     </template>
+    <template v-if="draft" #dialog-actions>
+      <div class="inline-flex items-center gap-2 text-xs font-medium" :class="draft.enabled ? 'text-primary-700 dark:text-primary-300' : 'text-gray-500'">
+        <span>{{ t(draft.enabled ? 'governance.settingsCard.on' : 'governance.settingsCard.off') }}</span>
+        <Toggle v-model="draft.enabled" data-test="automation-enabled" :aria-label="t('governance.enableAutomation')" :disabled="busy || disabled" class="disabled:cursor-not-allowed disabled:opacity-50" />
+      </div>
+    </template>
     <template v-if="draft" #form>
       <p class="text-sm text-gray-500">{{ t('governance.automationHint') }}</p>
       <form class="space-y-4" @submit.prevent="save">
       <fieldset :disabled="busy || disabled" class="min-w-0 space-y-4">
-        <label class="governance-checkbox-label flex items-center gap-3 rounded-lg bg-gray-50 p-3 text-sm font-medium dark:bg-dark-900"><input v-model="draft.enabled" data-test="automation-enabled" type="checkbox" class="governance-checkbox" />{{ t('governance.enableAutomation') }}</label>
         <div class="grid gap-3 sm:grid-cols-2">
           <label v-for="option in options" :key="option" class="governance-checkbox-label flex items-start gap-2 text-sm leading-6"><input v-model="draft[option]" type="checkbox" class="governance-checkbox mt-1" :data-test="'automation-' + option" /><span class="min-w-0">{{ t(`governance.automation_${option}`) }}</span></label>
         </div>

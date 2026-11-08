@@ -112,6 +112,91 @@ func TestManagedKeysCreateIndependentlyAndImportReusesThem(t *testing.T) {
 	require.Equal(t, "fixture-inference-key", local.changes[0].APIKey)
 }
 
+func TestRevealManagedKeyReadsLocalSnapshotWhileSiteIsBusy(t *testing.T) {
+	s, memory, _, _ := setupEngine(t)
+	ciphertext, err := s.cipher.Encrypt(`{"id":"remote-9","key":"retained-key-canary"}`)
+	require.NoError(t, err)
+	memory.keys = []ManagedKey{{ID: 9, SiteID: 1, RemoteGroupID: "8", Platform: "openai", RemoteKeyID: "remote-9", KeyCipher: ciphertext, HasKey: true}}
+	// Collection or session refresh can own the lock even though revealing a
+	// previously retained key needs neither an upstream session nor a write.
+	memory.locked = true
+	memory.site.SessionCipher = ""
+	s.connector = nil
+	s.local = nil
+
+	result, err := s.RevealKey(t.Context(), 1, 9)
+	require.NoError(t, err)
+	require.Equal(t, "retained-key-canary", result.Key)
+	require.Equal(t, "remote-9", result.ManagedKey.RemoteKeyID)
+	require.True(t, memory.locked, "reading must not release another operation's site lock")
+	require.Equal(t, ciphertext, memory.keys[0].KeyCipher)
+	require.Empty(t, memory.site.SessionCipher)
+}
+
+type revealKeySiteStore struct {
+	*memoryStore
+	siteErr error
+}
+
+func (s *revealKeySiteStore) GetSite(ctx context.Context, siteID int64) (*Site, error) {
+	if s.siteErr != nil {
+		return nil, s.siteErr
+	}
+	if siteID != s.site.ID {
+		return nil, ErrNotFound
+	}
+	return s.memoryStore.GetSite(ctx, siteID)
+}
+
+func TestRevealManagedKeyPreservesReadGuards(t *testing.T) {
+	for _, state := range []string{"durable-key", "nil-cipher", "local-workspace", "missing-site", "wrong-site", "missing-key", "empty-cipher", "invalid-cipher", "invalid-json", "empty-key"} {
+		t.Run(state, func(t *testing.T) {
+			s, memory, _, _ := setupEngine(t)
+			ciphertext, err := s.cipher.Encrypt(`{"id":"remote-9","key":"retained-key-canary"}`)
+			require.NoError(t, err)
+			memory.keys = []ManagedKey{{ID: 9, SiteID: 1, KeyCipher: ciphertext}}
+			store := &revealKeySiteStore{memoryStore: memory}
+			s.store = store
+			siteID, keyID := int64(1), int64(9)
+			want := ErrNotFound
+			switch state {
+			case "durable-key":
+				s.durableKey = false
+				want = ErrEncryption
+			case "nil-cipher":
+				s.cipher = nil
+				want = ErrEncryption
+			case "local-workspace":
+				memory.site = *newLocalModelSite(42, time.Now())
+				memory.site.ID = siteID
+				want = ErrInvalid
+			case "missing-site":
+				store.siteErr = ErrNotFound
+			case "wrong-site":
+				siteID = 2
+			case "missing-key":
+				keyID = 10
+			case "empty-cipher":
+				memory.keys[0].KeyCipher = ""
+			case "invalid-cipher":
+				memory.keys[0].KeyCipher = "!invalid!"
+				want = ErrReauth
+			case "invalid-json":
+				memory.keys[0].KeyCipher, err = s.cipher.Encrypt(`not-json`)
+				require.NoError(t, err)
+				want = ErrReauth
+			case "empty-key":
+				memory.keys[0].KeyCipher, err = s.cipher.Encrypt(`{"id":"remote-9","key":" "}`)
+				require.NoError(t, err)
+				want = ErrReauth
+			}
+			result, err := s.RevealKey(t.Context(), siteID, keyID)
+			require.ErrorIs(t, err, want)
+			require.Nil(t, result)
+		})
+	}
+}
+
 func TestManagedKeysAdoptExistingImportBindingWithoutRemoteCreation(t *testing.T) {
 	s, m, c, local := setupEngine(t)
 	snapshot, err := s.Sync(t.Context(), 1)

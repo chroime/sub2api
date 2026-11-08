@@ -3,24 +3,21 @@ import { computed, onUnmounted, ref, watch } from 'vue'
 import { errorKey } from './feedback'
 import { useI18n } from 'vue-i18n'
 import BaseDialog from '@/components/common/BaseDialog.vue'
-import Icon from '@/components/icons/Icon.vue'
 import ConnectionFields from './ConnectionFields.vue'
-import BrowserAuthorizationDialog from './BrowserAuthorizationDialog.vue'
 import { newConnectionForm, connectionInput, clearConnectionSecrets, clearConnectionProofs, continueChallenge, connectionBlocked } from './connection-form'
 import { formatGovernanceTime } from './format'
 import api, { type AuthorizationStatus, type Site } from '@/api/admin/upstream-governance'
-const props = defineProps<{ siteId: number; siteVersion?: number }>()
+const props = defineProps<{ siteId: number; siteVersion?: number; siteUrl?: string; platform?: string }>()
 const emit = defineEmits<{ close: []; connected: [site?: Site] }>()
 const { t } = useI18n()
 const form = ref(newConnectionForm())
 const busy = ref(false), error = ref(''), challenge = ref('')
 const loading = ref(true), loadFailed = ref(false), stale = ref(false)
 const expectedVersion = ref<number>()
-const browserOpen = ref(false), statusLoading = ref(true), statusFailed = ref(false)
+const statusLoading = ref(true), statusFailed = ref(false)
 const authorizationStatus = ref<AuthorizationStatus | null>(null)
 const status = computed(() => authorizationStatus.value?.session.site_version === expectedVersion.value ? authorizationStatus.value : null)
-const locked = computed(() => loading.value || busy.value || stale.value || browserOpen.value)
-const browserBlocked = computed(() => locked.value || !status.value?.browser.available || !expectedVersion.value || form.value.mode !== 'password' || !form.value.username.trim() || !form.value.password)
+const locked = computed(() => loading.value || busy.value || stale.value)
 const autoReauthorizationLabels: Record<string, string> = {
   ready: 'sessionAutoReauthorizationReady',
   collection_disabled: 'sessionAutoReauthorizationCollectionDisabled',
@@ -83,32 +80,20 @@ async function loadSavedLogin() {
   }
 }
 watch(() => [props.siteId, props.siteVersion], () => {
-  busy.value = false; stale.value = false; browserOpen.value = false
+  busy.value = false; stale.value = false
   void loadSavedLogin()
 }, { immediate: true })
 function close() {
   if (busy.value) return
   disposed = true; generation++
-  browserOpen.value = false
   form.value = newConnectionForm()
   emit('close')
 }
 onUnmounted(() => { disposed = true; generation++; form.value = newConnectionForm() })
 function invalidateTarget() {
-  browserOpen.value = false; stale.value = true
+  stale.value = true
   form.value = newConnectionForm(); challenge.value = ''; expectedVersion.value = undefined
   error.value = t('governance.loginTargetChanged')
-}
-function openBrowser() {
-  if (disposed || browserBlocked.value) return
-  clearConnectionProofs(form.value)
-  browserOpen.value = true
-}
-function browserConnected(site?: Site) {
-  if (disposed || !browserOpen.value) return
-  browserOpen.value = false
-  clearConnectionSecrets(form.value)
-  emit('connected', site)
 }
 async function connect() {
   if (disposed || locked.value || connectionBlocked(form.value, challenge.value)) return
@@ -143,7 +128,7 @@ async function connect() {
 }
 </script>
 <template>
-  <BaseDialog :show="!browserOpen" :title="t('governance.connect')" :close-on-escape="!busy" :show-close-button="!busy" @close="close">
+  <BaseDialog :show="true" :title="t('governance.connect')" :close-on-escape="!busy" :show-close-button="!busy" @close="close">
     <form class="space-y-4" @submit.prevent="connect">
       <p class="text-sm text-gray-500">{{ t('governance.secretNotice') }}</p>
       <p v-if="loading" role="status" class="text-sm text-gray-500">{{ t('governance.loadingSavedLogin') }}</p>
@@ -158,15 +143,13 @@ async function connect() {
           <span v-if="status.session.last_auto_reauthorization_at" class="block text-xs text-gray-500 tabular-nums">{{ t('governance.sessionLastAutoReauthorization') }} {{ formatGovernanceTime(status.session.last_auto_reauthorization_at) }}</span>
         </dd>
       </dl>
-      <ConnectionFields :key="siteId" v-model="form" id-prefix="governance-connect" :challenge="challenge" :disabled="locked" />
+      <ConnectionFields :key="`connection-fields:${siteId}`" v-model="form" id-prefix="governance-connect" :challenge="challenge" :disabled="locked" :site-url="siteUrl" :platform="platform || status?.session.platform" />
       <div class="flex flex-wrap gap-2">
         <button id="governance-connect-submit" class="btn btn-primary" :disabled="locked || connectionBlocked(form, challenge)">
-          {{ loading ? t('common.loading') : busy ? t('common.processing') : t('governance.connectAndCollect') }}
+          {{ loading ? t('common.loading') : busy ? t('common.processing') : t(form.mode === 'session' ? 'governance.importSession' : 'governance.connectAndCollect') }}
         </button>
-        <button id="governance-connect-browser" type="button" class="btn btn-secondary" :disabled="browserBlocked" @click="openBrowser"><Icon name="globe" size="sm" class="mr-2" />{{ t('governance.browserAuthorization') }}</button>
       </div>
-      <p v-if="statusLoading || statusFailed || !status?.browser.available" class="text-xs text-gray-500" role="status">{{ t(statusLoading ? 'common.loading' : statusFailed || !status ? 'governance.authorizationStatusUnavailable' : 'governance.browserUnavailable') }}</p>
+      <p v-if="statusLoading || statusFailed || !status" class="text-xs text-gray-500" role="status">{{ t(statusLoading ? 'common.loading' : 'governance.authorizationStatusUnavailable') }}</p>
     </form>
   </BaseDialog>
-  <BrowserAuthorizationDialog v-if="browserOpen && expectedVersion" :site-id="siteId" :site-version="expectedVersion" :username="form.username" :password="form.password" @close="browserOpen = false" @connected="browserConnected" @invalidated="invalidateTarget" />
 </template>

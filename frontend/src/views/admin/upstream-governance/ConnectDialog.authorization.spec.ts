@@ -12,10 +12,9 @@ const status = (): AuthorizationStatus => ({
   browser: { available: true, reason: '' },
 })
 const setup = () => mount(ConnectDialog, {
-  props: { siteId: 7, siteVersion: 9 },
+  props: { siteId: 7, siteVersion: 9, siteUrl: 'https://fixture.example', platform: 'sub2api' },
   global: { stubs: {
     BaseDialog: { template: '<div><slot /></div>' },
-    BrowserAuthorizationDialog: { name: 'BrowserAuthorizationDialog', props: ['siteId', 'siteVersion', 'username', 'password'], template: '<div data-test="browser-dialog"><button data-test="complete-browser" @click="$emit(\'connected\')">Complete</button><button data-test="stale-browser" @click="$emit(\'invalidated\')">Stale</button></div>' },
   } },
 })
 beforeEach(() => {
@@ -25,7 +24,15 @@ beforeEach(() => {
   vi.mocked(api.connect).mockResolvedValue({})
 })
 
-describe('authorization status and explicit browser entry', () => {
+describe('authorization status without embedded browser', () => {
+  it('keeps authorization status read-only without offering an embedded browser even when one is available', async () => {
+    const wrapper = setup()
+    await flushPromises()
+    expect(wrapper.find('#governance-connect-browser').exists()).toBe(false)
+    expect(wrapper.find('[data-test=browser-dialog]').exists()).toBe(false)
+    expect(api.startBrowserAuth).not.toHaveBeenCalled()
+    expect(api.connect).not.toHaveBeenCalled()
+  })
   it.each([
     ['ready', 'sessionAutoReauthorizationReady'],
     ['collection_disabled', 'sessionAutoReauthorizationCollectionDisabled'],
@@ -118,55 +125,11 @@ describe('authorization status and explicit browser entry', () => {
     const wrapper = setup()
     await flushPromises()
     expect(wrapper.get('#governance-connect-submit').attributes('disabled')).toBeUndefined()
-    expect(wrapper.get('#governance-connect-browser').attributes('disabled')).toBeDefined()
+    expect(wrapper.find('#governance-connect-browser').exists()).toBe(false)
     expect(wrapper.text()).toContain('governance.authorizationStatusUnavailable')
     await wrapper.get('form').trigger('submit')
     await flushPromises()
     expect(api.connect).toHaveBeenCalledTimes(1)
-  })
-
-  it('shows unavailable helper explicitly and does not open a browser job', async () => {
-    const value = status(); value.browser = { available: false, reason: 'not_configured' }
-    vi.mocked(api.authStatus).mockResolvedValue(value)
-    const wrapper = setup()
-    await flushPromises()
-    expect(wrapper.text()).toContain('governance.browserUnavailable')
-    await wrapper.get('#governance-connect-browser').trigger('click')
-    expect(wrapper.find('[data-test=browser-dialog]').exists()).toBe(false)
-    expect(wrapper.get('#governance-connect-submit').attributes('disabled')).toBeUndefined()
-  })
-
-  it('passes current edited credentials and version only after an explicit browser click', async () => {
-    const wrapper = setup()
-    await flushPromises()
-    await wrapper.get('#governance-connect-username').setValue('edited-user')
-    await wrapper.get('#governance-connect-password').setValue('edited-password')
-    await wrapper.get('#governance-connect-browser').trigger('click')
-    const dialog = wrapper.getComponent({ name: 'BrowserAuthorizationDialog' })
-    expect(dialog.props()).toMatchObject({ siteId: 7, siteVersion: 9, username: 'edited-user', password: 'edited-password' })
-    expect(wrapper.emitted('connected')).toBeUndefined()
-    await wrapper.get('[data-test=complete-browser]').trigger('click')
-    expect(wrapper.emitted('connected')).toHaveLength(1)
-    expect((wrapper.get('#governance-connect-password').element as HTMLInputElement).value).toBe('')
-  })
-
-  it('locks stale browser authorization and requires reloading credentials', async () => {
-    const wrapper = setup()
-    await flushPromises()
-    await wrapper.get('#governance-connect-browser').trigger('click')
-    await wrapper.get('[data-test=stale-browser]').trigger('click')
-    expect(wrapper.find('[data-test=browser-dialog]').exists()).toBe(false)
-    expect(wrapper.get('#governance-connect-submit').attributes('disabled')).toBeDefined()
-    expect(wrapper.text()).toContain('governance.loginTargetChanged')
-  })
-
-  it('invalidates the open browser when the site configuration version changes', async () => {
-    const wrapper = setup()
-    await flushPromises()
-    await wrapper.get('#governance-connect-browser').trigger('click')
-    await wrapper.setProps({ siteVersion: 10 })
-    await flushPromises()
-    expect(wrapper.find('[data-test=browser-dialog]').exists()).toBe(false)
   })
 
   it('discards stale authorization status after switching sites', async () => {
@@ -179,6 +142,6 @@ describe('authorization status and explicit browser entry', () => {
     finish(status())
     await flushPromises()
     expect(wrapper.text()).not.toContain('governance.sessionRefreshEnabled')
-    expect(wrapper.get('#governance-connect-browser').attributes('disabled')).toBeDefined()
+    expect(wrapper.find('#governance-connect-browser').exists()).toBe(false)
   })
 })

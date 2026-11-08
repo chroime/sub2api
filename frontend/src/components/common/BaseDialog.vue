@@ -14,10 +14,13 @@
         <!-- Modal panel -->
         <div ref="dialogRef" :class="['modal-content', widthClasses]" @click.stop>
           <!-- Header -->
-          <div class="modal-header">
-            <h3 :id="dialogId" class="modal-title">
+          <div class="modal-header" :class="{ 'gap-3': $slots['header-actions'] }">
+            <h3 :id="dialogId" class="modal-title" :class="{ 'min-w-0 flex-1': $slots['header-actions'] }">
               {{ title }}
             </h3>
+            <div v-if="$slots['header-actions']" class="ml-auto flex shrink-0 items-center">
+              <slot name="header-actions" />
+            </div>
             <button
               v-if="showCloseButton"
               @click="emit('close')"

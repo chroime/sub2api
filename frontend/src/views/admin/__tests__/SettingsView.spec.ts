@@ -665,6 +665,44 @@ describe("admin SettingsView email domain quota copy", () => {
 });
 
 describe("admin SettingsView payment visible method controls", () => {
+  it.each([true, false])("opens the email deep link with email verification enabled=%s without saving settings", async (enabled) => {
+    const previousURL = window.location.href;
+    window.history.replaceState(null, "", "/admin/settings#email-settings");
+    getSettings.mockResolvedValue({ ...baseSettingsResponse, email_verify_enabled: enabled });
+    const wrapper = mountView();
+    try {
+      await flushPromises();
+      expect(wrapper.get("#settings-tab-email").attributes("aria-selected")).toBe("true");
+      expect(wrapper.get("#email-settings").isVisible()).toBe(true);
+      expect(wrapper.get("#email-settings").text()).toContain(enabled ? "admin.settings.smtp.title" : "admin.settings.emailTabDisabledTitle");
+      expect(updateSettings).not.toHaveBeenCalled();
+      await wrapper.get("#settings-tab-general").trigger("click");
+      expect(wrapper.get("#settings-tab-general").attributes("aria-selected")).toBe("true");
+      expect(wrapper.get("#email-settings").attributes("style")).toContain("display: none");
+    } finally {
+      wrapper.unmount();
+      window.history.replaceState(null, "", previousURL);
+    }
+  });
+
+  it("opens email settings when the hash changes on an already open settings page", async () => {
+    const previousURL = window.location.href;
+    window.history.replaceState(null, "", "/admin/settings");
+    const wrapper = mountView();
+    try {
+      await flushPromises();
+      expect(wrapper.get("#settings-tab-general").attributes("aria-selected")).toBe("true");
+      window.history.replaceState(null, "", "/admin/settings#email-settings");
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+      await flushPromises();
+      expect(wrapper.get("#settings-tab-email").attributes("aria-selected")).toBe("true");
+      expect(wrapper.get("#email-settings").isVisible()).toBe(true);
+    } finally {
+      wrapper.unmount();
+      window.history.replaceState(null, "", previousURL);
+    }
+  });
+
   it.each(["#streaming-ack-settings", "#balance-precharge-settings", "#precharge-reviews-title", "#extensions"])("opens the extensions tab for the %s deep link", async (hash) => {
     const previousURL = window.location.href;
     window.history.replaceState(null, "", `/admin/settings${hash}`);

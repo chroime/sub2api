@@ -34,6 +34,7 @@ const { t } = useI18n()
     </header>
     <div v-if="$slots.default" class="mt-3 min-w-0 text-sm"><slot /></div>
     <BaseDialog v-if="$slots.form" :show="open" :title="dialogTitle || title" :width="width" :show-close-button="!busy" :close-on-escape="!busy" @close="open = false">
+      <template v-if="$slots['dialog-actions']" #header-actions><slot name="dialog-actions" /></template>
       <div :data-test="`${testId}-dialog`" class="space-y-4">
         <p v-if="error" role="alert" class="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-900/10 dark:text-red-200">{{ error }}</p>
         <p v-if="notice" role="status" class="rounded-lg border border-primary-100 bg-primary-50 p-3 text-sm text-primary-800 dark:border-primary-900/40 dark:bg-primary-900/10 dark:text-primary-300">{{ notice }}</p>

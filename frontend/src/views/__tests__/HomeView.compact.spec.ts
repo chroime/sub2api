@@ -128,7 +128,7 @@ describe('HomeView compact mode', () => {
   it('keeps configured documentation reachable from the default mobile header', async () => {
     const wrapper = await mountHome({ doc_url: 'https://docs.example.test/start' })
 
-    expect(wrapper.get('.home-mobile-doc-link').attributes('href')).toBe('https://docs.example.test/start')
+    expect(wrapper.get('.public-mobile-menu a[href="https://docs.example.test/start"]').attributes('target')).toBe('_blank')
     expect(wrapper.get('footer').findAll('a')).toHaveLength(0)
   })
 
@@ -142,9 +142,9 @@ describe('HomeView compact mode', () => {
   it('keeps both navigation destinations in the default mobile menu', async () => {
     const wrapper = await mountHome({ model_plaza_enabled: true, doc_url: '' })
 
-    expect(wrapper.get('.home-mobile-menu summary').attributes('aria-label')).toBeTruthy()
-    expect(wrapper.get('.home-mobile-menu .home-mobile-doc-link').attributes('href')).toBe('/docs')
-    expect(wrapper.get('.home-mobile-menu').findAllComponents(RouterLinkStub).some(link => link.props('to') === '/model-plaza')).toBe(true)
+    expect(wrapper.get('.public-mobile-menu summary').attributes('aria-label')).toBeTruthy()
+    expect(wrapper.get('.public-mobile-menu a[href="/docs"]').attributes('href')).toBe('/docs')
+    expect(wrapper.get('.public-mobile-menu').findAllComponents(RouterLinkStub).some(link => link.props('to') === '/model-plaza')).toBe(true)
   })
 
   it('uses the configured API base URL in the request example without repeating v1', async () => {

@@ -33,13 +33,14 @@ describe('model plaza public navigation', () => {
   it('uses the docs header styling and text-only navigation with shared language control', () => {
     const wrapper = render()
     expect(wrapper.get('header').classes()).toContain('public-site-header')
-    expect(wrapper.get('header').classes()).toContain('public-site-header-story')
+    expect(wrapper.get('header').classes()).toContain('public-site-header-app')
     const links = wrapper.findAllComponents(RouterLinkStub)
-    expect(links.filter(link => link.props('to') === '/home')).toHaveLength(2)
+    expect(links.filter(link => link.props('to') === '/home')).toHaveLength(3)
     const docs = links.find(link => link.props('to') === '/docs')!
     expect(docs.exists()).toBe(true)
     expect(docs.find('icon-stub').exists()).toBe(false)
     expect(docs.classes()).toContain('public-nav-link')
+    expect(wrapper.get('.public-mobile-menu').findAllComponents(RouterLinkStub).map(link => link.props('to'))).toEqual(['/home', '/docs'])
     expect(wrapper.find('locale-switcher-stub').exists()).toBe(true)
     expect(links.at(-1)?.props('to')).toEqual({ path: '/login', query: { redirect: '/model-plaza' } })
     wrapper.unmount()

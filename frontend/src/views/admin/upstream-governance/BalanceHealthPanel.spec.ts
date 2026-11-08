@@ -13,7 +13,7 @@ describe('balance observability', () => {
     expect(wrapper.text()).toContain('governance.mailConfigurationReady')
     expect(wrapper.text()).toContain('governance.mailReadinessHint')
     expect(wrapper.text()).toContain('governance.recipientCount:2')
-    expect(wrapper.get('a').attributes('href')).toBe('/admin/settings')
+    expect(wrapper.get('a').attributes('href')).toBe('/admin/settings#email-settings')
     await wrapper.findAll('button').find(button => button.text() === 'common.refresh')!.trigger('click')
     expect(wrapper.emitted('reload')).toHaveLength(1)
     wrapper.unmount()

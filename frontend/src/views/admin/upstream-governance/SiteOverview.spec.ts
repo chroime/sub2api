@@ -37,6 +37,27 @@ const readiness: ReadinessOverview = {
 }
 
 describe('SiteOverview readiness integration', () => {
+  it.each([
+    { name: 'known amounts', frozen: 1.25, used: 2.5, expectedFrozen: '1.25 USD', expectedUsed: '2.5 USD' },
+    { name: 'zero amounts', frozen: 0, used: 0, expectedFrozen: '0 USD', expectedUsed: '0 USD' },
+    { name: 'unknown amounts', frozen: null, used: null, expectedFrozen: '未知', expectedUsed: '未知' },
+  ])('shows frozen and used balances directly for $name', ({ frozen, used, expectedFrozen, expectedUsed }) => {
+    const wrapper = mount(SiteOverview, {
+      props: { site, snapshot: { ...snapshot, catalog: { ...snapshot.catalog, account: { user_id: 42, username: '余额账户', email: '', balance: 10, frozen_balance: frozen, used_balance: used, unit: 'USD', source: '/api/v1/user/profile' } } }, bindingCount: 0, readiness },
+      global: { plugins: [createI18n({ legacy: false, locale: 'zh', messages: { zh: { governance: zh } } })] },
+    })
+    expect(wrapper.get('[data-test=account-balance]').text()).toBe('10 USD')
+    expect(wrapper.text()).toContain('余额账户')
+    expect(wrapper.text()).toContain('冻结余额')
+    expect(wrapper.text()).toContain('已用额度')
+    const frozenValue = wrapper.get('[data-test=account-frozen]')
+    const usedValue = wrapper.get('[data-test=account-used]')
+    expect(frozenValue.text()).toBe(expectedFrozen)
+    expect(usedValue.text()).toBe(expectedUsed)
+    expect(frozenValue.element.closest('details')).toBeNull()
+    expect(usedValue.element.closest('details')).toBeNull()
+  })
+
   it('renders the read-only checklist and relays navigation without write actions', async () => {
     const wrapper = mount(SiteOverview, {
       props: { site, snapshot, bindingCount: 0, readiness },
