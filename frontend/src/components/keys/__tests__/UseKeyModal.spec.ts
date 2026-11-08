@@ -2,14 +2,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 
-const { copyToClipboardMock, saveAsMock } = vi.hoisted(() => ({
+const { copyToClipboardMock, saveAsMock, translateMock } = vi.hoisted(() => ({
   copyToClipboardMock: vi.fn().mockResolvedValue(true),
-  saveAsMock: vi.fn()
+  saveAsMock: vi.fn(),
+  translateMock: vi.fn((key: string) => key)
 }))
 
 vi.mock('vue-i18n', () => ({
   useI18n: () => ({
-    t: (key: string) => key
+    t: translateMock
   })
 }))
 
@@ -38,6 +39,120 @@ describe('UseKeyModal', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
     saveAsMock.mockClear()
+    translateMock.mockClear()
+  })
+
+  it.each(['registered-provider', 'constructor'])('preserves the %s provider and separate native/Responses catalogs', async platform => {
+    const wrapper = mount(UseKeyModal, {
+      props: { show: true, apiKey: 'sk-fixture', baseUrl: 'https://example.com', platform, availableModels: ['native-text'], availableCodexModels: ['response-text'] },
+      global: { stubs: { BaseDialog: { template: '<div><slot /><slot name="footer" /></div>' }, Icon: { template: '<span />' } } }
+    })
+    expect(wrapper.findAll('pre code').map(code => code.text()).join('\n')).toContain('ANTHROPIC_MODEL="native-text"')
+    const codex = wrapper.findAll('nav[aria-label="Client"] button').find(button => button.text().includes('codexCli'))!
+    await codex.trigger('click')
+    const codexConfig = wrapper.findAll('pre code').map(code => code.text()).join('\n')
+    expect(codexConfig).toContain('model = "response-text"')
+    expect(codexConfig).toContain(`name = "Sub2API ${platform}"`)
+    expect(codexConfig).not.toContain('native-text')
+    const opencode = wrapper.findAll('nav[aria-label="Client"] button').find(button => button.text().includes('opencode'))!
+    await opencode.trigger('click')
+    const config = JSON.parse(wrapper.find('pre code').text())
+    expect(config.model).toBe(`${platform}/response-text`)
+    expect(config.provider[platform]).toMatchObject({ name: platform, npm: '@ai-sdk/openai-compatible', models: { 'response-text': { name: 'response-text' } } })
+    expect(config.provider[platform].options.baseURL).toBe('https://example.com/v1')
+    expect(Object.keys(config.provider)).toEqual([platform])
+    wrapper.unmount()
+  })
+
+  it.each([undefined, []])('shows the registered platform when its model catalog is unavailable: %s', availableModels => {
+    const wrapper = mount(UseKeyModal, {
+      props: { show: true, apiKey: 'sk-fixture', baseUrl: 'https://example.com', platform: 'registered-provider', availableModels },
+      global: { stubs: { BaseDialog: { template: '<div><slot /><slot name="footer" /></div>' }, Icon: { template: '<span />' } } }
+    })
+    expect(wrapper.findAll('pre code')).toHaveLength(0)
+    expect(wrapper.get('[role="alert"]').text()).toBe('keys.setupModelUnavailable')
+    expect(translateMock).toHaveBeenCalledWith('keys.setupModelUnavailable', { model: 'registered-provider' })
+    wrapper.unmount()
+  })
+
+  it('does not route a native Antigravity client to a different model family', async () => {
+    const wrapper = mount(UseKeyModal, {
+      props: { show: true, apiKey: 'sk-fixture', baseUrl: 'https://example.com/v1', platform: 'antigravity', availableModels: ['claude-sonnet-5-5'] },
+      global: { stubs: { BaseDialog: { template: '<div><slot /><slot name="footer" /></div>' }, Icon: { template: '<span />' } } }
+    })
+    const gemini = wrapper.findAll('nav[aria-label="Client"] button').find(button => button.text().includes('geminiCli'))!
+    await gemini.trigger('click')
+    expect(wrapper.findAll('pre code')).toHaveLength(0)
+    expect(wrapper.get('[role="alert"]').text()).toBe('keys.setupModelUnavailable')
+    const opencode = wrapper.findAll('nav[aria-label="Client"] button').find(button => button.text().includes('opencode'))!
+    await opencode.trigger('click')
+    const files = wrapper.findAll('pre code')
+    expect(files).toHaveLength(1)
+    const config = JSON.parse(files[0].text())
+    expect(config.model).toBe('antigravity-claude/claude-sonnet-5-5')
+    expect(Object.keys(config.provider['antigravity-claude'].models)).toEqual(['claude-sonnet-5-5'])
+  })
+
+  it('preserves custom catalog aliases literally in TOML and shell configurations', async () => {
+    const alias = 'route"quoted$price'
+    const wrapper = mount(UseKeyModal, {
+      props: { show: true, apiKey: 'sk-fixture', baseUrl: 'https://example.com', platform: 'composite', availableModels: [alias] },
+      global: { stubs: { BaseDialog: { template: '<div><slot /><slot name="footer" /></div>' }, Icon: { template: '<span />' } } }
+    })
+    const codex = wrapper.findAll('nav[aria-label="Client"] button').find(button => button.text().includes('codexCli'))!
+    await codex.trigger('click')
+    expect(wrapper.findAll('pre code').map(code => code.text()).join('\n')).toContain(`model = ${JSON.stringify(alias)}`)
+    const claude = wrapper.findAll('nav[aria-label="Client"] button').find(button => button.text().includes('claudeCode'))!
+    await claude.trigger('click')
+    expect(wrapper.findAll('pre code').map(code => code.text()).join('\n')).toContain(`export ANTHROPIC_MODEL='${alias}'`)
+    const powershell = wrapper.findAll('button').find(button => button.text().trim() === 'PowerShell')!
+    await powershell.trigger('click')
+    expect(wrapper.findAll('pre code').map(code => code.text()).join('\n')).toContain(`$env:ANTHROPIC_MODEL='${alias}'`)
+    const cmd = wrapper.findAll('button').find(button => button.text().trim() === 'Windows CMD')!
+    await cmd.trigger('click')
+    const files = wrapper.findAll('pre code')
+    expect(files).toHaveLength(1)
+    expect(JSON.parse(files[0].text()).env.ANTHROPIC_MODEL).toBe(alias)
+  })
+
+  it('keeps native-only route names out of Codex configurations', async () => {
+    const wrapper = mount(UseKeyModal, {
+      props: { show: true, apiKey: 'sk-fixture', baseUrl: 'https://example.com', platform: 'composite', availableModels: ['native-route'], availableCodexModels: ['response-route'] },
+      global: { stubs: { BaseDialog: { template: '<div><slot /><slot name="footer" /></div>' }, Icon: { template: '<span />' } } }
+    })
+    expect(wrapper.findAll('pre code').map(code => code.text()).join('\n')).toContain('ANTHROPIC_MODEL="native-route"')
+    const codex = wrapper.findAll('nav[aria-label="Client"] button').find(button => button.text().includes('codexCli'))!
+    await codex.trigger('click')
+    const config = wrapper.findAll('pre code').map(code => code.text()).join('\n')
+    expect(config).toContain('model = "response-route"')
+    expect(config).not.toContain('native-route')
+    const opencode = wrapper.findAll('nav[aria-label="Client"] button').find(button => button.text().includes('opencode'))!
+    await opencode.trigger('click')
+    const openCodeConfig = JSON.parse(wrapper.find('pre code').text())
+    expect(openCodeConfig.model).toBe('openai/response-route')
+    expect(Object.keys(openCodeConfig.provider.openai.models)).toEqual(['response-route'])
+  })
+
+  it('quotes a supported Gemini alias without expanding shell variables', async () => {
+    const wrapper = mount(UseKeyModal, {
+      props: { show: true, apiKey: 'sk-fixture', baseUrl: 'https://example.com/v1', platform: 'gemini', availableModels: ['gemini-3.8-$price'] },
+      global: { stubs: { BaseDialog: { template: '<div><slot /><slot name="footer" /></div>' }, Icon: { template: '<span />' } } }
+    })
+    expect(wrapper.find('pre code').text()).toContain("export GEMINI_MODEL='gemini-3.8-$price'")
+    const powershell = wrapper.findAll('button').find(button => button.text().trim() === 'PowerShell')!
+    await powershell.trigger('click')
+    expect(wrapper.find('pre code').text()).toContain("$env:GEMINI_MODEL='gemini-3.8-$price'")
+  })
+
+  it.each([
+    ['openai', ['gpt-5.5']], ['grok', ['grok-4.5']], ['gemini', ['gemini-2.5-pro']], ['anthropic', ['claude-sonnet-4-6']]
+  ] as const)('shows an actionable error for unsupported %s defaults', (platform, availableModels) => {
+    const wrapper = mount(UseKeyModal, {
+      props: { show: true, apiKey: 'sk-fixture', baseUrl: 'https://example.com', platform, availableModels },
+      global: { stubs: { BaseDialog: { template: '<div><slot /><slot name="footer" /></div>' }, Icon: { template: '<span />' } } }
+    })
+    expect(wrapper.findAll('pre code')).toHaveLength(0)
+    expect(wrapper.get('[role="alert"]').text()).toBe('keys.setupModelUnavailable')
   })
 
   it('shows only Claude Code for Claude Code-only groups', async () => {
@@ -99,9 +214,9 @@ describe('UseKeyModal', () => {
     })
 
     for (const [shell, trafficSetting] of [
-      ['macOS / Linux', 'export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1'],
+      ['macOS / Linux', 'export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="1"'],
       ['Windows CMD', 'set CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1'],
-      ['PowerShell', '$env:CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1']
+      ['PowerShell', '$env:CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="1"']
     ]) {
       if (shell !== 'macOS / Linux') {
         const shellTab = wrapper.findAll('button').find(
@@ -151,39 +266,16 @@ describe('UseKeyModal', () => {
     const allCode = wrapper.findAll('pre code').map((code) => code.text()).join('\n')
     expect(allCode).toContain('GROK_MODELS_BASE_URL')
     expect(allCode).toContain('XAI_API_KEY')
-    expect(allCode).toContain('[model."grok-4.5"]')
-    expect(allCode).toContain('[model."grok-build-0.1"]')
-    expect(allCode).toContain('[model."grok-4.20-multi-agent-0309"]')
-    expect(allCode).toContain('[model."grok-4.3"]')
-    expect(allCode).toContain('default = "grok-4.5"')
+    expect(allCode).toContain('[model."grok-4.7"]')
+    expect(allCode).toContain('default = "grok-4.7"')
     expect(allCode).toContain('models_base_url = "https://example.com/v1"')
     expect(allCode).toContain('models_list_url = "https://example.com/v1/models"')
-    expect(allCode).toContain('xai_api_base_url = "https://example.com/v1"')
-    expect(allCode).toContain('cli_chat_proxy_base_url = "https://example.com/v1"')
     expect(allCode).toContain('preferred_method = "api_key"')
-    expect(allCode).toContain('image_description = "grok-4.5"')
-    expect(allCode).toContain('auto_compact_threshold_percent = 80')
-    expect(allCode).toContain('image_gen = true')
-    expect(allCode).toContain('video_gen = true')
-    expect(allCode).toContain('image_gen_model_override = "grok-imagine-image-quality"')
-    expect(allCode).toContain('image_edit_model_override = "grok-imagine-edit"')
     expect(allCode).toContain('env_key = "XAI_API_KEY"')
-    expect(allCode).toContain('Keep api_backend = "responses" on every model entry.')
-    expect(allCode).toContain('grok-imagine-image')
-    expect(allCode).toContain('grok-imagine-edit')
-    expect(allCode).toMatch(/\[model\."grok-4\.5"\][\s\S]*?context_window = 500000/)
-    expect(allCode).toMatch(/\[model\."grok-build-0\.1"\][\s\S]*?context_window = 256000/)
-    // Prefer env_key; hardcode api_key only as commented alternative
-    expect(allCode).not.toMatch(/^api_key = "sk-grok-test"$/m)
-
-    const modelBlocks = allCode
-      .split(/(?=^\[model\.)/m)
-      .filter((block) => block.startsWith('[model."'))
-    expect(modelBlocks.length).toBeGreaterThanOrEqual(4)
-    for (const block of modelBlocks) {
-      if (block.includes('# [model.')) continue
-      expect(block).toContain('api_backend = "responses"')
-    }
+    expect(allCode).toContain('api_backend = "responses"')
+    expect(allCode).not.toContain('context_window')
+    expect(allCode).not.toContain('image_gen = true')
+    expect(allCode).not.toContain('video_gen = true')
 
     const windowsTab = wrapper.findAll('button').find(
       (button) => button.text().trim() === 'Windows'
@@ -256,13 +348,13 @@ describe('UseKeyModal', () => {
       'ANTHROPIC_DEFAULT_FABLE_MODEL',
       'CLAUDE_CODE_SUBAGENT_MODEL'
     ]) {
-      expect(unixConfig).toContain(`export ${name}="grok-4.5"`)
+      expect(unixConfig).toContain(`export ${name}="grok-4.7"`)
     }
     const settingsConfig = codeBlocks.find((content) => content.includes('"$schema"'))
     expect(settingsConfig).toBeDefined()
     const parsedSettings = JSON.parse(settingsConfig!)
     expect(parsedSettings.$schema).toBe('https://json.schemastore.org/claude-code-settings.json')
-    expect(parsedSettings.env.ANTHROPIC_MODEL).toBe('grok-4.5')
+    expect(parsedSettings.env.ANTHROPIC_MODEL).toBe('grok-4.7')
     expect(codeBlocks.join('\n')).not.toContain('CLAUDE_CODE_ATTRIBUTION_HEADER')
     expect(codeBlocks.join('\n')).toContain('CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC')
     expect(parsedSettings.env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC).toBe('1')
@@ -280,9 +372,9 @@ describe('UseKeyModal', () => {
     await nextTick()
 
     codeBlocks = wrapper.findAll('pre code').map((code) => code.text())
-    expect(codeBlocks.join('\n')).toContain('set ANTHROPIC_MODEL=grok-4.5')
-    expect(codeBlocks.join('\n')).toContain('set ANTHROPIC_DEFAULT_FABLE_MODEL=grok-4.5')
-    expect(codeBlocks.join('\n')).toContain('set CLAUDE_CODE_SUBAGENT_MODEL=grok-4.5')
+    expect(codeBlocks.join('\n')).toContain('set ANTHROPIC_MODEL=grok-4.7')
+    expect(codeBlocks.join('\n')).toContain('set ANTHROPIC_DEFAULT_FABLE_MODEL=grok-4.7')
+    expect(codeBlocks.join('\n')).toContain('set CLAUDE_CODE_SUBAGENT_MODEL=grok-4.7')
     expect(codeBlocks.join('\n')).toContain('set CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1')
     expect(codeBlocks.join('\n')).not.toContain('CLAUDE_CODE_ATTRIBUTION_HEADER')
     const cmdSettings = JSON.parse(codeBlocks.find((content) => content.includes('"$schema"'))!)
@@ -298,9 +390,9 @@ describe('UseKeyModal', () => {
 
     codeBlocks = wrapper.findAll('pre code').map((code) => code.text())
     expect(codeBlocks.join('\n')).toContain('$env:ANTHROPIC_BASE_URL="https://example.com"')
-    expect(codeBlocks.join('\n')).toContain('$env:ANTHROPIC_MODEL="grok-4.5"')
-    expect(codeBlocks.join('\n')).toContain('$env:ANTHROPIC_DEFAULT_FABLE_MODEL="grok-4.5"')
-    expect(codeBlocks.join('\n')).toContain('$env:CLAUDE_CODE_SUBAGENT_MODEL="grok-4.5"')
+    expect(codeBlocks.join('\n')).toContain('$env:ANTHROPIC_MODEL="grok-4.7"')
+    expect(codeBlocks.join('\n')).toContain('$env:ANTHROPIC_DEFAULT_FABLE_MODEL="grok-4.7"')
+    expect(codeBlocks.join('\n')).toContain('$env:CLAUDE_CODE_SUBAGENT_MODEL="grok-4.7"')
     expect(codeBlocks.join('\n')).toContain('$env:CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="1"')
     expect(codeBlocks.join('\n')).not.toContain('CLAUDE_CODE_ATTRIBUTION_HEADER')
     const powershellSettings = JSON.parse(codeBlocks.find((content) => content.includes('"$schema"'))!)
@@ -350,14 +442,14 @@ describe('UseKeyModal', () => {
     const configToml = codeBlocks.find((content) => content.includes('[model_providers.sub2api]'))
     expect(configToml).toBeDefined()
     expect(configToml).toContain('model_provider = "sub2api"')
-    expect(configToml).toContain('model = "grok-4.5"')
+    expect(configToml).toContain('model = "grok-4.7"')
     expect(configToml).toContain('base_url = "https://example.com/v1"')
     expect(configToml).toContain('env_key = "SUB2API_API_KEY"')
     expect(configToml).toContain('wire_api = "responses"')
     // API-key provider: Codex must not require a ChatGPT OAuth login.
     expect(configToml).toContain('requires_openai_auth = false')
     expect(configToml).toContain('supports_websockets = false')
-    expect(configToml).toContain('grok-4.20-multi-agent-0309 (text / web_search)')
+    expect(configToml).toContain('available in this key')
     expect(configToml).toContain('grok-imagine-image')
     expect(configToml).toContain('grok-imagine-video')
     // Hardcoded bearer is only a commented fallback when env cannot be set.
@@ -1066,7 +1158,7 @@ describe('UseKeyModal', () => {
   it.each([1024 * 1024 - 1, 1024 * 1024, 1024 * 1024 + 1])(
     'uses file mode only when the manifest exceeds the remote byte limit (%s bytes)',
     async (responseBytes) => {
-      const manifest = { models: [{ slug: 'gpt-5.5', description: '' }] }
+      const manifest = { models: [{ slug: 'gpt-6.1-sol', description: '' }] }
       manifest.models[0]!.description = 'x'.repeat(responseBytes - JSON.stringify(manifest).length)
       const responseText = JSON.stringify(manifest)
       vi.stubGlobal('fetch', vi.fn().mockResolvedValue({

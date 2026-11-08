@@ -77,10 +77,22 @@ func (s *GatewayService) resolveProfitControlGroup(ctx context.Context, groupID 
 // the latest scheduler snapshot. Snapshot read failures are deliberately
 // fail-open to preserve availability, but are observable.
 func (s *GatewayService) GatewayProfitControlVetoLatest(ctx context.Context, selected *Account) (*Account, bool, string) {
-	return profitControlVetoLatest(ctx, selected, s.schedulerSnapshot)
+	snapshot := s.schedulerSnapshot
+	if snapshot == nil && groupInputRoutingRequestFromContext(ctx) != nil {
+		snapshot = &SchedulerSnapshotService{accountRepo: s.accountRepo, groupRepo: s.groupRepo}
+	}
+	return profitControlVetoLatest(ctx, selected, snapshot)
 }
 
 func profitControlVetoLatest(ctx context.Context, selected *Account, snapshot *SchedulerSnapshotService) (*Account, bool, string) {
+	if groupInputRoutingRequestFromContext(ctx) != nil {
+		latest, vetoed, reason := groupInputRoutingAdmissionLatest(ctx, selected, snapshot)
+		if vetoed {
+			return latest, true, reason
+		}
+		vetoed, reason = openAIProfitControlVetoReason(ctx, latest)
+		return latest, vetoed, reason
+	}
 	gate, _ := ctx.Value(openAIProfitControlGateCtxKey{}).(*openAIProfitControlGate)
 	if gate == nil || selected == nil {
 		return selected, false, ""

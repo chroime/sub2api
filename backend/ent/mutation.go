@@ -22252,6 +22252,7 @@ type GroupMutation struct {
 	addfallback_group_id_on_invalid_request      *int64
 	model_routing                                *map[string][]int64
 	model_routing_enabled                        *bool
+	input_routing                                *domain.GroupInputRoutingConfig
 	mcp_xml_inject                               *bool
 	supported_model_scopes                       *[]string
 	appendsupported_model_scopes                 []string
@@ -25271,6 +25272,42 @@ func (m *GroupMutation) ResetModelRoutingEnabled() {
 	m.model_routing_enabled = nil
 }
 
+// SetInputRouting sets the "input_routing" field.
+func (m *GroupMutation) SetInputRouting(dirc domain.GroupInputRoutingConfig) {
+	m.input_routing = &dirc
+}
+
+// InputRouting returns the value of the "input_routing" field in the mutation.
+func (m *GroupMutation) InputRouting() (r domain.GroupInputRoutingConfig, exists bool) {
+	v := m.input_routing
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldInputRouting returns the old "input_routing" field's value of the Group entity.
+// If the Group object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupMutation) OldInputRouting(ctx context.Context) (v domain.GroupInputRoutingConfig, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldInputRouting is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldInputRouting requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldInputRouting: %w", err)
+	}
+	return oldValue.InputRouting, nil
+}
+
+// ResetInputRouting resets all changes to the "input_routing" field.
+func (m *GroupMutation) ResetInputRouting() {
+	m.input_routing = nil
+}
+
 // SetMcpXMLInject sets the "mcp_xml_inject" field.
 func (m *GroupMutation) SetMcpXMLInject(b bool) {
 	m.mcp_xml_inject = &b
@@ -26459,7 +26496,7 @@ func (m *GroupMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *GroupMutation) Fields() []string {
-	fields := make([]string, 0, 75)
+	fields := make([]string, 0, 76)
 	if m.created_at != nil {
 		fields = append(fields, group.FieldCreatedAt)
 	}
@@ -26624,6 +26661,9 @@ func (m *GroupMutation) Fields() []string {
 	}
 	if m.model_routing_enabled != nil {
 		fields = append(fields, group.FieldModelRoutingEnabled)
+	}
+	if m.input_routing != nil {
+		fields = append(fields, group.FieldInputRouting)
 	}
 	if m.mcp_xml_inject != nil {
 		fields = append(fields, group.FieldMcpXMLInject)
@@ -26803,6 +26843,8 @@ func (m *GroupMutation) Field(name string) (ent.Value, bool) {
 		return m.ModelRouting()
 	case group.FieldModelRoutingEnabled:
 		return m.ModelRoutingEnabled()
+	case group.FieldInputRouting:
+		return m.InputRouting()
 	case group.FieldMcpXMLInject:
 		return m.McpXMLInject()
 	case group.FieldSupportedModelScopes:
@@ -26962,6 +27004,8 @@ func (m *GroupMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldModelRouting(ctx)
 	case group.FieldModelRoutingEnabled:
 		return m.OldModelRoutingEnabled(ctx)
+	case group.FieldInputRouting:
+		return m.OldInputRouting(ctx)
 	case group.FieldMcpXMLInject:
 		return m.OldMcpXMLInject(ctx)
 	case group.FieldSupportedModelScopes:
@@ -27395,6 +27439,13 @@ func (m *GroupMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetModelRoutingEnabled(v)
+		return nil
+	case group.FieldInputRouting:
+		v, ok := value.(domain.GroupInputRoutingConfig)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetInputRouting(v)
 		return nil
 	case group.FieldMcpXMLInject:
 		v, ok := value.(bool)
@@ -28277,6 +28328,9 @@ func (m *GroupMutation) ResetField(name string) error {
 		return nil
 	case group.FieldModelRoutingEnabled:
 		m.ResetModelRoutingEnabled()
+		return nil
+	case group.FieldInputRouting:
+		m.ResetInputRouting()
 		return nil
 	case group.FieldMcpXMLInject:
 		m.ResetMcpXMLInject()

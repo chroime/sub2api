@@ -108,7 +108,7 @@
 .home-experience .home-disabled-nav { display: inline-flex; align-items: center; gap: 6px; color: var(--public-muted); cursor: default; }
 
 .home-experience .home-integration { padding: 12px 0 64px; scroll-margin-top: 104px; }
-.home-experience .home-integration-layout { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); align-items: start; gap: 64px; }
+.home-experience .home-integration-layout { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); align-items: center; gap: 64px; }
 .home-experience .home-integration-copy { min-width: 0; }
 .home-experience .home-integration-copy > p { max-width: 430px; margin: 16px 0 0; color: var(--public-muted); font-size: 15px; line-height: 1.8; }
 .home-experience .home-integration-steps { display: grid; gap: 24px; margin: 28px 0 0; padding: 0; list-style: none; }

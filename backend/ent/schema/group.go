@@ -254,6 +254,11 @@ func (Group) Fields() []ent.Field {
 			Default(false).
 			Comment("是否启用模型路由配置"),
 
+		field.JSON("input_routing", domain.GroupInputRoutingConfig{}).
+			Default(domain.GroupInputRoutingConfig{Rules: []domain.GroupInputRoutingRule{}}).
+			SchemaType(map[string]string{dialect.Postgres: "jsonb"}).
+			Comment("按预估输入 Token 和请求类型限制候选账号；保持入口分组计费"),
+
 		// MCP XML 协议注入开关 (added by migration 042)
 		field.Bool("mcp_xml_inject").
 			Default(true).

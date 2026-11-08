@@ -588,6 +588,9 @@ type AccountSelectionResult struct {
 	// 局部 ctx 上，handler 必须经 ContextWithSelectionProfitGate 重放后才能在
 	// 调度栈之外做抢槽后终检与准入后粘性绑定。
 	profitGate *openAIProfitControlGate
+	// Carry the immutable routing pass through wait plans and final admission.
+	inputRoutingRequest *groupInputRoutingRequest
+	inputRoutingPass    *groupInputRoutingPass
 }
 
 // ProfitGateActive 报告本次选号是否处于利润门之下。
@@ -613,7 +616,10 @@ type AudioUsage struct {
 }
 
 type ForwardResult struct {
-	RequestID string
+	// groupInputRoutingOpenAI preserves native usage buckets and billing metadata
+	// when an input-routing request crosses into the OpenAI forwarding service.
+	groupInputRoutingOpenAI *OpenAIForwardResult
+	RequestID               string
 	// UpstreamHeaders 是直接上游的响应头，用于按账户配置解析上游请求标识。
 	UpstreamHeaders http.Header
 	Usage           ClaudeUsage
@@ -773,43 +779,44 @@ func (s *GatewayService) TempUnscheduleRetryableError(ctx context.Context, accou
 
 // GatewayService handles API gateway operations
 type GatewayService struct {
-	accountRepo           AccountRepository
-	groupRepo             GroupRepository
-	usageLogRepo          UsageLogRepository
-	usageBillingRepo      UsageBillingRepository
-	userRepo              UserRepository
-	userSubRepo           UserSubscriptionRepository
-	userGroupRateRepo     UserGroupRateRepository
-	cache                 GatewayCache
-	digestStore           *DigestSessionStore
-	cfg                   *config.Config
-	schedulerSnapshot     *SchedulerSnapshotService
-	billingService        *BillingService
-	rateLimitService      *RateLimitService
-	billingCacheService   *BillingCacheService
-	identityService       *IdentityService
-	httpUpstream          HTTPUpstream
-	deferredService       *DeferredService
-	concurrencyService    *ConcurrencyService
-	claudeTokenProvider   *ClaudeTokenProvider
-	sessionLimitCache     SessionLimitCache // 会话数量限制缓存（仅 Anthropic OAuth/SetupToken）
-	rpmCache              RPMCache          // RPM 计数缓存（仅 Anthropic OAuth/SetupToken）
-	userGroupRateResolver *userGroupRateResolver
-	userGroupRateCache    *gocache.Cache
-	userGroupRateSF       singleflight.Group
-	modelsListCache       *gocache.Cache
-	modelsListCacheTTL    time.Duration
-	settingService        *SettingService
-	responseHeaderFilter  *responseheaders.CompiledHeaderFilter
-	debugModelRouting     atomic.Bool
-	debugClaudeMimic      atomic.Bool
-	channelService        *ChannelService
-	resolver              *ModelPricingResolver
-	compositeResolver     *CompositeRouteResolver
-	debugGatewayBodyFile  atomic.Pointer[os.File] // non-nil when SUB2API_DEBUG_GATEWAY_BODY is set
-	tlsFPProfileService   *TLSFingerprintProfileService
-	balanceNotifyService  *BalanceNotifyService
-	userPlatformQuotaRepo UserPlatformQuotaRepository
+	inputRoutingOpenAIGateway *OpenAIGatewayService
+	accountRepo               AccountRepository
+	groupRepo                 GroupRepository
+	usageLogRepo              UsageLogRepository
+	usageBillingRepo          UsageBillingRepository
+	userRepo                  UserRepository
+	userSubRepo               UserSubscriptionRepository
+	userGroupRateRepo         UserGroupRateRepository
+	cache                     GatewayCache
+	digestStore               *DigestSessionStore
+	cfg                       *config.Config
+	schedulerSnapshot         *SchedulerSnapshotService
+	billingService            *BillingService
+	rateLimitService          *RateLimitService
+	billingCacheService       *BillingCacheService
+	identityService           *IdentityService
+	httpUpstream              HTTPUpstream
+	deferredService           *DeferredService
+	concurrencyService        *ConcurrencyService
+	claudeTokenProvider       *ClaudeTokenProvider
+	sessionLimitCache         SessionLimitCache // 会话数量限制缓存（仅 Anthropic OAuth/SetupToken）
+	rpmCache                  RPMCache          // RPM 计数缓存（仅 Anthropic OAuth/SetupToken）
+	userGroupRateResolver     *userGroupRateResolver
+	userGroupRateCache        *gocache.Cache
+	userGroupRateSF           singleflight.Group
+	modelsListCache           *gocache.Cache
+	modelsListCacheTTL        time.Duration
+	settingService            *SettingService
+	responseHeaderFilter      *responseheaders.CompiledHeaderFilter
+	debugModelRouting         atomic.Bool
+	debugClaudeMimic          atomic.Bool
+	channelService            *ChannelService
+	resolver                  *ModelPricingResolver
+	compositeResolver         *CompositeRouteResolver
+	debugGatewayBodyFile      atomic.Pointer[os.File] // non-nil when SUB2API_DEBUG_GATEWAY_BODY is set
+	tlsFPProfileService       *TLSFingerprintProfileService
+	balanceNotifyService      *BalanceNotifyService
+	userPlatformQuotaRepo     UserPlatformQuotaRepository
 }
 
 // NewGatewayService creates a new GatewayService
@@ -1589,10 +1596,14 @@ func (s *GatewayService) GetCompositeRouteModels(ctx context.Context, groupID *i
 }
 
 func (s *GatewayService) FilterCompositeCodexModels(ctx context.Context, groupID int64, models []string) ([]string, error) {
+	return s.FilterCompositeModelsForEndpoint(ctx, groupID, models, CompositeRouteEndpointResponses)
+}
+
+func (s *GatewayService) FilterCompositeModelsForEndpoint(ctx context.Context, groupID int64, models []string, endpoint string) ([]string, error) {
 	if s == nil || s.compositeResolver == nil {
 		return models, nil
 	}
-	return s.compositeResolver.FilterCodexModels(ctx, groupID, models)
+	return s.compositeResolver.FilterModelsForEndpoint(ctx, groupID, models, endpoint)
 }
 
 // GetSchedulablePlatforms returns the concrete platforms that currently have

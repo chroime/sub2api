@@ -580,6 +580,25 @@ export interface GroupLocaleText {
 /** 以语言代码（en、zh…）为键的分组文案译文。 */
 export type GroupI18n = Record<string, GroupLocaleText>
 
+export interface GroupInputRoutingRule {
+  id: string
+  name: string
+  enabled: boolean
+  request_type: 'sync' | 'stream' | 'all'
+  input_tokens_mode: 'all' | 'range'
+  /** Inclusive lower and upper bounds for the estimated input token count. */
+  min_input_tokens: number
+  max_input_tokens: number
+  account_ids: number[]
+  group_ids: number[]
+  fallback_to_original: boolean
+}
+
+export interface GroupInputRoutingConfig {
+  enabled: boolean
+  rules: GroupInputRoutingRule[]
+}
+
 // 用户侧接口返回的 name / description 已由后端按请求语言（Accept-Language）选好
 export interface Group {
   id: number
@@ -648,6 +667,7 @@ export interface Group {
 }
 
 export interface AdminGroup extends Group {
+  input_routing?: GroupInputRoutingConfig
 	// 仅管理员可见：下游计费 Token 修正倍率。
 	billing_input_token_multiplier: number
 	billing_output_token_multiplier: number
@@ -821,6 +841,7 @@ export interface UpdateApiKeyRequest {
 }
 
 export interface CreateGroupRequest {
+  input_routing?: GroupInputRoutingConfig
   streaming_ack_enabled?: boolean
   name: string
   description?: string | null
@@ -895,6 +916,7 @@ export interface CreateGroupRequest {
 }
 
 export interface UpdateGroupRequest {
+  input_routing?: GroupInputRoutingConfig
   streaming_ack_enabled?: boolean
   name?: string
   description?: string | null

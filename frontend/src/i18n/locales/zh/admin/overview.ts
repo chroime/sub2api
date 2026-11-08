@@ -498,7 +498,7 @@ export default {
       description: '管理用户账户和权限',
       createUser: '创建用户',
       bulkEmail: {
-        action: '批量发送邮件',
+        action: '发送邮件',
         title: '批量发送通知邮件',
         template: '邮件模板',
         healthTemplate: '分组与倍率更新',

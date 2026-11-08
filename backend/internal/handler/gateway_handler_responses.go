@@ -42,6 +42,7 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 		h.responsesErrorResponse(c, http.StatusInternalServerError, "api_error", "User context not found")
 		return
 	}
+	service.SetOpenAIHTTPResponseOwner(c, subject.UserID, apiKey.ID)
 	reqLog := requestLogger(
 		c,
 		"handler.gateway.responses",
@@ -100,6 +101,16 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 
 	setOpsRequestContext(c, reqModel, reqStream)
 	setOpsEndpointContext(c, "", int16(service.RequestTypeFromLegacy(reqStream, false)))
+	bindGroupInputRouting(c, apiKey, body, "responses", reqModel, reqStream)
+	_, inputRoutingMatched := service.GroupInputRoutingDecisionFromContext(c.Request.Context())
+	if inputRoutingMatched {
+		if policyBody, changed, err := applyGroupInputRoutingReasoningEffortPolicy(c, apiKey, body, ""); err != nil {
+			respondOpenAIReasoningEffortPolicyError(c, err, h.responsesErrorResponse)
+			return
+		} else if changed {
+			body = policyBody
+		}
+	}
 	requestCtx := c.Request.Context()
 	// 定价上下文无条件装配：/v1/responses 是 token 计费端点，声明生图工具的
 	// 混合请求同样按 token 计费（外加图片部分），其 token 利润保护不因请求体
@@ -294,7 +305,9 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 		}
 		var result *service.ForwardResult
 		setActualUpstreamEndpoint(c, "")
-		if shouldUseAntigravityCompat(account) {
+		if inputRoutingMatched {
+			result, err = h.forwardGroupInputRouting(requestCtx, c, account, service.CompositeRouteEndpointResponses, forwardBody, parsedReq, sessionHash, false)
+		} else if shouldUseAntigravityCompat(account) {
 			if h.antigravityGatewayService == nil {
 				h.responsesErrorResponse(c, http.StatusBadGateway, "upstream_error", "Antigravity compatibility service is not configured")
 				if accountReleaseFunc != nil {
@@ -333,7 +346,7 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 			stampForwardRequestedReasoningEffort(result, service.RequestedReasoningEffortFromContext(c.Request.Context()))
 			channelUsageFields := clientRequestedUsageFields(c, channelMapping, reqModel, result.UpstreamModel)
 			h.submitUsageRecordTask(c.Request.Context(), func(ctx context.Context) {
-				if err := h.gatewayService.RecordUsage(ctx, &service.RecordUsageInput{
+				if err := service.RecordGroupInputRoutingUsage(ctx, h.gatewayService, h.openAIGatewayService, &service.RecordUsageInput{
 					Result:             result,
 					QuotaPlatform:      quotaPlatform,
 					APIKey:             apiKey,

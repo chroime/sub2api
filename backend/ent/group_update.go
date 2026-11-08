@@ -1073,6 +1073,20 @@ func (_u *GroupUpdate) SetNillableModelRoutingEnabled(v *bool) *GroupUpdate {
 	return _u
 }
 
+// SetInputRouting sets the "input_routing" field.
+func (_u *GroupUpdate) SetInputRouting(v domain.GroupInputRoutingConfig) *GroupUpdate {
+	_u.mutation.SetInputRouting(v)
+	return _u
+}
+
+// SetNillableInputRouting sets the "input_routing" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableInputRouting(v *domain.GroupInputRoutingConfig) *GroupUpdate {
+	if v != nil {
+		_u.SetInputRouting(*v)
+	}
+	return _u
+}
+
 // SetMcpXMLInject sets the "mcp_xml_inject" field.
 func (_u *GroupUpdate) SetMcpXMLInject(v bool) *GroupUpdate {
 	_u.mutation.SetMcpXMLInject(v)
@@ -2043,6 +2057,9 @@ func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.ModelRoutingEnabled(); ok {
 		_spec.SetField(group.FieldModelRoutingEnabled, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.InputRouting(); ok {
+		_spec.SetField(group.FieldInputRouting, field.TypeJSON, value)
 	}
 	if value, ok := _u.mutation.McpXMLInject(); ok {
 		_spec.SetField(group.FieldMcpXMLInject, field.TypeBool, value)
@@ -3476,6 +3493,20 @@ func (_u *GroupUpdateOne) SetNillableModelRoutingEnabled(v *bool) *GroupUpdateOn
 	return _u
 }
 
+// SetInputRouting sets the "input_routing" field.
+func (_u *GroupUpdateOne) SetInputRouting(v domain.GroupInputRoutingConfig) *GroupUpdateOne {
+	_u.mutation.SetInputRouting(v)
+	return _u
+}
+
+// SetNillableInputRouting sets the "input_routing" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableInputRouting(v *domain.GroupInputRoutingConfig) *GroupUpdateOne {
+	if v != nil {
+		_u.SetInputRouting(*v)
+	}
+	return _u
+}
+
 // SetMcpXMLInject sets the "mcp_xml_inject" field.
 func (_u *GroupUpdateOne) SetMcpXMLInject(v bool) *GroupUpdateOne {
 	_u.mutation.SetMcpXMLInject(v)
@@ -4476,6 +4507,9 @@ func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error)
 	}
 	if value, ok := _u.mutation.ModelRoutingEnabled(); ok {
 		_spec.SetField(group.FieldModelRoutingEnabled, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.InputRouting(); ok {
+		_spec.SetField(group.FieldInputRouting, field.TypeJSON, value)
 	}
 	if value, ok := _u.mutation.McpXMLInject(); ok {
 		_spec.SetField(group.FieldMcpXMLInject, field.TypeBool, value)

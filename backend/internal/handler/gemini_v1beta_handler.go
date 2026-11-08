@@ -340,9 +340,10 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 		zap.Any("group_id", apiKey.GroupID),
 	)
 
-	// 检查平台：优先使用强制平台（/antigravity 路由，中间件已设置 request.Context），否则要求 gemini 分组（composite 分组允许路由到 antigravity）
+	// A matched native rule admits only Gemini/Antigravity accounts at scheduling,
+	// independently of the source group's billing platform.
 	effectivePlatform := effectiveAPIKeyPlatform(c, apiKey)
-	if !middleware.HasForcePlatform(c) {
+	if !middleware.HasForcePlatform(c) && !hasNativeGeminiInputRouting(c) {
 		if effectivePlatform != service.PlatformGemini &&
 			!servesCompositeAntigravityGemini(apiKey, effectivePlatform) {
 			googleError(c, http.StatusBadRequest, "API key group platform is not gemini")
@@ -389,6 +390,9 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 
 	setOpsRequestContext(c, modelName, stream)
 	setOpsEndpointContext(c, "", int16(service.RequestTypeFromLegacy(stream, false)))
+	if action == "generateContent" || action == "streamGenerateContent" {
+		bindGroupInputRouting(c, apiKey, body, "gemini", urlModel, stream)
+	}
 	pricingCtx, pricingAt := service.WithGatewayTokenRequestPricing(c.Request.Context())
 	c.Request = c.Request.WithContext(pricingCtx)
 

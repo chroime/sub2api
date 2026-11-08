@@ -1,8 +1,9 @@
 import type { GroupPlatform } from '@/types'
 import { buildCodexApiKeyAuthConfig } from '@/utils/codexAuthConfig'
+import { CLIENT_SETUP_DEFAULT_MODELS, clientV1BaseUrl, normalizeClientBaseUrl, selectClientSetupModel } from '@/utils/clientSetupModels'
 
-export const OPENAI_CC_SWITCH_CODEX_MODEL = 'gpt-6.1-sol'
-export const GROK_CC_SWITCH_MODEL = 'grok-4.5'
+export const OPENAI_CC_SWITCH_CODEX_MODEL = CLIENT_SETUP_DEFAULT_MODELS.openai
+export const GROK_CC_SWITCH_MODEL = CLIENT_SETUP_DEFAULT_MODELS.grok
 
 export type CcSwitchClientType = 'claude' | 'gemini'
 
@@ -19,6 +20,7 @@ export interface CcSwitchImportDeeplinkInput {
   providerName: string
   apiKey: string
   usageScript: string
+  availableModels?: readonly string[]
 }
 
 /**
@@ -46,55 +48,31 @@ export const CC_SWITCH_USAGE_SCRIPT = `({
     }
   })`
 
-function withV1Endpoint(baseUrl: string): string {
-  const normalizedBaseUrl = baseUrl.replace(/\/+$/, '')
-  return normalizedBaseUrl.endsWith('/v1') ? normalizedBaseUrl : `${normalizedBaseUrl}/v1`
-}
-
-function withoutTrailingSlashes(baseUrl: string): string {
-  return baseUrl.replace(/\/+$/, '')
-}
-
 export function resolveCcSwitchImportConfig(
   platform: GroupPlatform | undefined | null,
   clientType: CcSwitchClientType,
-  baseUrl: string
+  baseUrl: string,
+  availableModels?: readonly string[]
 ): CcSwitchImportConfig {
-  switch (platform || 'anthropic') {
-    case 'antigravity':
-      return {
-        app: clientType === 'gemini' ? 'gemini' : 'claude',
-        endpoint: `${baseUrl.replace(/\/+$/, '')}/antigravity`
-      }
-    case 'openai':
-      return {
-        app: 'codex',
-        // CC Switch's Codex provider appends the OpenAI-compatible path itself.
-        // Passing /v1 here can make the client request /v1/v1/....
-        endpoint: withoutTrailingSlashes(baseUrl),
-        model: OPENAI_CC_SWITCH_CODEX_MODEL
-      }
-    case 'gemini':
-      return {
-        app: 'gemini',
-        endpoint: baseUrl
-      }
-    case 'grok':
-      return {
-        app: 'grokbuild',
-        endpoint: withV1Endpoint(baseUrl),
-        model: GROK_CC_SWITCH_MODEL
-      }
-    default:
-      return {
-        app: 'claude',
-        endpoint: baseUrl
-      }
+  const source = platform || 'anthropic'
+  if (source === 'typesafe') throw new Error('TypeSafe requires the /v1/systemone client format')
+  const root = normalizeClientBaseUrl(baseUrl)
+  if (source === 'antigravity') {
+    const endpoint = root.endsWith('/antigravity') ? root : `${root}/antigravity`
+    return {
+      app: clientType === 'gemini' ? 'gemini' : 'claude', endpoint,
+      model: selectClientSetupModel(clientType === 'gemini' ? 'gemini' : 'anthropic', availableModels)
+    }
   }
+  const model = selectClientSetupModel(source, availableModels)
+  if (source === 'openai') return { app: 'codex', endpoint: clientV1BaseUrl(root), model }
+  if (source === 'grok') return { app: 'grokbuild', endpoint: clientV1BaseUrl(root), model }
+  if (source === 'gemini') return { app: 'gemini', endpoint: root, model }
+  return { app: 'claude', endpoint: root, model }
 }
 
 export function buildCcSwitchImportDeeplink(input: CcSwitchImportDeeplinkInput): string {
-  const config = resolveCcSwitchImportConfig(input.platform, input.clientType, input.baseUrl)
+  const config = resolveCcSwitchImportConfig(input.platform, input.clientType, input.baseUrl, input.availableModels)
   const entries: [string, string][] = [
     ['resource', 'provider'],
     ['app', config.app],
@@ -110,6 +88,14 @@ export function buildCcSwitchImportDeeplink(input: CcSwitchImportDeeplinkInput):
 
   if (config.model) {
     entries.splice(2, 0, ['model', config.model])
+  }
+
+  if (config.app === 'claude' && config.model) {
+    // Claude Code's role aliases must stay inside the same verified catalog.
+    const opus = input.platform === 'anthropic' || input.platform === 'antigravity' || !input.platform
+      ? selectClientSetupModel('anthropic', input.availableModels, 'claude-opus-5-5')
+      : config.model
+    entries.push(['sonnetModel', config.model], ['haikuModel', config.model], ['opusModel', opus])
   }
 
   if (config.app === 'codex') {

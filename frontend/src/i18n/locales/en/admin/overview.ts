@@ -498,7 +498,7 @@ export default {
       description: 'Manage users and their permissions',
       createUser: 'Create User',
       bulkEmail: {
-        action: 'Send bulk email',
+        action: 'Send email',
         title: 'Send notification emails',
         template: 'Email template',
         healthTemplate: 'Groups and rates update',

@@ -6,6 +6,7 @@ import type { AdminGroup } from '@/types'
 import GroupsView from '@/views/admin/GroupsView.vue'
 import { adminAPI } from '@/api/admin'
 import GroupBalancePrechargeSettings from '@/components/admin/group/GroupBalancePrechargeSettings.vue'
+import Select from '@/components/common/Select.vue'
 
 vi.mock('@/api/admin/settings', () => ({
   getGroupBalancePrechargeSettings: vi.fn(async (groupId: number) => ({
@@ -222,6 +223,8 @@ describe('GroupsView duplicate action', () => {
     getUsageSummary.mockResolvedValue([])
     getCapacitySummary.mockResolvedValue([])
     getLiveCapability.mockResolvedValue({ supported: false })
+    vi.mocked(adminAPI.groups.create).mockReset()
+    vi.mocked(adminAPI.groups.getAll).mockResolvedValue([])
   })
 
   afterEach(() => {
@@ -554,6 +557,123 @@ describe('GroupsView duplicate action', () => {
       wrapper.unmount()
       vi.useRealTimers()
     }
+  })
+
+  it('submits disabled input routing for a new group and resets discarded rule drafts', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    const openCreate = () => wrapper.findAll('button').find(button => button.text() === 'admin.groups.createGroup')!
+    await openCreate().trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="input-routing-toggle"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="input-routing-toggle"]').attributes('aria-checked')).toBe('false')
+    await wrapper.get('[data-testid="input-routing-add-rule"]').trigger('click')
+    expect(wrapper.findAll('[data-testid="input-routing-rule"]')).toHaveLength(1)
+    await wrapper.findAll('button').find(button => button.text() === 'common.cancel')!.trigger('click')
+    await openCreate().trigger('click')
+    await flushPromises()
+    expect(wrapper.findAll('[data-testid="input-routing-rule"]')).toHaveLength(0)
+    await wrapper.get('[data-tour="group-form-name"]').setValue('Fresh group')
+    await wrapper.get('#create-group-form').trigger('submit')
+    await flushPromises()
+    expect(adminAPI.groups.create).toHaveBeenCalledWith(expect.objectContaining({
+      input_routing: { enabled: false, rules: [] },
+    }))
+    wrapper.unmount()
+  })
+
+  it('loads input routing without mutating the source and persists edited values and explicit clearing', async () => {
+    const rule = {
+      id: 'small-stream', name: 'Small stream', enabled: true, request_type: 'stream',
+      input_tokens_mode: 'range', min_input_tokens: 0, max_input_tokens: 8000, account_ids: [5], group_ids: [], fallback_to_original: false,
+    }
+    const group = { ...sourceGroup, input_routing: { enabled: true, rules: [rule] } }
+    listGroups.mockResolvedValue({ items: [group], total: 1, page: 1, page_size: 20, pages: 1 })
+    updateGroup.mockResolvedValue(group)
+    const wrapper = mountView()
+    await flushPromises()
+    const edit = () => wrapper.findAll('button').find(button => button.text() === 'common.edit')!
+    await edit().trigger('click')
+    await flushPromises()
+    expect(wrapper.findAll('[data-testid="input-routing-rule"]')).toHaveLength(1)
+    expect(wrapper.get<HTMLInputElement>('[data-testid="input-routing-min-tokens"]').element.value).toBe('0')
+    expect(wrapper.get<HTMLInputElement>('[data-testid="input-routing-max-tokens"]').element.value).toBe('8000')
+    await wrapper.get('[data-testid="input-routing-max-tokens"]').setValue('4096')
+    await wrapper.get('[data-testid="input-routing-fallback"]').trigger('click')
+    expect(group.input_routing.rules[0]).toEqual(rule)
+    expect(group.input_routing.rules[0]!.max_input_tokens).toBe(8000)
+    await wrapper.get('#edit-group-form').trigger('submit')
+    await flushPromises()
+    expect(updateGroup).toHaveBeenCalledWith(42, expect.objectContaining({
+      input_routing: { enabled: true, rules: [{ ...rule, max_input_tokens: 4096, fallback_to_original: true }] },
+    }))
+    await edit().trigger('click')
+    await flushPromises()
+    expect(wrapper.get<HTMLInputElement>('[data-testid="input-routing-max-tokens"]').element.value).toBe('8000')
+    await wrapper.get('[data-testid="input-routing-remove-rule"]').trigger('click')
+    await wrapper.get('[data-testid="input-routing-toggle"]').trigger('click')
+    await wrapper.get('#edit-group-form').trigger('submit')
+    await flushPromises()
+    expect(updateGroup).toHaveBeenLastCalledWith(42, expect.objectContaining({ input_routing: { enabled: false, rules: [] } }))
+    wrapper.unmount()
+  })
+
+  it('blocks incomplete create rules and sends the configured routing after selecting a target', async () => {
+    vi.mocked(adminAPI.groups.getAll).mockResolvedValue([{ ...sourceGroup, id: 88, name: 'Candidate group', platform: 'anthropic' }])
+    const wrapper = mountView()
+    await flushPromises()
+    await wrapper.findAll('button').find(button => button.text() === 'admin.groups.createGroup')!.trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-tour="group-form-name"]').setValue('Routed group')
+    await wrapper.get('[data-testid="input-routing-toggle"]').trigger('click')
+    await wrapper.get('[data-testid="input-routing-add-rule"]').trigger('click')
+    await wrapper.get('[data-testid="input-routing-rule-toggle"]').trigger('click')
+    await wrapper.get('[data-testid="input-routing-name"]').setValue('Small sync')
+    wrapper.findAllComponents(Select).find(select => select.attributes('data-testid') === 'input-routing-request-type')!.vm.$emit('update:modelValue', 'sync')
+    await wrapper.vm.$nextTick()
+    wrapper.findAllComponents(Select).find(select => select.attributes('data-testid') === 'input-routing-input-mode')!.vm.$emit('update:modelValue', 'range')
+    await wrapper.vm.$nextTick()
+    await wrapper.get('[data-testid="input-routing-max-tokens"]').setValue('1000')
+    await wrapper.get('#create-group-form').trigger('submit')
+    expect(adminAPI.groups.create).not.toHaveBeenCalled()
+    expect(wrapper.get('[data-testid="input-routing-validation-error"]').text()).toContain('targetsError')
+    await wrapper.get('[data-group-id="88"]').setValue(true)
+    await wrapper.get('#create-group-form').trigger('submit')
+    await flushPromises()
+    expect(adminAPI.groups.create).toHaveBeenCalledWith(expect.objectContaining({
+      input_routing: { enabled: true, rules: [{
+        id: expect.any(String), name: 'Small sync', enabled: true, request_type: 'sync',
+        input_tokens_mode: 'range', min_input_tokens: 0, max_input_tokens: 1000, account_ids: [], group_ids: [88], fallback_to_original: false,
+      }] },
+    }))
+    wrapper.unmount()
+  })
+
+  it.each(['range', 'all'] as const)('loads and saves server-copied %s input routing when editing a duplicated group', async mode => {
+    const inputRouting = { enabled: true, rules: [{
+      id: 'copy-route', name: 'Copied route', enabled: true, request_type: 'all' as const,
+      input_tokens_mode: mode, min_input_tokens: 0, max_input_tokens: 2000, account_ids: [5], group_ids: [], fallback_to_original: false,
+    }] }
+    const copy = { ...sourceGroup, id: 43, name: 'Primary (Copy)', input_routing: inputRouting }
+    duplicateGroup.mockResolvedValue(copy)
+    listGroups.mockResolvedValueOnce({ items: [sourceGroup], total: 1, page: 1, page_size: 20, pages: 1 })
+      .mockResolvedValue({ items: [copy], total: 1, page: 1, page_size: 20, pages: 1 })
+    const wrapper = mountView()
+    await flushPromises()
+    await wrapper.get('[data-testid="group-duplicate"]').trigger('click')
+    await flushPromises()
+    await wrapper.findAll('button').find(button => button.text() === 'common.edit')!.trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="input-routing-toggle"]').attributes('aria-checked')).toBe('true')
+    expect(wrapper.get<HTMLInputElement>('[data-testid="input-routing-name"]').element.value).toBe('Copied route')
+    const inputMode = wrapper.findAllComponents(Select).find(select => select.attributes('data-testid') === 'input-routing-input-mode')!
+    expect(inputMode.props('modelValue')).toBe(mode)
+    expect(wrapper.find('[data-testid="input-routing-max-tokens"]').exists()).toBe(mode === 'range')
+    if (mode === 'range') expect(wrapper.get<HTMLInputElement>('[data-testid="input-routing-max-tokens"]').element.value).toBe('2000')
+    await wrapper.get('#edit-group-form').trigger('submit')
+    await flushPromises()
+    expect(updateGroup).toHaveBeenCalledWith(43, expect.objectContaining({ input_routing: inputRouting }))
+    wrapper.unmount()
   })
 
 })

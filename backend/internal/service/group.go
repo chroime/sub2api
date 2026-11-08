@@ -14,6 +14,16 @@ import (
 type OpenAIMessagesDispatchModelConfig = domain.OpenAIMessagesDispatchModelConfig
 type GroupCodexModelsManifestConfig = domain.GroupCodexModelsManifestConfig
 type ReasoningEffortMapping = domain.ReasoningEffortMapping
+type GroupInputRoutingConfig = domain.GroupInputRoutingConfig
+type GroupInputRoutingRule = domain.GroupInputRoutingRule
+
+func CloneGroupInputRouting(config GroupInputRoutingConfig) GroupInputRoutingConfig {
+	return domain.CloneGroupInputRouting(config)
+}
+
+func NormalizeGroupInputRouting(config GroupInputRoutingConfig) (GroupInputRoutingConfig, error) {
+	return domain.NormalizeGroupInputRouting(config)
+}
 
 type Group struct {
 	ID             int64
@@ -102,6 +112,7 @@ type Group struct {
 	// value: 优先账号 ID 列表
 	ModelRouting        map[string][]int64
 	ModelRoutingEnabled bool
+	InputRouting        GroupInputRoutingConfig
 
 	// MCP XML 协议注入开关（仅 antigravity 平台使用）
 	MCPXMLInject bool

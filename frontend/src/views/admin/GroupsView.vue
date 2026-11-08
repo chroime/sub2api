@@ -534,6 +534,12 @@
           <p class="input-hint">{{ t("admin.groups.platformHint") }}</p>
         </div>
         <GroupStreamingACKSettings v-model="createForm.streaming_ack_enabled" />
+        <GroupInputRoutingEditor
+          v-if="showCreateModal && !authStore.isSimpleMode"
+          ref="createInputRoutingRef"
+          v-model="createForm.input_routing"
+          :platform="createForm.platform"
+        />
         <!-- 从分组复制账号 -->
         <div v-if="!authStore.isSimpleMode && copyAccountsGroupOptions.length > 0">
           <div class="mb-1.5 flex items-center gap-1">
@@ -2230,6 +2236,13 @@
           <p class="input-hint">{{ t("admin.groups.platformNotEditable") }}</p>
         </div>
         <GroupStreamingACKSettings v-model="editForm.streaming_ack_enabled" />
+        <GroupInputRoutingEditor
+          v-if="showEditModal && !authStore.isSimpleMode"
+          ref="editInputRoutingRef"
+          v-model="editForm.input_routing"
+          :platform="editForm.platform"
+          :group-id="editingGroup.id"
+        />
         <template v-if="!authStore.isSimpleMode">
         <GroupBalancePrechargeSettings :key="editingGroup.id" :group-id="editingGroup.id" />
         <!-- 从分组复制账号（编辑时） -->
@@ -4436,6 +4449,8 @@ import GroupRateMultipliersModal from "@/components/admin/group/GroupRateMultipl
 import GroupRPMOverridesModal from "@/components/admin/group/GroupRPMOverridesModal.vue";
 import GroupBalancePrechargeSettings from "@/components/admin/group/GroupBalancePrechargeSettings.vue";
 import GroupStreamingACKSettings from "@/components/admin/group/GroupStreamingACKSettings.vue";
+import GroupInputRoutingEditor from "@/components/admin/group/GroupInputRoutingEditor.vue";
+import { cloneGroupInputRouting } from "@/components/admin/group/groupInputRouting";
 import GroupCapacityBadge from "@/components/common/GroupCapacityBadge.vue";
 import ReasoningEffortPolicyFields from "@/components/admin/group/ReasoningEffortPolicyFields.vue";
 import CodexManifestAccountsField from "@/components/admin/group/CodexManifestAccountsField.vue";
@@ -5026,6 +5041,8 @@ type ReasoningEffortPolicyFieldsExpose = {
 };
 const createReasoningEffortPolicyRef = ref<ReasoningEffortPolicyFieldsExpose | null>(null);
 const editReasoningEffortPolicyRef = ref<ReasoningEffortPolicyFieldsExpose | null>(null);
+const createInputRoutingRef = ref<{ validate: () => boolean } | null>(null);
+const editInputRoutingRef = ref<{ validate: () => boolean } | null>(null);
 
 // 固定账号获取 Codex Model Manifest（仅 openai 分组编辑对话框）
 type CodexManifestAccountsFieldExpose = {
@@ -5077,6 +5094,7 @@ const submitEditAllowlistCustomEntry = () => {
 };
 
 const createForm = reactive({
+  input_routing: cloneGroupInputRouting(),
   streaming_ack_enabled: false,
   name: "",
   description: "",
@@ -5450,6 +5468,7 @@ const convertApiFormatToRoutingRules = async (
 };
 
 const editForm = reactive({
+  input_routing: cloneGroupInputRouting(),
   streaming_ack_enabled: null as boolean | null,
   name: "",
   description: "",
@@ -5930,6 +5949,7 @@ const openCreateModal = () => {
 
 const closeCreateModal = () => {
   showCreateModal.value = false;
+  createForm.input_routing = cloneGroupInputRouting();
   createModelRoutingRules.value.forEach((rule) => {
     accountSearchRunner.clearKey(getCreateRuleSearchKey(rule));
   });
@@ -6071,6 +6091,7 @@ const handleCreateGroup = async () => {
     return;
   }
   if (!validateGroupReasoningMultipliers(createForm.model_pricing)) return;
+  if (createInputRoutingRef.value && !createInputRoutingRef.value.validate()) return;
   // 模型白名单：开启且没有任何条目时阻止提交，与后端 400 对齐。
   if (
     createModelAllowlistState.enabled &&
@@ -6095,6 +6116,7 @@ const handleCreateGroup = async () => {
     // 构建请求数据，包含模型路由配置
     const requestData = {
       ...createGroupForm,
+      input_routing: cloneGroupInputRouting(createForm.input_routing),
       force_openai_fast: normalizeGroupOpenAIFast(
         createForm.platform,
         createForm.force_openai_fast,
@@ -6232,6 +6254,7 @@ const handleCreateGroup = async () => {
 
 const handleEdit = async (group: AdminGroup) => {
   editingGroup.value = group;
+  editForm.input_routing = cloneGroupInputRouting(group.input_routing);
   editForm.name = group.name;
   editForm.description = group.description || "";
   editForm.i18n = Object.fromEntries(
@@ -6366,6 +6389,7 @@ const handleEdit = async (group: AdminGroup) => {
 };
 
 const closeEditModal = () => {
+  editForm.input_routing = cloneGroupInputRouting();
   editModelRoutingRules.value.forEach((rule) => {
     accountSearchRunner.clearKey(getEditRuleSearchKey(rule));
   });
@@ -6428,6 +6452,7 @@ const handleUpdateGroup = async () => {
     return;
   }
   if (!validateGroupReasoningMultipliers(editForm.model_pricing)) return;
+  if (editInputRoutingRef.value && !editInputRoutingRef.value.validate()) return;
   // 模型白名单：开启且没有任何条目时阻止提交，与后端 400 对齐。
   if (
     editModelAllowlistState.enabled &&
@@ -6457,6 +6482,7 @@ const handleUpdateGroup = async () => {
     const { streaming_ack_enabled: ackPolicy, ...groupEditFields } = editForm;
     const payload = {
       ...groupEditFields,
+      input_routing: cloneGroupInputRouting(editForm.input_routing),
       ...(ackPolicy === null ? {} : { streaming_ack_enabled: ackPolicy }),
       force_openai_fast: normalizeGroupOpenAIFast(
         editForm.platform,

@@ -111,6 +111,8 @@ export default {
     copyToClipboard: 'Copy to clipboard',
     copied: 'Copied!',
     importToCcSwitch: 'Import to CCS',
+    setupModelUnavailable: 'This API key does not offer the required model ({model} or a supported newer version). Ask your administrator to enable it, then try again.',
+    setupSystemOneOnly: 'TypeSafe uses /v1/systemone and cannot be imported into these chat clients. Click Use Key for its supported request example.',
     quickSetup: 'Quick Setup',
     quickSetupPlatforms: {
       windows: 'Windows',

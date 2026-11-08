@@ -280,6 +280,15 @@ func attachSelectionProfitGate(ctx context.Context, sel *AccountSelectionResult)
 	if gate, ok := ctx.Value(openAIProfitControlGateCtxKey{}).(*openAIProfitControlGate); ok && gate != nil {
 		sel.profitGate = gate
 	}
+	sel.inputRoutingRequest = groupInputRoutingRequestFromContext(ctx)
+	sel.inputRoutingPass = groupInputRoutingPassFromContext(ctx)
+	if sel.inputRoutingPass != nil {
+		if upstreamModel, ok := ResolvedUpstreamModelFromContext(ctx); ok {
+			pass := *sel.inputRoutingPass
+			pass.requestedModel = upstreamModel
+			sel.inputRoutingPass = &pass
+		}
+	}
 	return sel
 }
 
@@ -288,7 +297,14 @@ func attachSelectionProfitGate(ctx context.Context, sel *AccountSelectionResult)
 // （ProfitControlVetoLatest / GatewayProfitControlVetoLatest）与准入后粘性
 // 绑定，否则这两步会因为看不到调度栈内安装的门而退化为空操作。
 func ContextWithSelectionProfitGate(ctx context.Context, sel *AccountSelectionResult) context.Context {
-	if sel == nil || sel.profitGate == nil {
+	if sel == nil {
+		return ctx
+	}
+	if sel.inputRoutingRequest != nil {
+		ctx = context.WithValue(ctx, groupInputRoutingRequestKey{}, sel.inputRoutingRequest)
+		ctx = context.WithValue(ctx, groupInputRoutingPassKey{}, sel.inputRoutingPass)
+	}
+	if sel.profitGate == nil {
 		return ctx
 	}
 	if existing, ok := ctx.Value(openAIProfitControlGateCtxKey{}).(*openAIProfitControlGate); ok && existing == sel.profitGate {
@@ -334,7 +350,11 @@ func (s *OpenAIGatewayService) ProfitControlVetoLatest(ctx context.Context, sele
 	if s == nil {
 		return selected, false, ""
 	}
-	return profitControlVetoLatest(ctx, selected, s.schedulerSnapshot)
+	snapshot := s.schedulerSnapshot
+	if snapshot == nil && groupInputRoutingRequestFromContext(ctx) != nil {
+		snapshot = &SchedulerSnapshotService{accountRepo: s.accountRepo}
+	}
+	return profitControlVetoLatest(ctx, selected, snapshot)
 }
 
 // bindOpenAIStickySessionDuringSelection preserves the official eager binding

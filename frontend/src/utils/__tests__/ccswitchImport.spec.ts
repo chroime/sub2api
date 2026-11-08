@@ -18,7 +18,7 @@ describe('ccswitchImport utils', () => {
   })
 
   it('defaults Grok Build imports to the current Grok model', () => {
-    expect(GROK_CC_SWITCH_MODEL).toBe('grok-4.5')
+    expect(GROK_CC_SWITCH_MODEL).toBe('grok-4.7')
   })
 
   const baseInput = {
@@ -29,8 +29,8 @@ describe('ccswitchImport utils', () => {
   }
 
   it.each([
-    ['https://api.example.com', 'https://api.example.com'],
-    ['https://api.example.com/', 'https://api.example.com'],
+    ['https://api.example.com', 'https://api.example.com/v1'],
+    ['https://api.example.com/', 'https://api.example.com/v1'],
     ['https://api.example.com/v1', 'https://api.example.com/v1'],
     ['https://api.example.com/v1/', 'https://api.example.com/v1']
   ])('keeps Codex imports on the configured endpoint for base URL %s', (baseUrl, endpoint) => {
@@ -71,7 +71,7 @@ describe('ccswitchImport utils', () => {
     }))
     const bytes = Uint8Array.from(atob(params.get('config') || ''), (char) => char.charCodeAt(0))
     const payload = JSON.parse(new TextDecoder().decode(bytes)) as { config: string }
-    expect(payload.config).toContain('base_url = "https://example.com/网关"')
+    expect(payload.config).toContain('base_url = "https://example.com/网关/v1"')
     expect(payload.config).toContain(`experimental_bearer_token = ${JSON.stringify(apiKey)}`)
     expect(params.get('apiKey')).toBe(apiKey)
   })
@@ -100,7 +100,7 @@ describe('ccswitchImport utils', () => {
   it.each([
     { platform: 'anthropic' as GroupPlatform, clientType: 'claude' as const, app: 'claude' },
     { platform: 'gemini' as GroupPlatform, clientType: 'gemini' as const, app: 'gemini' }
-  ])('does not add a model parameter for $platform imports', ({ platform, clientType, app }) => {
+  ])('sets a supported default model for $platform imports', ({ platform, clientType, app }) => {
     const params = paramsFromDeeplink(
       buildCcSwitchImportDeeplink({
         ...baseInput,
@@ -111,11 +111,11 @@ describe('ccswitchImport utils', () => {
 
     expect(params.get('app')).toBe(app)
     expect(params.get('endpoint')).toBe(baseInput.baseUrl)
-    expect(params.has('model')).toBe(false)
+    expect(params.get('model')).toMatch(/^(claude-sonnet-5-5|gemini-3.8-flash)$/)
     expect(params.has('config')).toBe(false)
   })
 
-  it('keeps Antigravity imports on the selected client endpoint without a model parameter', () => {
+  it('sets the selected Antigravity client model and endpoint', () => {
     const params = paramsFromDeeplink(
       buildCcSwitchImportDeeplink({
         ...baseInput,
@@ -126,8 +126,21 @@ describe('ccswitchImport utils', () => {
 
     expect(params.get('app')).toBe('gemini')
     expect(params.get('endpoint')).toBe(`${baseInput.baseUrl}/antigravity`)
-    expect(params.has('model')).toBe(false)
+    expect(params.get('model')).toMatch(/^(claude-sonnet-5-5|gemini-3.8-flash)$/)
     expect(params.has('config')).toBe(false)
+  })
+
+  it('pins every Claude role to a verified model, including non-Claude providers', () => {
+    const claude = paramsFromDeeplink(buildCcSwitchImportDeeplink({
+      ...baseInput, platform: 'anthropic', clientType: 'claude', availableModels: ['claude-sonnet-5-5', 'claude-opus-5-5']
+    }))
+    expect(claude.get('sonnetModel')).toBe('claude-sonnet-5-5')
+    expect(claude.get('haikuModel')).toBe('claude-sonnet-5-5')
+    expect(claude.get('opusModel')).toBe('claude-opus-5-5')
+    const deepseek = paramsFromDeeplink(buildCcSwitchImportDeeplink({
+      ...baseInput, platform: 'deepseek', clientType: 'claude', availableModels: ['deepseek-v4-pro']
+    }))
+    for (const field of ['model', 'sonnetModel', 'haikuModel', 'opusModel']) expect(deepseek.get(field)).toBe('deepseek-v4-pro')
   })
 })
 

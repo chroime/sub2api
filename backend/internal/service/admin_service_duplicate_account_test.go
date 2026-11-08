@@ -13,6 +13,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	gov "github.com/Wei-Shaw/sub2api/internal/upstreamgovernance"
 	"github.com/stretchr/testify/require"
 )
 
@@ -346,4 +347,54 @@ func TestDuplicateAccountReturnsExistingCopyForSameOperationKey(t *testing.T) {
 	require.NotEqual(t, first.ID, otherAdminCopy.ID)
 	require.Len(t, repo.accounts, 3)
 	require.NotEmpty(t, first.Extra[duplicateAccountOperationIDExtraKey])
+}
+
+func TestDuplicateAccountDoesNotInheritGovernanceIdentity(t *testing.T) {
+	ctx := context.Background()
+	repo := newDuplicateAccountRepoStub()
+	svc := &adminServiceImpl{accountRepo: repo, accountDuplicateRepo: repo}
+	rate := 0.04
+	source := &Account{
+		Name: "governed-upstream", Platform: PlatformOpenAI, Type: AccountTypeAPIKey,
+		Status: StatusActive, Schedulable: true, RateMultiplier: &rate,
+		Credentials: map[string]any{"api_key": "fixture-key", "base_url": "https://fixture.example"},
+		GroupIDs:    []int64{2}, AccountGroups: []AccountGroup{{GroupID: 2, Priority: 7}},
+		Extra: map[string]any{
+			duplicateAccountOperationIDExtraKey: "previous-source-copy-operation",
+			governanceMarkerKey:                 "source-unique-import-marker",
+			gov.GovernanceRateOwnerExtraKey:     "source-rate-owner",
+			gov.GovernancePauseExtraKey:         map[string]any{"token": "source-pause", "identity": "source-identity"},
+			gov.GovernanceReceiptExtraKey:       "source-receipt",
+			"quota_limit":                       1000,
+			"custom_config":                     map[string]any{"enabled": true},
+		},
+	}
+	require.NoError(t, repo.Create(ctx, source))
+
+	duplicate, err := svc.DuplicateAccount(ctx, source.ID, "admin:1", "governance-copy-operation")
+	require.NoError(t, err)
+	require.NotEqual(t, source.ID, duplicate.ID)
+	require.False(t, duplicate.Schedulable)
+	require.Equal(t, source.Credentials, duplicate.Credentials)
+	require.Equal(t, source.GroupIDs, duplicate.GroupIDs)
+	require.Equal(t, source.RateMultiplier, duplicate.RateMultiplier)
+	require.Equal(t, float64(1000), duplicate.Extra["quota_limit"])
+	require.Equal(t, map[string]any{"enabled": true}, duplicate.Extra["custom_config"])
+	for _, field := range []string{governanceMarkerKey, gov.GovernanceRateOwnerExtraKey, gov.GovernancePauseExtraKey, gov.GovernanceReceiptExtraKey} {
+		require.NotContains(t, duplicate.Extra, field, "governance ownership belongs to the original account")
+	}
+	require.False(t, GovernanceCatalogOwnsRate(duplicate), "the independent copy must not be owned by the source's rate automation")
+	require.True(t, GovernanceCatalogOwnsRate(source))
+	require.Equal(t, "source-unique-import-marker", source.Extra[governanceMarkerKey])
+	require.Equal(t, "source-receipt", source.Extra[gov.GovernanceReceiptExtraKey])
+	require.Equal(t, "previous-source-copy-operation", source.Extra[duplicateAccountOperationIDExtraKey])
+	require.Equal(t, map[string]any{"token": "source-pause", "identity": "source-identity"}, source.Extra[gov.GovernancePauseExtraKey])
+	require.True(t, source.Schedulable)
+
+	replayed, err := svc.DuplicateAccount(ctx, source.ID, "admin:1", "governance-copy-operation")
+	require.NoError(t, err)
+	require.Equal(t, duplicate.ID, replayed.ID)
+	require.Len(t, repo.accounts, 2, "retries still recover one independent copy")
+	require.NotEmpty(t, duplicate.Extra[duplicateAccountOperationIDExtraKey])
+	require.NotEqual(t, source.Extra[duplicateAccountOperationIDExtraKey], duplicate.Extra[duplicateAccountOperationIDExtraKey], "a copy must carry this operation's identity, not the source's previous operation")
 }

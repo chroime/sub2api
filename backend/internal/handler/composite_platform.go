@@ -11,6 +11,9 @@ import (
 )
 
 func ensureCompositeTargetPlatform(c *gin.Context, apiKey *service.APIKey, model string) {
+	if UseGroupInputRoutingGateway(c) {
+		return
+	}
 	if c == nil || c.Request == nil || apiKey == nil || apiKey.Group == nil || apiKey.Group.Platform != service.PlatformComposite {
 		return
 	}
@@ -23,6 +26,9 @@ func ensureCompositeTargetPlatform(c *gin.Context, apiKey *service.APIKey, model
 }
 
 func compositeTargetPlatformAllowed(c *gin.Context, apiKey *service.APIKey, model string, allowed ...string) bool {
+	if UseGroupInputRoutingGateway(c) {
+		return true
+	}
 	if c == nil || c.Request == nil || apiKey == nil || apiKey.Group == nil || apiKey.Group.Platform != service.PlatformComposite {
 		return true
 	}
@@ -40,6 +46,9 @@ func compositeTargetPlatformAllowed(c *gin.Context, apiKey *service.APIKey, mode
 }
 
 func compositeTargetPlatformResolved(c *gin.Context, apiKey *service.APIKey, model string) bool {
+	if UseGroupInputRoutingGateway(c) {
+		return true
+	}
 	if c == nil || c.Request == nil || apiKey == nil || apiKey.Group == nil || apiKey.Group.Platform != service.PlatformComposite {
 		return true
 	}

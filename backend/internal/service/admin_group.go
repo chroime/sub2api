@@ -430,6 +430,10 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 	}
 
 	platform := NormalizeGroupPlatform(input.Platform)
+	inputRouting, err := s.normalizeAndValidateGroupInputRouting(ctx, 0, platform, input.InputRouting)
+	if err != nil {
+		return nil, err
+	}
 	// 固定账号 manifest 配置：账号绑定发生在创建之后，创建时无法校验成员关系，
 	// 拒绝开启并在创建后的编辑里配置。
 	if normalizeCodexModelsManifestConfig(platform, input.CodexModelsManifestConfig).Enabled {
@@ -662,6 +666,7 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 		FallbackGroupID:                      input.FallbackGroupID,
 		FallbackGroupIDOnInvalidRequest:      fallbackOnInvalidRequest,
 		ModelRouting:                         input.ModelRouting,
+		InputRouting:                         inputRouting,
 		MCPXMLInject:                         mcpXMLInject,
 		SupportedModelScopes:                 input.SupportedModelScopes,
 		AllowMessagesDispatch:                input.AllowMessagesDispatch,
@@ -1094,6 +1099,19 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 		}
 	}
 	group.FallbackGroupIDOnInvalidRequest = fallbackOnInvalidRequest
+
+	// Validate retained routing targets again when changing the source platform.
+	if input.InputRouting != nil || group.Platform != previousPlatform {
+		inputRouting := group.InputRouting
+		if input.InputRouting != nil {
+			inputRouting = *input.InputRouting
+		}
+		inputRouting, err = s.normalizeAndValidateGroupInputRouting(ctx, id, group.Platform, inputRouting)
+		if err != nil {
+			return nil, err
+		}
+		group.InputRouting = inputRouting
+	}
 
 	// 模型路由配置
 	if input.ModelRouting != nil {

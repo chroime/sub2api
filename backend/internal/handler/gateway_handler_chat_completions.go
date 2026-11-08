@@ -104,6 +104,16 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 
 	setOpsRequestContext(c, reqModel, reqStream)
 	setOpsEndpointContext(c, "", int16(service.RequestTypeFromLegacy(reqStream, false)))
+	bindGroupInputRouting(c, apiKey, body, "chat", reqModel, reqStream)
+	_, inputRoutingMatched := service.GroupInputRoutingDecisionFromContext(c.Request.Context())
+	if inputRoutingMatched {
+		if policyBody, changed, err := applyGroupInputRoutingReasoningEffortPolicy(c, apiKey, body, ""); err != nil {
+			respondOpenAIReasoningEffortPolicyError(c, err, h.chatCompletionsErrorResponse)
+			return
+		} else if changed {
+			body = policyBody
+		}
+	}
 	pricingCtx, pricingAt := service.WithGatewayTokenRequestPricing(c.Request.Context())
 	c.Request = c.Request.WithContext(pricingCtx)
 
@@ -192,7 +202,7 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 	}
 	// 3. Account selection + failover loop
 	fs := NewFailoverState(h.maxAccountSwitches, false)
-	if groupPlatform == service.PlatformGemini {
+	if groupPlatform == service.PlatformGemini && !inputRoutingMatched {
 		fs = NewFailoverState(h.maxAccountSwitchesGemini, false)
 	}
 
@@ -284,7 +294,7 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 		}
 		accountReleaseFunc = wrapReleaseOnDone(c.Request.Context(), accountReleaseFunc)
 
-		if groupPlatform == service.PlatformGemini && account.Platform != service.PlatformGemini {
+		if groupPlatform == service.PlatformGemini && account.Platform != service.PlatformGemini && !inputRoutingMatched {
 			if accountReleaseFunc != nil {
 				accountReleaseFunc()
 			}
@@ -303,7 +313,9 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 		}
 		var result *service.ForwardResult
 		setActualUpstreamEndpoint(c, "")
-		if account.Platform == service.PlatformGemini {
+		if inputRoutingMatched {
+			result, err = h.forwardGroupInputRouting(c.Request.Context(), c, account, service.CompositeRouteEndpointChatCompletions, forwardBody, parsedReq, selectionSessionHash, false)
+		} else if account.Platform == service.PlatformGemini {
 			if h.geminiCompatService == nil {
 				h.chatCompletionsErrorResponse(c, http.StatusBadGateway, "upstream_error", "Gemini compatibility service is not configured")
 				if accountReleaseFunc != nil {
@@ -351,7 +363,7 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 			stampForwardRequestedReasoningEffort(result, service.RequestedReasoningEffortFromContext(c.Request.Context()))
 			channelUsageFields := clientRequestedUsageFields(c, channelMapping, reqModel, result.UpstreamModel)
 			h.submitUsageRecordTask(c.Request.Context(), func(ctx context.Context) {
-				if err := h.gatewayService.RecordUsage(ctx, &service.RecordUsageInput{
+				if err := service.RecordGroupInputRoutingUsage(ctx, h.gatewayService, h.openAIGatewayService, &service.RecordUsageInput{
 					Result:             result,
 					QuotaPlatform:      quotaPlatform,
 					APIKey:             apiKey,

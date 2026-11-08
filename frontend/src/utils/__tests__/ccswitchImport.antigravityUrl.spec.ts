@@ -16,7 +16,7 @@ describe('Antigravity CC Switch endpoint', () => {
       expect(url.searchParams.get('endpoint')).toBe(endpoint)
       expect(url.searchParams.get('app')).toBe(clientType)
       expect(url.searchParams.get('homepage')).toBe(baseUrl)
-      expect(url.searchParams.has('model')).toBe(false)
+      expect(url.searchParams.get('model')).toBe(clientType === 'gemini' ? 'gemini-3.8-flash' : 'claude-sonnet-5-5')
     }
   })
 })

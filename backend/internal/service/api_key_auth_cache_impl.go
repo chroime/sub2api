@@ -14,7 +14,7 @@ import (
 	"github.com/dgraph-io/ristretto"
 )
 
-const apiKeyAuthSnapshotVersion = 32 // v32: preserve local billing/voice/ACK plus upstream privacy and RPM projections
+const apiKeyAuthSnapshotVersion = 33 // v33: preserve group input-routing rules for gateway scheduling
 
 type apiKeyAuthCacheConfig struct {
 	l1Size        int
@@ -423,6 +423,7 @@ func (s *APIKeyService) snapshotFromAPIKey(ctx context.Context, apiKey *APIKey) 
 			FallbackGroupIDOnInvalidRequest:      apiKey.Group.FallbackGroupIDOnInvalidRequest,
 			ModelRouting:                         apiKey.Group.ModelRouting,
 			ModelRoutingEnabled:                  apiKey.Group.ModelRoutingEnabled,
+			InputRouting:                         CloneGroupInputRouting(apiKey.Group.InputRouting),
 			MCPXMLInject:                         apiKey.Group.MCPXMLInject,
 			SupportedModelScopes:                 apiKey.Group.SupportedModelScopes,
 			AllowMessagesDispatch:                apiKey.Group.AllowMessagesDispatch,
@@ -539,6 +540,7 @@ func (s *APIKeyService) snapshotToAPIKey(key string, snapshot *APIKeyAuthSnapsho
 			FallbackGroupIDOnInvalidRequest:      snapshot.Group.FallbackGroupIDOnInvalidRequest,
 			ModelRouting:                         snapshot.Group.ModelRouting,
 			ModelRoutingEnabled:                  snapshot.Group.ModelRoutingEnabled,
+			InputRouting:                         CloneGroupInputRouting(snapshot.Group.InputRouting),
 			MCPXMLInject:                         snapshot.Group.MCPXMLInject,
 			SupportedModelScopes:                 snapshot.Group.SupportedModelScopes,
 			AllowMessagesDispatch:                snapshot.Group.AllowMessagesDispatch,

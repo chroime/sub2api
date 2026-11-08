@@ -161,6 +161,7 @@ func GroupFromServiceAdmin(g *service.Group) *AdminGroup {
 		ModelPricing:                         g.ModelPricing,
 		ModelRouting:                         g.ModelRouting,
 		ModelRoutingEnabled:                  g.ModelRoutingEnabled,
+		InputRouting:                         service.CloneGroupInputRouting(g.InputRouting),
 		MCPXMLInject:                         g.MCPXMLInject,
 		DefaultMappedModel:                   g.DefaultMappedModel,
 		MessagesDispatchModelConfig:          g.MessagesDispatchModelConfig,

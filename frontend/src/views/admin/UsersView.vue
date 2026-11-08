@@ -264,12 +264,14 @@
             </button>
 
             <button
-              class="btn btn-secondary flex-1 md:flex-initial"
+              class="btn btn-secondary px-2 md:px-3"
               data-test="bulk-email-users"
+              :title="t('admin.users.bulkEmail.action')"
+              :aria-label="t('admin.users.bulkEmail.action')"
               @click="showBulkEmailModal = true"
             >
-              <Icon name="mail" size="md" class="mr-2" />
-              {{ t('admin.users.bulkEmail.action') }}
+              <Icon name="mail" size="sm" class="md:mr-1.5" />
+              <span class="hidden md:inline">{{ t('admin.users.bulkEmail.action') }}</span>
             </button>
 
             <!-- Create User Button (full width on mobile, auto width on desktop) -->

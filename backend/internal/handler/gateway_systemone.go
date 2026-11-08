@@ -24,6 +24,11 @@ const systemOneOnlyPlatformMessage = "TypeSafe models are only available through
 // foreign payloads (and the account key) to the wrong upstream path and feed
 // the resulting auth failures back into account state.
 func rejectSystemOneOnlyPlatform(c *gin.Context, apiKey *service.APIKey, writeError func(*gin.Context, int, string, string)) bool {
+	if UseGroupInputRoutingGateway(c) {
+		// The matched rule selects a supported text account; the source group
+		// remains the billing identity and is not the upstream transport.
+		return false
+	}
 	if _, forced := middleware2.GetForcePlatformFromContext(c); forced {
 		return false
 	}

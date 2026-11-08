@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { nextTick } from 'vue'
 
@@ -286,7 +286,11 @@ const readBlobText = (blob: Blob) => new Promise<string>((resolve, reject) => {
 })
 
 describe('user KeysView column settings', () => {
+  afterEach(() => vi.unstubAllGlobals())
   beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, text: async () => JSON.stringify({ data: [
+      { id: 'claude-sonnet-5-5' }, { id: 'claude-opus-5-5' }, { id: 'gpt-6.1-sol' }, { id: 'grok-4.7' }, { id: 'gemini-3.8-flash' }
+    ] }) }))
     localStorage.clear()
 
     listKeys.mockReset()
@@ -522,6 +526,93 @@ describe('user KeysView column settings', () => {
     expect(wrapper.get('[data-test="current-concurrency"]').text()).toBe('3')
   })
 
+  it('does not download a script when the key model catalog fails', async () => {
+    vi.mocked(fetch).mockRejectedValueOnce(new Error('network unavailable'))
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    const wrapper = await mountView()
+    await getButtonByText(wrapper, 'Quick Setup').trigger('click')
+    await getButtonByText(wrapper, 'Linux').trigger('click')
+    await flushPromises()
+    expect(click).not.toHaveBeenCalled()
+    expect(showError).toHaveBeenCalledWith('keys.useKeyModal.codexModelCatalog.errorDescription')
+    expect(showSuccess).not.toHaveBeenCalled()
+    click.mockRestore()
+  })
+
+  it('keeps a delayed Use Key catalog response separate from editing another key', async () => {
+    const first = createApiKey({ id: 1, name: 'first', key: 'sk-first', group_id: 7 })
+    const second = createApiKey({ id: 2, name: 'second', key: 'sk-second', group_id: 7 })
+    listKeys.mockResolvedValue({ items: [first, second], total: 2, page: 1, page_size: 20, pages: 1 })
+    let finish!: (response: Response) => void
+    vi.mocked(fetch).mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+    updateKey.mockResolvedValue(second)
+    const wrapper = await mountView()
+    await getButtonByText(wrapper, 'Use Key').trigger('click')
+    // DataTable's two action slots render two sets per row; edit the second key.
+    await wrapper.findAll('button').filter(button => button.text().includes('Edit'))[2].trigger('click')
+    finish({ ok: true, text: async () => '{"data":[{"id":"gpt-6.1-sol"}]}' } as Response)
+    await flushPromises()
+    await wrapper.get('#key-form').trigger('submit')
+    await flushPromises()
+    expect(updateKey).toHaveBeenCalledWith(2, expect.objectContaining({ name: 'second' }))
+    expect(updateKey).not.toHaveBeenCalledWith(1, expect.anything())
+  })
+
+  it('ignores an older Use Key response after a different row is selected', async () => {
+    listKeys.mockResolvedValue({ items: [createApiKey({ id: 1, key: 'sk-first' }), createApiKey({ id: 2, key: 'sk-second' })], total: 2 })
+    let finishFirst!: (response: Response) => void
+    vi.mocked(fetch).mockImplementationOnce(() => new Promise(resolve => { finishFirst = resolve }))
+    const wrapper = await mountView()
+    const buttons = wrapper.findAll('button').filter(button => button.text().includes('Use Key'))
+    await buttons[0].trigger('click')
+    await buttons[2].trigger('click')
+    await flushPromises()
+    finishFirst({ ok: true, text: async () => '{"data":[{"id":"gpt-6.1-sol"}]}' } as Response)
+    await flushPromises()
+    expect(wrapper.findComponent({ name: 'UseKeyModal' }).props('apiKey')).toBe('sk-second')
+  })
+
+  it('refuses a known older model before downloading a configuration', async () => {
+    listKeys.mockResolvedValue({ items: [createApiKey({ group_id: 7, group: { platform: 'gemini' } as ApiKey['group'] })], total: 1 })
+    vi.mocked(fetch).mockResolvedValueOnce({ ok: true, text: async () => '{"data":[{"id":"gemini-2.5-pro"}]}' } as Response)
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    const wrapper = await mountView()
+    await getButtonByText(wrapper, 'Quick Setup').trigger('click')
+    await getButtonByText(wrapper, 'Linux').trigger('click')
+    await flushPromises()
+    expect(click).not.toHaveBeenCalled()
+    expect(showError).toHaveBeenCalledWith('keys.setupModelUnavailable')
+    click.mockRestore()
+  })
+
+  it('explains TypeSafe support without fetching a catalog or importing an incompatible client', async () => {
+    listKeys.mockResolvedValue({ items: [createApiKey({ group_id: 7, group: { platform: 'typesafe' } as ApiKey['group'] })], total: 1 })
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null)
+    const wrapper = await mountView()
+    await getButtonByText(wrapper, 'Quick Setup').trigger('click')
+    await getButtonByText(wrapper, 'Linux').trigger('click')
+    await getButtonByText(wrapper, 'Import to CCS').trigger('click')
+    await flushPromises()
+    expect(fetch).not.toHaveBeenCalled()
+    expect(open).not.toHaveBeenCalled()
+    expect(showError).toHaveBeenCalledWith('keys.setupSystemOneOnly')
+    await getButtonByText(wrapper, 'Use Key').trigger('click')
+    expect(wrapper.findComponent({ name: 'UseKeyModal' }).props('platform')).toBe('typesafe')
+    expect(wrapper.findComponent({ name: 'UseKeyModal' }).props('show')).toBe(true)
+    open.mockRestore()
+  })
+
+  it('does not import a CC Switch provider with an empty model catalog', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({ ok: true, text: async () => '{"data":[]}' } as Response)
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null)
+    const wrapper = await mountView()
+    await getButtonByText(wrapper, 'Import to CCS').trigger('click')
+    await flushPromises()
+    expect(open).not.toHaveBeenCalled()
+    expect(showError).toHaveBeenCalledWith('keys.useKeyModal.codexModelCatalog.errorDescription')
+    open.mockRestore()
+  })
+
   it('opens the Codex quick setup platform menu from the action column', async () => {
     const wrapper = await mountView()
 
@@ -577,10 +668,11 @@ describe('user KeysView column settings', () => {
       const content = await readBlobText(blob)
       await vi.waitFor(() => expect(revokeObjectURL).toHaveBeenCalledWith('blob:quick-setup'))
 
-      expect(content).toContain('%USERPROFILE%\\.claude')
+      expect(content).toContain("'.claude'")
       expect(content).toContain('"ANTHROPIC_AUTH_TOKEN": "sk-claude-row-key"')
       expect(content).toContain('"ANTHROPIC_BASE_URL": "https://api.oreniva.com"')
-      expect(content).not.toContain('OPENAI_API_KEY')
+      expect(content).toContain('"model": "claude-sonnet-5-5"')
+      expect(fetch).toHaveBeenCalledWith('https://api.oreniva.com/v1/models?endpoint=messages', expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer sk-claude-row-key' }) }))
       expect(showSuccess).toHaveBeenCalledWith('keys.quickSetupDownloadSuccess')
     } finally {
       clickSpy.mockRestore()

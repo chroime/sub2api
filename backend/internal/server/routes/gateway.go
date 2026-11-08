@@ -37,6 +37,7 @@ func RegisterGatewayRoutes(
 	endpointNorm := handler.InboundEndpointMiddleware()
 	compositeTarget := compositeTargetPlatformMiddleware(compositeResolver)
 	compositeGeminiTarget := compositeGeminiTargetPlatformMiddleware(compositeResolver)
+	inputRouting := h.Gateway.GroupInputRoutingMiddleware()
 
 	// 未分组 Key 拦截中间件（按协议格式区分错误响应）
 	requireGroupAnthropic := middleware.RequireGroupAssignment(settingService, middleware.AnthropicErrorWriter)
@@ -48,6 +49,9 @@ func RegisterGatewayRoutes(
 	downstreamUsageProjection := middleware.DownstreamUsageProjection()
 
 	isOpenAIResponsesCompatibleGatewayPlatform := func(c *gin.Context) bool {
+		if handler.UseGroupInputRoutingGateway(c) {
+			return false
+		}
 		// openai、grok 与多协议 API Key 供应商经 OpenAI 网关转发（平台清单）。
 		return domain.UsesOpenAIGateway(getGroupPlatform(c))
 	}
@@ -187,6 +191,7 @@ func RegisterGatewayRoutes(
 	gateway.Use(downstreamUsageProjection)
 	gateway.GET("/sub2api/billing", h.Gateway.KeyBillingInfo)
 	gateway.Use(groupModelAllowlist)
+	gateway.Use(inputRouting)
 	gateway.Use(compositeTarget)
 	gateway.Use(requireGroupAnthropic)
 	gateway.Use(h.Gateway.BalancePrechargeLifecycle())
@@ -363,6 +368,7 @@ func RegisterGatewayRoutes(
 	gemini.Use(endpointNorm)
 	gemini.Use(middleware.APIKeyAuthWithSubscriptionGoogle(apiKeyService, subscriptionService, cfg))
 	gemini.Use(groupModelAllowlist)
+	gemini.Use(inputRouting)
 	gemini.Use(compositeGeminiTarget)
 	gemini.Use(requireGroupGoogle)
 	gemini.Use(h.Gateway.BalancePrechargeLifecycle())
@@ -390,7 +396,7 @@ func RegisterGatewayRoutes(
 	// 根路径别名共用中间件链：白名单准入在 apiKeyAuth 之后、compositeTarget
 	// 之前，避免逐条路由手工维护链导致漏挂。
 	rootRoute := func(method, path string, limit gin.HandlerFunc, handler gin.HandlerFunc) {
-		r.Handle(method, path, limit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), groupModelAllowlist, compositeTarget, requireGroupAnthropic, h.Gateway.BalancePrechargeLifecycle(), downstreamUsageProjection, handler)
+		r.Handle(method, path, limit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), groupModelAllowlist, inputRouting, compositeTarget, requireGroupAnthropic, h.Gateway.BalancePrechargeLifecycle(), downstreamUsageProjection, handler)
 	}
 	for _, prefix := range []string{"/api/v3", "/v3", "/v1", ""} {
 		rootRoute(http.MethodPost, prefix+"/contents/generations/tasks", bodyLimit, h.OpenAIGateway.SeedanceTasks)
@@ -407,7 +413,7 @@ func RegisterGatewayRoutes(
 	rootRoute(http.MethodGet, "/models/:model", bodyLimit, h.Gateway.Models)
 	rootRoute(http.MethodPost, "/messages/count_tokens", bodyLimit, countTokensHandler)
 	codexDirect := r.Group("/backend-api/codex")
-	codexDirect.Use(bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), downstreamUsageProjection, groupModelAllowlist, compositeTarget, requireGroupAnthropic, h.Gateway.BalancePrechargeLifecycle())
+	codexDirect.Use(bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), downstreamUsageProjection, groupModelAllowlist, inputRouting, compositeTarget, requireGroupAnthropic, h.Gateway.BalancePrechargeLifecycle())
 	{
 		codexDirect.POST("/realtime/calls", h.OpenAIGateway.Live)
 		codexDirect.GET("/:call_id", h.OpenAIGateway.LiveSideband)
@@ -538,6 +544,7 @@ func RegisterGatewayRoutes(
 	antigravityV1.Use(gin.HandlerFunc(apiKeyAuth))
 	antigravityV1.Use(downstreamUsageProjection)
 	antigravityV1.Use(groupModelAllowlist)
+	antigravityV1.Use(inputRouting)
 	antigravityV1.Use(requireGroupAnthropic)
 	antigravityV1.Use(h.Gateway.BalancePrechargeLifecycle())
 	{
@@ -555,6 +562,7 @@ func RegisterGatewayRoutes(
 	antigravityV1Beta.Use(middleware.ForcePlatform(service.PlatformAntigravity))
 	antigravityV1Beta.Use(middleware.APIKeyAuthWithSubscriptionGoogle(apiKeyService, subscriptionService, cfg))
 	antigravityV1Beta.Use(groupModelAllowlist)
+	antigravityV1Beta.Use(inputRouting)
 	antigravityV1Beta.Use(requireGroupGoogle)
 	antigravityV1Beta.Use(h.Gateway.BalancePrechargeLifecycle())
 	{
@@ -593,6 +601,23 @@ func compositeTargetPlatformMiddleware(resolver *service.CompositeRouteResolver)
 	}
 	return func(c *gin.Context) {
 		apiKey, ok := middleware.GetAPIKeyFromContext(c)
+		if handler.UseGroupInputRoutingGateway(c) {
+			// Input routing owns the account pool and forwarding model. Resolve
+			// the source route only when needed to retain its reasoning policy,
+			// including model-scoped mappings for an explicit public alias.
+			if ok && apiKey != nil && apiKey.Group != nil && apiKey.Group.Platform == service.PlatformComposite &&
+				(apiKey.Group.MaxReasoningEffort != "" || len(apiKey.Group.ReasoningEffortMappings) > 0) {
+				model, _ := service.RequestedPublicModelFromContext(c.Request.Context())
+				decision, err := resolver.Resolve(c.Request.Context(), apiKey.Group.ID, model, compositeRouteEndpointForPath(c.Request.URL.Path))
+				if err != nil {
+					c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": gin.H{"type": "server_error", "message": "Failed to resolve source group reasoning policy"}})
+					return
+				}
+				handler.BindGroupInputRoutingReasoningRoute(c, decision)
+			}
+			c.Next()
+			return
+		}
 		if !ok || apiKey == nil || apiKey.Group == nil || apiKey.Group.Platform != service.PlatformComposite {
 			c.Next()
 			return
@@ -651,6 +676,12 @@ func compositeGeminiTargetPlatformMiddleware(resolver *service.CompositeRouteRes
 		resolver = service.NewCompositeRouteResolver(nil)
 	}
 	return func(c *gin.Context) {
+		if c.Request != nil {
+			if _, matched := service.GroupInputRoutingDecisionFromContext(c.Request.Context()); matched {
+				c.Next()
+				return
+			}
+		}
 		apiKey, ok := middleware.GetAPIKeyFromContext(c)
 		if ok && apiKey != nil && apiKey.Group != nil && apiKey.Group.Platform == service.PlatformComposite {
 			model := compositeGeminiModelFromParams(c)

@@ -1082,11 +1082,13 @@
     <!-- Use Key Modal -->
     <UseKeyModal
       :show="showUseKeyModal"
-      :api-key="selectedKey?.key || ''"
+      :available-models="selectedKeySetupModels"
+      :available-codex-models="selectedKeyCodexModels"
+      :api-key="selectedUseKey?.key || ''"
       :base-url="publicSettings?.api_base_url || ''"
-      :platform="selectedKey?.group?.platform || null"
-      :claude-code-only="selectedKey?.group?.claude_code_only || false"
-      :allow-messages-dispatch="selectedKey?.group?.allow_messages_dispatch || false"
+      :platform="selectedUseKey ? resolveKeyGroupPlatform(selectedUseKey) : null"
+      :claude-code-only="selectedUseKey?.group?.claude_code_only || false"
+      :allow-messages-dispatch="selectedUseKey?.group?.allow_messages_dispatch || false"
       @close="closeUseKeyModal"
     />
 
@@ -1156,6 +1158,7 @@
           type="button"
           class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
           @click="selectedQuickSetupKey && downloadCodexQuickSetup(selectedQuickSetupKey, option.value)"
+          :disabled="quickSetupBusy"
         >
           <component :is="option.icon" class="h-4 w-4 text-gray-400" aria-hidden="true" />
           <span>{{ option.label }}</span>
@@ -1276,6 +1279,7 @@ import {
   buildCodexQuickSetupScript,
   type CodexQuickSetupPlatform
 } from '@/utils/codexQuickSetup'
+import { ClientSetupModelUnavailableError, CLIENT_SETUP_DEFAULT_MODELS, fetchClientSetupCatalog } from '@/utils/clientSetupModels'
 
 // Helper to format date for datetime-local input
 const formatDateTimeLocal = (isoDate: string): string => {
@@ -1442,6 +1446,12 @@ const showDeleteDialog = ref(false)
 const showResetQuotaDialog = ref(false)
 const showResetRateLimitDialog = ref(false)
 const showUseKeyModal = ref(false)
+const selectedKeySetupModels = ref<string[]>()
+const selectedKeyCodexModels = ref<string[]>()
+const selectedUseKey = ref<ApiKey | null>(null)
+let useKeyCatalogRequestID = 0
+let useKeyCatalogController: AbortController | null = null
+const quickSetupBusy = ref(false)
 const showCcsClientSelect = ref(false)
 const showColumnDropdown = ref(false)
 const pendingCcsRow = ref<ApiKey | null>(null)
@@ -1726,14 +1736,45 @@ const loadPublicSettings = async () => {
   }
 }
 
-const openUseKeyModal = (key: ApiKey) => {
-  selectedKey.value = key
-  showUseKeyModal.value = true
+const openUseKeyModal = async (key: ApiKey) => {
+  useKeyCatalogController?.abort()
+  const requestID = ++useKeyCatalogRequestID
+  const controller = new AbortController()
+  useKeyCatalogController = controller
+  const timeout = setTimeout(() => controller.abort(), 15000)
+  try {
+    if (resolveKeyGroupPlatform(key) !== 'typesafe') {
+      const [native, codex] = await Promise.allSettled([
+        fetchClientSetupCatalog(resolveApiBaseUrl(), key.key, controller.signal, 'native'),
+        fetchClientSetupCatalog(resolveApiBaseUrl(), key.key, controller.signal, 'responses')
+      ])
+      if (requestID !== useKeyCatalogRequestID) return
+      if (native.status === 'rejected' && codex.status === 'rejected') throw native.reason
+      selectedKeySetupModels.value = native.status === 'fulfilled' ? native.value.modelIds : []
+      selectedKeyCodexModels.value = codex.status === 'fulfilled' ? codex.value.modelIds : []
+    } else {
+      selectedKeySetupModels.value = undefined
+      selectedKeyCodexModels.value = undefined
+    }
+    selectedUseKey.value = key
+    showUseKeyModal.value = true
+  } catch (error) {
+    if (requestID !== useKeyCatalogRequestID) return
+    appStore.showError(error instanceof ClientSetupModelUnavailableError
+      ? t('keys.setupModelUnavailable', { model: CLIENT_SETUP_DEFAULT_MODELS[resolveKeyGroupPlatform(key) || 'openai'] ?? resolveKeyGroupPlatform(key) })
+      : t('keys.useKeyModal.codexModelCatalog.errorDescription'))
+  } finally {
+    clearTimeout(timeout)
+    if (requestID === useKeyCatalogRequestID) useKeyCatalogController = null
+  }
 }
 
 const closeUseKeyModal = () => {
+  useKeyCatalogRequestID += 1
+  useKeyCatalogController?.abort()
+  useKeyCatalogController = null
   showUseKeyModal.value = false
-  selectedKey.value = null
+  selectedUseKey.value = null
 }
 
 const closeQuickSetupMenu = () => {
@@ -1781,13 +1822,22 @@ const resolveKeyGroupPlatform = (key: ApiKey): GroupPlatform | null => {
   return groups.value.find((group) => group.id === key.group_id)?.platform ?? null
 }
 
-const downloadCodexQuickSetup = (key: ApiKey, platform: CodexQuickSetupPlatform) => {
+const downloadCodexQuickSetup = async (key: ApiKey, platform: CodexQuickSetupPlatform) => {
+  if (resolveKeyGroupPlatform(key) === 'typesafe') {
+    appStore.showError(t('keys.setupSystemOneOnly'))
+    closeQuickSetupMenu()
+    return
+  }
+  if (quickSetupBusy.value) return
+  quickSetupBusy.value = true
   try {
+    const catalog = await fetchClientSetupCatalog(resolveApiBaseUrl(), key.key, AbortSignal.timeout(15000), resolveKeyGroupPlatform(key) === 'anthropic' ? 'native' : 'responses')
     const script = buildCodexQuickSetupScript({
       platform,
       apiKey: key.key,
       baseUrl: resolveApiBaseUrl(),
       groupPlatform: resolveKeyGroupPlatform(key),
+      availableModels: catalog.modelIds,
     })
     const blob = new Blob([script.content], { type: `${script.mimeType};charset=utf-8` })
     const url = URL.createObjectURL(blob)
@@ -1800,9 +1850,11 @@ const downloadCodexQuickSetup = (key: ApiKey, platform: CodexQuickSetupPlatform)
     setTimeout(() => URL.revokeObjectURL(url), 0)
     appStore.showSuccess(t('keys.quickSetupDownloadSuccess'))
   } catch (error) {
-    console.error('Failed to download quick setup script:', error)
-    appStore.showError(t('keys.quickSetupDownloadFailed'))
+    appStore.showError(error instanceof ClientSetupModelUnavailableError
+      ? t('keys.setupModelUnavailable', { model: CLIENT_SETUP_DEFAULT_MODELS[resolveKeyGroupPlatform(key) || 'openai'] ?? resolveKeyGroupPlatform(key) })
+      : t('keys.useKeyModal.codexModelCatalog.errorDescription'))
   } finally {
+    quickSetupBusy.value = false
     closeQuickSetupMenu()
   }
 }
@@ -2148,7 +2200,7 @@ const resetRateLimitUsage = async () => {
 }
 
 const importToCcswitch = (row: ApiKey) => {
-  const platform = row.group?.platform || 'anthropic'
+  const platform = resolveKeyGroupPlatform(row) || 'anthropic'
 
   // For antigravity platform, show client selection dialog
   if (platform === 'antigravity') {
@@ -2161,33 +2213,32 @@ const importToCcswitch = (row: ApiKey) => {
   executeCcsImport(row, platform === 'gemini' ? 'gemini' : 'claude')
 }
 
-const executeCcsImport = (row: ApiKey, clientType: CcSwitchClientType) => {
-  const baseUrl = publicSettings.value?.api_base_url || window.location.origin
-  const platform = row.group?.platform || 'anthropic'
-
-  const usageScript = CC_SWITCH_USAGE_SCRIPT
-  const providerName = (publicSettings.value?.site_name || 'sub2api').trim() || 'sub2api'
-  const deeplink = buildCcSwitchImportDeeplink({
-    baseUrl,
-    platform,
-    clientType,
-    providerName,
-    apiKey: row.key,
-    usageScript
-  })
-
+const executeCcsImport = async (row: ApiKey, clientType: CcSwitchClientType) => {
+  const baseUrl = resolveApiBaseUrl()
+  const platform = resolveKeyGroupPlatform(row) || 'anthropic'
+  if (platform === 'typesafe') {
+    appStore.showError(t('keys.setupSystemOneOnly'))
+    return
+  }
   try {
+    const catalog = await fetchClientSetupCatalog(baseUrl, row.key, AbortSignal.timeout(15000), platform === 'openai' || platform === 'grok' ? 'responses' : 'native')
+    const deeplink = buildCcSwitchImportDeeplink({
+      baseUrl,
+      platform,
+      clientType,
+      providerName: (publicSettings.value?.site_name || 'sub2api').trim() || 'sub2api',
+      apiKey: row.key,
+      usageScript: CC_SWITCH_USAGE_SCRIPT,
+      availableModels: catalog.modelIds
+    })
     window.open(deeplink, '_self')
-
-    // Check if the protocol handler worked by detecting if we're still focused
     setTimeout(() => {
-      if (document.hasFocus()) {
-        // Still focused means the protocol handler likely failed
-        appStore.showError(t('keys.ccSwitchNotInstalled'))
-      }
+      if (document.hasFocus()) appStore.showError(t('keys.ccSwitchNotInstalled'))
     }, 100)
   } catch (error) {
-    appStore.showError(t('keys.ccSwitchNotInstalled'))
+    appStore.showError(error instanceof ClientSetupModelUnavailableError
+      ? t('keys.setupModelUnavailable', { model: CLIENT_SETUP_DEFAULT_MODELS[platform] ?? platform })
+      : t('keys.useKeyModal.codexModelCatalog.errorDescription'))
   }
 }
 
@@ -2227,6 +2278,8 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  useKeyCatalogRequestID += 1
+  useKeyCatalogController?.abort()
   document.removeEventListener('click', closeGroupSelector)
   if (resetTimer) clearInterval(resetTimer)
 })

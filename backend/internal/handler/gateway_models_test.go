@@ -1933,3 +1933,119 @@ func TestGatewayModels_CompositeCodexRouteLookupErrorKeepsFallback(t *testing.T)
 		})
 	}
 }
+
+func TestGatewayModels_ExplicitEndpointScopesCompositeNativeCatalog(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	const groupID int64 = 7810
+	accounts := &gatewayModelsAccountRepoStub{byGroup: map[int64][]service.Account{groupID: {
+		{ID: 1, Platform: service.PlatformOpenAI, Credentials: map[string]any{"model_mapping": map[string]any{
+			"safe-account": "gpt-5", "shadow-exact": "gpt-5", "shadow-prefix-one": "gpt-5", "rescued-alias": "gpt-5",
+		}}},
+		{ID: 2, Platform: service.PlatformTypeSafe, Credentials: map[string]any{"model_mapping": map[string]any{"systemone-account": "jev-latest"}}},
+	}}}
+	routes := &gatewayModelsRouteRepoStub{routes: []service.CompositeModelRoute{
+		{ID: 1, PublicModel: "messages-only", TargetPlatform: service.PlatformAnthropic, MatchType: service.CompositeRouteMatchExact, Endpoint: service.CompositeRouteEndpointMessages, Enabled: true},
+		{ID: 2, PublicModel: "responses-only", TargetPlatform: service.PlatformOpenAI, MatchType: service.CompositeRouteMatchExact, Endpoint: service.CompositeRouteEndpointResponses, Enabled: true},
+		{ID: 3, PublicModel: "chat-only", TargetPlatform: service.PlatformOpenAI, MatchType: service.CompositeRouteMatchExact, Endpoint: service.CompositeRouteEndpointChatCompletions, Enabled: true},
+		{ID: 4, PublicModel: "gemini-only", TargetPlatform: service.PlatformGemini, MatchType: service.CompositeRouteMatchExact, Endpoint: service.CompositeRouteEndpointGemini, Enabled: true},
+		{ID: 5, PublicModel: "all-endpoints", TargetPlatform: service.PlatformOpenAI, MatchType: service.CompositeRouteMatchExact, Endpoint: service.CompositeRouteEndpointAny, Enabled: true},
+		{ID: 6, PublicModel: "systemone-alias", TargetPlatform: service.PlatformTypeSafe, MatchType: service.CompositeRouteMatchExact, Endpoint: service.CompositeRouteEndpointMessages, Enabled: true},
+		{ID: 7, PublicModel: "shadow-exact", TargetPlatform: service.PlatformTypeSafe, MatchType: service.CompositeRouteMatchExact, Endpoint: service.CompositeRouteEndpointAny, Enabled: true},
+		{ID: 8, PublicModel: "shadow-prefix-", TargetPlatform: service.PlatformTypeSafe, MatchType: service.CompositeRouteMatchPrefix, Endpoint: service.CompositeRouteEndpointAny, Enabled: true},
+		{ID: 9, PublicModel: "rescued-alias", TargetPlatform: service.PlatformTypeSafe, MatchType: service.CompositeRouteMatchExact, Endpoint: service.CompositeRouteEndpointAny, Enabled: true},
+		{ID: 10, PublicModel: "rescued-alias", TargetPlatform: service.PlatformOpenAI, MatchType: service.CompositeRouteMatchExact, Endpoint: service.CompositeRouteEndpointMessages, Enabled: true},
+	}}
+	h := newGatewayModelsHandlerForTest(accounts, routes)
+	for _, tc := range []struct {
+		endpoint string
+		want     []string
+	}{
+		{"messages", []string{"safe-account", "messages-only", "all-endpoints", "rescued-alias"}},
+		{"responses", []string{"safe-account", "responses-only", "all-endpoints"}},
+		{"chat_completions", []string{"safe-account", "chat-only", "all-endpoints"}},
+		{"gemini", []string{"safe-account", "gemini-only", "all-endpoints"}},
+		{"", []string{"safe-account", "shadow-exact", "shadow-prefix-one", "rescued-alias", "systemone-account", "messages-only", "responses-only", "chat-only", "gemini-only", "all-endpoints", "systemone-alias"}},
+	} {
+		t.Run(tc.endpoint, func(t *testing.T) {
+			for _, allowlisted := range []bool{false, true} {
+				group := &service.Group{ID: groupID, Platform: service.PlatformComposite}
+				if allowlisted {
+					group.ModelAllowlist = service.GroupModelAllowlist{Enabled: true, Models: []string{"*"}}
+				}
+				path := "/v1/models"
+				if tc.endpoint != "" {
+					path += "?endpoint=" + tc.endpoint
+				}
+				rec := httptest.NewRecorder()
+				ctx, _ := gin.CreateTestContext(rec)
+				ctx.Request = httptest.NewRequest(http.MethodGet, path, nil)
+				ctx.Set(string(middleware2.ContextKeyAPIKey), &service.APIKey{Group: group})
+				h.Models(ctx)
+				require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+				var models gatewayModelsResponseForTest
+				require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &models))
+				require.ElementsMatch(t, tc.want, modelIDsForTest(models.Data))
+			}
+		})
+	}
+}
+
+func TestGatewayModels_ExplicitEndpointDoesNotInventCompositeDefaults(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	const groupID int64 = 7811
+	for _, tc := range []struct {
+		name       string
+		accounts   []service.Account
+		routes     *gatewayModelsRouteRepoStub
+		wantStatus int
+	}{
+		{"no accounts or routes", nil, &gatewayModelsRouteRepoStub{}, http.StatusOK},
+		{"other endpoint only", nil, &gatewayModelsRouteRepoStub{routes: []service.CompositeModelRoute{{PublicModel: "responses-only", TargetPlatform: service.PlatformOpenAI, MatchType: service.CompositeRouteMatchExact, Endpoint: service.CompositeRouteEndpointResponses, Enabled: true}}}, http.StatusOK},
+		{"systemone account only", []service.Account{{ID: 1, Platform: service.PlatformTypeSafe}}, &gatewayModelsRouteRepoStub{}, http.StatusOK},
+		{"all account aliases overridden", []service.Account{{ID: 1, Platform: service.PlatformOpenAI, Credentials: map[string]any{"model_mapping": map[string]any{"alias": "gpt-5"}}}}, &gatewayModelsRouteRepoStub{routes: []service.CompositeModelRoute{{PublicModel: "alias", TargetPlatform: service.PlatformTypeSafe, MatchType: service.CompositeRouteMatchExact, Endpoint: service.CompositeRouteEndpointMessages, Enabled: true}}}, http.StatusOK},
+		{"route lookup unavailable", []service.Account{{ID: 1, Platform: service.PlatformOpenAI}}, &gatewayModelsRouteRepoStub{err: errors.New("unavailable")}, http.StatusServiceUnavailable},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, allowlisted := range []bool{false, true} {
+				h := newGatewayModelsHandlerForTest(&gatewayModelsAccountRepoStub{byGroup: map[int64][]service.Account{groupID: tc.accounts}}, tc.routes)
+				group := &service.Group{ID: groupID, Platform: service.PlatformComposite}
+				if allowlisted {
+					group.ModelAllowlist = service.GroupModelAllowlist{Enabled: true, Models: []string{"*"}}
+				}
+				rec := httptest.NewRecorder()
+				ctx, _ := gin.CreateTestContext(rec)
+				ctx.Request = httptest.NewRequest(http.MethodGet, "/v1/models?endpoint=messages", nil)
+				ctx.Set(string(middleware2.ContextKeyAPIKey), &service.APIKey{Group: group})
+				h.Models(ctx)
+				require.Equal(t, tc.wantStatus, rec.Code, rec.Body.String())
+				if tc.wantStatus == http.StatusOK {
+					var models gatewayModelsResponseForTest
+					require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &models))
+					require.Empty(t, models.Data)
+					require.Contains(t, rec.Body.String(), `"data":[]`)
+				}
+			}
+		})
+	}
+}
+
+func TestGatewayModels_ValidatesExplicitEndpoint(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	h := newGatewayModelsHandlerForTest(&gatewayModelsAccountRepoStub{})
+	for _, tc := range []struct {
+		query  string
+		status int
+	}{
+		{"?endpoint=unknown", http.StatusBadRequest}, {"?endpoint=", http.StatusBadRequest}, {"?endpoint=messages&endpoint=responses", http.StatusBadRequest},
+		{"?endpoint=count_tokens", http.StatusOK}, {"?endpoint=embeddings", http.StatusOK}, {"?endpoint=images", http.StatusOK},
+	} {
+		t.Run(tc.query, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			ctx, _ := gin.CreateTestContext(rec)
+			ctx.Request = httptest.NewRequest(http.MethodGet, "/v1/models"+tc.query, nil)
+			ctx.Set(string(middleware2.ContextKeyAPIKey), &service.APIKey{Group: &service.Group{ID: 7812, Platform: service.PlatformComposite}})
+			h.Models(ctx)
+			require.Equal(t, tc.status, rec.Code, rec.Body.String())
+		})
+	}
+}

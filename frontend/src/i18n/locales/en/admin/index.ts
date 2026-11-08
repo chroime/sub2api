@@ -7,6 +7,7 @@ import settings from './settings'
 import audit from './audit'
 import promptAudit from './promptAudit'
 import plugins from './plugins'
+import groupInputRouting from './groupInputRouting'
 
 export default {
   ...overview,
@@ -18,4 +19,5 @@ export default {
   ...audit,
   ...promptAudit,
   ...plugins,
+  groups: { ...overview.groups, inputRouting: groupInputRouting },
 }

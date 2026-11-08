@@ -126,6 +126,8 @@ const (
 	FieldModelRouting = "model_routing"
 	// FieldModelRoutingEnabled holds the string denoting the model_routing_enabled field in the database.
 	FieldModelRoutingEnabled = "model_routing_enabled"
+	// FieldInputRouting holds the string denoting the input_routing field in the database.
+	FieldInputRouting = "input_routing"
 	// FieldMcpXMLInject holds the string denoting the mcp_xml_inject field in the database.
 	FieldMcpXMLInject = "mcp_xml_inject"
 	// FieldSupportedModelScopes holds the string denoting the supported_model_scopes field in the database.
@@ -296,6 +298,7 @@ var Columns = []string{
 	FieldFallbackGroupIDOnInvalidRequest,
 	FieldModelRouting,
 	FieldModelRoutingEnabled,
+	FieldInputRouting,
 	FieldMcpXMLInject,
 	FieldSupportedModelScopes,
 	FieldSortOrder,
@@ -433,6 +436,8 @@ var (
 	DefaultClaudeCodeOnly bool
 	// DefaultModelRoutingEnabled holds the default value on creation for the "model_routing_enabled" field.
 	DefaultModelRoutingEnabled bool
+	// DefaultInputRouting holds the default value on creation for the "input_routing" field.
+	DefaultInputRouting domain.GroupInputRoutingConfig
 	// DefaultMcpXMLInject holds the default value on creation for the "mcp_xml_inject" field.
 	DefaultMcpXMLInject bool
 	// DefaultSupportedModelScopes holds the default value on creation for the "supported_model_scopes" field.

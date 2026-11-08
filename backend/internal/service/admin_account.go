@@ -18,6 +18,7 @@ import (
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
+	gov "github.com/Wei-Shaw/sub2api/internal/upstreamgovernance"
 )
 
 // Account management implementations
@@ -106,6 +107,12 @@ var duplicateAccountDiscardedExtraKeys = map[string]struct{}{
 	"crs_account_id": {},
 	"crs_kind":       {},
 	"crs_synced_at":  {},
+	// Governance import identity is unique to the original account. Its price
+	// ownership, pause claim and reconciliation receipt cannot belong to a copy.
+	governanceMarkerKey:             {},
+	gov.GovernanceRateOwnerExtraKey: {},
+	gov.GovernancePauseExtraKey:     {},
+	gov.GovernanceReceiptExtraKey:   {},
 	// Local quota usage and derived window timestamps must start fresh.
 	"quota_used":            {},
 	"quota_daily_used":      {},

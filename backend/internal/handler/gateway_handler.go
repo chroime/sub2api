@@ -98,6 +98,9 @@ func NewGatewayHandler(
 	if userMsgQueueService != nil && cfg != nil {
 		umqHelper = NewUserMsgQueueHelper(userMsgQueueService, SSEPingFormatClaude, pingInterval)
 	}
+	if gatewayService != nil {
+		gatewayService.SetInputRoutingOpenAIGateway(openAIGatewayService)
+	}
 
 	return &GatewayHandler{
 		gatewayService:            gatewayService,
@@ -173,8 +176,16 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 	reqModel := parsedReq.Model
 	reqStream := parsedReq.Stream
 	bindRequestedReasoningEffort(c, body, reqModel)
+	bindGroupInputRouting(c, apiKey, body, "messages", reqModel, reqStream)
+	_, inputRoutingMatched := service.GroupInputRoutingDecisionFromContext(c.Request.Context())
 	ensureCompositeTargetPlatform(c, apiKey, reqModel)
-	if policyBody, changed, err := applyAnthropicReasoningEffortPolicyForRequest(c, apiKey, body); err != nil {
+	applyReasoningPolicy := func() ([]byte, bool, error) {
+		if inputRoutingMatched {
+			return applyGroupInputRoutingReasoningEffortPolicy(c, apiKey, body, "")
+		}
+		return applyAnthropicReasoningEffortPolicyForRequest(c, apiKey, body)
+	}
+	if policyBody, changed, err := applyReasoningPolicy(); err != nil {
 		respondOpenAIReasoningEffortPolicyError(c, err, h.errorResponse)
 		return
 	} else if changed {
@@ -213,6 +224,10 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 
 	setOpsRequestContext(c, reqModel, reqStream)
 	setOpsEndpointContext(c, "", int16(service.RequestTypeFromLegacy(reqStream, false)))
+	if inputRoutingMatched && apiKey.Group != nil && apiKey.Group.Platform == service.PlatformOpenAI && !apiKey.Group.AllowMessagesDispatch {
+		h.errorResponse(c, http.StatusForbidden, "permission_error", "This group does not allow /v1/messages dispatch")
+		return
+	}
 	pricingCtx, pricingAt := service.WithGatewayTokenRequestPricing(c.Request.Context())
 	c.Request = c.Request.WithContext(pricingCtx)
 
@@ -346,7 +361,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 	// 判断是否真的绑定了粘性会话：有 sessionKey 且已经绑定到某个账号
 	hasBoundSession := sessionKey != "" && sessionBoundAccountID > 0
 
-	if platform == service.PlatformGemini {
+	if platform == service.PlatformGemini && !inputRoutingMatched {
 		fs := NewFailoverState(h.maxAccountSwitchesGemini, hasBoundSession)
 
 		// 单账号分组首次 503 就不设模型限流标记，避免设 29s 限流导致后续请求连续快速失败；
@@ -617,7 +632,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			sessionID := service.ExtractClientSessionID(c)
 			channelUsageFields := clientRequestedUsageFields(c, channelMapping, reqModel, result.UpstreamModel)
 			h.submitUsageRecordTask(c.Request.Context(), func(ctx context.Context) {
-				if err := h.gatewayService.RecordUsage(ctx, &service.RecordUsageInput{
+				if err := service.RecordGroupInputRoutingUsage(ctx, h.gatewayService, h.openAIGatewayService, &service.RecordUsageInput{
 					Result:             result,
 					QuotaPlatform:      quotaPlatform,
 					APIKey:             apiKey,
@@ -936,7 +951,9 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 				stopStreamingACK = h.startStreamingACK(c, reqStream, time.Now(), account, currentAPIKey.GroupID)
 			}
 			writerSizeBeforeForward := service.OpenAICompactKeepaliveAdjustedWrittenSize(c)
-			if account.Platform == service.PlatformAntigravity && account.Type != service.AccountTypeAPIKey {
+			if inputRoutingMatched {
+				result, err = h.forwardGroupInputRouting(requestCtx, c, account, service.CompositeRouteEndpointMessages, attemptBody, attemptParsedReq, sessionKey, hasBoundSession)
+			} else if account.Platform == service.PlatformAntigravity && account.Type != service.AccountTypeAPIKey {
 				result, err = h.antigravityGatewayService.Forward(requestCtx, c, account, attemptBody, hasBoundSession)
 			} else {
 				result, err = h.gatewayService.Forward(requestCtx, c, account, attemptParsedReq)
@@ -991,7 +1008,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 				sessionID := service.ExtractClientSessionID(c)
 				channelUsageFields := clientRequestedUsageFields(c, channelMapping, reqModel, result.UpstreamModel)
 				h.submitUsageRecordTask(c.Request.Context(), func(ctx context.Context) {
-					if err := h.gatewayService.RecordUsage(ctx, &service.RecordUsageInput{
+					if err := service.RecordGroupInputRoutingUsage(ctx, h.gatewayService, h.openAIGatewayService, &service.RecordUsageInput{
 						Result:             result,
 						QuotaPlatform:      quotaPlatform,
 						APIKey:             currentAPIKey,
@@ -1037,7 +1054,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 						zap.Any("fallback_group_id", fallbackGroupID),
 						zap.Bool("fallback_used", fallbackUsed),
 					)
-					if !fallbackUsed && fallbackGroupID != nil && *fallbackGroupID > 0 {
+					if !inputRoutingMatched && !fallbackUsed && fallbackGroupID != nil && *fallbackGroupID > 0 {
 						fallbackGroup, err := h.gatewayService.ResolveGroupByID(c.Request.Context(), *fallbackGroupID)
 						if err != nil {
 							reqLog.Warn("gateway.resolve_fallback_group_failed", zap.Int64("fallback_group_id", *fallbackGroupID), zap.Error(err))
@@ -1175,6 +1192,22 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 // Falls back to default models if no whitelist is configured
 func (h *GatewayHandler) Models(c *gin.Context) {
 	apiKey, _ := middleware2.GetAPIKeyFromContext(c)
+	endpoint := ""
+	if values, explicit := c.Request.URL.Query()["endpoint"]; explicit {
+		if len(values) != 1 {
+			h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "endpoint must be specified once")
+			return
+		}
+		endpoint = strings.ToLower(strings.TrimSpace(values[0]))
+		switch endpoint {
+		case service.CompositeRouteEndpointMessages, service.CompositeRouteEndpointCountTokens,
+			service.CompositeRouteEndpointResponses, service.CompositeRouteEndpointChatCompletions,
+			service.CompositeRouteEndpointEmbeddings, service.CompositeRouteEndpointImages, service.CompositeRouteEndpointGemini:
+		default:
+			h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "unsupported model catalog endpoint")
+			return
+		}
+	}
 
 	var groupID *int64
 	var platform string
@@ -1194,7 +1227,24 @@ func (h *GatewayHandler) Models(c *gin.Context) {
 	}
 
 	if platform == service.PlatformComposite {
-		availableModels := h.compositeAvailableModels(c.Request.Context(), groupID, "", true)
+		availableModels := h.compositeAvailableModels(c.Request.Context(), groupID, endpoint, endpoint == "")
+		if endpoint != "" {
+			if apiKey != nil && apiKey.Group != nil && apiKey.Group.ModelAllowlistEnabled() {
+				availableModels = apiKey.Group.ModelAllowlist.FilterForListing(availableModels)
+			}
+			if groupID != nil {
+				filtered, err := h.gatewayService.FilterCompositeModelsForEndpoint(c.Request.Context(), *groupID, availableModels, endpoint)
+				if err != nil {
+					h.errorResponse(c, http.StatusServiceUnavailable, "api_error", "Unable to load models for the requested endpoint")
+					return
+				}
+				availableModels = filtered
+			}
+			// An explicit protocol catalog must preserve an empty result. Broad
+			// composite defaults would advertise models that were just excluded.
+			writeModelsList(c, service.PlatformComposite, availableModels)
+			return
+		}
 		if apiKey != nil && apiKey.Group != nil && apiKey.Group.ModelAllowlistEnabled() {
 			source := availableModels
 			if len(source) == 0 {

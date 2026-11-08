@@ -1,0 +1,51 @@
+ALTER TABLE groups
+    ADD COLUMN IF NOT EXISTS input_routing JSONB NOT NULL DEFAULT '{"enabled":false,"rules":[]}'::jsonb;
+
+COMMENT ON COLUMN groups.input_routing IS
+    '按预估输入 Token 和 HTTP 请求类型限制候选账号；保留入口分组鉴权和计费';
+
+-- Keep direct SQL changes visible to auth snapshots as well as admin updates.
+CREATE OR REPLACE FUNCTION enqueue_group_auth_cache_invalidation()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    target_group_id BIGINT;
+BEGIN
+    target_group_id := OLD.id;
+    IF TG_OP = 'UPDATE'
+       AND OLD.status IS NOT DISTINCT FROM NEW.status
+       AND OLD.is_exclusive IS NOT DISTINCT FROM NEW.is_exclusive
+       AND OLD.allow_image_generation IS NOT DISTINCT FROM NEW.allow_image_generation
+       AND OLD.platform IS NOT DISTINCT FROM NEW.platform
+       AND OLD.subscription_type IS NOT DISTINCT FROM NEW.subscription_type
+       AND OLD.rate_multiplier IS NOT DISTINCT FROM NEW.rate_multiplier
+       AND OLD.billing_input_token_multiplier IS NOT DISTINCT FROM NEW.billing_input_token_multiplier
+       AND OLD.billing_output_token_multiplier IS NOT DISTINCT FROM NEW.billing_output_token_multiplier
+       AND OLD.billing_unified_token_multiplier IS NOT DISTINCT FROM NEW.billing_unified_token_multiplier
+       AND OLD.billing_token_adjustment_min_input_tokens IS NOT DISTINCT FROM NEW.billing_token_adjustment_min_input_tokens
+       AND OLD.peak_rate_enabled IS NOT DISTINCT FROM NEW.peak_rate_enabled
+       AND OLD.peak_start IS NOT DISTINCT FROM NEW.peak_start
+       AND OLD.peak_end IS NOT DISTINCT FROM NEW.peak_end
+       AND OLD.peak_rate_multiplier IS NOT DISTINCT FROM NEW.peak_rate_multiplier
+       AND OLD.profit_control_enabled IS NOT DISTINCT FROM NEW.profit_control_enabled
+       AND OLD.profit_min_margin IS NOT DISTINCT FROM NEW.profit_min_margin
+       AND OLD.profit_safety_buffer IS NOT DISTINCT FROM NEW.profit_safety_buffer
+       AND OLD.streaming_ack_enabled IS NOT DISTINCT FROM NEW.streaming_ack_enabled
+       AND OLD.input_routing IS NOT DISTINCT FROM NEW.input_routing
+       AND OLD.deleted_at IS NOT DISTINCT FROM NEW.deleted_at THEN
+        RETURN NEW;
+    END IF;
+
+    INSERT INTO auth_cache_invalidation_outbox (cache_key)
+    SELECT encode(sha256(convert_to(k.key, 'UTF8')), 'hex')
+    FROM api_keys AS k
+    WHERE k.group_id = target_group_id
+      AND k.deleted_at IS NULL
+      AND k.key <> '';
+    IF TG_OP = 'DELETE' THEN
+        RETURN OLD;
+    END IF;
+    RETURN NEW;
+END;
+$$;

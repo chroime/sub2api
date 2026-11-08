@@ -760,6 +760,20 @@ func (_c *GroupCreate) SetNillableModelRoutingEnabled(v *bool) *GroupCreate {
 	return _c
 }
 
+// SetInputRouting sets the "input_routing" field.
+func (_c *GroupCreate) SetInputRouting(v domain.GroupInputRoutingConfig) *GroupCreate {
+	_c.mutation.SetInputRouting(v)
+	return _c
+}
+
+// SetNillableInputRouting sets the "input_routing" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableInputRouting(v *domain.GroupInputRoutingConfig) *GroupCreate {
+	if v != nil {
+		_c.SetInputRouting(*v)
+	}
+	return _c
+}
+
 // SetMcpXMLInject sets the "mcp_xml_inject" field.
 func (_c *GroupCreate) SetMcpXMLInject(v bool) *GroupCreate {
 	_c.mutation.SetMcpXMLInject(v)
@@ -1281,6 +1295,10 @@ func (_c *GroupCreate) defaults() error {
 		v := group.DefaultModelRoutingEnabled
 		_c.mutation.SetModelRoutingEnabled(v)
 	}
+	if _, ok := _c.mutation.InputRouting(); !ok {
+		v := group.DefaultInputRouting
+		_c.mutation.SetInputRouting(v)
+	}
 	if _, ok := _c.mutation.McpXMLInject(); !ok {
 		v := group.DefaultMcpXMLInject
 		_c.mutation.SetMcpXMLInject(v)
@@ -1521,6 +1539,9 @@ func (_c *GroupCreate) check() error {
 	}
 	if _, ok := _c.mutation.ModelRoutingEnabled(); !ok {
 		return &ValidationError{Name: "model_routing_enabled", err: errors.New(`ent: missing required field "Group.model_routing_enabled"`)}
+	}
+	if _, ok := _c.mutation.InputRouting(); !ok {
+		return &ValidationError{Name: "input_routing", err: errors.New(`ent: missing required field "Group.input_routing"`)}
 	}
 	if _, ok := _c.mutation.McpXMLInject(); !ok {
 		return &ValidationError{Name: "mcp_xml_inject", err: errors.New(`ent: missing required field "Group.mcp_xml_inject"`)}
@@ -1843,6 +1864,10 @@ func (_c *GroupCreate) createSpec() (*Group, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.ModelRoutingEnabled(); ok {
 		_spec.SetField(group.FieldModelRoutingEnabled, field.TypeBool, value)
 		_node.ModelRoutingEnabled = value
+	}
+	if value, ok := _c.mutation.InputRouting(); ok {
+		_spec.SetField(group.FieldInputRouting, field.TypeJSON, value)
+		_node.InputRouting = value
 	}
 	if value, ok := _c.mutation.McpXMLInject(); ok {
 		_spec.SetField(group.FieldMcpXMLInject, field.TypeBool, value)
@@ -3013,6 +3038,18 @@ func (u *GroupUpsert) SetModelRoutingEnabled(v bool) *GroupUpsert {
 // UpdateModelRoutingEnabled sets the "model_routing_enabled" field to the value that was provided on create.
 func (u *GroupUpsert) UpdateModelRoutingEnabled() *GroupUpsert {
 	u.SetExcluded(group.FieldModelRoutingEnabled)
+	return u
+}
+
+// SetInputRouting sets the "input_routing" field.
+func (u *GroupUpsert) SetInputRouting(v domain.GroupInputRoutingConfig) *GroupUpsert {
+	u.Set(group.FieldInputRouting, v)
+	return u
+}
+
+// UpdateInputRouting sets the "input_routing" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateInputRouting() *GroupUpsert {
+	u.SetExcluded(group.FieldInputRouting)
 	return u
 }
 
@@ -4417,6 +4454,20 @@ func (u *GroupUpsertOne) SetModelRoutingEnabled(v bool) *GroupUpsertOne {
 func (u *GroupUpsertOne) UpdateModelRoutingEnabled() *GroupUpsertOne {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateModelRoutingEnabled()
+	})
+}
+
+// SetInputRouting sets the "input_routing" field.
+func (u *GroupUpsertOne) SetInputRouting(v domain.GroupInputRoutingConfig) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetInputRouting(v)
+	})
+}
+
+// UpdateInputRouting sets the "input_routing" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateInputRouting() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateInputRouting()
 	})
 }
 
@@ -6031,6 +6082,20 @@ func (u *GroupUpsertBulk) SetModelRoutingEnabled(v bool) *GroupUpsertBulk {
 func (u *GroupUpsertBulk) UpdateModelRoutingEnabled() *GroupUpsertBulk {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateModelRoutingEnabled()
+	})
+}
+
+// SetInputRouting sets the "input_routing" field.
+func (u *GroupUpsertBulk) SetInputRouting(v domain.GroupInputRoutingConfig) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetInputRouting(v)
+	})
+}
+
+// UpdateInputRouting sets the "input_routing" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateInputRouting() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateInputRouting()
 	})
 }
 
