@@ -135,6 +135,7 @@ func (s *ModelPlazaService) ListGroups(ctx context.Context) ([]PlazaGroup, error
 // （accountModels 为 nil 时等同 ListGroups）：
 //   - 渠道里已有的模型保持渠道条目与渠道定价不变；
 //   - 仅账号侧才有的模型按官方目录价展示，来源标记为 official，目录也查不到时无定价；
+//   - 合并后的模型遵循网关渠道定价限制，官方兜底价不能绕过允许列表；
 //   - 没有绑定渠道但有账号模型的分组同样返回；平台隔离规则与渠道模型一致。
 func (s *ModelPlazaService) ListGroupsWithAccountModels(ctx context.Context, accountModels PlazaAccountModelLister) ([]PlazaGroup, error) {
 	channels, err := s.channelRepo.ListAll(ctx)
@@ -145,6 +146,13 @@ func (s *ModelPlazaService) ListGroupsWithAccountModels(ctx context.Context, acc
 	if err != nil {
 		return nil, fmt.Errorf("list active groups: %w", err)
 	}
+
+	groupPlatforms := make(map[int64]string, len(groups))
+	for _, group := range groups {
+		groupPlatforms[group.ID] = group.Platform
+	}
+	// 网关按仓库顺序确定生效渠道；快照持有渠道指针，必须与下方展示排序隔离。
+	restrictionCache := populateChannelCache(append([]Channel(nil), channels...), groupPlatforms)
 
 	sort.SliceStable(channels, func(i, j int) bool {
 		return strings.ToLower(channels[i].Name) < strings.ToLower(channels[j].Name)
@@ -283,6 +291,13 @@ func (s *ModelPlazaService) ListGroupsWithAccountModels(ctx context.Context, acc
 	out := make([]PlazaGroup, 0, len(order))
 	for _, gid := range order {
 		pg := byGroup[gid]
+		allowed := pg.Models[:0]
+		for _, model := range pg.Models {
+			if !plazaModelRestricted(restrictionCache, gid, model) {
+				allowed = append(allowed, model)
+			}
+		}
+		pg.Models = allowed
 		if len(pg.Models) == 0 {
 			continue
 		}
@@ -311,6 +326,19 @@ func (s *ModelPlazaService) ListGroupsWithAccountModels(ctx context.Context, acc
 		return out[i].ID < out[j].ID
 	})
 	return out, nil
+}
+
+// plazaModelRestricted 与网关调度前检查使用相同的计费模型、平台与定价匹配规则。
+func plazaModelRestricted(cache *channelCache, groupID int64, model PlazaModel) bool {
+	channel := cache.channelByGroupID[groupID]
+	if channel == nil || !channel.IsActive() || !channel.RestrictModels {
+		return false
+	}
+	lk := &channelLookup{cache: cache, channel: channel, platform: model.Platform}
+	mapping := resolveMapping(lk, groupID, model.Name)
+	billingModel := billingModelForRestriction(mapping.BillingModelSource, model.Name, mapping.MappedModel)
+	// upstream 依赖逐账号映射，与网关预检查一致，此处不推断上游模型。
+	return billingModel != "" && checkRestricted(lk, groupID, billingModel)
 }
 
 // accountOnlyPlazaModel 构造仅账号侧才有的模型条目：没有渠道定价，按官方目录价展示。
