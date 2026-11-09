@@ -189,22 +189,32 @@ func TestListPlazaGroups_InactiveChannelSkipped(t *testing.T) {
 	require.Empty(t, out)
 }
 
-func TestListPlazaGroups_SortedByRateMultiplierAsc(t *testing.T) {
+func TestListPlazaGroups_SortedByAdminOrder(t *testing.T) {
 	channels := []Channel{
 		plazaPricedChannel(1, "ch", []int64{10, 20, 30}, "anthropic", "claude-sonnet"),
 	}
 	groups := []Group{
-		{ID: 10, Name: "b-standard", Platform: "anthropic", RateMultiplier: 1},
-		{ID: 20, Name: "a-standard", Platform: "anthropic", RateMultiplier: 1},
-		{ID: 30, Name: "cheap", Platform: "anthropic", RateMultiplier: 0.5},
+		{ID: 30, Name: "a-cheap", Platform: "anthropic", RateMultiplier: 0.1, SortOrder: 10},
+		{ID: 20, Name: "z-first", Platform: "anthropic", RateMultiplier: 5, SortOrder: -5},
+		{ID: 10, Name: "b-same-order", Platform: "anthropic", RateMultiplier: 3, SortOrder: 10},
 	}
-	svc := newPlazaService(channels, groups, nil)
-	out, err := svc.ListGroups(context.Background())
-	require.NoError(t, err)
-	require.Len(t, out, 3)
-	require.Equal(t, "cheap", out[0].Name, "倍率低者在前")
-	require.Equal(t, "a-standard", out[1].Name, "同倍率按名称")
-	require.Equal(t, "b-standard", out[2].Name)
+	for _, accountOnly := range []bool{false, true} {
+		t.Run(map[bool]string{false: "channel models", true: "account models"}[accountOnly], func(t *testing.T) {
+			svc := newPlazaService(channels, groups, nil)
+			var accountModels PlazaAccountModelLister
+			if accountOnly {
+				svc = newPlazaService(nil, groups, nil)
+				accountModels = func(context.Context, *Group) []PlazaAccountModel {
+					return []PlazaAccountModel{{Name: "claude-sonnet", Platform: "anthropic"}}
+				}
+			}
+			out, err := svc.ListGroupsWithAccountModels(context.Background(), accountModels)
+			require.NoError(t, err)
+			require.Len(t, out, 3)
+			require.Equal(t, []int64{20, 10, 30}, []int64{out[0].ID, out[1].ID, out[2].ID}, "按后台 sort_order 升序，同序按 ID，不受倍率和名称影响")
+			require.Equal(t, []int{-5, 10, 10}, []int{out[0].SortOrder, out[1].SortOrder, out[2].SortOrder})
+		})
+	}
 }
 
 func TestListPlazaGroups_OfficialPricingFill(t *testing.T) {

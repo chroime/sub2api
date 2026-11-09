@@ -168,7 +168,7 @@ function effectiveRate(g: ModelPlazaGroup): number {
 }
 
 const sortedGroups = computed(() =>
-  [...groups.value].sort((a, b) => effectiveRate(a) - effectiveRate(b) || a.name.localeCompare(b.name))
+  [...groups.value].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.id - b.id)
 )
 
 const groupSelectOptions = computed<SelectOption[]>(() => [

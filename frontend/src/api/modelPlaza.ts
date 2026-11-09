@@ -66,6 +66,8 @@ export interface PlazaModel {
 
 export interface ModelPlazaGroup {
   id: number
+  /** 后台分组管理的自定义顺序；旧版响应缺省按 0 处理。 */
+  sort_order?: number
   name: string
   description: string
   platform: string

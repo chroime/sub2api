@@ -1,18 +1,18 @@
 <template>
   <div
-    class="plaza-vendor-price-table relative max-w-full overflow-x-auto rounded-2xl border border-gray-100 bg-white shadow-card focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-500 dark:border-dark-700/50 dark:bg-dark-800/50"
+    class="plaza-vendor-price-table relative max-w-full overflow-x-auto rounded-2xl border bg-white shadow-card focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-500 dark:bg-dark-800/50"
     role="region"
     tabindex="0"
     :aria-label="caption"
   >
-    <div v-if="group" class="pz-comparison-heading flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 px-5 py-4 dark:border-dark-700">
+    <div v-if="group" class="pz-comparison-heading flex flex-wrap items-center justify-between gap-3 border-b px-5 py-4">
       <div class="min-w-0">
         <p class="pz-title text-base font-semibold">{{ t('modelPlaza.comparison.title') }}</p>
         <p class="mt-1 text-sm text-gray-500 dark:text-dark-300">{{ t('modelPlaza.comparison.subtitle') }}</p>
       </div>
       <span class="pz-rate-badge shrink-0 rounded-lg px-3 py-1.5 text-sm font-semibold" :title="t('modelPlaza.comparison.rateDetails')">{{ siteRateNote }}</span>
     </div>
-    <table class="w-full border-collapse text-sm tabular-nums" :class="group ? 'min-w-[780px]' : 'min-w-[560px]'">
+    <table class="w-full border-separate border-spacing-0 text-sm tabular-nums" :class="group ? 'min-w-[780px]' : 'min-w-[560px]'">
       <caption class="sr-only">{{ caption }}</caption>
       <thead>
         <!-- 全部分组只看官方价；选中分组后按相同列序对照本站价。 -->
@@ -26,21 +26,21 @@
             {{ t('modelPlaza.table.model') }}
           </th>
           <th v-if="group" scope="colgroup" colspan="4" class="pz-bg pt-2 text-center">
-            <div class="pz-title border-b pb-2 font-semibold">
+            <div class="pz-title pb-2 font-semibold">
               {{ t('modelPlaza.priceTable.sitePrice') }}
               <span class="pz-unit ml-1 font-normal normal-case">{{ t('modelPlaza.comparison.standardPeriod') }}</span>
             </div>
           </th>
-          <th v-else scope="colgroup" colspan="4" class="border-l border-gray-100 pt-2 text-center dark:border-dark-700/60">
-            <div class="border-b border-gray-200 pb-2 text-gray-400 dark:border-dark-600 dark:text-dark-500">
+          <th v-else scope="colgroup" colspan="4" class="pt-2 text-center">
+            <div class="pb-2 text-gray-500 dark:text-dark-300">
               {{ t('modelPlaza.priceTable.official') }}
             </div>
           </th>
         </tr>
         <tr
-          class="border-b border-gray-200 text-sm font-medium leading-5 text-gray-400 dark:border-dark-700 dark:text-dark-500"
+          class="text-sm font-medium leading-5 text-gray-500 dark:text-dark-300"
         >
-          <th scope="col" class="border-l border-gray-100 px-3 py-2 text-right font-medium dark:border-dark-700/60" :class="{ 'pz-bg': group }">
+          <th scope="col" class="px-3 py-2 text-right font-medium" :class="{ 'pz-bg': group }">
             {{ t('modelPlaza.table.input') }}
           </th>
           <th scope="col" class="px-3 py-2 text-right font-medium" :class="{ 'pz-bg': group }">{{ t('modelPlaza.table.output') }}</th>
@@ -53,7 +53,7 @@
           v-for="m in models"
           :id="rowId(m)"
           :key="plazaModelKey(m)"
-          class="border-b border-gray-100 transition-colors last:border-b-0 dark:border-dark-800"
+          class="transition-colors"
           :class="highlighted === plazaModelKey(m)
             ? 'pz-row-highlight bg-primary-50/70 dark:bg-primary-500/10'
             : 'hover:bg-gray-50/70 dark:hover:bg-dark-800/50'"
@@ -134,7 +134,7 @@
             <template v-if="group">
               <template v-if="billingMode(m) === BILLING_MODE_TOKEN">
                 <td v-for="field in TOKEN_FIELDS" :key="field" class="pz-cell px-3 py-4 text-right align-top">
-                  <div class="space-y-5">
+                  <div class="pz-token-comparisons">
                     <PlazaPriceComparisonCell
                       v-for="price in getTokenComparisons(m, group, field)"
                       :key="price.key"
@@ -163,8 +163,7 @@
                   v-for="(field, fieldIdx) in TOKEN_FIELDS"
                   :key="`official-${field}`"
                   class="px-2.5 py-3 text-right align-middle font-mono text-base text-gray-500 dark:text-dark-400"
-                  :class="[fieldIdx === 0 ? 'border-l border-gray-100 dark:border-dark-700/60' : '',
-                           fieldIdx === TOKEN_FIELDS.length - 1 ? 'pr-5' : '']"
+                  :class="fieldIdx === TOKEN_FIELDS.length - 1 ? 'pr-5' : ''"
                 >
                   <template v-if="officialIntervals(m).length > 1">
                     <div
@@ -197,7 +196,7 @@
               <td
                 v-else-if="officialUnitPrices(m).length"
                 colspan="4"
-                class="border-l border-gray-100 px-2.5 py-3 pr-5 text-right align-middle dark:border-dark-700/60"
+                class="px-2.5 py-3 pr-5 text-right align-middle"
               >
                 <div class="flex flex-wrap items-center justify-end gap-1.5">
                   <span
@@ -211,7 +210,7 @@
                   </span>
                 </div>
               </td>
-              <td v-else colspan="4" class="border-l border-gray-100 px-2.5 py-3 pr-5 text-right align-middle text-sm text-gray-400 dark:border-dark-700/60 dark:text-dark-500">
+              <td v-else colspan="4" class="px-2.5 py-3 pr-5 text-right align-middle text-sm text-gray-400 dark:text-dark-500">
                 -
               </td>
             </template>
@@ -462,27 +461,65 @@ defineExpose({ rowId })
 <style scoped>
 /* 本站价分区用主色低饱和底色与官方价拉开层次，官方价保持中性 */
 .plaza-vendor-price-table {
+  --pz-border: theme('colors.slate.300');
+  --pz-grid: color-mix(in srgb, theme('colors.slate.300') 65%, theme('colors.slate.200'));
+  --pz-model-divider: theme('colors.slate.300');
   --pz-title: theme('colors.primary.700');
   --pz-bg: theme('colors.primary.50 / 60%');
   --pz-bg-hover: theme('colors.primary.50');
   /* 固定列需要与卡片同色的不透明底，行悬停/高亮色叠加在它上面 */
-  --pz-surface: theme('colors.white');
+  --pz-surface: theme('colors.slate.50');
+  --pz-head-surface: theme('colors.slate.100');
   --pz-row-hover: theme('colors.gray.50 / 70%');
   --pz-row-highlight: theme('colors.primary.50 / 70%');
-  --pz-sticky-edge: theme('colors.gray.100');
+  --pz-sticky-edge: var(--pz-border);
+  border-color: var(--pz-border);
 }
 
 /* 不能写成 :global(.dark) .plaza-vendor-price-table：Vue 的 scoped 编译会把整条选择器
    换成 .dark，变量落到 <html> 上，又被上面直接写在表格上的浅色值盖掉 */
 .dark .plaza-vendor-price-table {
+  --pz-border: theme('colors.slate.500');
+  --pz-grid: theme('colors.slate.600');
+  --pz-model-divider: theme('colors.slate.500');
   --pz-title: theme('colors.primary.300');
   --pz-bg: theme('colors.primary.500 / 8%');
   --pz-bg-hover: theme('colors.primary.500 / 14%');
   /* 卡片是半透明 dark-800 叠在 dark-950 页面上 */
   --pz-surface: color-mix(in srgb, theme('colors.dark.800') 50%, theme('colors.dark.950'));
+  --pz-head-surface: theme('colors.dark.800');
   --pz-row-hover: theme('colors.dark.800 / 50%');
   --pz-row-highlight: theme('colors.primary.500 / 10%');
-  --pz-sticky-edge: theme('colors.dark.700 / 60%');
+}
+
+thead th {
+  border-bottom: 1px solid var(--pz-grid);
+  background-color: var(--pz-head-surface);
+}
+
+thead tr:last-child > th + th,
+tbody td + td {
+  border-left: 1px solid var(--pz-grid);
+}
+
+tbody tr + tr > :is(th, td) {
+  border-top: 1px solid var(--pz-model-divider);
+}
+
+.pz-token-comparisons {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.pz-token-comparisons > .plaza-price-pair + .plaza-price-pair::before {
+  position: absolute;
+  top: -.75rem;
+  right: 0;
+  left: 0;
+  border-top: 1px dashed var(--pz-grid);
+  content: '';
+  pointer-events: none;
 }
 
 .pz-bg,
@@ -498,7 +535,7 @@ tbody tr:hover .pz-cell {
   background-color: var(--pz-bg-hover);
 }
 
-/* 窄屏横向滚动时模型名一列固定在左侧；边线用阴影，折叠边框不会跟随 sticky 单元格移动 */
+/* 横向滚动时固定模型列，内侧分隔线随固定列一起移动。 */
 .pz-sticky {
   position: sticky;
   left: 0;
@@ -533,5 +570,8 @@ tbody tr.pz-row-highlight > .pz-sticky {
   background: var(--public-accent-soft, var(--pz-bg));
 }
 
-.pz-comparison-heading { background: var(--pz-surface); }
+.pz-comparison-heading {
+  border-color: var(--pz-border);
+  background: var(--pz-surface);
+}
 </style>

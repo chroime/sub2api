@@ -89,6 +89,7 @@ type modelPlazaModel struct {
 // modelPlazaGroup 广场分组条目（白名单字段）。
 type modelPlazaGroup struct {
 	ID                 int64    `json:"id"`
+	SortOrder          int      `json:"sort_order"`
 	Name               string   `json:"name"`
 	Description        string   `json:"description"`
 	Platform           string   `json:"platform"`
@@ -225,6 +226,7 @@ func toModelPlazaGroupDTO(g *service.PlazaGroup, userRates map[int64]float64) mo
 	}
 	dto := modelPlazaGroup{
 		ID:                        g.ID,
+		SortOrder:                 g.SortOrder,
 		Name:                      g.Name,
 		Description:               g.Description,
 		Platform:                  g.Platform,

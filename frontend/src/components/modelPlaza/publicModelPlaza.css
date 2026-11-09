@@ -164,19 +164,26 @@
    多带一个 .public-theme，确保压过表格组件自带的 .dark 变量 */
 .public-theme.public-model-plaza .model-plaza-content .plaza-vendor-price-table {
   background: var(--public-surface);
-  border-color: var(--public-border);
+  border-color: var(--pz-border);
   box-shadow: var(--public-shadow);
+  --pz-border: var(--public-border-strong);
+  --pz-grid: color-mix(in srgb, var(--public-border-strong) 65%, var(--public-border));
+  --pz-model-divider: var(--public-border-strong);
   --pz-title: color-mix(in srgb, var(--public-accent) 35%, var(--public-heading));
   --pz-bg: color-mix(in srgb, var(--public-accent) 5%, var(--public-surface));
   --pz-bg-hover: color-mix(in srgb, var(--public-accent) 7%, var(--public-hover));
   --pz-surface: var(--public-surface);
   --pz-head-surface: var(--public-surface-soft);
   --pz-row-hover: var(--public-hover);
-  --pz-sticky-edge: var(--public-border);
+  --pz-sticky-edge: var(--pz-border);
 }
 
 .public-model-plaza .model-plaza-content .plaza-vendor-price-table :is(th, td, tr) {
-  border-color: var(--public-border);
+  border-color: var(--pz-grid);
+}
+
+.public-model-plaza .model-plaza-content .plaza-vendor-price-table tbody tr + tr > :is(th, td) {
+  border-top-color: var(--pz-model-divider);
 }
 
 .public-model-plaza .model-plaza-content .plaza-vendor-price-table thead {

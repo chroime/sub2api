@@ -91,6 +91,7 @@ func TestModelPlazaHandler_NilSettingServiceFailsClosed404(t *testing.T) {
 func TestToModelPlazaGroupDTO_UserRateAndFieldWhitelist(t *testing.T) {
 	g := service.PlazaGroup{
 		ID: 2, Name: "vip", Description: "d", Platform: "anthropic",
+		SortOrder:        17,
 		SubscriptionType: "standard", RateMultiplier: 1, IsExclusive: true,
 		VideoRateIndependent: true, VideoRateMultiplier: 0.7,
 		Models: []service.PlazaModel{{
@@ -115,7 +116,7 @@ func TestToModelPlazaGroupDTO_UserRateAndFieldWhitelist(t *testing.T) {
 	require.NoError(t, json.Unmarshal(raw, &decoded))
 
 	for _, key := range []string{
-		"id", "name", "description", "platform", "subscription_type",
+		"id", "name", "description", "platform", "subscription_type", "sort_order",
 		"rate_multiplier", "user_rate_multiplier", "is_exclusive", "models",
 		"peak_rate_enabled", "peak_start", "peak_end", "peak_rate_multiplier",
 		"image_rate_independent", "image_rate_multiplier", "long_context_pricing_enabled",
@@ -125,6 +126,7 @@ func TestToModelPlazaGroupDTO_UserRateAndFieldWhitelist(t *testing.T) {
 		require.Truef(t, exists, "plaza group DTO must expose %q", key)
 	}
 	require.InDelta(t, 0.5, decoded["user_rate_multiplier"].(float64), 1e-9)
+	require.Equal(t, float64(17), decoded["sort_order"])
 	require.Equal(t, true, decoded["video_rate_independent"])
 	require.Equal(t, 0.7, decoded["video_rate_multiplier"])
 
@@ -154,6 +156,38 @@ func TestToModelPlazaGroupDTO_UserRateAndFieldWhitelist(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rawNoRate, &decodedNoRate))
 	_, hasRate := decodedNoRate["user_rate_multiplier"]
 	require.False(t, hasRate, "无专属倍率时 user_rate_multiplier 应 omitempty")
+}
+
+func TestLocalizedPlazaGroups_PreserveVisibleAdminOrder(t *testing.T) {
+	groups := []service.PlazaGroup{
+		{ID: 30, Name: "z-public", RateMultiplier: 5},
+		{ID: 40, Name: "hidden-exclusive", IsExclusive: true, RateMultiplier: 0.01},
+		{ID: 10, Name: "a-granted", IsExclusive: true, RateMultiplier: 1},
+		{ID: 20, Name: "b-public", RateMultiplier: 0.5},
+	}
+	for _, tt := range []struct {
+		name       string
+		allowed    map[int64]struct{}
+		restricted bool
+		want       []int64
+	}{
+		{name: "anonymous", want: []int64{30, 20}},
+		{name: "authenticated", allowed: map[int64]struct{}{10: {}}, want: []int64{30, 10, 20}},
+		{name: "restricted", allowed: map[int64]struct{}{30: {}, 10: {}}, restricted: true, want: []int64{30, 10}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			visible := filterPlazaVisibleGroups(groups, tt.allowed, tt.restricted)
+			out := toLocalizedModelPlazaGroups(visible, map[int64]float64{30: 0.001}, "en")
+			ids := make([]int64, 0, len(out))
+			for _, g := range out {
+				ids = append(ids, g.ID)
+			}
+			require.Equal(t, tt.want, ids)
+			require.NotContains(t, ids, int64(40))
+			require.NotNil(t, out[0].UserRateMultiplier)
+			require.Equal(t, 0.001, *out[0].UserRateMultiplier)
+		})
+	}
 }
 
 func TestToModelPlazaOfficialPricing_NilPassthrough(t *testing.T) {
