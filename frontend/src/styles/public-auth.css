@@ -1,0 +1,64 @@
+/* Authentication pages share the classic home, docs and model-plaza palette. */
+.auth-layout-public .auth-theme-toggle {
+  color: var(--public-muted);
+  border: 1px solid var(--public-border);
+  background: var(--public-surface);
+}
+.auth-layout-public .auth-theme-toggle:hover { color: var(--public-accent); background: var(--public-hover); }
+.auth-layout-public .auth-theme-toggle:focus-visible { outline: 2px solid var(--public-accent); outline-offset: 3px; }
+.auth-layout-public .auth-card {
+  padding: clamp(1.25rem, 5vw, 2rem);
+  backdrop-filter: none;
+}
+.auth-layout-public .auth-subtitle,
+.auth-layout-public h1 { overflow-wrap: anywhere; }
+.auth-layout-public .auth-heading { color: var(--public-heading); }
+.auth-layout-public .auth-muted,
+.auth-layout-public .input-hint { color: var(--public-muted); }
+.auth-layout-public .auth-soft { color: var(--public-soft); }
+.auth-layout-public .auth-divider { background: var(--public-border); }
+.auth-layout-public .input-label { color: var(--public-text); }
+.auth-layout-public .input {
+  min-height: 3rem;
+  background: var(--public-surface-raised);
+  color: var(--public-heading);
+  font-size: 1rem;
+  line-height: 1.5rem;
+}
+.auth-layout-public .auth-code-input { font-size: 1.25rem; }
+.auth-layout-public .input:not(.input-error):not(.input-success) { border-color: var(--public-border-strong); }
+.auth-layout-public .input::placeholder { color: var(--public-soft); }
+.auth-layout-public .input:not(.input-error):not(.input-success):focus {
+  border-color: var(--public-accent);
+  --tw-ring-color: color-mix(in srgb, var(--public-accent) 25%, transparent);
+}
+.auth-layout-public .input:disabled { background: var(--public-surface-soft); color: var(--public-muted); }
+.auth-layout-public .btn {
+  min-height: 3rem;
+  font-size: .9375rem;
+  --tw-ring-offset-color: var(--public-surface);
+}
+.auth-layout-public .btn:focus { --tw-ring-color: color-mix(in srgb, var(--public-accent) 45%, transparent); }
+.auth-layout-public .btn-primary {
+  background: var(--public-cta-bg);
+  color: var(--public-cta-ink);
+  box-shadow: var(--public-shadow);
+}
+.auth-layout-public .btn-primary:not(:disabled):hover { background: var(--public-cta-hover); box-shadow: var(--public-shadow); }
+.auth-layout-public .btn-secondary {
+  background: var(--public-surface-raised);
+  border-color: var(--public-border);
+  color: var(--public-text);
+  box-shadow: none;
+}
+.auth-layout-public .btn-secondary:not(:disabled):hover {
+  background: var(--public-hover);
+  border-color: var(--public-border-strong);
+  color: var(--public-heading);
+}
+.auth-layout-public .auth-link { color: var(--public-accent); }
+.auth-layout-public .auth-link:hover { color: var(--public-accent-hover); }
+.auth-layout-public .auth-password-toggle { color: var(--public-soft); }
+.auth-layout-public .auth-password-toggle:not(:disabled):hover { color: var(--public-accent); }
+.auth-layout-public .auth-link:focus-visible,
+.auth-layout-public .auth-password-toggle:focus-visible { outline: 2px solid var(--public-accent); outline-offset: 3px; border-radius: 4px; }

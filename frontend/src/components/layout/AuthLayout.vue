@@ -1,5 +1,15 @@
 <template>
-  <div class="relative flex min-h-screen items-center justify-center overflow-hidden p-4" :class="{ 'public-theme': publicTheme, 'auth-layout-public': publicTheme }">
+  <div class="relative flex min-h-screen items-center justify-center overflow-hidden p-4" :class="{ 'public-theme': publicTheme, 'public-app-theme': publicTheme, 'auth-layout-public': publicTheme }">
+    <button
+      v-if="publicTheme"
+      type="button"
+      class="auth-theme-toggle absolute right-4 top-4 z-20 inline-flex h-11 w-11 items-center justify-center rounded-xl transition-colors"
+      :title="isDark ? t('home.switchToLight') : t('home.switchToDark')"
+      :aria-label="isDark ? t('home.switchToLight') : t('home.switchToDark')"
+      @click="toggleTheme"
+    >
+      <Icon :name="isDark ? 'sun' : 'moon'" size="md" aria-hidden="true" />
+    </button>
     <!-- Background -->
     <div
       class="auth-background absolute inset-0 bg-gradient-to-br from-gray-50 via-primary-50/30 to-gray-100 dark:from-dark-950 dark:via-dark-900 dark:to-dark-950"
@@ -64,13 +74,19 @@
 
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores'
 import SiteLogo from '@/components/common/SiteLogo.vue'
+import Icon from '@/components/icons/Icon.vue'
+import { useDocumentTheme } from '@/composables/useDocumentTheme'
 import { sanitizeUrl } from '@/utils/url'
+import '@/styles/public-auth.css'
 
-withDefaults(defineProps<{ publicTheme?: boolean }>(), { publicTheme: false })
+withDefaults(defineProps<{ publicTheme?: boolean }>(), { publicTheme: true })
 
 const appStore = useAppStore()
+const { t } = useI18n()
+const { isDark, toggleTheme } = useDocumentTheme()
 
 const siteName = computed(() => appStore.siteName || 'Sub2API')
 const siteLogo = computed(() => sanitizeUrl(appStore.siteLogo || '', { allowRelative: true, allowDataUrl: true }))

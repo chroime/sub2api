@@ -224,7 +224,7 @@ func TestAdminServiceSimpleModeNormalizesAllUnsupportedCreateFieldsDirectly(t *t
 		ImagePrice1K: &one, VideoPrice720P: &one, WebSearchPricePerCall: &one, SearchPricePer1k: &one,
 		AudioRealtimePricePerMin: &one, ClaudeCodeOnly: true, FallbackGroupID: &fallbackID,
 		ModelRouting: map[string][]int64{"claude": {1}}, ModelRoutingEnabled: true,
-		AllowMessagesDispatch: true, AllowLive: true, ForceOpenAIFast: true, RequireOAuthOnly: true,
+		AllowMessagesDispatch: true, AllowLive: true, ForceOpenAIFast: true, ForceOpenAIUltrafast: true, RequireOAuthOnly: true,
 		RPMLimit: 99, MaxReasoningEffort: "high", ProfitControlEnabled: true, ProfitMinMargin: &one,
 		CopyAccountsFromGroupIDs: []int64{2},
 	}
@@ -262,7 +262,7 @@ func TestAdminServiceSimpleModeNormalizesAllUnsupportedUpdateFieldsDirectly(t *t
 		ImagePrice1K: &one, VideoPrice720P: &one, WebSearchPricePerCall: &one, SearchPricePer1k: &one,
 		AudioRealtimePricePerMin: &one, ClaudeCodeOnly: &truth, FallbackGroupID: &fallbackID,
 		ModelRouting: map[string][]int64{"claude": {1}}, ModelRoutingEnabled: &truth,
-		AllowMessagesDispatch: &truth, AllowLive: &truth, ForceOpenAIFast: &truth, RequireOAuthOnly: &truth,
+		AllowMessagesDispatch: &truth, AllowLive: &truth, ForceOpenAIFast: &truth, ForceOpenAIUltrafast: &truth, RequireOAuthOnly: &truth,
 		RPMLimit: new(int), MaxReasoningEffort: ptrString("high"), ProfitControlEnabled: &truth,
 		ProfitMinMargin: &one, CopyAccountsFromGroupIDs: []int64{2},
 	}

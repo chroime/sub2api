@@ -6,7 +6,7 @@ import i18n, { initI18n } from './i18n'
 import { useAppStore } from '@/stores/app'
 import { updateFavicon } from '@/utils/branding'
 import { isIOSDevice } from '@/utils/device'
-import { applyTheme, getInitialTheme } from '@/utils/theme'
+import { startThemeSync } from '@/utils/theme'
 import './style.css'
 import './styles/public-theme.css'
 
@@ -25,7 +25,8 @@ function initIOSViewportZoomFix() {
 }
 
 function initThemeClass() {
-  applyTheme(getInitialTheme())
+  const stopThemeSync = startThemeSync()
+  import.meta.hot?.dispose(stopThemeSync)
 }
 
 async function bootstrap() {

@@ -204,7 +204,7 @@ func TestListPlazaGroups_SortedByAdminOrder(t *testing.T) {
 			var accountModels PlazaAccountModelLister
 			if accountOnly {
 				svc = newPlazaService(nil, groups, nil)
-				accountModels = func(context.Context, *Group) []PlazaAccountModel {
+				accountModels = func(context.Context, *Group, []PlazaAccountModel) []PlazaAccountModel {
 					return []PlazaAccountModel{{Name: "claude-sonnet", Platform: "anthropic"}}
 				}
 			}

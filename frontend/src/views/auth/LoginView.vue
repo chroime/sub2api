@@ -1,12 +1,12 @@
 <template>
-  <AuthLayout public-theme class="public-login">
+  <AuthLayout class="public-login">
     <div class="space-y-6">
       <!-- Title -->
       <div class="text-center">
-        <h2 class="login-heading text-2xl font-bold text-gray-900 dark:text-white">
+        <h2 class="auth-heading text-2xl font-bold text-gray-900 dark:text-white">
           {{ t('auth.welcomeBack') }}
         </h2>
-        <p class="login-muted mt-2 text-sm text-gray-500 dark:text-dark-400">
+        <p class="auth-muted mt-2 text-sm text-gray-500 dark:text-dark-400">
           {{ t('auth.signInToAccount') }}
         </p>
       </div>
@@ -19,7 +19,7 @@
           </label>
           <div class="relative">
             <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
-              <Icon name="mail" size="md" class="login-soft text-gray-400 dark:text-dark-500" />
+              <Icon name="mail" size="md" class="auth-soft text-gray-400 dark:text-dark-500" />
             </div>
             <input
               id="email"
@@ -43,7 +43,7 @@
           </label>
           <div class="relative">
             <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
-              <Icon name="lock" size="md" class="login-soft text-gray-400 dark:text-dark-500" />
+              <Icon name="lock" size="md" class="auth-soft text-gray-400 dark:text-dark-500" />
             </div>
             <input
               id="password"
@@ -60,7 +60,7 @@
               type="button"
               @click="showPassword = !showPassword"
               :disabled="authActionDisabled"
-              class="login-password-toggle absolute inset-y-0 right-0 flex items-center pr-3.5 text-gray-400 transition-colors hover:text-gray-600 dark:hover:text-dark-300"
+              class="auth-password-toggle absolute inset-y-0 right-0 flex items-center pr-3.5 text-gray-400 transition-colors hover:text-gray-600 dark:hover:text-dark-300"
             >
               <Icon v-if="showPassword" name="eyeOff" size="md" />
               <Icon v-else name="eye" size="md" />
@@ -71,7 +71,7 @@
             <router-link
               v-if="passwordResetEnabled && !backendModeEnabled"
               to="/forgot-password"
-              class="login-link text-sm font-medium text-primary-600 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
+              class="auth-link text-sm font-medium text-primary-600 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
             >
               {{ t('auth.forgotPassword') }}
             </router-link>
@@ -141,11 +141,11 @@
 
         <div v-if="showPasskeyLogin || showOAuthLogin" class="space-y-3 pt-1">
           <div class="flex items-center gap-3">
-            <div class="login-divider h-px flex-1 bg-gray-200 dark:bg-dark-700"></div>
-            <span class="login-muted text-xs text-gray-500 dark:text-dark-400">
+            <div class="auth-divider h-px flex-1 bg-gray-200 dark:bg-dark-700"></div>
+            <span class="auth-muted text-xs text-gray-500 dark:text-dark-400">
               {{ t('auth.oauthOrContinue') }}
             </span>
-            <div class="login-divider h-px flex-1 bg-gray-200 dark:bg-dark-700"></div>
+            <div class="auth-divider h-px flex-1 bg-gray-200 dark:bg-dark-700"></div>
           </div>
 
           <button
@@ -198,11 +198,11 @@
 
     <!-- Footer -->
     <template v-if="!backendModeEnabled && publicSettingsLoaded && registrationEnabled" #footer>
-      <p class="login-muted text-gray-500 dark:text-dark-400">
+      <p class="auth-muted text-gray-500 dark:text-dark-400">
         {{ t('auth.dontHaveAccount') }}
         <router-link
           to="/register"
-          class="login-link font-medium text-primary-600 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
+          class="auth-link font-medium text-primary-600 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
         >
           {{ t('auth.signUp') }}
         </router-link>
@@ -226,7 +226,6 @@ import { computed, ref, reactive, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { AuthLayout } from '@/components/layout'
-import '@/styles/public-login.css'
 import LinuxDoOAuthSection from '@/components/auth/LinuxDoOAuthSection.vue'
 import DingTalkOAuthSection from '@/components/auth/DingTalkOAuthSection.vue'
 import OidcOAuthSection from '@/components/auth/OidcOAuthSection.vue'

@@ -104,7 +104,7 @@ func TestListGroups_GrokImagineChannelPriceWinsOverBuiltInPrice(t *testing.T) {
 			BillingMode: BillingModeImage, PerRequestPrice: testPtrFloat64(0.5),
 		}},
 	}}
-	byGroup := grokMediaPlazaGroups(t, channels, groups, nil)
+	byGroup := grokMediaPlazaGroups(t, channels, groups, []PlazaAccountModel{{Name: "grok-imagine-image-2.0", Platform: PlatformGrok}})
 
 	image := byGroup[10]["grok-imagine-image-2.0"]
 	require.Equal(t, PlazaPricingSourceChannel, image.PricingSource)

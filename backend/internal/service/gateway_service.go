@@ -1446,13 +1446,95 @@ func (s *GatewayService) GetAvailableModels(ctx context.Context, groupID *int64,
 	return cloneStringSlice(models)
 }
 
-// ListActiveAccountsByGroup 列出分组下所有启用账号（不看限流/冷却等调度状态）。
-// 模型广场用它取账号模型，避免账号临时不可调度时模型从橱窗消失。
-func (s *GatewayService) ListActiveAccountsByGroup(ctx context.Context, groupID int64) ([]Account, error) {
+// ListModelPlazaAccounts 列出分组中启用且允许调度的账号，忽略限流/冷却等临时状态。
+// 使用与可用性诊断相同的稳定账号池，暂停调度的账号不再贡献广场模型。
+func (s *GatewayService) ListModelPlazaAccounts(ctx context.Context, groupID int64) ([]Account, error) {
 	if s == nil || s.accountRepo == nil {
 		return nil, nil
 	}
-	return s.accountRepo.ListByGroup(ctx, groupID)
+	return s.accountRepo.ListModelAvailabilityCandidates(ctx, &groupID, domain.ConcretePlatformIDs(), false)
+}
+
+// AccountSupportsModelForListing 复用调度路径的模型准入规则，不检查账号瞬时状态。
+func (s *GatewayService) AccountSupportsModelForListing(ctx context.Context, group *Group, account *Account, publicModel string) bool {
+	publicModel = strings.TrimSpace(publicModel)
+	if s == nil || group == nil || account == nil || publicModel == "" || strings.Contains(publicModel, "*") {
+		return false
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	// Voice selects by capability with an empty model, independently of text
+	// mappings and channel text-model restrictions. Account-wide gates still apply.
+	if group.Platform == PlatformGrok && account.IsGrok() {
+		for _, voiceModel := range xai.DefaultVoiceModelIDs() {
+			if publicModel == voiceModel {
+				return !account.IsQualityBlocked() && account.SupportsOpenAIEndpointCapability(OpenAIEndpointCapabilityChatCompletions)
+			}
+		}
+	}
+	supports := func(routeCtx context.Context, platform, requestedModel string) bool {
+		mixed := group.Platform != PlatformComposite &&
+			(platform == PlatformAnthropic || platform == PlatformGemini) && account.IsMixedSchedulingEnabled()
+		if account.Platform != platform && !mixed {
+			return false
+		}
+		if source, ok := CompositeRouteSourceFromContext(routeCtx); ok && source == CompositeRouteSourceAccount && !explicitModelMappingClaims(*account, publicModel) {
+			return false
+		}
+		if s.checkChannelPricingRestriction(routeCtx, &group.ID, requestedModel) {
+			return false
+		}
+		selectionModel := requestedModel
+		openAIPath := domain.UsesOpenAIGateway(platform)
+		if openAIPath {
+			selectionModel = s.ResolveChannelMapping(routeCtx, group.ID, requestedModel).MappedModel
+			// Account.IsModelSupported includes OpenAI retirement and reviewed
+			// governance mappings; the generic passthrough shortcut does not.
+			if !account.IsModelSupported(selectionModel) {
+				return false
+			}
+		} else if !s.isModelSupportedByAccountWithContext(routeCtx, account, selectionModel) {
+			return false
+		}
+		if account.IsQualityBlockedForModel(selectionModel) {
+			return false
+		}
+		if account.IsGrok() && xai.IsGrokImagineModel(account.GetMappedModel(selectionModel)) &&
+			!account.SupportsOpenAIEndpointCapability(OpenAIEndpointCapabilityGrokMediaGeneration) {
+			return false
+		}
+		if s.needsUpstreamChannelRestrictionCheck(routeCtx, &group.ID) {
+			if openAIPath {
+				upstreamModel := resolveOpenAIAccountUpstreamModelForRequest(account, selectionModel, false)
+				if upstreamModel != "" && s.channelService.IsModelRestricted(routeCtx, group.ID, upstreamModel) {
+					return false
+				}
+			} else if s.isUpstreamModelRestrictedByChannel(routeCtx, group.ID, account, selectionModel) {
+				return false
+			}
+		}
+		return true
+	}
+	if group.Platform != PlatformComposite {
+		return supports(ctx, group.Platform, publicModel)
+	}
+	// The plaza has no selected endpoint. Admit a public model only when an
+	// existing endpoint resolves it to this account's platform and usable model.
+	for _, endpoint := range []string{
+		CompositeRouteEndpointResponses, CompositeRouteEndpointChatCompletions,
+		CompositeRouteEndpointMessages, CompositeRouteEndpointGemini,
+		CompositeRouteEndpointImages, CompositeRouteEndpointEmbeddings,
+	} {
+		decision, err := s.compositeResolver.Resolve(ctx, group.ID, publicModel, endpoint)
+		if err != nil {
+			return false
+		}
+		if decision.Matched && supports(WithCompositeRouteDecision(ctx, decision), decision.TargetPlatform, decision.UpstreamModel) {
+			return true
+		}
+	}
+	return false
 }
 
 // AvailableModelsFromAccounts 按 /v1/models 口径从给定账号集合推导模型列表。

@@ -77,7 +77,7 @@ func TestListPlazaGroups_PricingSourceGroupWins(t *testing.T) {
 }
 
 func staticPlazaAccountModels(byGroup map[int64][]PlazaAccountModel) PlazaAccountModelLister {
-	return func(_ context.Context, g *Group) []PlazaAccountModel { return byGroup[g.ID] }
+	return func(_ context.Context, g *Group, _ []PlazaAccountModel) []PlazaAccountModel { return byGroup[g.ID] }
 }
 
 func TestListGroupsWithAccountModels_MergesAccountOnlyModelsAtOfficialPrice(t *testing.T) {
@@ -112,8 +112,8 @@ func TestListGroupsWithAccountModels_MergesAccountOnlyModelsAtOfficialPrice(t *t
 	require.Nil(t, unpriced.Pricing)
 }
 
-func TestListGroupsWithAccountModels_KeepsChannelModelsWhenAccountsMissing(t *testing.T) {
-	// 分组下账号丢失（列不出任何模型）时，渠道配置的模型仍照常展示。
+func TestListGroupsWithAccountModels_KeepsEmptyGroupWhenAccountsMissing(t *testing.T) {
+	// 定价记录不能代替账号能力；没有账号模型时保留分组选项，模型列表为空。
 	ch := plazaPricedChannel(1, "ch", []int64{10}, "anthropic", "claude-sonnet", "claude-haiku")
 	svc := newPlazaService([]Channel{ch}, []Group{{ID: 10, Name: "no-accounts", Platform: "anthropic", RateMultiplier: 1}}, nil)
 	lister := staticPlazaAccountModels(nil)
@@ -121,8 +121,9 @@ func TestListGroupsWithAccountModels_KeepsChannelModelsWhenAccountsMissing(t *te
 	out, err := svc.ListGroupsWithAccountModels(context.Background(), lister)
 	require.NoError(t, err)
 	require.Len(t, out, 1)
-	require.Len(t, out[0].Models, 2)
-	require.Equal(t, PlazaPricingSourceChannel, out[0].Models[0].PricingSource)
+	require.Equal(t, int64(10), out[0].ID)
+	require.Equal(t, "no-accounts", out[0].Name)
+	require.Empty(t, out[0].Models)
 }
 
 func TestListGroupsWithAccountModels_GroupWithoutChannelIsReturned(t *testing.T) {

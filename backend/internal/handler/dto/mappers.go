@@ -154,6 +154,7 @@ func GroupFromServiceAdmin(g *service.Group) *AdminGroup {
 		BillingTokenAdjustmentMinInputTokens: g.BillingTokenAdjustmentMinInputTokens,
 		StreamingACKEnabled:                  g.StreamingACKEnabled,
 		ForceOpenAIFast:                      g.ForceOpenAIFast,
+		ForceOpenAIUltrafast:                 g.ForceOpenAIUltrafast,
 		FreeOpenAIFast:                       g.FreeOpenAIFast,
 		ProfitControlEnabled:                 g.ProfitControlEnabled,
 		ProfitMinMargin:                      g.ProfitMinMargin,

@@ -89,7 +89,10 @@ export interface ModelPlazaGroup {
   video_rate_multiplier: number
   /** 分组是否启用长上下文阶梯计费；false 时实付列只展示最低档，官方阶梯仅供参考。 */
   long_context_pricing_enabled: boolean
+  /** 选中该分组时展示的实际账号可用模型。 */
   models: PlazaModel[]
+  /** 全部分组视图使用的模型目录；旧响应缺省时回落 models，空数组表示目录为空。 */
+  catalog_models?: PlazaModel[]
 }
 
 export interface ModelPlazaResponse {

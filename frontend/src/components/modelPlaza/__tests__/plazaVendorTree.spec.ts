@@ -80,6 +80,34 @@ describe('collectPlazaModels', () => {
     const groups = [group(1, [model('grok-4', 'grok', 1e-6), model('grok-4', 'openai', 1e-6)])]
     expect(collectPlazaModels(groups, 'all')).toHaveLength(2)
   })
+
+  it('全部分组使用目录并保持来源去重，具体分组只使用实际可用模型', () => {
+    const available = model('gpt-live', 'openai', 1e-6, 'channel')
+    const official = model('kimi-catalog', 'openai', 2e-6, 'official')
+    const configured = model('kimi-catalog', 'openai', 3e-6, 'channel')
+    const groups: ModelPlazaGroup[] = [
+      { ...group(1, [available]), catalog_models: [official] },
+      { ...group(2, []), catalog_models: [configured] }
+    ]
+    expect(collectPlazaModels(groups, 'all')).toEqual([configured])
+    expect(collectPlazaModels(groups, 1)).toEqual([available])
+    expect(collectPlazaModels(groups, 2)).toEqual([])
+    expect(collectPlazaModels(groups, 'all')).toEqual([configured])
+    expect(groups[0].catalog_models).toEqual([official])
+    expect(groups[0].models).toEqual([available])
+  })
+
+  it('显式空目录不回落到实际模型，旧响应缺少目录时仍使用 models', () => {
+    const available = model('gpt-live', 'openai', 1e-6, 'channel')
+    const legacy = model('claude-legacy', 'anthropic', 3e-6, 'channel')
+    const groups: ModelPlazaGroup[] = [
+      { ...group(1, [available]), catalog_models: [] },
+      group(2, [legacy])
+    ]
+    expect(collectPlazaModels(groups, 'all')).toEqual([legacy])
+    expect(collectPlazaModels(groups, 1)).toEqual([available])
+    expect(collectPlazaModels(groups, 2)).toEqual([legacy])
+  })
 })
 
 describe('buildVendorTree', () => {

@@ -110,6 +110,7 @@ type modelPlazaGroup struct {
 	// 分组是否启用长上下文阶梯计费；关闭时模型实付列只展示最低档/基础价。
 	LongContextPricingEnabled bool              `json:"long_context_pricing_enabled"`
 	Models                    []modelPlazaModel `json:"models"`
+	CatalogModels             []modelPlazaModel `json:"catalog_models,omitempty"`
 }
 
 // modelPlazaResponse 广场页响应。
@@ -211,19 +212,6 @@ func toLocalizedModelPlazaGroups(visible []service.PlazaGroup, userRates map[int
 
 // toModelPlazaGroupDTO 将 service 层广场分组映射为白名单 DTO,并合并用户专属倍率。
 func toModelPlazaGroupDTO(g *service.PlazaGroup, userRates map[int64]float64) modelPlazaGroup {
-	models := make([]modelPlazaModel, 0, len(g.Models))
-	for i := range g.Models {
-		m := &g.Models[i]
-		models = append(models, modelPlazaModel{
-			Name:             m.Name,
-			Platform:         m.Platform,
-			Pricing:          toUserPricing(m.Pricing),
-			PricingSource:    m.PricingSource,
-			OfficialPricing:  toModelPlazaOfficialPricing(m.OfficialPricing),
-			LongContextBasis: string(m.LongContextBasis),
-			TimePricing:      toModelPlazaTimePricing(m.TimePricing),
-		})
-	}
 	dto := modelPlazaGroup{
 		ID:                        g.ID,
 		SortOrder:                 g.SortOrder,
@@ -242,12 +230,32 @@ func toModelPlazaGroupDTO(g *service.PlazaGroup, userRates map[int64]float64) mo
 		VideoRateIndependent:      g.VideoRateIndependent,
 		VideoRateMultiplier:       g.VideoRateMultiplier,
 		LongContextPricingEnabled: g.LongContextPricingEnabled,
-		Models:                    models,
+		Models:                    toModelPlazaModelsDTO(g.Models),
+	}
+	if g.CatalogModels != nil {
+		dto.CatalogModels = toModelPlazaModelsDTO(g.CatalogModels)
 	}
 	if rate, ok := userRates[g.ID]; ok {
 		dto.UserRateMultiplier = &rate
 	}
 	return dto
+}
+
+func toModelPlazaModelsDTO(source []service.PlazaModel) []modelPlazaModel {
+	models := make([]modelPlazaModel, 0, len(source))
+	for i := range source {
+		m := &source[i]
+		models = append(models, modelPlazaModel{
+			Name:             m.Name,
+			Platform:         m.Platform,
+			Pricing:          toUserPricing(m.Pricing),
+			PricingSource:    m.PricingSource,
+			OfficialPricing:  toModelPlazaOfficialPricing(m.OfficialPricing),
+			LongContextBasis: string(m.LongContextBasis),
+			TimePricing:      toModelPlazaTimePricing(m.TimePricing),
+		})
+	}
+	return models
 }
 
 // toModelPlazaTimePricing 转换分时倍率；nil 透传（JSON 省略）。

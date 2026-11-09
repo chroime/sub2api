@@ -183,6 +183,8 @@ type AdminGroup struct {
 	StreamingACKEnabled                  *bool   `json:"streaming_ack_enabled"`
 	// ForceOpenAIFast 是管理端请求策略，用户侧分组 DTO 无需暴露。
 	ForceOpenAIFast bool `json:"force_openai_fast"`
+	// ForceOpenAIUltrafast 是仅适用于 OpenAI 分组的管理端请求策略。
+	ForceOpenAIUltrafast bool `json:"force_openai_ultrafast"`
 	// FreeOpenAIFast 是管理端计费策略，用户侧分组 DTO 无需暴露。
 	FreeOpenAIFast bool `json:"free_openai_fast"`
 

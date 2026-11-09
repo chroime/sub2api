@@ -3,6 +3,7 @@ import { enableAutoUnmount, mount } from '@vue/test-utils'
 import { nextTick, reactive } from 'vue'
 
 import AuthLayout from '../AuthLayout.vue'
+import { applyTheme } from '@/utils/theme'
 
 const appStore = reactive({
   siteName: 'Test gateway',
@@ -17,14 +18,48 @@ vi.mock('@/stores', () => ({
 }))
 
 enableAutoUnmount(afterEach)
+afterEach(() => {
+  document.documentElement.classList.remove('dark')
+  localStorage.removeItem('theme')
+})
 
 describe('AuthLayout branding', () => {
   beforeEach(() => {
+    document.documentElement.classList.remove('dark')
+    localStorage.removeItem('theme')
     appStore.siteName = 'Test gateway'
     appStore.siteLogo = ''
     appStore.cachedPublicSettings = { site_subtitle: 'Unified model access' }
     appStore.publicSettingsLoaded = true
     appStore.fetchPublicSettings.mockClear()
+  })
+
+  it('lets authentication pages change and persist the site theme', async () => {
+    const wrapper = mount(AuthLayout)
+    const button = wrapper.get('button.auth-theme-toggle')
+    const initialLabel = button.attributes('aria-label')
+    await button.trigger('click')
+    expect(document.documentElement.classList.contains('dark')).toBe(true)
+    expect(localStorage.getItem('theme')).toBe('dark')
+    expect(button.attributes('aria-label')).not.toBe(initialLabel)
+    await button.trigger('click')
+    expect(document.documentElement.classList.contains('dark')).toBe(false)
+    expect(localStorage.getItem('theme')).toBe('light')
+    expect(button.attributes('aria-label')).toBe(initialLabel)
+  })
+
+  it('updates the auth theme control when another page changes the applied theme', async () => {
+    const wrapper = mount(AuthLayout)
+    const button = wrapper.get('button.auth-theme-toggle')
+    const initialLabel = button.attributes('aria-label')
+    applyTheme('dark')
+    await nextTick()
+    await nextTick()
+    expect(button.attributes('aria-label')).not.toBe(initialLabel)
+    await button.trigger('click')
+    expect(document.documentElement.classList.contains('dark')).toBe(false)
+    expect(localStorage.getItem('theme')).toBe('light')
+    expect(button.attributes('aria-label')).toBe(initialLabel)
   })
 
   it('keeps the logo unframed while preserving its size and the auth form surface', () => {

@@ -28,14 +28,14 @@ function sourceRank(m: PlazaModel): number {
   return m.pricing_source ? ALL_GROUPS_SOURCE_RANK[m.pricing_source] : 3
 }
 
-/** 取当前分组范围内的模型；「全部」时跨分组按平台+模型名去重。 */
+/** 具体分组只展示实际可用模型；「全部」从目录按平台+模型名去重，兼容旧响应。 */
 export function collectPlazaModels(groups: ModelPlazaGroup[], groupId: number | 'all'): PlazaModel[] {
   if (groupId !== 'all') {
     return groups.find((g) => g.id === groupId)?.models ?? []
   }
   const byKey = new Map<string, PlazaModel>()
   for (const g of groups) {
-    for (const m of g.models) {
+    for (const m of g.catalog_models ?? g.models) {
       const key = plazaModelKey(m)
       const current = byKey.get(key)
       if (!current || sourceRank(m) < sourceRank(current)) {

@@ -92,6 +92,7 @@ func mustCreateGroup(t *testing.T, client *dbent.Client, g *service.Group) *serv
 		SetRateMultiplier(g.RateMultiplier).
 		SetIsExclusive(g.IsExclusive).
 		SetForceOpenaiFast(g.ForceOpenAIFast).
+		SetForceOpenaiUltrafast(g.ForceOpenAIUltrafast).
 		SetFreeOpenaiFast(g.FreeOpenAIFast).
 		SetInputRouting(service.CloneGroupInputRouting(g.InputRouting)).
 		SetModelAllowlist(service.DomainGroupModelAllowlist(g.ModelAllowlist)).

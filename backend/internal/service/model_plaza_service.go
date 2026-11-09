@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 )
 
 // PlazaOfficialPricing 模型广场展示用的官方参考价（USD per token），与计费同源：
@@ -47,9 +49,8 @@ type PlazaModel struct {
 
 // PlazaGroup 模型广场中以分组为顶层的条目。
 //
-// 与 AvailableGroupRef 相比多了 Description 与 Models；Models 来自该分组关联渠道的
-// 支持模型（普通分组按分组平台隔离，Composite 分组展开关联渠道已配置的
-// 具体平台），与「可用渠道」页口径一致。
+// 与 AvailableGroupRef 相比多了 Description 与 Models；生产查询只展示分组账号
+// 支持且通过分组/渠道限制的模型，渠道配置提供候选名称和定价，不证明模型可用。
 type PlazaGroup struct {
 	ID                 int64
 	SortOrder          int
@@ -74,16 +75,23 @@ type PlazaGroup struct {
 	// LongContextPricingEnabled 分组是否按上下文长度应用阶梯价；关闭时模型展示的是最低档。
 	LongContextPricingEnabled bool
 	Models                    []PlazaModel
+	// CatalogModels 供“全部分组”价格目录展示；Models 仍是具体分组实际可用清单。
+	// nil 表示调用方只查询渠道目录，沿用 Models。
+	CatalogModels []PlazaModel
 }
 
-// PlazaAccountModel 分组下可调度账号对外暴露的模型（与 /v1/models 同源）。
+// PlazaAccountModel 分组账号支持的具体公开模型名。
 type PlazaAccountModel struct {
 	Name     string
 	Platform string
+	// ChannelRestrictionVerified confirms that the lister checked the actual
+	// route target and account against channel pricing restrictions.
+	ChannelRestrictionVerified bool
 }
 
-// PlazaAccountModelLister 列出分组账号侧的模型；由 handler 层按 /v1/models 口径提供。
-type PlazaAccountModelLister func(ctx context.Context, g *Group) []PlazaAccountModel
+// PlazaAccountModelLister 列出账号模型，并逐项验证渠道/白名单候选。
+// 返回值只包含可服务的具体公开名称，不能用通配模式覆盖单个候选的失败结果。
+type PlazaAccountModelLister func(ctx context.Context, g *Group, candidates []PlazaAccountModel) []PlazaAccountModel
 
 // ModelPlazaService 聚合模型广场数据。
 //
@@ -123,7 +131,7 @@ func NewModelPlazaService(
 //   - token 模型的单价与阶梯按实收口径合成（见 ResolveContextPricingSchedule），
 //     图片计费模型的档位价按实收口径合成（见 plazaImageDisplayPricing）；
 //   - 每个模型附带官方参考价（查不到为 nil）；
-//   - 只返回 Models 非空的分组；分组按后台 SortOrder 升序（同序按 ID），
+//   - 渠道目录查询只返回 Models 非空的分组；分组按后台 SortOrder 升序（同序按 ID），
 //     组内模型按名称排序。
 //
 // 可见性过滤（专属分组）不在此层做，由 handler 按登录态裁剪。
@@ -131,11 +139,12 @@ func (s *ModelPlazaService) ListGroups(ctx context.Context) ([]PlazaGroup, error
 	return s.ListGroupsWithAccountModels(ctx, nil)
 }
 
-// ListGroupsWithAccountModels 在 ListGroups 的渠道模型之外，再并入分组账号侧的模型
-// （accountModels 为 nil 时等同 ListGroups）：
-//   - 渠道里已有的模型保持渠道条目与渠道定价不变；
+// ListGroupsWithAccountModels 以账号支持列表约束渠道与账号侧模型的展示
+// （accountModels 为 nil 时等同 ListGroups，仅用于渠道目录查询）：
+//   - 渠道里已有且账号支持的模型保持渠道条目与渠道定价不变；
 //   - 仅账号侧才有的模型按官方目录价展示，来源标记为 official，目录也查不到时无定价；
 //   - 合并后的模型遵循网关渠道定价限制，官方兜底价不能绕过允许列表；
+//   - 保留全部活跃分组，空模型列表由页面展示空状态；可见性仍由 handler 裁剪；
 //   - 没有绑定渠道但有账号模型的分组同样返回；平台隔离规则与渠道模型一致。
 func (s *ModelPlazaService) ListGroupsWithAccountModels(ctx context.Context, accountModels PlazaAccountModelLister) ([]PlazaGroup, error) {
 	channels, err := s.channelRepo.ListAll(ctx)
@@ -256,15 +265,38 @@ func (s *ModelPlazaService) ListGroupsWithAccountModels(ctx context.Context, acc
 		}
 	}
 
+	accountSupport := make(map[int64][]PlazaAccountModel, len(groups))
 	if accountModels != nil {
 		for _, gid := range order {
 			pg := byGroup[gid]
+			g := groupEnt[gid]
+			candidates := make([]PlazaAccountModel, 0, len(pg.Models))
+			for _, model := range pg.Models {
+				candidates = append(candidates, PlazaAccountModel{
+					Name: model.Name, Platform: model.Platform,
+				})
+			}
+			// 白名单可把账号通配模式收敛为具体模型；先给账号验证请求路径，
+			// 再按公开名展示，不能只因白名单写了名字便宣称模型可用。
+			listedPlatforms := []string{pg.Platform}
+			if pg.Platform == PlatformComposite {
+				listedPlatforms = domain.ConcretePlatformIDs()
+			}
+			for _, name := range g.ModelAllowlist.Models {
+				if !g.ModelAllowlistEnabled() || strings.Contains(name, wildcardSuffix) {
+					continue
+				}
+				for _, platform := range listedPlatforms {
+					candidates = append(candidates, PlazaAccountModel{Name: name, Platform: platform})
+				}
+			}
+			accountSupport[gid] = accountModels(ctx, g, candidates)
 			idx := modelIdx[gid]
 			if idx == nil {
 				idx = make(map[modelKey]int)
 				modelIdx[gid] = idx
 			}
-			for _, am := range accountModels(ctx, groupEnt[gid]) {
+			for _, am := range accountSupport[gid] {
 				name := strings.TrimSpace(am.Name)
 				// 账号映射键可能是通配模式，不是可展示的具体模型。
 				if name == "" || strings.Contains(name, wildcardSuffix) {
@@ -291,14 +323,31 @@ func (s *ModelPlazaService) ListGroupsWithAccountModels(ctx context.Context, acc
 	out := make([]PlazaGroup, 0, len(order))
 	for _, gid := range order {
 		pg := byGroup[gid]
+		g := groupEnt[gid]
 		allowed := pg.Models[:0]
 		for _, model := range pg.Models {
-			if !plazaModelRestricted(restrictionCache, gid, model) {
-				allowed = append(allowed, model)
+			if !g.ModelAllowlist.Allows(model.Name) {
+				continue
 			}
+			// Composite aliases were checked against their resolved route target
+			// by the account lister. A second raw-name pricing check would reject
+			// a usable alias whose price belongs to that target model.
+			verifiedComposite := false
+			if pg.Platform == PlatformComposite {
+				for _, support := range accountSupport[gid] {
+					if support.Platform == model.Platform && support.Name == model.Name && support.ChannelRestrictionVerified {
+						verifiedComposite = true
+						break
+					}
+				}
+			}
+			if !verifiedComposite && plazaModelRestricted(restrictionCache, gid, model) {
+				continue
+			}
+			allowed = append(allowed, model)
 		}
 		pg.Models = allowed
-		if len(pg.Models) == 0 {
+		if len(pg.Models) == 0 && accountModels == nil {
 			continue
 		}
 		sort.SliceStable(pg.Models, func(i, j int) bool {
@@ -307,7 +356,6 @@ func (s *ModelPlazaService) ListGroupsWithAccountModels(ctx context.Context, acc
 			}
 			return pg.Models[i].Platform < pg.Models[j].Platform
 		})
-		g := groupEnt[gid]
 		for j := range pg.Models {
 			s.fillDisplayPricing(ctx, &pg.Models[j], g)
 			// 无渠道/分组定价、由计费目录（含内置兜底价）给出单价的模型归为官方价。
@@ -315,6 +363,18 @@ func (s *ModelPlazaService) ListGroupsWithAccountModels(ctx context.Context, acc
 				pg.Models[j].PricingSource = PlazaPricingSourceOfficial
 			}
 			pg.Models[j].OfficialPricing = s.lookupOfficialPricing(ctx, pg.Models[j].Name, officialMemo)
+		}
+		if accountModels != nil {
+			// 全部分组保留配置价目目录；具体分组仅返回真实账号支持的模型。
+			// 用独立切片筛选，确保不会原地覆盖目录内容及已计算的定价。
+			pg.CatalogModels = pg.Models
+			available := make([]PlazaModel, 0, len(pg.Models))
+			for _, model := range pg.Models {
+				if plazaAccountModelSupported(model, accountSupport[gid]) {
+					available = append(available, model)
+				}
+			}
+			pg.Models = available
 		}
 		out = append(out, *pg)
 	}
@@ -326,6 +386,15 @@ func (s *ModelPlazaService) ListGroupsWithAccountModels(ctx context.Context, acc
 		return out[i].ID < out[j].ID
 	})
 	return out, nil
+}
+
+func plazaAccountModelSupported(model PlazaModel, supported []PlazaAccountModel) bool {
+	for _, accountModel := range supported {
+		if accountModel.Platform == model.Platform && accountModel.Name == model.Name {
+			return true
+		}
+	}
+	return false
 }
 
 // plazaModelRestricted 与网关调度前检查使用相同的计费模型、平台与定价匹配规则。

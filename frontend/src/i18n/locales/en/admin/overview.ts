@@ -1344,6 +1344,10 @@ export default {
         free: 'Free Fast',
         freeHint: 'Fast requests in this group still use the priority tier, but customers are charged the equivalent Standard price.'
       },
+      openaiUltraFast: {
+        force: 'Force UltraFast (ultrafast)',
+        hint: 'Forces service_tier=ultrafast on OpenAI requests in this group and turns off forced Fast. The global policy can still filter or block it. Requires upstream and model support and uses UltraFast pricing; Free Fast does not apply. New requests update immediately after saving; existing WebSocket sessions must reconnect.'
+      },
       invalidRequestFallback: {
         title: 'Invalid Request Fallback Group',
         hint: 'Triggered only when upstream explicitly returns prompt too long. Leave empty to disable fallback.',

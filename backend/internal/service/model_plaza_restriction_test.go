@@ -52,7 +52,7 @@ func TestPlazaRestriction_UsesGatewayBillingModelAndFiltersMappingOnlyEntries(t 
 			})
 			svc := newPlazaService([]Channel{channel}, []Group{{ID: 10, Platform: PlatformOpenAI}}, catalog)
 			out, err := svc.ListGroupsWithAccountModels(context.Background(), staticPlazaAccountModels(map[int64][]PlazaAccountModel{
-				10: {{Name: "alias-preview", Platform: PlatformOpenAI}},
+				10: {{Name: "allowed-model", Platform: PlatformOpenAI}, {Name: "alias", Platform: PlatformOpenAI}, {Name: "alias-preview", Platform: PlatformOpenAI}, {Name: "kimi-k3", Platform: PlatformOpenAI}},
 			}))
 			require.NoError(t, err)
 			require.Len(t, out, 1)
@@ -75,7 +75,7 @@ func TestPlazaRestriction_PreservesGatewayNormalizationAndCompositePlatformIsola
 	groups := []Group{{ID: 10, Platform: PlatformOpenAI}, {ID: 20, Platform: PlatformComposite}}
 	lister := staticPlazaAccountModels(map[int64][]PlazaAccountModel{
 		10: {{Name: "KiMi-k3", Platform: PlatformOpenAI}, {Name: "shared", Platform: PlatformOpenAI}},
-		20: {{Name: "Claude-Sonnet-4.5", Platform: PlatformAnthropic}, {Name: "shared", Platform: PlatformAnthropic}, {Name: "shared", Platform: PlatformOpenAI}, {Name: "KiMi-k3", Platform: PlatformOpenAI}},
+		20: {{Name: "CLAUDE-SONNET-4-5", Platform: PlatformAnthropic}, {Name: "Claude-Sonnet-4.5", Platform: PlatformAnthropic}, {Name: "shared", Platform: PlatformAnthropic}, {Name: "shared", Platform: PlatformOpenAI}, {Name: "KiMi-k3", Platform: PlatformOpenAI}},
 	})
 	out, err := newPlazaService([]Channel{channel}, groups, nil).ListGroupsWithAccountModels(context.Background(), lister)
 	require.NoError(t, err)
@@ -108,7 +108,7 @@ func TestPlazaRestriction_EffectiveChannelUsesRepositoryOrderBeforeDisplaySortin
 			last.Status, last.RestrictModels = tt.lastStatus, tt.lastRestrict
 			out, err := newPlazaService([]Channel{first, last}, []Group{{ID: 10, Platform: PlatformOpenAI}}, nil).
 				ListGroupsWithAccountModels(context.Background(), staticPlazaAccountModels(map[int64][]PlazaAccountModel{
-					10: {{Name: "kimi-k3", Platform: PlatformOpenAI}},
+					10: {{Name: "configured-model", Platform: PlatformOpenAI}, {Name: "kimi-k3", Platform: PlatformOpenAI}},
 				}))
 			require.NoError(t, err)
 			_, exists := plazaSourceModelsByName(t, out)["kimi-k3"]
@@ -124,7 +124,7 @@ func TestPlazaRestriction_GroupPriceDoesNotOverrideGatewayRestriction(t *testing
 		{Models: []string{"kimi-k3"}, InputPrice: testPtrFloat64(1e-6)},
 	}}
 	out, err := newPlazaService([]Channel{channel}, []Group{group}, nil).ListGroupsWithAccountModels(
-		context.Background(), staticPlazaAccountModels(map[int64][]PlazaAccountModel{10: {{Name: "kimi-k3", Platform: PlatformOpenAI}}}))
+		context.Background(), staticPlazaAccountModels(map[int64][]PlazaAccountModel{10: {{Name: "configured-model", Platform: PlatformOpenAI}, {Name: "kimi-k3", Platform: PlatformOpenAI}}}))
 	require.NoError(t, err)
 	require.NotContains(t, plazaSourceModelsByName(t, out), "kimi-k3")
 }

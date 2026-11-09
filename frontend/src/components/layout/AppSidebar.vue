@@ -206,6 +206,7 @@ import SiteLogo from '@/components/common/SiteLogo.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { sanitizeSvg } from '@/utils/sanitize'
 import { sanitizeUrl } from '@/utils/url'
+import { setTheme } from '@/utils/theme'
 import { FeatureFlags, makeSidebarFlag } from '@/utils/featureFlags'
 import { resolveSiteBillingMode } from '@/utils/siteBillingMode'
 import { useBatchImageAccess } from '@/composables/useBatchImageAccess'
@@ -263,6 +264,7 @@ const mobileOpen = computed(() => appStore.mobileOpen)
 const isAdmin = computed(() => authStore.isAdmin)
 const sidebarNavRef = ref<HTMLElement | null>(null)
 const isDark = ref(document.documentElement.classList.contains('dark'))
+let themeObserver: MutationObserver | undefined
 
 const homePath = computed(() => (isAdmin.value ? '/admin/dashboard' : '/dashboard'))
 const smartOperationsRootPath = SMART_OPERATIONS_SECTIONS[0].path
@@ -922,10 +924,13 @@ function toggleSidebar() {
   appStore.toggleSidebar()
 }
 
+function syncTheme() {
+  isDark.value = document.documentElement.classList.contains('dark')
+}
+
 function toggleTheme() {
-  isDark.value = !isDark.value
-  document.documentElement.classList.toggle('dark', isDark.value)
-  localStorage.setItem('theme', isDark.value ? 'dark' : 'light')
+  setTheme(document.documentElement.classList.contains('dark') ? 'light' : 'dark')
+  syncTheme()
 }
 
 function closeMobile() {
@@ -1018,9 +1023,6 @@ function handleGroupClick(item: NavItem) {
   groupExpandOverrides.value.set(item.path, true)
 }
 
-// Initialize theme from the global class set before app mount.
-isDark.value = document.documentElement.classList.contains('dark')
-
 // Fetch admin settings (for feature-gated nav items like Ops).
 watch(
   isAdmin,
@@ -1033,6 +1035,9 @@ watch(
 )
 
 onMounted(() => {
+  syncTheme()
+  themeObserver = new MutationObserver(syncTheme)
+  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
   void refreshBatchImageAccess()
   if (isAdmin.value) {
     adminSettingsStore.fetch()
@@ -1048,6 +1053,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  themeObserver?.disconnect()
   if (sidebarNavRef.value) {
     appStore.sidebarScrollTop = sidebarNavRef.value.scrollTop
   }

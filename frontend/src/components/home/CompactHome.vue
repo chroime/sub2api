@@ -90,7 +90,7 @@ const observer = new MutationObserver(() => { isDark.value = document.documentEl
 onMounted(() => observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] }))
 onBeforeUnmount(() => observer.disconnect())
 function toggleTheme() {
-  setTheme(isDark.value ? 'light' : 'dark')
+  setTheme(document.documentElement.classList.contains('dark') ? 'light' : 'dark')
   isDark.value = document.documentElement.classList.contains('dark')
 }
 </script>

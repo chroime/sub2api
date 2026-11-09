@@ -1342,6 +1342,10 @@ export default {
         free: '免费 Fast',
         freeHint: '该分组的 Fast 请求仍使用 priority 档位，但客户实际费用按同一请求的 Standard 价格计算。'
       },
+      openaiUltraFast: {
+        force: '强制使用 UltraFast（ultrafast）',
+        hint: '开启后，此分组的 OpenAI 请求会强制使用 UltraFast（service_tier=ultrafast），并关闭强制 Fast。全局策略仍可过滤或拦截；需上游及模型支持，按 UltraFast 价格计费，免费 Fast 不适用。保存后新请求立即生效，已建立的 WebSocket 会话需重连。'
+      },
       invalidRequestFallback: {
         title: '无效请求兜底分组',
         hint: '仅当上游明确返回 prompt too long 时才会触发，留空表示不兜底',
