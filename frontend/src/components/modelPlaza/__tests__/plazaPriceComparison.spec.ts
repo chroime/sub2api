@@ -4,6 +4,7 @@ import type { UserPricingInterval, UserSupportedModelPricing } from '@/api/chann
 import {
   comparePriceAmounts,
   effectivePlazaRate,
+  getPlazaPayableComparison,
   getTokenComparisons,
   getUnitComparisons
 } from '../plazaPriceComparison'
@@ -44,13 +45,15 @@ function tier(min: number, max: number | null, input: number): UserPricingInterv
 }
 
 describe('model plaza price comparisons', () => {
-  it('compares the actual configured base times the rate, not a rate-derived discount', () => {
+  it('compares the CNY cost of official USD and the actual configured site credits', () => {
     const [entry] = getTokenComparisons(model(), group(), 'input_price')
     expect(entry).toMatchObject({ reference: 3, site: 2.5, currency: 'USD', referenceKind: 'official', comparable: true })
-    const result = comparePriceAmounts(entry.reference, entry.site)
+    const payable = getPlazaPayableComparison(entry)
+    expect(payable).toEqual({ reference: 20.1, site: 2.5, currency: 'CNY', converted: true, comparable: true })
+    const result = comparePriceAmounts(payable.reference, payable.site)
     expect(result.status).toBe('saving')
-    expect(result.difference).toBe(0.5)
-    expect(result.percent).toBeCloseTo(100 / 6)
+    expect(result.difference).toBeCloseTo(17.6)
+    expect(result.percent).toBeCloseTo(87.5621890547)
   })
 
   it('applies a personal rate once and preserves a zero override', () => {
@@ -166,6 +169,103 @@ describe('model plaza price comparisons', () => {
   })
 })
 
+describe('CNY payable price comparisons', () => {
+  it('normalizes output independently from input without changing the raw quote', () => {
+    const [entry] = getTokenComparisons(model(), group(), 'output_price')
+    const payable = getPlazaPayableComparison(entry)
+    expect(payable).toEqual({ reference: 100.5, site: 5, currency: 'CNY', converted: true, comparable: true })
+    const result = comparePriceAmounts(payable.reference, payable.site)
+    expect(result.difference).toBeCloseTo(95.5)
+    expect(result.percent).toBeCloseTo(95.0248756219)
+    expect(entry).toMatchObject({ reference: 15, site: 5, currency: 'USD', comparable: true })
+  })
+
+  it('includes the credit purchase rate even when the configured USD price equals the official price', () => {
+    const m = model({ pricing: price({ input_price: 3e-6 }) })
+    const discounted = getPlazaPayableComparison(getTokenComparisons(m, group({ rate_multiplier: 0.15 }), 'input_price')[0])
+    expect(discounted.reference).toBe(20.1)
+    expect(discounted.site).toBeCloseTo(0.45)
+    expect(comparePriceAmounts(discounted.reference, discounted.site).percent).toBeCloseTo(97.7611940299)
+
+    const fullRate = getPlazaPayableComparison(getTokenComparisons(m, group({ rate_multiplier: 1 }), 'input_price')[0])
+    expect(fullRate.site).toBe(3)
+    expect(comparePriceAmounts(fullRate.reference, fullRate.site).percent).toBeCloseTo(85.0746268657)
+  })
+
+  it('does not apply personal or group rates a second time during conversion', () => {
+    const discounted = getPlazaPayableComparison(getTokenComparisons(model(), group({ user_rate_multiplier: 0.2 }), 'input_price')[0])
+    expect(discounted.site).toBeCloseTo(1)
+    const free = getPlazaPayableComparison(getTokenComparisons(model(), group({ user_rate_multiplier: 0 }), 'input_price')[0])
+    expect(free).toMatchObject({ reference: 20.1, site: 0, comparable: true })
+    expect(comparePriceAmounts(free.reference, free.site)).toEqual({ status: 'saving', difference: 20.1, percent: 100 })
+  })
+
+  it('leaves configured domestic CNY amounts unchanged but converts its official USD source', () => {
+    const m = model({ name: 'glm-5', platform: 'zhipu' })
+    const configured = getPlazaPayableComparison(getTokenComparisons(m, group(), 'input_price')[0])
+    expect(configured).toEqual({ reference: 5, site: 2.5, currency: 'CNY', converted: false, comparable: true })
+    expect(comparePriceAmounts(configured.reference, configured.site).percent).toBe(50)
+    const official = getPlazaPayableComparison(getTokenComparisons({ ...m, pricing_source: 'official' }, group(), 'input_price')[0])
+    expect(official).toEqual({ reference: 20.1, site: 2.5, currency: 'CNY', converted: true, comparable: true })
+  })
+
+  it('converts aligned token tiers and separate cache durations without changing their basis', () => {
+    const m = model({ pricing: price({ intervals: [tier(0, 100_000, 2e-6), tier(100_000, null, 8e-6)] }) })
+    m.official_pricing!.intervals = [tier(0, 200_000, 4e-6), tier(200_000, null, 10e-6)]
+    expect(getTokenComparisons(m, group(), 'input_price').map(getPlazaPayableComparison))
+      .toEqual([
+        { reference: 26.8, site: 1, currency: 'CNY', converted: true, comparable: true },
+        { reference: 26.8, site: 4, currency: 'CNY', converted: true, comparable: true },
+        { reference: 67, site: 4, currency: 'CNY', converted: true, comparable: true }
+      ])
+
+    const cache = model({ pricing: price({ cache_read_price: 0.5e-6, cache_write_price: 2e-6, cache_write_1h_price: 4e-6 }) })
+    cache.official_pricing!.cache_read_price = 1e-6
+    cache.official_pricing!.cache_write_price = 3e-6
+    cache.official_pricing!.cache_write_1h_price = 6e-6
+    expect(getPlazaPayableComparison(getTokenComparisons(cache, group(), 'cache_read_price')[0]))
+      .toMatchObject({ reference: 6.7, site: 0.25, comparable: true })
+    const writes = getTokenComparisons(cache, group(), 'cache_write_price').map(getPlazaPayableComparison)
+    expect(writes).toHaveLength(2)
+    expect(writes[0]).toMatchObject({ reference: 20.1, site: 1, comparable: true })
+    expect(writes[1]).toMatchObject({ reference: 40.2, site: 2, comparable: true })
+  })
+
+  it('preserves missing prices and incompatible token schedules instead of inventing discounts', () => {
+    const marginal = getPlazaPayableComparison(getTokenComparisons(model({ long_context_basis: 'marginal' }), group(), 'input_price')[0])
+    expect(marginal).toMatchObject({ reference: 20.1, site: 2.5, comparable: false })
+    const noOfficial = getPlazaPayableComparison(getTokenComparisons(model({ official_pricing: null }), group(), 'input_price')[0])
+    expect(noOfficial).toMatchObject({ reference: null, site: 2.5, comparable: false })
+    const noGroup = getPlazaPayableComparison(getTokenComparisons(model(), null, 'input_price')[0])
+    expect(noGroup).toMatchObject({ reference: 20.1, site: null, comparable: false })
+    const conflicting = model({ pricing: price({ intervals: [{ ...tier(0, 200_000, 2e-6), tier_label: '≤200K' }] }) })
+    conflicting.official_pricing!.intervals = [{ ...tier(0, 200_000, 3e-6), tier_label: '<200K' }]
+    expect(getPlazaPayableComparison(getTokenComparisons(conflicting, group(), 'input_price')[0]).comparable).toBe(false)
+  })
+
+  it.each([null, -1, NaN, Infinity])('keeps invalid amount %s unavailable after conversion', value => {
+    const [entry] = getTokenComparisons(model(), group(), 'input_price')
+    expect(getPlazaPayableComparison({ ...entry, reference: value })).toMatchObject({ reference: null, site: 2.5, comparable: false })
+    expect(getPlazaPayableComparison({ ...entry, site: value })).toMatchObject({ reference: 20.1, site: null, comparable: false })
+    expect(getPlazaPayableComparison({ ...entry, currency: 'CNY', reference: value })).toMatchObject({ reference: null, comparable: false })
+  })
+
+  it('rejects conversion overflow and preserves zero, equality and tiny positive payable amounts', () => {
+    const [entry] = getTokenComparisons(model(), group(), 'input_price')
+    expect(getPlazaPayableComparison({ ...entry, reference: Number.MAX_VALUE }))
+      .toMatchObject({ reference: null, comparable: false })
+    const zero = getPlazaPayableComparison({ ...entry, reference: 0, site: 0 })
+    expect(comparePriceAmounts(zero.reference, zero.site)).toEqual({ status: 'equal', difference: 0, percent: null })
+    const equal = getPlazaPayableComparison({ ...entry, reference: 0.1, site: 0.67 })
+    expect(comparePriceAmounts(equal.reference, equal.site).status).toBe('equal')
+    const higher = getPlazaPayableComparison({ ...entry, reference: 0.1, site: 0.68 })
+    expect(comparePriceAmounts(higher.reference, higher.site).status).toBe('higher')
+    const tiny = getPlazaPayableComparison({ ...entry, reference: 1, site: 1e-20 })
+    expect(tiny.site).toBeGreaterThan(0)
+    expect(comparePriceAmounts(tiny.reference, tiny.site).percent).toBeLessThan(100)
+  })
+})
+
 describe('media comparison units and rates', () => {
   const video = () => model({
     name: 'grok-imagine-video-1.5', platform: 'grok',
@@ -185,6 +285,29 @@ describe('media comparison units and rates', () => {
     expect(rows.find(row => row.label === '720P')).toMatchObject({ reference: 0.2, site: 0.07, comparable: true })
   })
 
+  it('converts USD video references once without mixing resolutions or applying token scaling', () => {
+    const rows = getUnitComparisons(video(), group())
+    const low = getPlazaPayableComparison(rows.find(row => row.label === '480P')!)
+    const high = getPlazaPayableComparison(rows.find(row => row.label === '720P')!)
+    expect(low).toMatchObject({ reference: 0.67, site: 0.04, comparable: true })
+    expect(high).toMatchObject({ reference: 1.34, site: 0.07, comparable: true })
+    const result = comparePriceAmounts(low.reference, low.site)
+    expect(result.difference).toBeCloseTo(0.63)
+    expect(result.percent).toBeCloseTo(94.0298507463)
+    const independent = group({ user_rate_multiplier: 0.1, video_rate_independent: true, video_rate_multiplier: 2 })
+    expect(getPlazaPayableComparison(getUnitComparisons(video(), independent).find(row => row.label === '480P')!).site).toBe(0.16)
+  })
+
+  it.each(['image', 'per_request'] as const)('retains the per-unit amount for %s quotes', billingMode => {
+    const m = model({
+      pricing: price({ billing_mode: billingMode, per_request_price: 0.2 }),
+      official_pricing: { billing_mode: billingMode, input_price: null, output_price: null, cache_read_price: null, cache_write_price: null, per_request_price: 0.5 }
+    })
+    const [raw] = getUnitComparisons(m, group())
+    expect(raw.billingMode).toBe(billingMode)
+    expect(getPlazaPayableComparison(raw)).toEqual({ reference: 3.35, site: 0.1, currency: 'CNY', converted: true, comparable: true })
+  })
+
   it('independent media rates replace personal and group rates', () => {
     const g = group({ user_rate_multiplier: 0.1, video_rate_independent: true, video_rate_multiplier: 2 })
     expect(getUnitComparisons(video(), g).find(row => row.label === '480P')!.site).toBe(0.16)
@@ -200,6 +323,7 @@ describe('media comparison units and rates', () => {
     const rows = getUnitComparisons(m, group())
     expect(rows.find(row => row.label === '1080P')).toMatchObject({ reference: null, site: 0.15, comparable: false })
     expect(rows.find(row => row.label === '480P')).toMatchObject({ reference: 0.1, site: null, comparable: false })
+    expect(rows.map(getPlazaPayableComparison).every(row => !row.comparable)).toBe(true)
   })
 
   it('keeps different billing modes in separate rows and never calculates savings between them', () => {
@@ -209,6 +333,7 @@ describe('media comparison units and rates', () => {
     expect(rows.some(row => row.site !== null && row.billingMode === 'per_request')).toBe(true)
     expect(rows.some(row => row.reference !== null && row.billingMode === 'video')).toBe(true)
     expect(rows.every(row => !row.comparable)).toBe(true)
+    expect(rows.map(getPlazaPayableComparison).every(row => !row.comparable)).toBe(true)
   })
 
   it('uses configured CNY media reference rather than relabeling USD official prices', () => {
@@ -216,6 +341,7 @@ describe('media comparison units and rates', () => {
     m.name = 'cogvideo-test'; m.platform = 'zhipu'
     const row = getUnitComparisons(m, group()).find(entry => entry.label === '480P')!
     expect(row).toMatchObject({ currency: 'CNY', referenceKind: 'configured', reference: 0.08, site: 0.04 })
+    expect(getPlazaPayableComparison(row)).toEqual({ reference: 0.08, site: 0.04, currency: 'CNY', converted: false, comparable: true })
   })
 })
 

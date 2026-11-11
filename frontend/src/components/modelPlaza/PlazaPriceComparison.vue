@@ -2,7 +2,13 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { formatScaled } from '@/utils/pricing'
-import { comparePriceAmounts, type PlazaPriceComparison } from './plazaPriceComparison'
+import {
+  comparePriceAmounts,
+  getPlazaPayableComparison,
+  PLAZA_REFERENCE_USD_TO_CNY,
+  PLAZA_CNY_PER_USD_CREDIT,
+  type PlazaPriceComparison
+} from './plazaPriceComparison'
 
 const props = defineProps<{
   price: PlazaPriceComparison
@@ -10,17 +16,21 @@ const props = defineProps<{
 }>()
 
 const { t } = useI18n()
-const comparison = computed(() => props.price.comparable
-  ? comparePriceAmounts(props.price.reference, props.price.site)
+const payable = computed(() => getPlazaPayableComparison(props.price))
+const comparison = computed(() => payable.value.comparable
+  ? comparePriceAmounts(payable.value.reference, payable.value.site)
   : { status: 'unavailable', difference: null, percent: null })
 const referenceLabel = computed(() => t(`modelPlaza.comparison.${props.price.referenceKind === 'configured' ? 'configuredReference' : 'officialReference'}`))
+const comparisonBasis = computed(() => t(props.price.referenceKind === 'configured' ? 'modelPlaza.comparison.configuredBasis' : 'modelPlaza.comparison.officialBasis', {
+  rate: PLAZA_REFERENCE_USD_TO_CNY, creditRate: PLAZA_CNY_PER_USD_CREDIT
+}))
 
-function money(value: number | null): string {
+function money(value: number | null, currency: 'USD' | 'CNY' = 'CNY'): string {
   if (value == null || !Number.isFinite(value)) return '—'
   const digits = value === 0 ? 1 : Math.floor(Math.log10(Math.abs(value))) + 1
   const rounded = Number(value.toPrecision(Math.min(100, Math.max(5, digits + 2))))
   const formatted = formatScaled(rounded, 1, 2)
-  return props.price.currency === 'CNY' ? formatted.replace(/^\$/, '¥') : formatted
+  return currency === 'CNY' ? formatted.replace(/^\$/, '¥') : formatted
 }
 
 const percent = computed(() => {
@@ -52,20 +62,26 @@ const differenceLabel = computed(() => {
       <div class="flex flex-wrap items-baseline justify-end gap-x-1.5 text-xs leading-5 text-gray-600 dark:text-dark-300">
         <span>{{ referenceLabel }}</span>
         <span class="font-mono tabular-nums" :class="{ 'line-through decoration-gray-400/70': comparison.status === 'saving' }" data-reference-price>
-          {{ money(price.reference) }}<span v-if="unit && price.reference != null" class="font-sans">{{ unit }}</span>
+          {{ money(price.reference, price.currency) }}<span v-if="unit && price.reference != null" class="font-sans">{{ unit }}</span>
         </span>
+      </div>
+      <div v-if="payable.converted && payable.reference != null" class="text-right font-mono text-xs leading-5 tabular-nums text-gray-500 dark:text-dark-300" data-reference-cny>
+        ≈ {{ money(payable.reference) }}<span v-if="unit" class="font-sans">{{ unit }}</span>
       </div>
       <div class="my-1.5 flex flex-wrap items-baseline justify-end gap-x-1">
         <span class="sr-only">{{ t('modelPlaza.priceTable.sitePrice') }}</span>
         <span class="plaza-payable font-mono text-2xl font-bold leading-8 tracking-tight tabular-nums" data-site-price>
-          {{ money(price.site) }}<span v-if="unit && price.site != null" class="ml-1 font-sans text-xs font-medium tracking-normal">{{ unit }}</span>
+          {{ money(payable.site) }}<span v-if="unit && payable.site != null" class="ml-1 font-sans text-xs font-medium tracking-normal">{{ unit }}</span>
         </span>
+      </div>
+      <div v-if="payable.converted && price.site != null" class="mb-1.5 text-right text-xs leading-5 text-gray-500 dark:text-dark-300" data-site-credit>
+        {{ t('modelPlaza.comparison.creditDeduction', { amount: money(price.site, 'USD') }) }}<span v-if="unit">{{ unit }}</span>
       </div>
       <div v-if="comparison.status !== 'unavailable'" class="flex justify-end">
         <span
           class="inline-flex flex-wrap items-center justify-end gap-x-2 gap-y-1.5 rounded-lg px-2 py-1.5 text-[13px] font-semibold leading-5"
           :class="comparison.status === 'saving' ? 'plaza-saving' : comparison.status === 'higher' ? 'bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300' : 'text-gray-500 dark:text-dark-300'"
-          :title="t(price.referenceKind === 'configured' ? 'modelPlaza.comparison.configuredBasis' : 'modelPlaza.comparison.officialBasis')"
+          :title="comparisonBasis"
           data-price-difference
         >
           <span v-if="percent && comparison.status !== 'equal'" class="rounded-md px-2 py-0.5 text-base font-bold tabular-nums" :class="comparison.status === 'saving' ? 'plaza-discount' : 'bg-amber-100 dark:bg-amber-900/50'">

@@ -521,6 +521,49 @@ describe('PaymentView preset-only balance recharge', () => {
     expect(submitButton(wrapper).text()).toContain('101.10')
   })
 
+  it('disables fixed QR amounts using the fee-inclusive payable total while leaving other methods available', async () => {
+    const method = checkoutInfoFixture().data.methods.wxpay
+    const { wrapper } = await mountRecharge({
+      recharge_amounts: [100], recharge_fee_rate: 1,
+      methods: {
+        alipay: { ...method, currency: 'CNY', fixed_amounts_only: true, pay_amounts: ['100.00'] },
+        wxpay: method,
+      },
+    })
+    expect(wrapper.get('[data-testid="quick-amount-100"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.text()).not.toContain('payment.fixedAmountHint')
+    wrapper.getComponent(AmountInput).vm.$emit('update:modelValue', 100)
+    await flushPromises()
+    expect(wrapper.getComponent(PaymentMethodSelector).props('selected')).toBe('alipay')
+    expect(submitButton(wrapper).attributes('disabled')).toBeDefined()
+    expect(wrapper.text()).toContain('payment.fixedAmountUnavailable')
+    await submitButton(wrapper).trigger('click')
+    expect(createOrder).not.toHaveBeenCalled()
+    wrapper.getComponent(PaymentMethodSelector).vm.$emit('select', 'wxpay')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="quick-amount-100"]').attributes('disabled')).toBeUndefined()
+    expect(submitButton(wrapper).attributes('disabled')).toBeUndefined()
+    await submitButton(wrapper).trigger('click')
+    await flushPromises()
+    expect(createOrder).toHaveBeenCalledWith(expect.objectContaining({ amount: 100, payment_type: 'wxpay' }))
+  })
+
+  it('matches fixed QR rules after discount and fees without changing the submitted preset amount', async () => {
+    const { wrapper } = await mountRecharge({
+      recharge_amounts: [100], recharge_bonus_mode: 'discount',
+      recharge_bonus_tiers: [{ min_amount: 100, bonus_percent: 20 }], recharge_fee_rate: 1,
+      methods: { alipay: { ...checkoutInfoFixture().data.methods.wxpay, currency: 'CNY', fixed_amounts_only: true, pay_amounts: ['80.80'] } },
+    })
+    const preset = wrapper.get('[data-testid="quick-amount-100"]')
+    expect(preset.attributes('disabled')).toBeUndefined()
+    await preset.trigger('click')
+    expect(submitButton(wrapper).attributes('disabled')).toBeUndefined()
+    expect(submitButton(wrapper).text()).toContain('80.80')
+    await submitButton(wrapper).trigger('click')
+    await flushPromises()
+    expect(createOrder).toHaveBeenCalledWith(expect.objectContaining({ amount: 100, payment_type: 'alipay' }))
+  })
+
   it('keeps a discounted preset whose server-rounded payment meets the method minimum', async () => {
     const { wrapper } = await mountRecharge({
       recharge_amounts: [10],
@@ -630,6 +673,21 @@ describe('PaymentView recharge rate preview', () => {
 })
 
 describe('PaymentView subscription confirmation amounts', () => {
+  it.each([
+    { payAmounts: ['71.50'], disabled: true },
+    { payAmounts: ['72.22'], disabled: false },
+  ])('checks converted subscription amount plus fees against fixed QR rules $payAmounts', async ({ payAmounts, disabled }) => {
+    const wrapper = await mountSubscriptionConfirm({
+      checkout: {
+        subscription_usd_to_cny_rate: 7.15, recharge_fee_rate: 1,
+        methods: { alipay: { ...checkoutInfoFixture().data.methods.wxpay, currency: 'CNY', fixed_amounts_only: true, pay_amounts: payAmounts } },
+      },
+      plan: { price: 10 },
+    })
+    const submit = wrapper.findAll('button').find(button => button.text().includes('payment.createOrder'))!
+    expect(submit.attributes('disabled') !== undefined).toBe(disabled)
+    if (disabled) expect(wrapper.text()).toContain('payment.fixedAmountUnavailable')
+  })
   it('shows converted CNY pay amount using the subscription rate, not the balance multiplier', async () => {
     const wrapper = await mountSubscriptionConfirm({
       checkout: {

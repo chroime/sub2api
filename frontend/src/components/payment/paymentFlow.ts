@@ -6,6 +6,7 @@ import type {
   WechatJSAPIPayload,
   WechatOAuthInfo,
 } from '@/types/payment'
+import { canWaitForBill } from './billPaymentWindow'
 
 export const PAYMENT_RECOVERY_STORAGE_KEY = 'payment.recovery.current'
 
@@ -49,6 +50,7 @@ export interface PaymentRecoverySnapshot {
   paymentMode: string
   resumeToken: string
   alipayMobilePrecreateDeepLink?: boolean
+  billAmountMatching?: boolean
   createdAt: number
 }
 
@@ -169,6 +171,7 @@ export function decidePaymentLaunch(
     paymentMode: (result.payment_mode || '').trim(),
     resumeToken: result.resume_token || '',
     alipayMobilePrecreateDeepLink: result.alipay_mobile_precreate_deep_link === true,
+    billAmountMatching: result.bill_amount_matching === true,
   }, context.now)
 
   if (visibleMethod === 'airwallex' && baseState.clientSecret && baseState.intentId) {
@@ -212,6 +215,11 @@ export function decidePaymentLaunch(
     && baseState.qrCode
   ) {
     return { kind: 'alipay_deep_link', paymentState: baseState, recovery: baseState }
+  }
+
+  // Keep the one-minute fixed-code countdown visible on mobile as well.
+  if (baseState.billAmountMatching && baseState.qrCode) {
+    return { kind: 'qr_waiting', paymentState: baseState, recovery: baseState }
   }
 
   const normalizedPaymentMode = baseState.paymentMode.trim().toLowerCase()
@@ -296,6 +304,7 @@ export function readPaymentRecoverySnapshot(
       || typeof parsed.paymentMode !== 'string'
       || typeof parsed.resumeToken !== 'string'
       || (parsed.alipayMobilePrecreateDeepLink != null && typeof parsed.alipayMobilePrecreateDeepLink !== 'boolean')
+      || (parsed.billAmountMatching != null && typeof parsed.billAmountMatching !== 'boolean')
       || typeof parsed.createdAt !== 'number'
     ) {
       return null
@@ -303,7 +312,7 @@ export function readPaymentRecoverySnapshot(
 
     const now = options.now ?? Date.now()
     const expiresAt = Date.parse(parsed.expiresAt)
-    if (Number.isFinite(expiresAt) && expiresAt <= now) {
+    if (Number.isFinite(expiresAt) && expiresAt <= now && !canWaitForBill(parsed.billAmountMatching === true, parsed.expiresAt, now)) {
       return null
     }
     if (options.resumeToken && parsed.resumeToken !== options.resumeToken) {
@@ -328,6 +337,7 @@ export function readPaymentRecoverySnapshot(
       paymentMode: parsed.paymentMode,
       resumeToken: parsed.resumeToken,
       alipayMobilePrecreateDeepLink: parsed.alipayMobilePrecreateDeepLink === true,
+      billAmountMatching: parsed.billAmountMatching === true,
       createdAt: parsed.createdAt,
     }
   } catch {

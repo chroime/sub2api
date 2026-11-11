@@ -6,6 +6,11 @@ import { resolveIntervalPrices } from '@/utils/pricing'
 
 export type TokenPriceField = 'input_price' | 'output_price' | 'cache_read_price' | 'cache_write_price'
 
+/** Reference exchange rate for the plaza's CNY cost comparison. */
+export const PLAZA_REFERENCE_USD_TO_CNY = 6.7
+/** One CNY purchases one USD of site credit. */
+export const PLAZA_CNY_PER_USD_CREDIT = 1
+
 export interface PlazaPriceComparison {
   key: string
   label: string
@@ -27,6 +32,14 @@ export interface PriceAmountComparison {
   percent: number | null
 }
 
+export interface PlazaPayableComparison {
+  reference: number | null
+  site: number | null
+  currency: 'CNY'
+  converted: boolean
+  comparable: boolean
+}
+
 function amount(value: number | null | undefined): number | null {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null
 }
@@ -34,6 +47,17 @@ function amount(value: number | null | undefined): number | null {
 function scaled(value: number | null | undefined, multiplier: number, unit = 1): number | null {
   const valid = amount(value)
   return valid === null || amount(multiplier) === null ? null : amount(valid * multiplier * unit)
+}
+
+/** Normalize real CNY costs after the quote's unit and effective rate are resolved. */
+export function getPlazaPayableComparison(price: PlazaPriceComparison): PlazaPayableComparison {
+  const converted = price.currency === 'USD'
+  const reference = converted ? scaled(price.reference, PLAZA_REFERENCE_USD_TO_CNY) : amount(price.reference)
+  const site = converted ? scaled(price.site, PLAZA_CNY_PER_USD_CREDIT) : amount(price.site)
+  return {
+    reference, site, currency: 'CNY', converted,
+    comparable: price.comparable && reference !== null && site !== null
+  }
 }
 
 /** Compare raw amounts before presentation rounding; missing is never free. */

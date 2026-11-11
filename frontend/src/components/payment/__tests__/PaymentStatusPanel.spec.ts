@@ -73,7 +73,76 @@ describe('PaymentStatusPanel', () => {
     vi.useRealTimers()
   })
 
-  it('treats RECHARGING as a successful terminal state', async () => {
+  it('shows immediate amount release after the user cancels a fixed-code order', async () => {
+    cancelOrder.mockResolvedValue({ data: { message: 'cancelled' } })
+    const wrapper = mount(PaymentStatusPanel, {
+      props: {
+        orderId: 42,
+        qrCode: 'https://pay.example.com/qr/42',
+        expiresAt: '2099-01-01T12:30:00Z',
+        paymentType: 'alipay',
+        billAmountMatching: true,
+      },
+      global: { stubs: { Icon: true } },
+    })
+    await flushPromises()
+    const cancel = wrapper.findAll('button').find(button => button.text() === 'payment.qr.cancelOrder')
+    expect(cancel).toBeDefined()
+    await cancel!.trigger('click')
+    await flushPromises()
+    expect(cancelOrder).toHaveBeenCalledWith(42)
+    expect(wrapper.text()).toContain('payment.qr.billCancelledDesc')
+    expect(wrapper.text()).not.toContain('payment.qr.billCancelledReviewDesc')
+    expect(wrapper.emitted('settled')).toEqual([['cancelled']])
+    wrapper.unmount()
+  })
+
+  it('does not promise immediate release for a cancellation only observed by polling', async () => {
+    pollOrderStatus.mockResolvedValue(orderFactory('CANCELLED'))
+    const wrapper = mount(PaymentStatusPanel, {
+      props: {
+        orderId: 42,
+        qrCode: 'https://pay.example.com/qr/42',
+        expiresAt: '2099-01-01T12:30:00Z',
+        paymentType: 'alipay',
+        billAmountMatching: true,
+      },
+      global: { stubs: { Icon: true } },
+    })
+    await vi.advanceTimersByTimeAsync(3000)
+    expect(wrapper.text()).toContain('payment.qr.billCancelledReviewDesc')
+    expect(wrapper.text()).not.toContain('payment.qr.billCancelledDesc')
+    wrapper.unmount()
+  })
+
+  it('keeps a paid order in fulfillment when cancellation reports already_paid', async () => {
+    cancelOrder.mockResolvedValue({ data: { message: 'already_paid' } })
+    pollOrderStatus.mockResolvedValue(orderFactory('RECHARGING'))
+    const wrapper = mount(PaymentStatusPanel, {
+      props: {
+        orderId: 42,
+        qrCode: 'https://pay.example.com/qr/42',
+        expiresAt: '2099-01-01T12:30:00Z',
+        paymentType: 'alipay',
+        billAmountMatching: true,
+      },
+      global: { stubs: { Icon: true } },
+    })
+    await flushPromises()
+    const cancel = wrapper.findAll('button').find(button => button.text() === 'payment.qr.cancelOrder')
+    await cancel!.trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('payment.result.processing')
+    expect(wrapper.text()).not.toContain('payment.qr.cancelled')
+    expect(wrapper.text()).not.toContain('payment.qr.billCancelledDesc')
+    expect(wrapper.emitted('settled')).toBeUndefined()
+    pollOrderStatus.mockResolvedValue(orderFactory('COMPLETED'))
+    await vi.advanceTimersByTimeAsync(3000)
+    expect(wrapper.emitted('success')).toHaveLength(1)
+    wrapper.unmount()
+  })
+
+  it('waits for COMPLETED instead of stopping at RECHARGING', async () => {
     pollOrderStatus.mockResolvedValue(orderFactory('RECHARGING'))
 
     const wrapper = mount(PaymentStatusPanel, {
@@ -96,6 +165,10 @@ describe('PaymentStatusPanel', () => {
     await flushPromises()
 
     expect(pollOrderStatus).toHaveBeenCalledWith(42)
+    expect(wrapper.text()).toContain('payment.result.processing')
+    expect(wrapper.emitted('success')).toBeUndefined()
+    pollOrderStatus.mockResolvedValue(orderFactory('COMPLETED'))
+    await vi.advanceTimersByTimeAsync(3000)
     expect(wrapper.text()).toContain('payment.result.success')
     expect(wrapper.emitted('success')).toHaveLength(1)
   })

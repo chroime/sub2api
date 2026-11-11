@@ -9,6 +9,9 @@
       <div class="min-w-0">
         <p class="pz-title text-base font-semibold">{{ t('modelPlaza.comparison.title') }}</p>
         <p class="mt-1 text-sm text-gray-500 dark:text-dark-300">{{ t('modelPlaza.comparison.subtitle') }}</p>
+        <p v-if="hasUsdPrices" class="mt-1.5 text-sm leading-6 text-gray-600 dark:text-dark-300" data-exchange-basis>
+          {{ t('modelPlaza.comparison.exchangeBasis', { rate: PLAZA_REFERENCE_USD_TO_CNY, creditRate: PLAZA_CNY_PER_USD_CREDIT }) }}
+        </p>
       </div>
       <span class="pz-rate-badge shrink-0 rounded-lg px-3 py-1.5 text-sm font-semibold" :title="t('modelPlaza.comparison.rateDetails')">{{ siteRateNote }}</span>
     </div>
@@ -226,7 +229,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ModelIcon from '@/components/common/ModelIcon.vue'
 import PlazaPriceComparisonCell from './PlazaPriceComparison.vue'
-import { getTokenComparisons, getUnitComparisons } from './plazaPriceComparison'
+import { getTokenComparisons, getUnitComparisons, PLAZA_REFERENCE_USD_TO_CNY, PLAZA_CNY_PER_USD_CREDIT } from './plazaPriceComparison'
 import { formatScaled, resolveIntervalPrices } from '@/utils/pricing'
 import { isDomesticModelVendor, modelVendorOf } from '@/utils/modelVendor'
 import {
@@ -258,6 +261,7 @@ const TOKEN_FIELDS = ['input_price', 'output_price', 'cache_read_price', 'cache_
 
 /** 选中分组时本站价列头的倍率标注。 */
 const siteRateNote = computed(() => t('modelPlaza.priceTable.siteRateNote', { rate: groupRate() }))
+const hasUsdPrices = computed(() => props.models.some(model => !isCny(model) && (model.pricing || model.official_pricing)))
 
 function rowId(m: PlazaModel): string {
   return `plaza-model-${plazaModelKey(m).replace(/[^a-zA-Z0-9_-]/g, '_')}`

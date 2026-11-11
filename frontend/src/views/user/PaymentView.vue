@@ -26,6 +26,7 @@
             :currency="paymentState.currency || selectedCurrency"
             :out-trade-no="paymentState.outTradeNo"
             :mobile-alipay-deep-link="paymentState.alipayMobilePrecreateDeepLink"
+            :bill-amount-matching="paymentState.billAmountMatching"
             @done="onPaymentDone"
             @success="onPaymentSuccess"
             @settled="onPaymentSettled"
@@ -60,6 +61,7 @@
               <AmountInput
                 v-model="amount"
                 :amounts="rechargeAmounts"
+                :disabled-amounts="disabledRechargeAmounts"
                 :bonus-tiers="rechargeBonusTiers"
                 :bonus-mode="rechargeBonusMode"
                 :multiplier="balanceRechargeMultiplier"
@@ -200,6 +202,7 @@
                 </span>
                 <span v-else>{{ t('payment.createOrder') }} {{ formatSelectedPaymentAmount(subTotalAmount) }}</span>
               </button>
+              <p v-if="subscriptionAmountError" class="text-xs text-amber-600 dark:text-amber-300">{{ subscriptionAmountError }}</p>
               <button class="btn btn-secondary w-full" @click="selectedPlan = null">{{ t('common.cancel') }}</button>
             </template>
             <!-- Plan list -->
@@ -514,7 +517,6 @@ function onPaymentDone() {
 async function onPaymentSuccess() {
   const completedPayment = { ...paymentState.value }
   removeRecoverySnapshot()
-  authStore.refreshUser()
   if (paymentState.value.orderType === 'subscription') {
     subscriptionStore.fetchActiveSubscriptions(true).catch(() => {})
   }
@@ -586,13 +588,20 @@ const planGridClass = computed(() => {
 })
 
 // Check if an amount fits a method's [min, max]. 0 = no limit.
-function amountFitsMethod(amt: number, methodType: string): boolean {
+function amountFitsMethod(amt: number, methodType: string, checkFixedAmounts = true): boolean {
   if (amt <= 0) return true
   const ml = visibleMethods.value[methodType]
   if (!ml) return false
   if (ml.single_min > 0 && amt < ml.single_min) return false
   if (ml.single_max > 0 && amt > ml.single_max) return false
+  if (checkFixedAmounts && ml.fixed_amounts_only && !matchesFixedPayAmount(amt, ml.pay_amounts)) return false
   return true
+}
+
+function matchesFixedPayAmount(amount: number, payAmounts: string[] | undefined): boolean {
+  return Number.isFinite(amount) && amount > 0 && (payAmounts || []).some(value =>
+    /^(0|[1-9]\d*)\.\d{2}$/.test(value) && Number(value) === amount,
+  )
 }
 
 // Selected method's limits (for validation and error messages)
@@ -670,9 +679,9 @@ function rechargeTotalAmountForCurrency(value: number, currency: string): number
   return roundPaymentAmount(payBase + fee, currency)
 }
 
-function rechargeAmountFitsMethod(value: number, methodType: string): boolean {
+function rechargeAmountFitsMethod(value: number, methodType: string, checkFixedAmounts = true): boolean {
   const currency = normalizePaymentCurrency(visibleMethods.value[methodType]?.currency)
-  return amountFitsMethod(rechargeTotalAmountForCurrency(value, currency), methodType)
+  return amountFitsMethod(rechargeTotalAmountForCurrency(value, currency), methodType, checkFixedAmounts)
 }
 
 // Configured limits are applied by the server. Provider limits apply to the actual
@@ -682,9 +691,14 @@ const rechargeAmounts = computed(() => {
   if (!Array.isArray(presets)) return []
   return [...new Set(presets)].filter(value =>
     Number.isFinite(value) && value > 0
-      && enabledMethods.value.some(method => rechargeAmountFitsMethod(value, method)),
+      && enabledMethods.value.some(method => rechargeAmountFitsMethod(value, method, false)),
   )
 })
+
+const disabledRechargeAmounts = computed(() => selectedLimit.value?.fixed_amounts_only
+  ? rechargeAmounts.value.filter(value => !rechargeAmountFitsMethod(value, selectedMethod.value))
+  : [],
+)
 
 function isRechargeAmount(value: number | null): value is number {
   return value !== null && Number.isFinite(value) && rechargeAmounts.value.includes(value)
@@ -724,6 +738,9 @@ const showActualPay = computed(() => feeRate.value > 0 || discountAmount.value >
 
 const amountError = computed(() => {
   if (validAmount.value <= 0) return ''
+  if (selectedLimit.value?.fixed_amounts_only && !matchesFixedPayAmount(totalAmount.value, selectedLimit.value.pay_amounts)) {
+    return t('payment.fixedAmountUnavailable')
+  }
   // No method can handle this amount
   if (!enabledMethods.value.some((m) => rechargeAmountFitsMethod(validAmount.value, m))) {
     return t('payment.amountNoMethod')
@@ -787,8 +804,14 @@ const canSubmitSubscription = computed(() =>
     && selectedLimit.value?.available !== false
 )
 
+const subscriptionAmountError = computed(() => selectedLimit.value?.fixed_amounts_only &&
+  !matchesFixedPayAmount(subTotalAmount.value, selectedLimit.value.pay_amounts)
+  ? t('payment.fixedAmountUnavailable') : '',
+)
+
 // Auto-switch to first available method when current selection can't handle the amount
 watch(() => [validAmount.value, selectedMethod.value] as const, ([amt, method]) => {
+  if (selectedLimit.value?.fixed_amounts_only) return
   if (amt <= 0 || rechargeAmountFitsMethod(amt, method)) return
   const available = enabledMethods.value.find((m) => rechargeAmountFitsMethod(amt, m))
   if (available) selectedMethod.value = available
@@ -853,7 +876,7 @@ async function handleSubmitRecharge() {
 }
 
 async function confirmSubscribe() {
-  if (!selectedPlan.value || submitting.value) return
+  if (!selectedPlan.value || !canSubmitSubscription.value || submitting.value) return
   await createOrder(selectedPlan.value.price, 'subscription', selectedPlan.value.id)
 }
 

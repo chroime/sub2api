@@ -426,7 +426,12 @@ func (h *PaymentHandler) CreateProvider(c *gin.Context) {
 		return
 	}
 	h.paymentService.RefreshProviders(c.Request.Context())
-	response.Created(c, inst)
+	result, err := h.configService.ProviderInstanceResponseForAdmin(inst)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Created(c, result)
 }
 
 // UpdateProvider updates an existing payment provider instance.
@@ -447,7 +452,12 @@ func (h *PaymentHandler) UpdateProvider(c *gin.Context) {
 		return
 	}
 	h.paymentService.RefreshProviders(c.Request.Context())
-	response.Success(c, inst)
+	result, err := h.configService.ProviderInstanceResponseForAdmin(inst)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, result)
 }
 
 // DeleteProvider deletes a payment provider instance.
@@ -481,7 +491,7 @@ func parseIDParam(c *gin.Context, paramName string) (int64, bool) {
 // GetConfig returns the payment configuration (admin view).
 // GET /api/v1/admin/payment/config
 func (h *PaymentHandler) GetConfig(c *gin.Context) {
-	cfg, err := h.configService.GetPaymentConfig(c.Request.Context())
+	cfg, err := h.configService.GetAdminPaymentConfig(c.Request.Context())
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return

@@ -499,6 +499,7 @@ type PublicOrderResult struct {
 	Status              string     `json:"status"`
 	CreatedAt           time.Time  `json:"created_at"`
 	ExpiresAt           time.Time  `json:"expires_at"`
+	BillAmountMatching  bool       `json:"bill_amount_matching,omitempty"`
 	PaidAt              *time.Time `json:"paid_at,omitempty"`
 	CompletedAt         *time.Time `json:"completed_at,omitempty"`
 	RefundAmount        float64    `json:"refund_amount"`
@@ -535,6 +536,7 @@ func buildPublicOrderResult(order *dbent.PaymentOrder) PublicOrderResult {
 		Status:              order.Status,
 		CreatedAt:           order.CreatedAt,
 		ExpiresAt:           order.ExpiresAt,
+		BillAmountMatching:  service.PaymentOrderUsesBillAmountMatching(order),
 		PaidAt:              order.PaidAt,
 		CompletedAt:         order.CompletedAt,
 		RefundAmount:        order.RefundAmount,
@@ -632,6 +634,7 @@ func isMobile(c *gin.Context) bool {
 }
 
 type PaymentOrderResult struct {
+	BillAmountMatching  bool       `json:"bill_amount_matching,omitempty"`
 	ID                  int64      `json:"id"`
 	UserID              int64      `json:"user_id"`
 	Amount              float64    `json:"amount"`
@@ -671,6 +674,7 @@ func sanitizePaymentOrderForResponse(order *dbent.PaymentOrder) *PaymentOrderRes
 		return nil
 	}
 	return &PaymentOrderResult{
+		BillAmountMatching:  service.PaymentOrderUsesBillAmountMatching(order),
 		ID:                  order.ID,
 		UserID:              order.UserID,
 		Amount:              order.Amount,

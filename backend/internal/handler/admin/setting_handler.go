@@ -126,7 +126,7 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 	// Load payment config
 	var paymentCfg *service.PaymentConfig
 	if h.paymentConfigService != nil {
-		paymentCfg, _ = h.paymentConfigService.GetPaymentConfig(c.Request.Context())
+		paymentCfg, _ = h.paymentConfigService.GetAdminPaymentConfig(c.Request.Context())
 	}
 	if paymentCfg == nil {
 		paymentCfg = &service.PaymentConfig{}

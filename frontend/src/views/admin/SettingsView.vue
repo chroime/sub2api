@@ -25,7 +25,7 @@
                 type="button"
                 role="tab"
                 :aria-selected="activeTab === tab.key"
-                :aria-controls="tab.key === 'extensions' ? 'extensions' : tab.key === 'email' ? 'email-settings' : undefined"
+                :aria-controls="tab.key === 'extensions' ? 'extensions' : tab.key === 'email' ? 'email-settings' : tab.key === 'payment' ? 'payment-settings' : undefined"
                 :tabindex="activeTab === tab.key ? 0 : -1"
                 :class="[
                   'settings-tab',
@@ -7894,7 +7894,7 @@
 
         <!-- Tab: Email -->
         <!-- Tab: Payment -->
-        <div v-show="activeTab === 'payment'" class="space-y-6">
+        <div id="payment-settings" v-show="activeTab === 'payment'" class="scroll-mt-40 space-y-6">
           <!-- Payment System Settings -->
           <div class="card">
             <div
@@ -8434,15 +8434,23 @@
             v-model:notice="form.payment_recharge_bonus_notice"
           />
 
-          <!-- Provider Management -->
-          <PaymentProviderList
-            v-if="form.payment_enabled"
+          <AlipayBillSettingsCard
             :providers="providers"
             :loading="providersLoading"
-            :can-create="hasAnyPaymentTypeEnabled"
+            @saved="handleBillProviderSaved"
+            @delete="confirmDeleteProvider"
+          />
+
+          <!-- Provider Management -->
+          <PaymentProviderList
+            :providers="providers"
+            :loading="providersLoading"
+            :can-create="creatableProviderKeyOptions.length > 0"
             :enabled-payment-types="form.payment_enabled_types"
             :all-payment-types="allPaymentTypes"
             :redirect-label="t('admin.settings.payment.easypayRedirect')"
+            :alipay-source="form.payment_visible_method_alipay_source"
+            :source-saving="paymentSourceSaving"
             @refresh="loadProviders"
             @create="openCreateProvider"
             @edit="openEditProvider"
@@ -8450,6 +8458,7 @@
             @toggle-field="handleToggleField"
             @toggle-type="handleToggleType"
             @reorder="handleReorderProviders"
+            @select-alipay-source="handleSelectAlipaySource"
           />
         </div>
 
@@ -8922,7 +8931,7 @@
         :saving="providerSaving"
         :editing="editingProvider"
         :all-key-options="providerKeyOptions"
-        :enabled-key-options="enabledProviderKeyOptions"
+        :enabled-key-options="creatableProviderKeyOptions"
         :all-payment-types="allPaymentTypes"
         :redirect-label="t('admin.settings.payment.easypayRedirect')"
         @close="showProviderDialog = false"
@@ -8969,6 +8978,7 @@ import {
   defaultWeChatConnectScopesForMode,
   deriveWeChatConnectStoredMode,
   normalizeDefaultSubscriptionSettings,
+  normalizePaymentVisibleMethodSource,
   resolveWeChatConnectModeCapabilities,
 } from "@/api/admin/settings";
 import type {
@@ -9005,6 +9015,7 @@ import PublicDocsEditor from "@/components/docs/PublicDocsEditor.vue";
 import ConfirmDialog from "@/components/common/ConfirmDialog.vue";
 import PaymentProviderList from "@/components/payment/PaymentProviderList.vue";
 import PaymentProviderDialog from "@/components/payment/PaymentProviderDialog.vue";
+import AlipayBillSettingsCard from "@/components/payment/AlipayBillSettingsCard.vue";
 import GroupBadge from "@/components/common/GroupBadge.vue";
 import GroupOptionItem from "@/components/common/GroupOptionItem.vue";
 import Toggle from "@/components/common/Toggle.vue";
@@ -9096,6 +9107,7 @@ const extensionSettingsHashes = new Set([
 function settingsTabForHash(hash: string): SettingsTab | undefined {
   if (extensionSettingsHashes.has(hash)) return "extensions";
   if (hash === "#email-settings") return "email";
+  if (hash === "#payment-settings" || hash === "#builtin-epay-settings") return "payment";
   return undefined;
 }
 const settingsHash = ref(window.location.hash);
@@ -9865,6 +9877,8 @@ const form = reactive<SettingsForm>({
   payment_cancel_rate_limit_window_mode: "rolling",
   payment_alipay_force_qrcode: false,
   payment_alipay_mobile_precreate_deep_link: false,
+  payment_visible_method_alipay_source: "",
+  payment_visible_method_alipay_enabled: true,
   table_default_page_size: tablePageSizeDefault,
   table_page_size_options: [10, 20, 50, 100],
   custom_menu_items: [] as Array<{
@@ -11068,12 +11082,16 @@ async function loadSettings() {
     const settings = await adminAPI.settings.getSettings();
     settings.payment_load_balance_strategy =
       settings.payment_load_balance_strategy || "round-robin";
+    settings.payment_visible_method_alipay_source = normalizePaymentVisibleMethodSource(
+      "alipay", settings.payment_visible_method_alipay_source,
+    );
     // Only assign non-null values from backend (null means unconfigured, keep defaults)
     for (const [key, value] of Object.entries(settings)) {
       if (value !== null && value !== undefined) {
         (form as Record<string, unknown>)[key] = value;
       }
     }
+    savedPaymentEnabledTypes.value = [...form.payment_enabled_types];
     form.homepage_template = resolveHomepageTemplate(settings);
     // For this optional override, null explicitly selects per-account rates.
     if (settings.openai_oauth_scheduling_rate_multiplier === null) {
@@ -11764,6 +11782,8 @@ async function saveSettings() {
       payment_alipay_force_qrcode: form.payment_alipay_force_qrcode,
       payment_alipay_mobile_precreate_deep_link:
         form.payment_alipay_mobile_precreate_deep_link,
+      payment_visible_method_alipay_source: form.payment_visible_method_alipay_source,
+      payment_visible_method_alipay_enabled: form.payment_visible_method_alipay_enabled,
       openai_low_upstream_rate_priority_enabled:
         form.openai_low_upstream_rate_priority_enabled,
       openai_oauth_scheduling_rate_multiplier:
@@ -11876,6 +11896,7 @@ async function saveSettings() {
         (form as Record<string, unknown>)[key] = value;
       }
     }
+    savedPaymentEnabledTypes.value = [...form.payment_enabled_types];
     if (updated.openai_oauth_scheduling_rate_multiplier === null) {
       form.openai_oauth_scheduling_rate_multiplier = null;
     }
@@ -12598,10 +12619,6 @@ function isPaymentTypeEnabled(type: string): boolean {
   return form.payment_enabled_types.includes(type);
 }
 
-const hasAnyPaymentTypeEnabled = computed(
-  () => form.payment_enabled_types.length > 0,
-);
-
 function togglePaymentType(type: string) {
   if (form.payment_enabled_types.includes(type)) {
     form.payment_enabled_types = form.payment_enabled_types.filter(
@@ -12632,8 +12649,10 @@ function slog(...args: unknown[]) {
   console.warn("[payment]", ...args);
 }
 
-const providersLoading = ref(false);
+const providersLoading = ref(true);
+const savedPaymentEnabledTypes = ref<string[]>([]);
 const providerSaving = ref(false);
+const paymentSourceSaving = ref(false);
 const providers = ref<ProviderInstance[]>([]);
 const showProviderDialog = ref(false);
 const showDeleteProviderDialog = ref(false);
@@ -12651,7 +12670,7 @@ const providerKeyOptions = computed(() => [
   { value: "airwallex", label: t("admin.settings.payment.providerAirwallex") },
 ]);
 
-const enabledProviderKeyOptions = computed(() => {
+const creatableProviderKeyOptions = computed(() => {
   const enabled = form.payment_enabled_types;
   return providerKeyOptions.value.filter((opt) => enabled.includes(opt.value));
 });
@@ -12740,7 +12759,8 @@ function getProviderVisibleMethods(
 function findProviderEnablementConflict(
   candidate: ProviderEnablementCandidate,
 ): { method: "alipay" | "wxpay"; conflicting: ProviderInstance } | null {
-  const claimedMethods = getProviderVisibleMethods(candidate);
+  // Alipay providers may coexist; the explicit source routes new orders.
+  const claimedMethods = getProviderVisibleMethods(candidate).filter(method => method !== "alipay");
   if (claimedMethods.length === 0) {
     return null;
   }
@@ -12796,10 +12816,29 @@ async function loadProviders() {
   }
 }
 
+async function handleSelectAlipaySource(value: string) {
+  const source = normalizePaymentVisibleMethodSource("alipay", value);
+  if (source === form.payment_visible_method_alipay_source || paymentSourceSaving.value) return;
+  paymentSourceSaving.value = true;
+  try {
+    await adminAPI.settings.updateSettings({
+      payment_visible_method_alipay_source: source,
+      payment_visible_method_alipay_enabled: true,
+    });
+    form.payment_visible_method_alipay_source = source;
+    form.payment_visible_method_alipay_enabled = true;
+    appStore.showSuccess(t("admin.settings.payment.alipaySourceSaved"));
+  } catch (error) {
+    appStore.showError(extractI18nErrorMessage(error, t, "payment.errors", t("common.error")));
+  } finally {
+    paymentSourceSaving.value = false;
+  }
+}
+
 function openCreateProvider() {
   editingProvider.value = null;
   providerDialogRef.value?.reset(
-    enabledProviderKeyOptions.value[0]?.value || "easypay",
+    creatableProviderKeyOptions.value[0]?.value || "easypay",
   );
   showProviderDialog.value = true;
 }
@@ -12808,6 +12847,37 @@ function openEditProvider(provider: ProviderInstance) {
   editingProvider.value = provider;
   providerDialogRef.value?.loadProvider(provider);
   showProviderDialog.value = true;
+}
+
+async function handleBillProviderSaved(provider: ProviderInstance) {
+  const savedIndex = providers.value.findIndex(item => item.id === provider.id);
+  if (savedIndex === -1) providers.value = [...providers.value, provider];
+  else providers.value = providers.value.map(item => item.id === provider.id ? provider : item);
+  await loadProviders();
+  if (!provider.enabled) return;
+  try {
+    // Read raw administrator types so activation preserves other providers.
+    const { data } = await adminAPI.payment.getConfig();
+    const enabledTypes = Array.from(new Set([
+      ...(data.enabled_payment_types || []), "alipay_bill",
+    ]));
+    if (!(data.enabled_payment_types || []).includes("alipay_bill")) {
+      await adminAPI.payment.updateConfig({ enabled_payment_types: enabledTypes });
+    }
+    // Keep pending additions/removals in the page while updating the saved baseline.
+    const pending = form.payment_enabled_types;
+    const removed = savedPaymentEnabledTypes.value.filter(type => !pending.includes(type));
+    const added = pending.filter(type => !savedPaymentEnabledTypes.value.includes(type));
+    form.payment_enabled_types = Array.from(new Set([
+      ...enabledTypes.filter(type => type === "alipay_bill" || !removed.includes(type)),
+      ...added,
+    ]));
+    savedPaymentEnabledTypes.value = enabledTypes;
+  } catch (error) {
+    appStore.showError(t("admin.settings.payment.billActivationFailed", {
+      error: extractI18nErrorMessage(error, t, "payment.errors", t("common.error")),
+    }));
+  }
 }
 
 async function handleSaveProvider(payload: Partial<ProviderInstance>) {
@@ -12836,8 +12906,13 @@ async function handleSaveProvider(payload: Partial<ProviderInstance>) {
     showProviderDialog.value = false;
     // Reload full list (API returns decrypted/formatted data with correct sort order)
     await loadProviders();
-    // Auto-save settings so provider changes take effect immediately
-    await saveSettings();
+    if (candidate.provider_key === "alipay_bill" && !candidate.enabled) {
+      // Keep pending global settings separate from saving a disabled draft.
+      appStore.showSuccess(t("common.saved"));
+    } else {
+      // Auto-save settings so active provider changes take effect immediately.
+      await saveSettings();
+    }
   } catch (err: unknown) {
     appStore.showError(extractI18nErrorMessage(err, t, "payment.errors", t("common.error")));
   } finally {

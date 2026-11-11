@@ -34,6 +34,9 @@ func (s *PaymentConfigService) GetAvailableMethodLimits(ctx context.Context) (*M
 		ml := pcAggregateMethodLimits(pt, insts)
 		ml.DisplayName = s.pcAggregateMethodDisplayName(pt, insts)
 		ml.Currency = currency
+		if !s.pcAttachBillPayAmounts(&ml, insts) {
+			continue
+		}
 		resp.Methods[ml.PaymentType] = ml
 	}
 	resp.GlobalMin, resp.GlobalMax = pcComputeGlobalRange(resp.Methods)
@@ -62,7 +65,13 @@ func (s *PaymentConfigService) pcApplyEnabledVisibleMethodInstances(ctx context.
 				delete(filtered, method)
 				continue
 			}
-			filtered[method] = matching
+			legacy := make([]*dbent.PaymentProviderInstance, 0, len(matching))
+			for _, instance := range matching {
+				if instance.ProviderKey != payment.TypeAlipayBill {
+					legacy = append(legacy, instance)
+				}
+			}
+			filtered[method] = legacy
 			continue
 		}
 		selectedInstances := filterVisibleMethodInstancesByProviderKey(instances, method, providerKey)

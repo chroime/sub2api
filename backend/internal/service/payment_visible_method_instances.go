@@ -22,7 +22,7 @@ func enabledVisibleMethodsForProvider(providerKey, supportedTypes string) []stri
 	}
 
 	switch strings.TrimSpace(providerKey) {
-	case payment.TypeAlipay:
+	case payment.TypeAlipay, payment.TypeAlipayBill:
 		if strings.TrimSpace(supportedTypes) == "" {
 			addMethod(payment.TypeAlipay)
 			break
@@ -145,7 +145,7 @@ func (s *PaymentConfigService) validateVisibleMethodEnablementConflicts(
 	supportedTypes string,
 	enabled bool,
 ) error {
-	// Visible methods are selected by configured source (official/easypay),
+	// Visible methods are selected by configured source,
 	// so multiple enabled providers can intentionally claim the same user-facing
 	// method. Order creation and limits will route through the configured source.
 	_, _, _, _, _ = ctx, excludeID, providerKey, supportedTypes, enabled
@@ -189,19 +189,11 @@ func (s *PaymentConfigService) resolveVisibleMethodProviderKey(
 	method string,
 	matching []*dbent.PaymentProviderInstance,
 ) (string, error) {
-	switch providerKeys := distinctVisibleMethodProviderKeys(matching); len(providerKeys) {
-	case 0:
-		return "", nil
-	case 1:
-		return strings.TrimSpace(providerKeys[0]), nil
-	default:
-		providerKey, err := s.resolveVisibleMethodSourceProviderKey(ctx, method)
-		if err != nil {
-			return "", err
-		}
-		if providerKey == "" {
-			return "", nil
-		}
+	providerKey, err := s.resolveVisibleMethodSourceProviderKey(ctx, method)
+	if err != nil {
+		return "", err
+	}
+	if providerKey != "" {
 		selected := selectVisibleMethodInstanceByProviderKey(matching, providerKey)
 		if selected == nil {
 			return "", infraerrors.BadRequest(
@@ -211,6 +203,23 @@ func (s *PaymentConfigService) resolveVisibleMethodProviderKey(
 		}
 		return strings.TrimSpace(selected.ProviderKey), nil
 	}
+	// Unconfigured installations retain the existing single-provider and
+	// cross-provider load balancing behavior for older providers. Fixed QR
+	// checkout requires an explicit source selection before it becomes eligible.
+	legacy := make([]*dbent.PaymentProviderInstance, 0, len(matching))
+	for _, inst := range matching {
+		if inst != nil && inst.ProviderKey != payment.TypeAlipayBill {
+			legacy = append(legacy, inst)
+		}
+	}
+	if len(matching) > 0 && len(legacy) == 0 {
+		return "", infraerrors.BadRequest("INVALID_PAYMENT_VISIBLE_METHOD_SOURCE", "Alipay fixed QR requires an explicit payment source selection")
+	}
+	providerKeys := distinctVisibleMethodProviderKeys(legacy)
+	if len(providerKeys) == 1 {
+		return strings.TrimSpace(providerKeys[0]), nil
+	}
+	return "", nil
 }
 
 func (s *PaymentConfigService) resolveEnabledVisibleMethodInstance(

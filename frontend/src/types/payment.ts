@@ -50,6 +50,9 @@ export interface PaymentConfig {
 export interface MethodLimit {
   currency?: string
   display_name?: string
+  /** Exact final CNY payable amounts supported by fixed QR sources. */
+  fixed_amounts_only?: boolean
+  pay_amounts?: string[]
   daily_limit: number
   daily_used: number
   daily_remaining: number
@@ -111,6 +114,7 @@ export interface PaymentOrder {
   order_type: OrderType
   created_at: string
   expires_at: string
+  bill_amount_matching?: boolean
   paid_at?: string
   completed_at?: string
   refund_amount: number
@@ -181,6 +185,64 @@ export interface ProviderInstance {
   sort_order: number
 }
 
+export interface AlipayBillQRRule {
+  id: string
+  amount: string
+  qr_url: string
+  enabled: boolean
+  sort_order: number
+}
+
+export interface AlipayBillTestResult {
+  success: boolean
+  checked_at: string
+  entry_count: number
+  has_more: boolean
+}
+
+export interface AlipayBillEditCredentials {
+  privateKey: string
+  publicKey: string
+}
+
+export interface AlipayBillSyncResult {
+  fetched: number
+  inserted: number
+  matched: number
+  review: number
+  checked_at: string
+}
+
+export interface AlipayBillReceipt {
+  id: number
+  account_log_id: string
+  alipay_order_no: string
+  merchant_order_no: string
+  amount: string
+  trans_at: string
+  status: string
+  order_id?: number
+  epay_order_id?: number
+  review_reason: string
+}
+
+export interface EasyPayGatewayOrder {
+  id: number
+  out_trade_no: string
+  trade_no: string
+  amount: string
+  status: string
+  notify_status: string
+  created_at: string
+  paid_at?: string
+  expires_at?: string
+}
+
+export type AlipayBillClaimRequest = { reason: string } & (
+  | { order_id: number; epay_order_id?: never }
+  | { epay_order_id: number; order_id?: never }
+)
+
 // ==================== Request / Response ====================
 
 export interface CreateOrderRequest {
@@ -230,6 +292,7 @@ export interface CreateOrderResult {
   bonus_amount?: number
   expires_at: string
   result_type?: CreateOrderResultType
+  bill_amount_matching?: boolean
   payment_type?: string
   out_trade_no?: string
   payment_mode?: string

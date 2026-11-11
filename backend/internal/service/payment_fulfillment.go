@@ -176,20 +176,23 @@ func expectedNotificationProviderKey(registry *payment.Registry, orderPaymentTyp
 }
 
 func (s *PaymentService) toPaid(ctx context.Context, o *dbent.PaymentOrder, tradeNo string, paid float64, pk string) error {
+	tradeNo = strings.TrimSpace(tradeNo)
 	previousStatus := o.Status
 	now := time.Now()
 	grace := now.Add(-paymentGraceMinutes * time.Minute)
-	c, err := s.entClient.PaymentOrder.Update().Where(
-		paymentorder.IDEQ(o.ID),
-		paymentorder.Or(
-			paymentorder.StatusEQ(OrderStatusPending),
-			paymentorder.StatusEQ(OrderStatusCancelled),
-			paymentorder.And(
-				paymentorder.StatusEQ(OrderStatusExpired),
-				paymentorder.UpdatedAtGTE(grace),
+	c, err := s.guardAlipayPaidTransition(ctx, o, tradeNo, func(client *dbent.Client) (int, error) {
+		return client.PaymentOrder.Update().Where(
+			paymentorder.IDEQ(o.ID),
+			paymentorder.Or(
+				paymentorder.StatusEQ(OrderStatusPending),
+				paymentorder.StatusEQ(OrderStatusCancelled),
+				paymentorder.And(
+					paymentorder.StatusEQ(OrderStatusExpired),
+					paymentorder.UpdatedAtGTE(grace),
+				),
 			),
-		),
-	).SetStatus(OrderStatusPaid).SetPayAmount(paid).SetPaymentTradeNo(tradeNo).SetPaidAt(now).ClearFailedAt().ClearFailedReason().Save(ctx)
+		).SetStatus(OrderStatusPaid).SetPayAmount(paid).SetPaymentTradeNo(tradeNo).SetPaidAt(now).ClearFailedAt().ClearFailedReason().Save(ctx)
+	})
 	if err != nil {
 		return fmt.Errorf("update to PAID: %w", err)
 	}

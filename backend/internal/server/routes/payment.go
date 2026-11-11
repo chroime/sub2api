@@ -68,6 +68,13 @@ func RegisterPaymentRoutes(
 	// enumeration. It fails open on Redis errors so an outage never blocks a
 	// user who is mid-payment from seeing their result.
 	publicRateLimiter := ratelimit.NewRateLimiter(redisClient)
+	epay := v1.Group("/payment/epay")
+	epay.Use(publicRateLimiter.Limit("payment-epay", 120, time.Minute))
+	{
+		epay.POST("/mapi.php", paymentHandler.BuiltinEasyPayCreate)
+		epay.GET("/api.php", paymentHandler.BuiltinEasyPayAPI)
+		epay.POST("/api.php", paymentHandler.BuiltinEasyPayAPI)
+	}
 	public := v1.Group("/payment/public")
 	{
 		public.POST("/orders/verify",
@@ -127,6 +134,12 @@ func RegisterPaymentRoutes(
 		{
 			providers.GET("", adminPaymentHandler.ListProviders)
 			providers.POST("", adminPaymentHandler.CreateProvider)
+			providers.GET("/:id/bill-credentials", adminPaymentHandler.GetBillEditCredentials)
+			providers.POST("/:id/bill-test", adminPaymentHandler.TestBillConnection)
+			providers.POST("/:id/bill-sync", adminPaymentHandler.SyncBillReceipts)
+			providers.GET("/:id/bill-receipts", adminPaymentHandler.ListBillReceipts)
+			providers.GET("/:id/epay-orders", adminPaymentHandler.ListBuiltinEasyPayOrders)
+			providers.POST("/:id/bill-receipts/:receiptId/claim", adminPaymentHandler.ClaimBillReceipt)
 			providers.PUT("/:id", adminPaymentHandler.UpdateProvider)
 			providers.DELETE("/:id", adminPaymentHandler.DeleteProvider)
 		}

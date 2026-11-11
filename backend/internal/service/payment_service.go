@@ -116,6 +116,7 @@ type CreateOrderResponse struct {
 	JSAPI                         *payment.WechatJSAPIPayload     `json:"jsapi,omitempty"`
 	JSAPIPayload                  *payment.WechatJSAPIPayload     `json:"jsapi_payload,omitempty"`
 	ExpiresAt                     time.Time                       `json:"expires_at"`
+	BillAmountMatching            bool                            `json:"bill_amount_matching,omitempty"`
 	PaymentMode                   string                          `json:"payment_mode,omitempty"`
 	ResumeToken                   string                          `json:"resume_token,omitempty"`
 	AlipayMobilePrecreateDeepLink bool                            `json:"alipay_mobile_precreate_deep_link,omitempty"`

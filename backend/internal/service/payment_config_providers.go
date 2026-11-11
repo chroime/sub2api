@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"entgo.io/ent/dialect"
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
 	"github.com/Wei-Shaw/sub2api/ent/paymentproviderinstance"
@@ -77,9 +78,9 @@ func (s *PaymentConfigService) ListProviderInstancesWithConfig(ctx context.Conte
 // decryptAndMaskConfig returns the stored config with sensitive fields omitted.
 // Admin UIs display masked placeholders for these; the raw values never leave
 // the server. Callers that need the full config (e.g. payment runtime) must
-// use decryptConfig directly.
+// use decryptProviderConfig directly.
 func (s *PaymentConfigService) decryptAndMaskConfig(providerKey, encrypted string) (map[string]string, error) {
-	cfg, err := s.decryptConfig(encrypted)
+	cfg, err := s.decryptProviderConfig(providerKey, encrypted)
 	if err != nil {
 		return nil, err
 	}
@@ -92,6 +93,12 @@ func (s *PaymentConfigService) decryptAndMaskConfig(providerKey, encrypted strin
 			continue
 		}
 		masked[k] = v
+	}
+	if providerKey == payment.TypeAlipayBill {
+		delete(masked, "epayKeyConfigured")
+		if strings.TrimSpace(cfg["epayKey"]) != "" {
+			masked["epayKeyConfigured"] = "true"
+		}
 	}
 	return masked, nil
 }
@@ -111,11 +118,12 @@ var pendingOrderStatuses = []string{
 // Key matching is case-insensitive. Non-listed keys (e.g. appId, notifyUrl,
 // stripe publishableKey) are returned in plaintext by the admin GET API.
 var providerSensitiveConfigFields = map[string]map[string]struct{}{
-	payment.TypeEasyPay:   {"pkey": {}},
-	payment.TypeAlipay:    {"privatekey": {}, "publickey": {}, "alipaypublickey": {}},
-	payment.TypeWxpay:     {"privatekey": {}, "apiv3key": {}, "publickey": {}},
-	payment.TypeStripe:    {"secretkey": {}, "webhooksecret": {}},
-	payment.TypeAirwallex: {"apikey": {}, "webhooksecret": {}},
+	payment.TypeEasyPay:    {"pkey": {}},
+	payment.TypeAlipay:     {"privatekey": {}, "publickey": {}, "alipaypublickey": {}},
+	payment.TypeAlipayBill: {"privatekey": {}, "publickey": {}, "alipaypublickey": {}, "appauthtoken": {}, "epaykey": {}},
+	payment.TypeWxpay:      {"privatekey": {}, "apiv3key": {}, "publickey": {}},
+	payment.TypeStripe:     {"secretkey": {}, "webhooksecret": {}},
+	payment.TypeAirwallex:  {"apikey": {}, "webhooksecret": {}},
 }
 
 // providerPendingOrderProtectedConfigFields lists config keys that cannot be
@@ -123,11 +131,12 @@ var providerSensitiveConfigFields = map[string]map[string]struct{}{
 // all provider identity fields that are snapshotted into orders or used by
 // webhook/refund verification.
 var providerPendingOrderProtectedConfigFields = map[string]map[string]struct{}{
-	payment.TypeEasyPay:   {"pkey": {}, "pid": {}},
-	payment.TypeAlipay:    {"privatekey": {}, "publickey": {}, "alipaypublickey": {}, "appid": {}},
-	payment.TypeWxpay:     {"privatekey": {}, "apiv3key": {}, "publickey": {}, "appid": {}, "mpappid": {}, "mchid": {}, "publickeyid": {}, "certserial": {}},
-	payment.TypeStripe:    {"secretkey": {}, "webhooksecret": {}, "currency": {}},
-	payment.TypeAirwallex: {"clientid": {}, "apikey": {}, "webhooksecret": {}, "apibase": {}, "accountid": {}, "currency": {}},
+	payment.TypeEasyPay:    {"pkey": {}, "pid": {}},
+	payment.TypeAlipay:     {"privatekey": {}, "publickey": {}, "alipaypublickey": {}, "appid": {}},
+	payment.TypeAlipayBill: {"privatekey": {}, "publickey": {}, "alipaypublickey": {}, "appauthtoken": {}, "appid": {}, "receiverid": {}, "epaykey": {}},
+	payment.TypeWxpay:      {"privatekey": {}, "apiv3key": {}, "publickey": {}, "appid": {}, "mpappid": {}, "mchid": {}, "publickeyid": {}, "certserial": {}},
+	payment.TypeStripe:     {"secretkey": {}, "webhooksecret": {}, "currency": {}},
+	payment.TypeAirwallex:  {"clientid": {}, "apikey": {}, "webhooksecret": {}, "apibase": {}, "accountid": {}, "currency": {}},
 }
 
 func isSensitiveProviderConfigField(providerKey, fieldName string) bool {
@@ -178,13 +187,24 @@ func (s *PaymentConfigService) countPendingOrdersByPlan(ctx context.Context, pla
 }
 
 var validProviderKeys = map[string]bool{
-	payment.TypeEasyPay: true, payment.TypeAlipay: true, payment.TypeWxpay: true, payment.TypeStripe: true, payment.TypeAirwallex: true,
+	payment.TypeEasyPay: true, payment.TypeAlipay: true, payment.TypeAlipayBill: true, payment.TypeWxpay: true, payment.TypeStripe: true, payment.TypeAirwallex: true,
 }
 
 func (s *PaymentConfigService) CreateProviderInstance(ctx context.Context, req CreateProviderInstanceRequest) (*dbent.PaymentProviderInstance, error) {
 	typesStr := joinTypes(req.SupportedTypes)
 	if err := validateProviderRequest(req.ProviderKey, req.Name, typesStr); err != nil {
 		return nil, err
+	}
+	if req.ProviderKey == payment.TypeAlipayBill {
+		if typesStr == "" {
+			typesStr = payment.TypeAlipay
+		}
+		if req.PaymentMode == "" {
+			req.PaymentMode = "qrcode"
+		}
+		if err := validateAlipayBillProviderOptions(typesStr, req.PaymentMode, req.RefundEnabled, req.AllowUserRefund, req.Config); err != nil {
+			return nil, err
+		}
 	}
 	if req.ProviderKey == payment.TypeEasyPay {
 		if err := validateEasyPayCustomMethods(req.Config, typesStr); err != nil {
@@ -199,7 +219,7 @@ func (s *PaymentConfigService) CreateProviderInstance(ctx context.Context, req C
 			return nil, err
 		}
 	}
-	enc, err := s.encryptConfig(req.Config)
+	enc, err := s.encryptProviderConfig(req.ProviderKey, req.Config)
 	if err != nil {
 		return nil, err
 	}
@@ -293,6 +313,37 @@ func (s *PaymentConfigService) UpdateProviderInstance(ctx context.Context, id in
 	if err != nil {
 		return nil, fmt.Errorf("load provider instance: %w", err)
 	}
+	if current.ProviderKey != payment.TypeAlipayBill {
+		return s.updateProviderInstance(ctx, current, req)
+	}
+	tx, err := s.entClient.Tx(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin provider configuration transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	query := tx.PaymentProviderInstance.Query().Where(paymentproviderinstance.IDEQ(id))
+	if s.entClient.Driver().Dialect() == dialect.Postgres {
+		query = query.ForUpdate()
+	}
+	current, err = query.Only(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("lock provider instance: %w", err)
+	}
+	transactionService := *s
+	transactionService.entClient = tx.Client()
+	updated, err := transactionService.updateProviderInstance(ctx, current, req)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit provider configuration: %w", err)
+	}
+	return updated.Unwrap(), nil
+}
+
+func (s *PaymentConfigService) updateProviderInstance(ctx context.Context, current *dbent.PaymentProviderInstance, req UpdateProviderInstanceRequest) (*dbent.PaymentProviderInstance, error) {
+	id := current.ID
+	var err error
 	var pendingOrderCount *int
 	getPendingOrderCount := func() (int, error) {
 		if pendingOrderCount != nil {
@@ -318,13 +369,18 @@ func (s *PaymentConfigService) UpdateProviderInstance(ctx context.Context, id in
 	}
 	var mergedConfig map[string]string
 	if req.Config != nil {
-		currentConfig, err := s.decryptConfig(current.Config)
+		currentConfig, err := s.decryptProviderConfig(current.ProviderKey, current.Config)
 		if err != nil {
 			return nil, fmt.Errorf("decrypt existing config: %w", err)
 		}
 		mergedConfig, err = s.mergeConfig(ctx, id, req.Config)
 		if err != nil {
 			return nil, err
+		}
+		if current.ProviderKey == payment.TypeAlipayBill {
+			if err := validateAlipayBillConfigFieldNames(mergedConfig); err != nil {
+				return nil, err
+			}
 		}
 		if hasPendingOrderProtectedConfigChange(current.ProviderKey, currentConfig, mergedConfig) {
 			count, err := getPendingOrderCount()
@@ -334,6 +390,16 @@ func (s *PaymentConfigService) UpdateProviderInstance(ctx context.Context, id in
 			if count > 0 {
 				return nil, infraerrors.Conflict("PENDING_ORDERS", "instance has pending orders").
 					WithMetadata(map[string]string{"count": strconv.Itoa(count)})
+			}
+			if current.ProviderKey == payment.TypeAlipayBill {
+				if err := s.ensureBuiltinEasyPayCredentialsIdle(ctx, id); err != nil {
+					return nil, err
+				}
+			}
+		}
+		if current.ProviderKey == payment.TypeAlipayBill && hasAlipayBillIdentityChange(currentConfig, mergedConfig) {
+			if err := s.ensureAlipayBillHistoryUnchanged(ctx, id, providerConfigFieldValue(currentConfig, "receiverId")); err != nil {
+				return nil, err
 			}
 		}
 	}
@@ -349,7 +415,7 @@ func (s *PaymentConfigService) UpdateProviderInstance(ctx context.Context, id in
 	}
 	configToValidate := mergedConfig
 	if configToValidate == nil {
-		configToValidate, err = s.decryptConfig(current.Config)
+		configToValidate, err = s.decryptProviderConfig(current.ProviderKey, current.Config)
 		if err != nil {
 			return nil, fmt.Errorf("decrypt existing config: %w", err)
 		}
@@ -358,6 +424,24 @@ func (s *PaymentConfigService) UpdateProviderInstance(ctx context.Context, id in
 		if err := validateEasyPayCustomMethods(configToValidate, nextSupportedTypes); err != nil {
 			return nil, err
 		}
+	}
+	if current.ProviderKey == payment.TypeAlipayBill {
+		nextMode, nextRefund, nextUserRefund := current.PaymentMode, current.RefundEnabled, current.AllowUserRefund
+		if req.PaymentMode != nil {
+			nextMode = *req.PaymentMode
+		}
+		if req.RefundEnabled != nil {
+			nextRefund = *req.RefundEnabled
+		}
+		if req.AllowUserRefund != nil {
+			nextUserRefund = *req.AllowUserRefund
+		}
+		if err := validateAlipayBillProviderOptions(nextSupportedTypes, nextMode, nextRefund, nextUserRefund, configToValidate); err != nil {
+			return nil, err
+		}
+		// Every save of this provider must preserve encryption, including a
+		// metadata-only update of an older plaintext draft.
+		mergedConfig = configToValidate
 	}
 	// Validate merged config when the instance will end up enabled.
 	// This surfaces provider-level errors (e.g. wxpay missing certSerial) at save time,
@@ -375,8 +459,8 @@ func (s *PaymentConfigService) UpdateProviderInstance(ctx context.Context, id in
 	if req.Name != nil {
 		u.SetName(*req.Name)
 	}
-	if mergedConfig != nil {
-		enc, err := s.encryptConfig(mergedConfig)
+	if mergedConfig != nil || current.ProviderKey == payment.TypeAlipayBill {
+		enc, err := s.encryptProviderConfig(current.ProviderKey, mergedConfig)
 		if err != nil {
 			return nil, err
 		}
@@ -454,6 +538,7 @@ func (s *PaymentConfigService) UpdateProviderInstance(ctx context.Context, id in
 func (s *PaymentConfigService) GetUserRefundEligibleInstanceIDs(ctx context.Context) ([]string, error) {
 	instances, err := s.entClient.PaymentProviderInstance.Query().
 		Where(
+			paymentproviderinstance.ProviderKeyNEQ(payment.TypeAlipayBill),
 			paymentproviderinstance.RefundEnabledEQ(true),
 			paymentproviderinstance.AllowUserRefundEQ(true),
 		).Select(paymentproviderinstance.FieldID).All(ctx)
@@ -472,7 +557,7 @@ func (s *PaymentConfigService) mergeConfig(ctx context.Context, id int64, newCon
 	if err != nil {
 		return nil, fmt.Errorf("load existing provider: %w", err)
 	}
-	existing, err := s.decryptConfig(inst.Config)
+	existing, err := s.decryptProviderConfig(inst.ProviderKey, inst.Config)
 	if err != nil {
 		return nil, fmt.Errorf("decrypt existing config for instance %d: %w", id, err)
 	}
@@ -491,14 +576,10 @@ func (s *PaymentConfigService) mergeConfig(ctx context.Context, id int64, newCon
 }
 
 // decryptConfig parses a stored provider config.
-// New records are plaintext JSON; legacy records are AES-256-GCM ciphertext
-// ("iv:authTag:ciphertext"). Values that cannot be parsed as either — including
-// legacy ciphertext with no/invalid TOTP_ENCRYPTION_KEY — are treated as empty,
-// letting the admin re-enter the config via the UI to complete the migration.
-//
-// TODO(deprecated-legacy-ciphertext): The AES fallback branch is a transitional
-// shim for pre-plaintext records. Remove it (and the encryptionKey field) after
-// a few releases once all live deployments have re-saved their provider configs.
+// Existing providers support plaintext JSON and legacy AES-256-GCM ciphertext
+// ("iv:authTag:ciphertext"). Fixed QR credentials also use AES-GCM storage.
+// The generic legacy reader treats unreadable records as empty for re-entry;
+// fixed QR admin reads and writes use decryptProviderConfig to fail explicitly.
 func (s *PaymentConfigService) decryptConfig(stored string) (map[string]string, error) {
 	if stored == "" {
 		return nil, nil
@@ -507,9 +588,9 @@ func (s *PaymentConfigService) decryptConfig(stored string) (map[string]string, 
 	if err := json.Unmarshal([]byte(stored), &cfg); err == nil {
 		return cfg, nil
 	}
-	// Deprecated: legacy AES-256-GCM ciphertext fallback — scheduled for removal.
+	// AES-GCM remains required for fixed QR configurations and legacy records.
 	if len(s.encryptionKey) == payment.AES256KeySize {
-		//nolint:staticcheck // SA1019: intentional legacy fallback, scheduled for removal
+		//nolint:staticcheck // SA1019: fixed QR and legacy encrypted configuration support.
 		if plaintext, err := payment.Decrypt(stored, s.encryptionKey); err == nil {
 			if err := json.Unmarshal([]byte(plaintext), &cfg); err == nil {
 				return cfg, nil
@@ -522,6 +603,39 @@ func (s *PaymentConfigService) decryptConfig(stored string) (map[string]string, 
 }
 
 func (s *PaymentConfigService) DeleteProviderInstance(ctx context.Context, id int64) error {
+	instance, err := s.entClient.PaymentProviderInstance.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+	if instance.ProviderKey != payment.TypeAlipayBill {
+		return s.deleteProviderInstance(ctx, instance)
+	}
+	tx, err := s.entClient.Tx(ctx)
+	if err != nil {
+		return fmt.Errorf("begin provider deletion transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	query := tx.PaymentProviderInstance.Query().Where(paymentproviderinstance.IDEQ(id))
+	if s.entClient.Driver().Dialect() == dialect.Postgres {
+		query = query.ForUpdate()
+	}
+	instance, err = query.Only(ctx)
+	if err != nil {
+		return fmt.Errorf("lock provider instance: %w", err)
+	}
+	transactionService := *s
+	transactionService.entClient = tx.Client()
+	if err := transactionService.deleteProviderInstance(ctx, instance); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit provider deletion: %w", err)
+	}
+	return nil
+}
+
+func (s *PaymentConfigService) deleteProviderInstance(ctx context.Context, instance *dbent.PaymentProviderInstance) error {
+	id := instance.ID
 	count, err := s.countPendingOrders(ctx, id)
 	if err != nil {
 		return fmt.Errorf("check pending orders: %w", err)
@@ -530,12 +644,137 @@ func (s *PaymentConfigService) DeleteProviderInstance(ctx context.Context, id in
 		return infraerrors.Conflict("PENDING_ORDERS",
 			fmt.Sprintf("this instance has %d in-progress orders and cannot be deleted — wait for orders to complete or disable the instance first", count))
 	}
+	if instance.ProviderKey == payment.TypeAlipayBill {
+		cfg, err := s.decryptProviderConfig(instance.ProviderKey, instance.Config)
+		if err != nil {
+			return err
+		}
+		if err := s.ensureAlipayBillHistoryUnchanged(ctx, id, providerConfigFieldValue(cfg, "receiverId")); err != nil {
+			return err
+		}
+	}
 	return s.entClient.PaymentProviderInstance.DeleteOneID(id).Exec(ctx)
 }
 
+func validateAlipayBillProviderOptions(supportedTypes, paymentMode string, refundEnabled, allowUserRefund bool, cfg map[string]string) error {
+	if err := validateAlipayBillConfigFieldNames(cfg); err != nil {
+		return err
+	}
+	if supportedTypes != payment.TypeAlipay {
+		return infraerrors.BadRequest("VALIDATION_ERROR", "Alipay fixed QR supports only the alipay payment type")
+	}
+	if paymentMode != "qrcode" {
+		return infraerrors.BadRequest("VALIDATION_ERROR", "Alipay fixed QR requires qrcode payment mode")
+	}
+	if refundEnabled || allowUserRefund {
+		return infraerrors.BadRequest("VALIDATION_ERROR", "Alipay fixed QR does not support automatic or user refunds")
+	}
+	if err := ValidateBuiltinEasyPayConfig(cfg); err != nil {
+		return err
+	}
+	_, err := provider.ParseAlipayBillRules(cfg)
+	return err
+}
+
+func validateAlipayBillConfigFieldNames(cfg map[string]string) error {
+	seen := make(map[string]struct{}, len(cfg))
+	for key := range cfg {
+		normalized := strings.ToLower(key)
+		if _, exists := seen[normalized]; exists {
+			return infraerrors.BadRequest("VALIDATION_ERROR", "Alipay fixed QR configuration contains duplicate field names")
+		}
+		seen[normalized] = struct{}{}
+	}
+	return nil
+}
+
+func hasAlipayBillIdentityChange(current, next map[string]string) bool {
+	return providerConfigFieldValue(current, "appId") != providerConfigFieldValue(next, "appId") ||
+		providerConfigFieldValue(current, "receiverId") != providerConfigFieldValue(next, "receiverId")
+}
+
+func (s *PaymentConfigService) ensureAlipayBillHistoryUnchanged(ctx context.Context, instanceID int64, receiverID string) error {
+	hasOrders, err := s.entClient.PaymentOrder.Query().Where(paymentorder.ProviderInstanceIDEQ(strconv.FormatInt(instanceID, 10))).Exist(ctx)
+	if err != nil {
+		return fmt.Errorf("check payment reconciliation orders: %w", err)
+	}
+	hasHistory := hasOrders
+	if !hasHistory {
+		hasHistory, err = s.builtinEasyPayHasOrders(ctx, instanceID, false)
+		if err != nil {
+			return err
+		}
+	}
+	if !hasHistory {
+		rows, err := s.entClient.QueryContext(ctx, `SELECT EXISTS (
+			SELECT 1 FROM payment_bill_receipts WHERE provider_instance_id = $1 OR receiver_id = $2
+		)`, instanceID, strings.TrimSpace(receiverID))
+		if err != nil {
+			return fmt.Errorf("check payment reconciliation receipts: %w", err)
+		}
+		defer rows.Close()
+		if rows.Next() {
+			if err := rows.Scan(&hasHistory); err != nil {
+				return fmt.Errorf("scan payment reconciliation history: %w", err)
+			}
+		}
+		if err := rows.Err(); err != nil {
+			return fmt.Errorf("read payment reconciliation history: %w", err)
+		}
+	}
+	if hasHistory {
+		return infraerrors.Conflict("PAYMENT_RECONCILIATION_HISTORY", "this provider or receiving account has payment history; keep its identity and create a new instance for a different account")
+	}
+	return nil
+}
+
+func (s *PaymentConfigService) encryptProviderConfig(providerKey string, cfg map[string]string) (string, error) {
+	if providerKey == payment.TypeAlipayBill {
+		// This marker is derived on reads; clients cannot persist or override it.
+		stored := make(map[string]string, len(cfg))
+		for key, value := range cfg {
+			if key != "epayKeyConfigured" {
+				stored[key] = value
+			}
+		}
+		cfg = stored
+	}
+	plaintext, err := s.encryptConfig(cfg)
+	if err != nil || providerKey != payment.TypeAlipayBill {
+		return plaintext, err
+	}
+	if len(s.encryptionKey) != payment.AES256KeySize {
+		return "", infraerrors.ServiceUnavailable("PAYMENT_CONFIG_ENCRYPTION_NOT_CONFIGURED", "Alipay fixed QR requires a configured 32-byte payment encryption key")
+	}
+	//nolint:staticcheck // SA1019: fixed QR credentials intentionally use AES-GCM storage.
+	return payment.Encrypt(plaintext, s.encryptionKey)
+}
+
+func (s *PaymentConfigService) decryptProviderConfig(providerKey, stored string) (map[string]string, error) {
+	if providerKey != payment.TypeAlipayBill || stored == "" {
+		return s.decryptConfig(stored)
+	}
+	var cfg map[string]string
+	if err := json.Unmarshal([]byte(stored), &cfg); err == nil {
+		return cfg, nil
+	}
+	if len(s.encryptionKey) != payment.AES256KeySize {
+		return nil, infraerrors.ServiceUnavailable("PAYMENT_CONFIG_ENCRYPTION_NOT_CONFIGURED", "Alipay fixed QR requires a configured 32-byte payment encryption key")
+	}
+	//nolint:staticcheck // SA1019: fixed QR credentials intentionally use AES-GCM storage.
+	plaintext, err := payment.Decrypt(stored, s.encryptionKey)
+	if err != nil {
+		return nil, infraerrors.ServiceUnavailable("PAYMENT_CONFIG_DECRYPTION_FAILED", "Alipay fixed QR configuration could not be decrypted with the configured encryption key")
+	}
+	if err := json.Unmarshal([]byte(plaintext), &cfg); err != nil {
+		return nil, infraerrors.ServiceUnavailable("PAYMENT_CONFIG_DECRYPTION_FAILED", "Alipay fixed QR configuration is unreadable")
+	}
+	return cfg, nil
+}
+
 // encryptConfig serialises a provider config for storage.
-// New records are written as plaintext JSON; the historical AES-GCM wrapping
-// has been dropped but decryptConfig still accepts old ciphertext during migration.
+// Existing providers keep plaintext storage compatibility. New fixed QR saves
+// call encryptProviderConfig to wrap the serialized configuration in AES-GCM.
 func (s *PaymentConfigService) encryptConfig(cfg map[string]string) (string, error) {
 	data, err := json.Marshal(cfg)
 	if err != nil {

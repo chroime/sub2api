@@ -97,7 +97,7 @@
         <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
           <h2 class="shrink-0 text-xl font-semibold text-gray-900 dark:text-white">{{ currentVendorLabel }}</h2>
           <span class="text-sm leading-relaxed plaza-soft text-gray-400 dark:text-dark-500">
-            {{ t('modelPlaza.priceTable.unitNote') }}
+            {{ t(selectedGroup ? 'modelPlaza.priceTable.siteUnitNote' : 'modelPlaza.priceTable.unitNote') }}
           </span>
         </div>
 

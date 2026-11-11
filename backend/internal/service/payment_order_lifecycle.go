@@ -107,6 +107,9 @@ func (s *PaymentService) CancelOrder(ctx context.Context, orderID, userID int64)
 	if o.Status != OrderStatusPending {
 		return "", infraerrors.BadRequest("INVALID_STATUS", "order cannot be cancelled in current status")
 	}
+	if psStringValue(o.ProviderKey) == payment.TypeAlipayBill {
+		return s.cancelBillOrderByUser(ctx, o)
+	}
 	return s.cancelCore(ctx, o, OrderStatusCancelled, fmt.Sprintf("user:%d", userID), "user cancelled order")
 }
 

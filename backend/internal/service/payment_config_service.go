@@ -131,13 +131,15 @@ type UpdatePaymentConfigRequest struct {
 
 // MethodLimits holds per-payment-type limits.
 type MethodLimits struct {
-	PaymentType string  `json:"payment_type"`
-	DisplayName string  `json:"display_name,omitempty"`
-	Currency    string  `json:"currency"`
-	FeeRate     float64 `json:"fee_rate"`
-	DailyLimit  float64 `json:"daily_limit"`
-	SingleMin   float64 `json:"single_min"`
-	SingleMax   float64 `json:"single_max"`
+	PaymentType      string   `json:"payment_type"`
+	DisplayName      string   `json:"display_name,omitempty"`
+	Currency         string   `json:"currency"`
+	FeeRate          float64  `json:"fee_rate"`
+	DailyLimit       float64  `json:"daily_limit"`
+	SingleMin        float64  `json:"single_min"`
+	SingleMax        float64  `json:"single_max"`
+	PayAmounts       []string `json:"pay_amounts,omitempty"`
+	FixedAmountsOnly bool     `json:"fixed_amounts_only,omitempty"`
 }
 
 // MethodLimitsResponse is the full response for the user-facing /limits API.
@@ -226,8 +228,18 @@ func (s *PaymentConfigService) IsPaymentEnabled(ctx context.Context) bool {
 	return val == "true"
 }
 
-// GetPaymentConfig returns the full payment configuration.
+// GetPaymentConfig returns payment configuration with canonical checkout methods.
 func (s *PaymentConfigService) GetPaymentConfig(ctx context.Context) (*PaymentConfig, error) {
+	return s.getPaymentConfig(ctx, false)
+}
+
+// GetAdminPaymentConfig preserves selected provider keys, including providers
+// such as alipay_bill that share a user-facing payment method with alipay.
+func (s *PaymentConfigService) GetAdminPaymentConfig(ctx context.Context) (*PaymentConfig, error) {
+	return s.getPaymentConfig(ctx, true)
+}
+
+func (s *PaymentConfigService) getPaymentConfig(ctx context.Context, preserveProviderKeys bool) (*PaymentConfig, error) {
 	keys := []string{
 		SettingPaymentEnabled, SettingMinRechargeAmount, SettingMaxRechargeAmount,
 		SettingDailyRechargeLimit, SettingOrderTimeoutMinutes, SettingMaxPendingOrders,
@@ -246,9 +258,33 @@ func (s *PaymentConfigService) GetPaymentConfig(ctx context.Context) (*PaymentCo
 		return nil, fmt.Errorf("get payment config settings: %w", err)
 	}
 	cfg := s.parsePaymentConfig(vals)
+	if preserveProviderKeys {
+		cfg.EnabledTypes = normalizeConfiguredProviderTypes(splitTypes(vals[SettingEnabledPaymentTypes]))
+	}
 	// Load Stripe publishable key from the first enabled Stripe provider instance
 	cfg.StripePublishableKey = s.getStripePublishableKey(ctx)
 	return cfg, nil
+}
+
+func normalizeConfiguredProviderTypes(types []string) []string {
+	var result []string
+	seen := make(map[string]struct{}, len(types))
+	for _, providerKey := range types {
+		providerKey = strings.TrimSpace(providerKey)
+		if !validProviderKeys[providerKey] {
+			// Preserve existing alias handling for legacy method-based settings.
+			providerKey = NormalizeVisibleMethod(providerKey)
+		}
+		if providerKey == "" {
+			continue
+		}
+		if _, exists := seen[providerKey]; exists {
+			continue
+		}
+		seen[providerKey] = struct{}{}
+		result = append(result, providerKey)
+	}
+	return result
 }
 
 func (s *PaymentConfigService) parsePaymentConfig(vals map[string]string) *PaymentConfig {
@@ -448,10 +484,18 @@ func (s *PaymentConfigService) UpdatePaymentConfig(ctx context.Context, req Upda
 		m[SettingAlipayMobilePrecreateDeepLink] = formatBoolOrEmpty(req.AlipayMobilePrecreateDeepLink)
 	}
 	if req.VisibleMethodAlipaySource != nil {
-		m[SettingPaymentVisibleMethodAlipaySource] = derefStr(req.VisibleMethodAlipaySource)
+		source, err := normalizeVisibleMethodSettingSource(payment.TypeAlipay, *req.VisibleMethodAlipaySource, true)
+		if err != nil {
+			return err
+		}
+		m[SettingPaymentVisibleMethodAlipaySource] = source
 	}
 	if req.VisibleMethodWxpaySource != nil {
-		m[SettingPaymentVisibleMethodWxpaySource] = derefStr(req.VisibleMethodWxpaySource)
+		source, err := normalizeVisibleMethodSettingSource(payment.TypeWxpay, *req.VisibleMethodWxpaySource, true)
+		if err != nil {
+			return err
+		}
+		m[SettingPaymentVisibleMethodWxpaySource] = source
 	}
 	if req.VisibleMethodAlipayEnabled != nil {
 		m[SettingPaymentVisibleMethodAlipayEnabled] = formatBoolOrEmpty(req.VisibleMethodAlipayEnabled)
@@ -553,6 +597,10 @@ func buildVisibleMethodSourceAvailability(instances []*dbent.PaymentProviderInst
 		case payment.TypeAlipay:
 			if inst.SupportedTypes == "" || payment.InstanceSupportsType(inst.SupportedTypes, payment.TypeAlipay) || payment.InstanceSupportsType(inst.SupportedTypes, payment.TypeAlipayDirect) {
 				available[VisibleMethodSourceOfficialAlipay] = true
+			}
+		case payment.TypeAlipayBill:
+			if payment.InstanceSupportsType(inst.SupportedTypes, payment.TypeAlipay) {
+				available[VisibleMethodSourceAlipayBill] = true
 			}
 		case payment.TypeWxpay:
 			if inst.SupportedTypes == "" || payment.InstanceSupportsType(inst.SupportedTypes, payment.TypeWxpay) || payment.InstanceSupportsType(inst.SupportedTypes, payment.TypeWxpayDirect) {

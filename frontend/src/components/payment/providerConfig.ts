@@ -39,6 +39,7 @@ export interface CallbackPaths {
 export const PROVIDER_SUPPORTED_TYPES: Record<string, string[]> = {
   easypay: ['alipay', 'wxpay'],
   alipay: ['alipay'],
+  alipay_bill: ['alipay'],
   wxpay: ['wxpay'],
   stripe: ['card', 'alipay', 'wxpay', 'link'],
   airwallex: ['airwallex'],
@@ -136,6 +137,13 @@ export const PROVIDER_CONFIG_FIELDS: Record<string, ConfigFieldDef[]> = {
     { key: 'appId', label: 'App ID', sensitive: false },
     { key: 'privateKey', label: '', sensitive: true },
     { key: 'publicKey', label: '', sensitive: true },
+  ],
+  alipay_bill: [
+    { key: 'appId', label: 'App ID', sensitive: false },
+    { key: 'receiverId', label: '', sensitive: false, optional: true, hintKey: 'admin.settings.payment.field_receiverIdHint' },
+    { key: 'privateKey', label: '', sensitive: true },
+    { key: 'publicKey', label: '', sensitive: true },
+    { key: 'appAuthToken', label: '', sensitive: true, optional: true },
   ],
   wxpay: [
     { key: 'appId', label: 'App ID', sensitive: false },

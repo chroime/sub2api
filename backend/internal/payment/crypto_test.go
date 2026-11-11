@@ -2,9 +2,34 @@ package payment
 
 import (
 	"crypto/rand"
+	"encoding/base64"
 	"strings"
 	"testing"
 )
+
+func TestDecryptRejectsMalformedNonceWithoutPanicking(t *testing.T) {
+	t.Parallel()
+	key := makeKey(t)
+	encoded, err := Encrypt(`{"privateKey":"secret"}`, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parts := strings.SplitN(encoded, ":", 3)
+	for _, length := range []int{0, 1, 11, 13, 32} {
+		func() {
+			defer func() {
+				if recovered := recover(); recovered != nil {
+					t.Errorf("nonce length %d caused panic: %v", length, recovered)
+				}
+			}()
+			corrupted := base64.StdEncoding.EncodeToString(make([]byte, length)) + ":" + parts[1] + ":" + parts[2]
+			plaintext, err := Decrypt(corrupted, key)
+			if err == nil || plaintext != "" {
+				t.Errorf("nonce length %d accepted corrupted ciphertext", length)
+			}
+		}()
+	}
+}
 
 func makeKey(t *testing.T) []byte {
 	t.Helper()

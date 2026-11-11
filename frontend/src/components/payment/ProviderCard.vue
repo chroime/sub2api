@@ -2,16 +2,12 @@
   <div
     :class="[
       'group relative rounded-lg border transition-all',
-      enabled ? 'border-gray-200 dark:border-dark-600' : 'border-gray-200 bg-gray-50 opacity-50 dark:border-dark-700 dark:bg-dark-800/50',
+      enabled ? 'border-gray-200 dark:border-dark-600' : 'border-gray-200 bg-gray-50 dark:border-dark-700 dark:bg-dark-800/50',
     ]"
-    :title="!enabled ? t('admin.settings.payment.typeDisabled') + ' — ' + t('admin.settings.payment.enableTypesFirst') : undefined"
   >
-    <div :class="[
-      'flex items-center justify-between px-4 py-2.5',
-      !enabled && 'pointer-events-none',
-    ]">
+    <div class="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5">
       <!-- Left: icon + name + key badge + type badges -->
-      <div class="flex items-center gap-3">
+      <div class="flex flex-wrap items-center gap-3">
         <div :class="[
           'rounded-md p-1.5',
           provider.enabled && enabled ? 'bg-green-100 dark:bg-green-900/30' : 'bg-gray-100 dark:bg-dark-700',
@@ -24,6 +20,7 @@
         </div>
         <span class="text-sm font-medium text-gray-900 dark:text-white">{{ provider.name }}</span>
         <span class="text-xs text-gray-400 dark:text-gray-500">{{ keyLabel }}</span>
+        <span v-if="!enabled" class="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-500 dark:bg-dark-700 dark:text-gray-400">{{ t('admin.settings.payment.typeDisabled') }}</span>
         <span v-if="provider.payment_mode" class="text-xs text-gray-400 dark:text-gray-500">· {{ modeLabel }}</span>
         <span v-if="enabled && availableTypes.length" class="text-xs text-gray-300 dark:text-gray-600">|</span>
         <div v-if="enabled" class="flex items-center gap-1">
@@ -31,6 +28,7 @@
             v-for="pt in availableTypes"
             :key="pt.value"
             type="button"
+            :disabled="provider.provider_key === 'alipay_bill'"
             @click="emit('toggleType', pt.value)"
             :class="[
               'rounded px-2 py-0.5 text-xs font-medium transition-all',
@@ -43,10 +41,10 @@
       </div>
 
       <!-- Right: toggles + actions -->
-      <div class="flex items-center gap-4">
-        <ToggleSwitch :label="t('common.enabled')" :checked="provider.enabled" @toggle="emit('toggleField', 'enabled')" />
-        <ToggleSwitch :label="t('admin.settings.payment.refundEnabled')" :checked="provider.refund_enabled" @toggle="emit('toggleField', 'refund_enabled')" />
-        <ToggleSwitch v-if="provider.refund_enabled" :label="t('admin.settings.payment.allowUserRefund')" :checked="provider.allow_user_refund" @toggle="emit('toggleField', 'allow_user_refund')" />
+      <div class="flex flex-wrap items-center gap-4">
+        <ToggleSwitch :disabled="!enabled" :label="t('common.enabled')" :checked="provider.enabled" @toggle="emit('toggleField', 'enabled')" />
+        <ToggleSwitch v-if="provider.provider_key !== 'alipay_bill'" :disabled="!enabled" :label="t('admin.settings.payment.refundEnabled')" :checked="provider.refund_enabled" @toggle="emit('toggleField', 'refund_enabled')" />
+        <ToggleSwitch v-if="provider.provider_key !== 'alipay_bill' && provider.refund_enabled" :disabled="!enabled" :label="t('admin.settings.payment.allowUserRefund')" :checked="provider.allow_user_refund" @toggle="emit('toggleField', 'allow_user_refund')" />
         <div class="flex items-center gap-2 border-l border-gray-200 pl-3 dark:border-dark-600">
           <button type="button" @click="emit('edit')" class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/20 dark:hover:text-blue-400">
             <Icon name="edit" size="sm" />
@@ -74,6 +72,7 @@ import { PAYMENT_MODE_QRCODE, PAYMENT_MODE_POPUP, PAYMENT_MODE_REDIRECT } from '
 const PROVIDER_KEY_LABELS: Record<string, string> = {
   easypay: 'admin.settings.payment.providerEasypay',
   alipay: 'admin.settings.payment.providerAlipay',
+  alipay_bill: 'admin.settings.payment.providerAlipayBill',
   wxpay: 'admin.settings.payment.providerWxpay',
   stripe: 'admin.settings.payment.providerStripe',
   airwallex: 'admin.settings.payment.providerAirwallex',
@@ -93,7 +92,6 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-
 const keyLabel = computed(() => t(PROVIDER_KEY_LABELS[props.provider.provider_key] || props.provider.provider_key))
 
 const modeLabel = computed(() => {

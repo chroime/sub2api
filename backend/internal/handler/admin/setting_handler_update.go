@@ -2207,7 +2207,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 	// Reload payment config for response
 	var updatedPaymentCfg *service.PaymentConfig
 	if h.paymentConfigService != nil {
-		updatedPaymentCfg, _ = h.paymentConfigService.GetPaymentConfig(c.Request.Context())
+		updatedPaymentCfg, _ = h.paymentConfigService.GetAdminPaymentConfig(c.Request.Context())
 	}
 	if updatedPaymentCfg == nil {
 		updatedPaymentCfg = &service.PaymentConfig{}

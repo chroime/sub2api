@@ -17,6 +17,7 @@ type paymentOrderProviderSnapshot struct {
 	PaymentMode        string
 	MerchantAppID      string
 	MerchantID         string
+	ReceiverID         string
 	Currency           string
 }
 
@@ -32,6 +33,7 @@ func psOrderProviderSnapshot(order *dbent.PaymentOrder) *paymentOrderProviderSna
 		PaymentMode:        psSnapshotStringValue(order.ProviderSnapshot["payment_mode"]),
 		MerchantAppID:      psSnapshotStringValue(order.ProviderSnapshot["merchant_app_id"]),
 		MerchantID:         psSnapshotStringValue(order.ProviderSnapshot["merchant_id"]),
+		ReceiverID:         psSnapshotStringValue(order.ProviderSnapshot["receiver_id"]),
 		Currency:           psSnapshotStringValue(order.ProviderSnapshot["currency"]),
 	}
 	if snapshot.SchemaVersion == 0 &&
@@ -40,6 +42,7 @@ func psOrderProviderSnapshot(order *dbent.PaymentOrder) *paymentOrderProviderSna
 		snapshot.PaymentMode == "" &&
 		snapshot.MerchantAppID == "" &&
 		snapshot.MerchantID == "" &&
+		snapshot.ReceiverID == "" &&
 		snapshot.Currency == "" {
 		return nil
 	}
@@ -127,7 +130,7 @@ func expectedNotificationProviderKeyForOrder(registry *payment.Registry, order *
 }
 
 func validateProviderSnapshotMetadata(order *dbent.PaymentOrder, providerKey string, metadata map[string]string) error {
-	if order == nil || len(metadata) == 0 {
+	if order == nil || (len(metadata) == 0 && strings.TrimSpace(providerKey) != payment.TypeAlipayBill) {
 		return nil
 	}
 
@@ -176,6 +179,25 @@ func validateProviderSnapshotMetadata(order *dbent.PaymentOrder, providerKey str
 			}
 			if !strings.EqualFold(expected, actual) {
 				return fmt.Errorf("alipay app_id mismatch: expected %s, got %s", expected, actual)
+			}
+		}
+	case payment.TypeAlipayBill:
+		if expected := strings.TrimSpace(snapshot.MerchantAppID); expected != "" {
+			actual := strings.TrimSpace(metadata["app_id"])
+			if actual == "" {
+				return fmt.Errorf("alipay bill notification missing app_id")
+			}
+			if !strings.EqualFold(expected, actual) {
+				return fmt.Errorf("alipay bill app_id mismatch: expected %s, got %s", expected, actual)
+			}
+		}
+		if expected := strings.TrimSpace(snapshot.ReceiverID); expected != "" {
+			actual := strings.TrimSpace(metadata["receiver_id"])
+			if actual == "" {
+				return fmt.Errorf("alipay bill notification missing receiver_id")
+			}
+			if !strings.EqualFold(expected, actual) {
+				return fmt.Errorf("alipay bill receiver_id mismatch: expected %s, got %s", expected, actual)
 			}
 		}
 	case payment.TypeEasyPay:

@@ -33,18 +33,30 @@
           </button>
         </div>
       </div>
+      <div class="mt-3 flex flex-wrap items-start gap-3 border-t border-gray-100 pt-3 dark:border-dark-700">
+        <div class="w-full sm:w-64">
+          <label class="input-label">{{ t('admin.settings.payment.alipayCurrentSource') }}</label>
+          <Select
+            :model-value="alipaySource || ''"
+            :options="alipaySourceOptions"
+            :disabled="sourceSaving || loading"
+            @update:model-value="emit('selectAlipaySource', String($event))"
+          />
+        </div>
+        <p class="max-w-xl text-xs leading-5 text-gray-500 sm:pt-6 dark:text-gray-400">{{ t('admin.settings.payment.alipaySourceHint') }}</p>
+      </div>
     </div>
 
     <!-- List -->
     <div class="p-4">
       <!-- Loading -->
-      <div v-if="loading && !providers.length" class="flex items-center justify-center py-6">
+      <div v-if="loading && !localProviders.length" class="flex items-center justify-center py-6">
         <div class="h-5 w-5 animate-spin rounded-full border-2 border-primary-500 border-t-transparent" />
       </div>
 
       <!-- Provider cards (draggable) -->
       <VueDraggable
-        v-if="providers.length"
+        v-if="localProviders.length"
         v-model="localProviders"
         :animation="200"
         handle=".drag-handle"
@@ -92,10 +104,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { VueDraggable } from 'vue-draggable-plus'
 import Icon from '@/components/icons/Icon.vue'
+import Select from '@/components/common/Select.vue'
+import { getPaymentVisibleMethodSourceOptions } from '@/api/admin/settings'
 import ProviderCard from './ProviderCard.vue'
 import type { ProviderInstance } from '@/types/payment'
 import type { TypeOption } from './providerConfig'
@@ -108,6 +122,8 @@ const props = defineProps<{
   enabledPaymentTypes: string[]
   allPaymentTypes: TypeOption[]
   redirectLabel: string
+  alipaySource?: string
+  sourceSaving?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -118,14 +134,24 @@ const emit = defineEmits<{
   toggleField: [provider: ProviderInstance, field: 'enabled' | 'refund_enabled' | 'allow_user_refund']
   toggleType: [provider: ProviderInstance, type: string]
   reorder: [providers: { id: number; sort_order: number }[]]
+  selectAlipaySource: [source: string]
 }>()
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
+
+const alipaySourceOptions = computed(() => getPaymentVisibleMethodSourceOptions('alipay').map(option => {
+  const key = option.value === 'official_alipay' ? 'alipay' : option.value === 'easypay_alipay' ? 'easypay' : option.value
+  const available = !key || (props.enabledPaymentTypes.includes(key) && props.providers.some(provider =>
+    provider.enabled && provider.provider_key === key &&
+    ((provider.supported_types || []).includes('alipay') || (key !== 'easypay' && !provider.supported_types?.length)),
+  ))
+  return { value: option.value, label: locale.value.startsWith('zh') ? option.labelZh : option.labelEn, disabled: !available }
+}))
 
 const localProviders = ref<ProviderInstance[]>([])
 
 watch(() => props.providers, (val) => {
-  localProviders.value = [...val]
+  localProviders.value = val.filter(provider => provider.provider_key !== 'alipay_bill')
 }, { immediate: true })
 
 function onDragEnd() {

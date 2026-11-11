@@ -17,8 +17,10 @@ const (
 	// that only one instance issues the upstream payment-provider calls per cycle.
 	paymentOrderExpiryLeaderLockKey = "payment:order:expiry:leader"
 	// paymentOrderExpiryLeaderLockTTL must exceed the combined reconcile + expiry
-	// timeouts (2 * expiryCheckTimeout) so the lock never expires mid-run.
-	paymentOrderExpiryLeaderLockTTL = 3 * time.Minute
+	// timeouts (3 * expiryCheckTimeout) so the lock never expires mid-run.
+	paymentOrderExpiryLeaderLockTTL   = 3 * time.Minute
+	paymentBillCollectorLeaderLockKey = "payment:bill:collector:leader"
+	paymentBillActivePollInterval     = 5 * time.Second
 )
 
 // PaymentOrderExpiryService periodically expires timed-out payment orders.
@@ -58,7 +60,7 @@ func (s *PaymentOrderExpiryService) Start() {
 	if s == nil || s.paymentSvc == nil || s.interval <= 0 {
 		return
 	}
-	s.wg.Add(1)
+	s.wg.Add(2)
 	go func() {
 		defer s.wg.Done()
 		ticker := time.NewTicker(s.interval)
@@ -69,6 +71,31 @@ func (s *PaymentOrderExpiryService) Start() {
 			select {
 			case <-ticker.C:
 				s.runOnce()
+			case <-s.stopCh:
+				return
+			}
+		}
+	}()
+	// Keep bill confirmation independent of slow queries to unrelated payment
+	// providers in the expiry sweep. One worker owns both fast and regular bill
+	// collection, so its own scans cannot overlap.
+	go func() {
+		defer s.wg.Done()
+		pollInterval := paymentBillActivePollInterval
+		if s.interval < pollInterval {
+			pollInterval = s.interval
+		}
+		ticker := time.NewTicker(pollInterval)
+		defer ticker.Stop()
+		var nextFull time.Time
+		for {
+			now := time.Now()
+			full := !now.Before(nextFull)
+			if s.runBillCollection(full) && full {
+				nextFull = now.Add(s.interval)
+			}
+			select {
+			case <-ticker.C:
 			case <-s.stopCh:
 				return
 			}
@@ -97,6 +124,14 @@ func (s *PaymentOrderExpiryService) runOnce() {
 	}
 	defer release()
 
+	// Notification recovery uses persisted external orders and continues when
+	// the payment system or provider has been disabled for new orders.
+	notifyCtx, notifyCancel := context.WithTimeout(context.Background(), expiryCheckTimeout)
+	if err := s.paymentSvc.RetryBuiltinEasyPayNotifications(notifyCtx); err != nil {
+		slog.Warn("[PaymentOrderExpiry] failed to retry built-in EasyPay notifications")
+	}
+	notifyCancel()
+
 	reconcileCtx, cancel := context.WithTimeout(context.Background(), expiryCheckTimeout)
 	recovered, err := s.paymentSvc.ReconcilePendingPaymentOrders(reconcileCtx)
 	cancel()
@@ -116,4 +151,26 @@ func (s *PaymentOrderExpiryService) runOnce() {
 	if expired > 0 {
 		slog.Info("[PaymentOrderExpiry] expired timed-out orders", "count", expired)
 	}
+}
+
+func (s *PaymentOrderExpiryService) runBillCollection(full bool) bool {
+	lockCtx, lockCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	release, ok := tryAcquireSingletonLeaderLock(lockCtx, s.lockCache, s.db, paymentBillCollectorLeaderLockKey, s.instanceID, paymentOrderExpiryLeaderLockTTL)
+	lockCancel()
+	if !ok {
+		return false
+	}
+	defer release()
+	ctx, cancel := context.WithTimeout(context.Background(), expiryCheckTimeout)
+	defer cancel()
+	var err error
+	if full {
+		err = s.paymentSvc.CollectAlipayBillReceipts(ctx)
+	} else {
+		err = s.paymentSvc.CollectActiveAlipayBillReceipts(ctx)
+	}
+	if err != nil {
+		slog.Warn("[PaymentBillCollector] failed to collect Alipay bill receipts")
+	}
+	return true
 }

@@ -248,6 +248,40 @@ describe('PaymentResultView', () => {
     expect(window.localStorage.getItem(PAYMENT_RECOVERY_STORAGE_KEY)).toBeNull()
   })
 
+  it.each(['PAID', 'RECHARGING'])('keeps checking %s until the server balance is credited', async (status) => {
+    vi.useFakeTimers()
+    routeState.query = { order_id: '42' }
+    pollOrderStatus.mockResolvedValueOnce(orderFactory(status)).mockResolvedValueOnce(orderFactory('COMPLETED'))
+    const account = { balance: 12 }
+    refreshUser.mockImplementation(async () => { account.balance = 100; return account })
+    const wrapper = mount(PaymentResultView, { global: { stubs: { OrderStatusBadge: true } } })
+    await flushPromises()
+    expect(wrapper.text()).toContain('payment.result.processing')
+    expect(account.balance).toBe(12)
+    expect(refreshUser).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(2000)
+    await flushPromises()
+    expect(wrapper.text()).toContain('payment.result.success')
+    expect(account.balance).toBe(100)
+    expect(refreshUser).toHaveBeenCalledTimes(1)
+    wrapper.unmount()
+  })
+
+  it('retries a transient account refresh after successful fulfillment', async () => {
+    vi.useFakeTimers()
+    routeState.query = { order_id: '42' }
+    pollOrderStatus.mockResolvedValue(orderFactory('COMPLETED'))
+    refreshUser.mockRejectedValueOnce(new Error('temporary disconnect')).mockResolvedValueOnce({ balance: 100 })
+    const wrapper = mount(PaymentResultView, { global: { stubs: { OrderStatusBadge: true } } })
+    await flushPromises()
+    expect(refreshUser).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(2000)
+    await flushPromises()
+    expect(refreshUser).toHaveBeenCalledTimes(2)
+    expect(wrapper.text()).toContain('payment.result.success')
+    wrapper.unmount()
+  })
+
   it('keeps the successful result when refreshing the user balance fails', async () => {
     routeState.query = {
       resume_token: 'resume-refresh-failure',
@@ -286,7 +320,7 @@ describe('PaymentResultView', () => {
     )
     resolveOrderPublicByResumeToken.mockRejectedValueOnce(new Error('resume failed'))
     pollOrderStatus.mockResolvedValueOnce({
-      ...orderFactory('PAID'),
+      ...orderFactory('COMPLETED'),
       id: 77,
     })
 
@@ -316,7 +350,7 @@ describe('PaymentResultView', () => {
     resolveOrderPublicByResumeToken.mockRejectedValueOnce(new Error('resume failed'))
     verifyOrderPublic.mockResolvedValueOnce({
       data: {
-        ...orderFactory('PAID'),
+        ...orderFactory('COMPLETED'),
         out_trade_no: 'legacy-should-not-run',
       },
     })
@@ -370,7 +404,7 @@ describe('PaymentResultView', () => {
     }
     verifyOrder.mockRejectedValue(new Error('auth required'))
     verifyOrderPublic.mockResolvedValue({
-      data: orderFactory('PAID'),
+      data: orderFactory('COMPLETED'),
     })
 
     const wrapper = mount(PaymentResultView, {
@@ -398,7 +432,7 @@ describe('PaymentResultView', () => {
     verifyOrderPublic.mockResolvedValue({
       data: {
         out_trade_no: 'legacy-minimal',
-        status: 'PAID',
+        status: 'COMPLETED',
         paid: true,
         created_at: '2026-04-20T12:00:00Z',
         expires_at: '2026-04-20T12:30:00Z',
@@ -467,7 +501,7 @@ describe('PaymentResultView', () => {
       resume_token: 'resume-77',
     }
     resolveOrderPublicByResumeToken.mockResolvedValue({
-      data: orderFactory('PAID'),
+      data: orderFactory('COMPLETED'),
     })
 
     const wrapper = mount(PaymentResultView, {
@@ -490,7 +524,7 @@ describe('PaymentResultView', () => {
     }
     resolveOrderPublicByResumeToken.mockResolvedValue({
       data: {
-        ...orderFactory('PAID'),
+        ...orderFactory('COMPLETED'),
         currency: 'HKD',
         amount: 100,
         pay_amount: 103,
@@ -517,7 +551,7 @@ describe('PaymentResultView', () => {
     }
     resolveOrderPublicByResumeToken.mockResolvedValueOnce({
       data: {
-        ...orderFactory('PAID'),
+        ...orderFactory('COMPLETED'),
         payment_type: 'alipay_direct',
       },
     })

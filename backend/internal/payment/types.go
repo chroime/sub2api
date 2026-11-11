@@ -13,6 +13,7 @@ type PaymentType = string
 // Supported payment type constants.
 const (
 	TypeAlipay       PaymentType = "alipay"
+	TypeAlipayBill   PaymentType = "alipay_bill"
 	TypeWxpay        PaymentType = "wxpay"
 	TypeAlipayDirect PaymentType = "alipay_direct"
 	TypeWxpayDirect  PaymentType = "wxpay_direct"
@@ -151,6 +152,7 @@ type CreatePaymentResponse struct {
 	TradeNo      string                  // Third-party transaction ID
 	PayURL       string                  // H5 payment URL (alipay/wxpay)
 	QRCode       string                  // QR code content for scanning
+	QRRuleID     string                  // Selected fixed-amount QR rule, when the provider uses reusable QR rules
 	ClientSecret string                  // Stripe PaymentIntent 客户端密钥
 	IntentID     string                  // 前端 SDK 需要的服务商支付意图 ID
 	Currency     string                  // 服务商支付币种

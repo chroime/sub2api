@@ -49,6 +49,14 @@ type contextKey string
 
 const wxpayJSAPIAppIDContextKey contextKey = "payment.wxpay.jsapi_app_id"
 
+const eligibleProviderInstancesContextKey contextKey = "payment.eligible_provider_instances"
+
+// WithEligibleProviderInstances restricts selection to a caller-validated set.
+// An explicitly empty set permits no instances; absent context has no restriction.
+func WithEligibleProviderInstances(ctx context.Context, ids []int64) context.Context {
+	return context.WithValue(ctx, eligibleProviderInstancesContextKey, append([]int64(nil), ids...))
+}
+
 // NewDefaultLoadBalancer creates a new load balancer.
 func NewDefaultLoadBalancer(db *dbent.Client, encryptionKey []byte) *DefaultLoadBalancer {
 	return &DefaultLoadBalancer{db: db, encryptionKey: encryptionKey}
@@ -118,6 +126,7 @@ func (lb *DefaultLoadBalancer) SelectInstance(
 // When providerKey is non-empty, only instances with that provider key are considered.
 // When providerKey is empty, instances across all providers are considered,
 // enabling cross-provider load balancing (e.g. EasyPay + Alipay direct for "alipay").
+// Fixed Alipay QR is opt-in and requires an explicit provider key.
 func (lb *DefaultLoadBalancer) queryEnabledInstances(
 	ctx context.Context,
 	providerKey string,
@@ -125,8 +134,16 @@ func (lb *DefaultLoadBalancer) queryEnabledInstances(
 ) ([]*dbent.PaymentProviderInstance, error) {
 	query := lb.db.PaymentProviderInstance.Query().
 		Where(paymentproviderinstance.Enabled(true))
+	if ids, restricted := ctx.Value(eligibleProviderInstancesContextKey).([]int64); restricted {
+		if len(ids) == 0 {
+			return nil, fmt.Errorf("no enabled instance for payment type %s", paymentType)
+		}
+		query = query.Where(paymentproviderinstance.IDIn(ids...))
+	}
 	if providerKey != "" {
 		query = query.Where(paymentproviderinstance.ProviderKey(providerKey))
+	} else {
+		query = query.Where(paymentproviderinstance.ProviderKeyNEQ(TypeAlipayBill))
 	}
 	instances, err := query.
 		Order(dbent.Asc(paymentproviderinstance.FieldSortOrder)).
@@ -315,15 +332,10 @@ func (lb *DefaultLoadBalancer) buildSelection(selected *dbent.PaymentProviderIns
 }
 
 // decryptConfig parses a stored provider config.
-// New records are plaintext JSON; legacy records are AES-256-GCM ciphertext.
-// Unreadable values (legacy ciphertext without a valid key, or malformed data)
+// Fixed-QR and legacy records may be AES-256-GCM ciphertext; other providers
+// currently use plaintext JSON. Unreadable values (ciphertext without a valid key, or malformed data)
 // are treated as empty so the service keeps running while the admin re-enters
 // the config via the UI.
-//
-// TODO(deprecated-legacy-ciphertext): The AES fallback branch below is a
-// transitional compatibility shim for pre-plaintext records. Remove it (and
-// the encryptionKey field + the Decrypt import) after a few releases once all
-// live deployments have re-saved their provider configs through the UI.
 func (lb *DefaultLoadBalancer) decryptConfig(stored string) (map[string]string, error) {
 	if stored == "" {
 		return nil, nil
@@ -332,9 +344,8 @@ func (lb *DefaultLoadBalancer) decryptConfig(stored string) (map[string]string, 
 	if err := json.Unmarshal([]byte(stored), &config); err == nil {
 		return config, nil
 	}
-	// Deprecated: legacy AES-256-GCM ciphertext fallback — scheduled for removal.
+	// Fixed-QR credentials and historical encrypted configurations use AES-GCM.
 	if len(lb.encryptionKey) == AES256KeySize {
-		//nolint:staticcheck // SA1019: intentional legacy fallback, scheduled for removal
 		if plaintext, err := Decrypt(stored, lb.encryptionKey); err == nil {
 			if err := json.Unmarshal([]byte(plaintext), &config); err == nil {
 				return config, nil

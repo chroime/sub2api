@@ -9,7 +9,13 @@ import type {
   PaymentOrder,
   PaymentChannel,
   SubscriptionPlan,
-  ProviderInstance
+  ProviderInstance,
+  AlipayBillReceipt,
+  AlipayBillTestResult,
+  AlipayBillSyncResult,
+  AlipayBillEditCredentials,
+  AlipayBillClaimRequest,
+  EasyPayGatewayOrder,
 } from '@/types/payment'
 import type { BasePaginationResponse } from '@/types'
 
@@ -184,6 +190,30 @@ export const adminPaymentAPI = {
   /** Update a provider instance */
   updateProvider(id: number, data: Partial<ProviderInstance>) {
     return apiClient.put<ProviderInstance>(`/admin/payment/providers/${id}`, data)
+  },
+
+  testAlipayBillConnection(id: number) {
+    return apiClient.post<AlipayBillTestResult>(`/admin/payment/providers/${id}/bill-test`)
+  },
+
+  getAlipayBillEditCredentials(id: number) {
+    return apiClient.get<AlipayBillEditCredentials>(`/admin/payment/providers/${id}/bill-credentials`)
+  },
+
+  syncAlipayBills(id: number) {
+    return apiClient.post<AlipayBillSyncResult>(`/admin/payment/providers/${id}/bill-sync`, undefined, { timeout: 60000 })
+  },
+
+  getAlipayBillReceipts(id: number, params: { page?: number; page_size?: number; status?: string } = {}) {
+    return apiClient.get<{ items: AlipayBillReceipt[]; total: number; page: number; page_size: number }>(`/admin/payment/providers/${id}/bill-receipts`, { params })
+  },
+
+  getEasyPayOrders(id: number, params: { page?: number; page_size?: number; keyword?: string; status?: string } = {}) {
+    return apiClient.get<{ items: EasyPayGatewayOrder[]; total: number; page: number; page_size: number }>(`/admin/payment/providers/${id}/epay-orders`, { params })
+  },
+
+  claimAlipayBillReceipt(id: number, receiptId: number, data: AlipayBillClaimRequest) {
+    return apiClient.post(`/admin/payment/providers/${id}/bill-receipts/${receiptId}/claim`, data)
   },
 
   /** Delete a provider instance */

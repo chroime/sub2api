@@ -226,22 +226,55 @@ func (s *PaymentService) createOrderInTx(ctx context.Context, req CreateOrderReq
 		return nil, fmt.Errorf("begin transaction: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
+	if err := s.validateBillOrderSelection(ctx, tx, sel, payAmount); err != nil {
+		return nil, err
+	}
+	fixedBill := sel != nil && sel.ProviderKey == payment.TypeAlipayBill
+	fixedReceiver := ""
+	var fixedProviderID int64
+	var fixedAmountMinor int64
+	if fixedBill {
+		fixedReceiver = strings.TrimSpace(sel.Config["receiverId"])
+		fixedProviderID, err = strconv.ParseInt(sel.InstanceID, 10, 64)
+		if err != nil || fixedProviderID <= 0 {
+			return nil, infraerrors.BadRequest("ALIPAY_BILL_PROVIDER_REQUIRED", "select a valid fixed-code provider")
+		}
+		fixedAmountMinor, err = provider.ParseAlipayBillAmountCents(strconv.FormatFloat(payAmount, 'f', 2, 64))
+		if err != nil {
+			return nil, err
+		}
+		if err = s.lockBillAmountReservation(ctx, tx, fixedReceiver, fixedAmountMinor, time.Now().UTC()); err != nil {
+			return nil, err
+		}
+	}
 	if err := s.checkPendingLimit(ctx, tx, req.UserID, cfg.MaxPendingOrders); err != nil {
 		return nil, err
 	}
 	if err := s.checkDailyLimit(ctx, tx, req.UserID, limitAmount, cfg.DailyLimit); err != nil {
 		return nil, err
 	}
+	now := time.Now().UTC()
+	if fixedBill {
+		// Official bill timestamps are only precise to whole seconds. Use the
+		// same boundary so the expiration second cannot admit a late payment.
+		now = now.Truncate(time.Second)
+	}
 	tm := cfg.OrderTimeoutMin
 	if tm <= 0 {
 		tm = defaultOrderTimeoutMin
 	}
-	exp := time.Now().Add(time.Duration(tm) * time.Minute)
+	if fixedBill {
+		tm = 1
+	}
+	exp := now.Add(time.Duration(tm) * time.Minute)
 	outTradeNo, err := s.allocateOutTradeNo(ctx, tx)
 	if err != nil {
 		return nil, err
 	}
 	providerSnapshot := buildPaymentOrderProviderSnapshot(sel, req)
+	if fixedBill {
+		providerSnapshot["bill_amount_matching"] = true
+	}
 	selectedInstanceID := ""
 	selectedProviderKey := ""
 	if sel != nil {
@@ -278,6 +311,9 @@ func (s *PaymentService) createOrderInTx(ctx context.Context, req CreateOrderReq
 	if providerSnapshot != nil {
 		b.SetProviderSnapshot(providerSnapshot)
 	}
+	if fixedBill {
+		b.SetCreatedAt(now)
+	}
 	if plan != nil {
 		b.SetPlanID(plan.ID).SetSubscriptionGroupID(plan.GroupID).SetSubscriptionDays(psComputeValidityDays(plan.ValidityDays, plan.ValidityUnit))
 	}
@@ -289,6 +325,11 @@ func (s *PaymentService) createOrderInTx(ctx context.Context, req CreateOrderReq
 	order, err = tx.PaymentOrder.UpdateOneID(order.ID).SetRechargeCode(code).Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("set recharge code: %w", err)
+	}
+	if fixedBill {
+		if err := s.insertBillAmountReservation(ctx, tx, fixedProviderID, fixedReceiver, fixedAmountMinor, order.ID, 0, now, exp); err != nil {
+			return nil, err
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("commit order transaction: %w", err)
@@ -361,10 +402,14 @@ func buildPaymentOrderProviderSnapshot(sel *payment.InstanceSelection, req Creat
 		}
 		snapshot["currency"] = payment.DefaultPaymentCurrency
 	}
-	if providerKey == payment.TypeAlipay {
+	if providerKey == payment.TypeAlipay || providerKey == payment.TypeAlipayBill {
 		if merchantAppID := strings.TrimSpace(sel.Config["appId"]); merchantAppID != "" {
 			snapshot["merchant_app_id"] = merchantAppID
 		}
+	}
+	if providerKey == payment.TypeAlipayBill {
+		snapshot["receiver_id"] = strings.TrimSpace(sel.Config["receiverId"])
+		snapshot["currency"] = payment.DefaultPaymentCurrency
 	}
 	if providerKey == payment.TypeEasyPay {
 		if merchantID := strings.TrimSpace(sel.Config["pid"]); merchantID != "" {
@@ -428,6 +473,9 @@ func (s *PaymentService) selectCreateOrderInstance(ctx context.Context, req Crea
 	}
 	sel, err := s.loadBalancer.SelectInstance(selectCtx, "", req.PaymentType, payment.Strategy(cfg.LoadBalanceStrategy), payAmount)
 	if err != nil {
+		if infraerrors.Reason(err) == "ALIPAY_BILL_AMOUNT_UNAVAILABLE" {
+			return nil, err
+		}
 		return nil, infraerrors.ServiceUnavailable("PAYMENT_GATEWAY_ERROR", "method_not_configured").
 			WithMetadata(map[string]string{"payment_type": req.PaymentType})
 	}
@@ -533,7 +581,14 @@ func (s *PaymentService) invokeProvider(ctx context.Context, order *dbent.Paymen
 		return nil, classifyCreatePaymentError(req, sel.ProviderKey, err)
 	}
 	sanitizeCreatePaymentResponseDetails(pr)
+	if pr.QRRuleID != "" && sel.ProviderKey == payment.TypeAlipayBill {
+		if order.ProviderSnapshot == nil {
+			order.ProviderSnapshot = buildPaymentOrderProviderSnapshot(sel, req)
+		}
+		order.ProviderSnapshot["qr_rule_id"] = pr.QRRuleID
+	}
 	_, err = s.entClient.PaymentOrder.UpdateOneID(order.ID).
+		SetProviderSnapshot(order.ProviderSnapshot).
 		SetNillablePaymentTradeNo(psNilIfEmpty(pr.TradeNo)).
 		SetNillablePayURL(psNilIfEmpty(pr.PayURL)).
 		SetNillableQrCode(psNilIfEmpty(pr.QRCode)).
@@ -807,27 +862,28 @@ func classifyCreatePaymentError(req CreateOrderRequest, providerKey string, err 
 
 func buildCreateOrderResponse(order *dbent.PaymentOrder, req CreateOrderRequest, payAmount float64, sel *payment.InstanceSelection, pr *payment.CreatePaymentResponse, resultType payment.CreatePaymentResultType) *CreateOrderResponse {
 	return &CreateOrderResponse{
-		OrderID:      order.ID,
-		Amount:       order.Amount,
-		PayAmount:    payAmount,
-		FeeRate:      order.FeeRate,
-		BonusAmount:  order.BonusAmount,
-		Status:       OrderStatusPending,
-		ResultType:   resultType,
-		PaymentType:  req.PaymentType,
-		OutTradeNo:   order.OutTradeNo,
-		PayURL:       pr.PayURL,
-		QRCode:       pr.QRCode,
-		ClientSecret: pr.ClientSecret,
-		IntentID:     pr.IntentID,
-		Currency:     pr.Currency,
-		CountryCode:  pr.CountryCode,
-		PaymentEnv:   pr.PaymentEnv,
-		OAuth:        pr.OAuth,
-		JSAPI:        pr.JSAPI,
-		JSAPIPayload: pr.JSAPI,
-		ExpiresAt:    order.ExpiresAt,
-		PaymentMode:  sel.PaymentMode,
+		OrderID:            order.ID,
+		Amount:             order.Amount,
+		PayAmount:          payAmount,
+		FeeRate:            order.FeeRate,
+		BonusAmount:        order.BonusAmount,
+		Status:             OrderStatusPending,
+		ResultType:         resultType,
+		PaymentType:        req.PaymentType,
+		OutTradeNo:         order.OutTradeNo,
+		PayURL:             pr.PayURL,
+		QRCode:             pr.QRCode,
+		ClientSecret:       pr.ClientSecret,
+		IntentID:           pr.IntentID,
+		Currency:           pr.Currency,
+		CountryCode:        pr.CountryCode,
+		PaymentEnv:         pr.PaymentEnv,
+		OAuth:              pr.OAuth,
+		JSAPI:              pr.JSAPI,
+		JSAPIPayload:       pr.JSAPI,
+		ExpiresAt:          order.ExpiresAt,
+		BillAmountMatching: PaymentOrderUsesBillAmountMatching(order),
+		PaymentMode:        sel.PaymentMode,
 	}
 }
 

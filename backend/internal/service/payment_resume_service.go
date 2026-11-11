@@ -31,6 +31,7 @@ const (
 
 	VisibleMethodSourceOfficialAlipay = "official_alipay"
 	VisibleMethodSourceEasyPayAlipay  = "easypay_alipay"
+	VisibleMethodSourceAlipayBill     = "alipay_bill"
 	VisibleMethodSourceOfficialWechat = "official_wxpay"
 	VisibleMethodSourceEasyPayWechat  = "easypay_wxpay"
 
@@ -156,6 +157,8 @@ func NormalizeVisibleMethodSource(method, source string) string {
 			return VisibleMethodSourceOfficialAlipay
 		case VisibleMethodSourceEasyPayAlipay, payment.TypeEasyPay:
 			return VisibleMethodSourceEasyPayAlipay
+		case VisibleMethodSourceAlipayBill:
+			return VisibleMethodSourceAlipayBill
 		}
 	case payment.TypeWxpay:
 		switch strings.TrimSpace(strings.ToLower(source)) {
@@ -174,6 +177,8 @@ func VisibleMethodProviderKeyForSource(method, source string) (string, bool) {
 		return payment.TypeAlipay, NormalizeVisibleMethod(method) == payment.TypeAlipay
 	case VisibleMethodSourceEasyPayAlipay:
 		return payment.TypeEasyPay, NormalizeVisibleMethod(method) == payment.TypeAlipay
+	case VisibleMethodSourceAlipayBill:
+		return payment.TypeAlipayBill, NormalizeVisibleMethod(method) == payment.TypeAlipay
 	case VisibleMethodSourceOfficialWechat:
 		return payment.TypeWxpay, NormalizeVisibleMethod(method) == payment.TypeWxpay
 	case VisibleMethodSourceEasyPayWechat:
@@ -195,6 +200,13 @@ func (lb *visibleMethodLoadBalancer) GetInstanceConfig(ctx context.Context, inst
 }
 
 func (lb *visibleMethodLoadBalancer) SelectInstance(ctx context.Context, providerKey string, paymentType payment.PaymentType, strategy payment.Strategy, orderAmount float64) (*payment.InstanceSelection, error) {
+	if providerKey == payment.TypeAlipayBill {
+		ids, err := lb.configService.eligibleBillInstanceIDs(ctx, paymentType, orderAmount)
+		if err != nil {
+			return nil, err
+		}
+		return lb.inner.SelectInstance(payment.WithEligibleProviderInstances(ctx, ids), providerKey, paymentType, strategy, orderAmount)
+	}
 	visibleMethod := NormalizeVisibleMethod(paymentType)
 	if providerKey != "" || (visibleMethod != payment.TypeAlipay && visibleMethod != payment.TypeWxpay) {
 		return lb.inner.SelectInstance(ctx, providerKey, paymentType, strategy, orderAmount)
@@ -206,6 +218,13 @@ func (lb *visibleMethodLoadBalancer) SelectInstance(ctx context.Context, provide
 	}
 	if inst == nil {
 		return nil, fmt.Errorf("visible payment method %s has no enabled provider instance", visibleMethod)
+	}
+	if inst.ProviderKey == payment.TypeAlipayBill {
+		ids, err := lb.configService.eligibleBillInstanceIDs(ctx, paymentType, orderAmount)
+		if err != nil {
+			return nil, err
+		}
+		ctx = payment.WithEligibleProviderInstances(ctx, ids)
 	}
 	return lb.inner.SelectInstance(ctx, inst.ProviderKey, paymentType, strategy, orderAmount)
 }

@@ -139,13 +139,16 @@ interface ReturnInfo {
 }
 const returnInfo = ref<ReturnInfo | null>(null)
 
-const SUCCESS_STATUSES = new Set(['COMPLETED', 'PAID', 'RECHARGING'])
-const PENDING_STATUSES = new Set(['PENDING', 'CREATED', 'WAITING', 'PROCESSING'])
+const SUCCESS_STATUSES = new Set(['COMPLETED'])
+const PENDING_STATUSES = new Set(['PENDING', 'CREATED', 'WAITING', 'PROCESSING', 'PAID', 'RECHARGING'])
 const STATUS_REFRESH_INTERVAL_MS = 2000
-const STATUS_REFRESH_MAX_ATTEMPTS = 15
+const STATUS_REFRESH_MAX_ATTEMPTS = 60
 
 let statusRefreshTimer: ReturnType<typeof setTimeout> | null = null
 let userBalanceRefreshStarted = false
+let userBalanceRefreshAttempts = 0
+let userBalanceRefreshTimer: ReturnType<typeof setTimeout> | null = null
+let disposed = false
 const refreshAttempts = ref(0)
 
 /** 充值金额 = pay_amount / (1 + fee_rate/100)，fee_rate=0 时等于 pay_amount */
@@ -200,6 +203,7 @@ function formatGatewayAmount(value: number): string {
 }
 
 function setResolvedOrder(nextOrder: ResolvedOrder | null): void {
+  if (disposed) return
   order.value = nextOrder
   if (nextOrder && 'currency' in nextOrder && nextOrder.currency) {
     currency.value = normalizePaymentCurrency(nextOrder.currency)
@@ -208,7 +212,7 @@ function setResolvedOrder(nextOrder: ResolvedOrder | null): void {
 }
 
 function refreshUserBalanceForSuccessfulOrder(nextOrder: ResolvedOrder | null): void {
-  if (!nextOrder || userBalanceRefreshStarted || normalizeOrderStatus(nextOrder.status) !== 'COMPLETED') {
+  if (disposed || !nextOrder || userBalanceRefreshStarted || normalizeOrderStatus(nextOrder.status) !== 'COMPLETED') {
     return
   }
   if ('order_type' in nextOrder && nextOrder.order_type !== 'balance') {
@@ -216,8 +220,16 @@ function refreshUserBalanceForSuccessfulOrder(nextOrder: ResolvedOrder | null): 
   }
 
   userBalanceRefreshStarted = true
+  userBalanceRefreshAttempts += 1
   void authStore.refreshUser().catch(() => {
     // The order result remains authoritative even if refreshing profile data fails.
+    userBalanceRefreshStarted = false
+    if (!disposed && userBalanceRefreshAttempts < 3) {
+      userBalanceRefreshTimer = setTimeout(() => {
+        userBalanceRefreshTimer = null
+        refreshUserBalanceForSuccessfulOrder(order.value)
+      }, STATUS_REFRESH_INTERVAL_MS)
+    }
   })
 }
 
@@ -347,13 +359,14 @@ function clearRecoverySnapshotForTerminalStatus(status: string | null | undefine
 
 function scheduleStatusRefresh(refreshOrder: (() => Promise<ResolvedOrder | null>) | null): void {
   clearStatusRefreshTimer()
-  if (!refreshOrder || !isPending.value || refreshAttempts.value >= STATUS_REFRESH_MAX_ATTEMPTS) {
+  if (disposed || !refreshOrder || !isPending.value || refreshAttempts.value >= STATUS_REFRESH_MAX_ATTEMPTS) {
     return
   }
 
   statusRefreshTimer = setTimeout(async () => {
     refreshAttempts.value += 1
     const refreshedOrder = await refreshOrder()
+    if (disposed) return
     if (refreshedOrder) {
       setResolvedOrder(refreshedOrder)
       clearRecoverySnapshotForTerminalStatus(refreshedOrder.status)
@@ -468,6 +481,8 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  disposed = true
   clearStatusRefreshTimer()
+  if (userBalanceRefreshTimer !== null) clearTimeout(userBalanceRefreshTimer)
 })
 </script>

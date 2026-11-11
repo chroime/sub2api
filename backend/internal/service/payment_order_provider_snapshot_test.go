@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"testing"
 
+	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	"github.com/stretchr/testify/require"
 )
@@ -194,4 +195,74 @@ func valueOrEmpty(v *string) string {
 		return ""
 	}
 	return *v
+}
+
+func TestBuildPaymentOrderProviderSnapshot_AlipayBillIdentity(t *testing.T) {
+	t.Parallel()
+	snapshot := buildPaymentOrderProviderSnapshot(&payment.InstanceSelection{
+		InstanceID: "88", ProviderKey: "alipay_bill", PaymentMode: "qrcode",
+		Config: map[string]string{
+			"appId": "app-fixed", "receiverId": "2088000000000001", "privateKey": "private-secret", "appAuthToken": "token-secret", "qrRules": "[]",
+		},
+	}, CreateOrderRequest{PaymentType: "alipay"})
+	require.Equal(t, "app-fixed", snapshot["merchant_app_id"])
+	require.Equal(t, "2088000000000001", snapshot["receiver_id"])
+	require.Equal(t, "CNY", snapshot["currency"])
+	require.NotContains(t, snapshot, "privateKey")
+	require.NotContains(t, snapshot, "appAuthToken")
+	require.NotContains(t, snapshot, "qrRules")
+}
+
+func TestValidateProviderSnapshotMetadata_AlipayBillRequiresPinnedIdentity(t *testing.T) {
+	t.Parallel()
+	order := &dbent.PaymentOrder{ProviderSnapshot: map[string]any{
+		"schema_version": 2, "provider_instance_id": "88", "provider_key": "alipay_bill", "merchant_app_id": "app-fixed", "receiver_id": "2088000000000001", "currency": "CNY",
+	}}
+	for _, tc := range []struct {
+		name      string
+		metadata  map[string]string
+		wantError bool
+	}{
+		{name: "correct identity", metadata: map[string]string{"app_id": "app-fixed", "receiver_id": "2088000000000001"}},
+		{name: "missing identity", wantError: true},
+		{name: "wrong app", metadata: map[string]string{"app_id": "other-app", "receiver_id": "2088000000000001"}, wantError: true},
+		{name: "wrong receiver", metadata: map[string]string{"app_id": "app-fixed", "receiver_id": "2088000000000002"}, wantError: true},
+		{name: "missing receiver", metadata: map[string]string{"app_id": "app-fixed"}, wantError: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateProviderSnapshotMetadata(order, "alipay_bill", tc.metadata)
+			if tc.wantError {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestAlipayBillSourceSwitchKeepsExistingOrderProvider(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	client := newPaymentConfigServiceTestClient(t)
+	old, err := client.PaymentProviderInstance.Create().SetProviderKey("easypay").SetName("Old Alipay").
+		SetConfig("{}").SetSupportedTypes("alipay").SetEnabled(true).Save(ctx)
+	require.NoError(t, err)
+	bill, err := client.PaymentProviderInstance.Create().SetProviderKey("alipay_bill").SetName("Fixed Alipay").
+		SetConfig("{}").SetSupportedTypes("alipay").SetEnabled(true).Save(ctx)
+	require.NoError(t, err)
+	configService := &PaymentConfigService{entClient: client, settingRepo: &paymentConfigSettingRepoStub{values: map[string]string{
+		SettingPaymentVisibleMethodAlipaySource: "alipay_bill",
+	}}}
+	selected, err := configService.resolveEnabledVisibleMethodInstance(ctx, "alipay")
+	require.NoError(t, err)
+	require.Equal(t, bill.ID, selected.ID)
+	id, key := strconv.FormatInt(old.ID, 10), "easypay"
+	order := &dbent.PaymentOrder{ID: 10, PaymentType: "alipay", ProviderInstanceID: &id, ProviderKey: &key, ProviderSnapshot: map[string]any{
+		"schema_version": 2, "provider_instance_id": id, "provider_key": "easypay", "merchant_id": "old-merchant",
+	}}
+	svc := &PaymentService{entClient: client, configService: configService}
+	resolved, err := svc.resolveSnapshotOrderProviderInstance(ctx, order, psOrderProviderSnapshot(order))
+	require.NoError(t, err)
+	require.Equal(t, old.ID, resolved.ID)
+	require.Equal(t, "easypay", expectedNotificationProviderKeyForOrder(nil, order, resolved.ProviderKey))
 }

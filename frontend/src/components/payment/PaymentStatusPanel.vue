@@ -50,23 +50,35 @@
             </svg>
           </div>
           <p class="text-lg font-bold text-gray-900 dark:text-white">{{ t('payment.qr.cancelled') }}</p>
-          <p class="text-sm text-gray-500 dark:text-gray-400">{{ t('payment.qr.cancelledDesc') }}</p>
+          <p class="text-center text-sm text-gray-500 dark:text-gray-400">{{ t(billAmountMatching ? (cancellationConfirmedByUser ? 'payment.qr.billCancelledDesc' : 'payment.qr.billCancelledReviewDesc') : 'payment.qr.cancelledDesc') }}</p>
           <button class="btn btn-primary" @click="handleDone">{{ t('common.confirm') }}</button>
         </div>
       </div>
     </template>
 
-    <!-- Expired / Failed -->
-    <template v-else-if="outcome === 'expired'">
+    <template v-else-if="fulfillmentPending">
+      <div class="card flex flex-col items-center gap-4 p-6 text-center">
+        <div v-if="!fulfillmentTimedOut" class="h-10 w-10 animate-spin rounded-full border-4 border-primary-500 border-t-transparent"></div>
+        <p class="text-lg font-semibold text-gray-900 dark:text-white">{{ t('payment.result.processing') }}</p>
+        <p class="text-sm text-gray-500 dark:text-gray-400">{{ t(fulfillmentTimedOut ? 'payment.result.fulfillmentDelayed' : 'payment.result.fulfillmentPending') }}</p>
+        <a class="btn btn-secondary" href="/orders">{{ t('payment.result.viewOrders') }}</a>
+      </div>
+    </template>
+
+    <!-- Payment window ended: fixed codes may still be awaiting a bill. -->
+    <template v-else-if="outcome === 'expired' || billAwaiting">
       <div class="card p-6">
         <div class="flex flex-col items-center space-y-4 py-4">
           <div class="flex h-16 w-16 items-center justify-center rounded-full bg-orange-100 dark:bg-orange-900/30">
-            <svg class="h-8 w-8 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <div v-if="billAwaiting" class="h-8 w-8 animate-spin rounded-full border-4 border-orange-500 border-t-transparent"></div>
+            <svg v-else class="h-8 w-8 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
-          <p class="text-lg font-bold text-gray-900 dark:text-white">{{ t('payment.qr.expired') }}</p>
-          <p class="text-sm text-gray-500 dark:text-gray-400">{{ t('payment.qr.expiredDesc') }}</p>
+          <p class="text-lg font-bold text-gray-900 dark:text-white">{{ t(billAmountMatching ? (billAwaiting ? 'payment.qr.billReconcilingTitle' : 'payment.qr.billUnconfirmedTitle') : 'payment.qr.expired') }}</p>
+          <p v-if="billAmountMatching" class="text-center text-sm text-gray-500 dark:text-gray-400">{{ t(billAwaiting ? 'payment.qr.billReconciling' : 'payment.qr.billExpiredDesc') }}</p>
+          <p v-else class="text-sm text-gray-500 dark:text-gray-400">{{ t('payment.qr.expiredDesc') }}</p>
+          <a v-if="billAmountMatching" class="btn btn-secondary" href="/orders">{{ t('payment.result.viewOrders') }}</a>
           <button class="btn btn-primary" @click="handleDone">{{ t('common.confirm') }}</button>
         </div>
       </div>
@@ -193,7 +205,7 @@
       <div class="card p-4 text-center">
         <p class="text-sm text-gray-500 dark:text-gray-400">{{ t('payment.qr.expiresIn') }}</p>
         <p class="mt-1 text-2xl font-bold tabular-nums text-gray-900 dark:text-white">{{ countdownDisplay }}</p>
-        <p class="mt-1 text-xs text-gray-400 dark:text-gray-500">{{ t('payment.qr.waitingPayment') }}</p>
+        <p class="mt-1 text-xs text-gray-400 dark:text-gray-500">{{ t(billAmountMatching ? 'payment.qr.billPaymentHint' : 'payment.qr.waitingPayment') }}</p>
       </div>
       <button class="btn btn-secondary w-full" :disabled="cancelling" @click="handleCancel">
         {{ cancelling ? t('common.processing') : t('payment.qr.cancelOrder') }}
@@ -237,6 +249,8 @@ import QRCode from 'qrcode'
 import alipayIcon from '@/assets/icons/alipay.svg'
 import wxpayIcon from '@/assets/icons/wxpay.svg'
 import paymentIcon from '@/assets/icons/payment.svg'
+import { canWaitForBill } from './billPaymentWindow'
+import { usePaymentFulfillmentWait } from './usePaymentFulfillmentWait'
 import {
   createAlipayDeepLinkLauncher,
   type AlipayDeepLinkLauncher,
@@ -255,6 +269,7 @@ const props = defineProps<{
   currency?: string
   outTradeNo?: string
   mobileAlipayDeepLink?: boolean
+  billAmountMatching?: boolean
 }>()
 
 type PaymentOutcome = 'success' | 'cancelled' | 'expired'
@@ -270,6 +285,7 @@ const qrCanvas = ref<HTMLCanvasElement | null>(null)
 const qrUrl = ref('')
 const remainingSeconds = ref(0)
 const cancelling = ref(false)
+const cancellationConfirmedByUser = ref(false)
 const paidOrder = ref<PaymentOrder | null>(null)
 const deepLinkState = ref<AlipayDeepLinkState>('idle')
 const deepLinkFallbackVisible = ref(false)
@@ -286,6 +302,8 @@ const localeCode = computed(() => {
 
 // Terminal outcome: null = still active, 'success' | 'cancelled' | 'expired'
 const outcome = ref<PaymentOutcome | null>(null)
+const billAwaiting = ref(false)
+const { waiting: fulfillmentPending, timedOut: fulfillmentTimedOut, start: waitForFulfillment, stop: stopFulfillmentWait } = usePaymentFulfillmentWait(cleanup)
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let countdownTimer: ReturnType<typeof setInterval> | null = null
@@ -345,11 +363,11 @@ function formatGatewayAmount(value: number, currency?: string | null): string {
 }
 
 function isSuccessStatus(status: string | null | undefined): boolean {
-  return status === 'COMPLETED' || status === 'PAID' || status === 'RECHARGING'
+  return status === 'COMPLETED'
 }
 
 function reopenPopup() {
-  if (props.payUrl) {
+  if (props.payUrl && !outcome.value && !billAwaiting.value && !fulfillmentPending.value && remainingSeconds.value > 0) {
     const win = window.open(props.payUrl, 'paymentPopup', getPaymentPopupFeatures())
     if (!win || win.closed) {
       window.location.href = props.payUrl
@@ -398,6 +416,7 @@ function saveQRCode() {
 }
 
 async function tryRecoverPendingOrder(order: PaymentOrder): Promise<PaymentOrder> {
+  if (props.billAmountMatching) return order
   if (!isWxpay.value && !isAlipay.value) return order
   const outTradeNo = String(order.out_trade_no || '').trim()
   if (!outTradeNo) return order
@@ -420,7 +439,7 @@ async function tryRecoverPendingOrder(order: PaymentOrder): Promise<PaymentOrder
 
 let pollInFlight = false
 async function pollStatus() {
-  if (!props.orderId || outcome.value) return
+  if (!props.orderId || outcome.value || !pollTimer) return
   // 防重入：接口（含 verifyOrder 二次确认）响应慢于 3 秒轮询间隔时避免并发重叠请求。
   if (pollInFlight) return
   pollInFlight = true
@@ -428,18 +447,27 @@ async function pollStatus() {
     let order = await paymentStore.pollOrderStatus(props.orderId)
     if (!order) return
     // 已进入终态则不再处理迟到的响应。
-    if (outcome.value) return
+    if (outcome.value || !pollTimer) return
     order = await tryRecoverPendingOrder(order)
-    if (outcome.value) return
+    if (outcome.value || !pollTimer) return
     if (isSuccessStatus(order.status)) {
       cleanup()
       paidOrder.value = order
       setOutcome('success')
       emit('success')
+    } else if (order.status === 'PAID' || order.status === 'RECHARGING') {
+      waitForFulfillment()
+      alipayLauncher?.dispose()
+      alipayLauncher = null
     } else if (order.status === 'CANCELLED') {
       cleanup()
       setOutcome('cancelled')
-    } else if (order.status === 'EXPIRED' || order.status === 'FAILED') {
+    } else if (order.status === 'EXPIRED') {
+      expirePayment()
+    } else if (order.status === 'FAILED') {
+      // A confirmed payment can temporarily fail during balance fulfillment.
+      // Keep its existing bounded wait so recovery can still update the UI.
+      if (fulfillmentPending.value) return
       cleanup()
       setOutcome('expired')
     }
@@ -451,18 +479,38 @@ async function pollStatus() {
 function startCountdown(seconds: number) {
   remainingSeconds.value = Math.max(0, seconds)
   const deadline = Date.now() + remainingSeconds.value * 1000
-  if (remainingSeconds.value <= 0) { setOutcome('expired'); return }
+  if (remainingSeconds.value <= 0) expirePayment()
+  if (outcome.value) return
   countdownTimer = setInterval(() => {
     remainingSeconds.value = Math.max(0, Math.floor((deadline - Date.now()) / 1000))
-    if (remainingSeconds.value <= 0) { setOutcome('expired'); cleanup() }
+    if (remainingSeconds.value <= 0) expirePayment()
   }, 1000)
+}
+
+function expirePayment() {
+  if (fulfillmentPending.value) return
+  if (canWaitForBill(props.billAmountMatching === true, props.expiresAt)) {
+    billAwaiting.value = true
+    alipayLauncher?.dispose()
+    alipayLauncher = null
+    return
+  }
+  billAwaiting.value = false
+  setOutcome('expired')
+  cleanup()
 }
 
 async function handleCancel() {
   if (!props.orderId || cancelling.value) return
   cancelling.value = true
   try {
-    await paymentAPI.cancelOrder(props.orderId)
+    const result = await paymentAPI.cancelOrder(props.orderId)
+    if (result.data?.message === 'already_paid') {
+      waitForFulfillment()
+      await pollStatus()
+      return
+    }
+    cancellationConfirmedByUser.value = result.data?.message === 'cancelled'
     cleanup()
     setOutcome('cancelled')
   } catch (err: unknown) {
@@ -475,6 +523,7 @@ async function handleCancel() {
 function handleDone() { cleanup(); emit('done') }
 
 function cleanup() {
+  stopFulfillmentWait()
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
   if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null }
   alipayLauncher?.dispose()
@@ -490,12 +539,12 @@ if (props.expiresAt) {
   seconds = Math.floor((new Date(props.expiresAt).getTime() - Date.now()) / 1000)
 }
 startCountdown(seconds)
-pollTimer = setInterval(pollStatus, 3000)
+if (!outcome.value) pollTimer = setInterval(pollStatus, 3000)
 renderQR()
 
 watch([() => qrUrl.value, showQRCode], () => renderQR())
 onMounted(() => {
-  if (!isMobileAlipayDeepLink.value) return
+  if (!isMobileAlipayDeepLink.value || outcome.value || billAwaiting.value) return
   alipayLauncher = createAlipayDeepLinkLauncher({
     qrCode: qrUrl.value,
     document,

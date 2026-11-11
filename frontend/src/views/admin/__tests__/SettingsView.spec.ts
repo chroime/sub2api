@@ -7,6 +7,9 @@ import enSettings from "@/i18n/locales/en/admin/settings";
 import zhCommon from "@/i18n/locales/zh/common";
 import zhSettings from "@/i18n/locales/zh/admin/settings";
 import SettingsView from "../SettingsView.vue";
+import PaymentProviderDialog from "@/components/payment/PaymentProviderDialog.vue";
+import PaymentProviderList from "@/components/payment/PaymentProviderList.vue";
+import AlipayBillSettingsCard from "@/components/payment/AlipayBillSettingsCard.vue";
 
 enableAutoUnmount(afterEach);
 
@@ -31,6 +34,8 @@ const {
   getGroups,
   listProxies,
   getProviders,
+  getPaymentConfig,
+  updatePaymentConfig,
   updateProvider,
   createProvider,
   deleteProvider,
@@ -72,6 +77,8 @@ const {
   getGroups: vi.fn(),
   listProxies: vi.fn(),
   getProviders: vi.fn(),
+  getPaymentConfig: vi.fn(),
+  updatePaymentConfig: vi.fn(),
   updateProvider: vi.fn(),
   createProvider: vi.fn(),
   deleteProvider: vi.fn(),
@@ -131,6 +138,8 @@ vi.mock("@/api", () => ({
       list: listProxies,
     },
     payment: {
+      getConfig: getPaymentConfig,
+      updateConfig: updatePaymentConfig,
       getProviders,
       updateProvider,
       createProvider,
@@ -168,7 +177,8 @@ vi.mock("@/composables/useClipboard", () => ({
   }),
 }));
 
-vi.mock("@/utils/apiError", () => ({
+vi.mock("@/utils/apiError", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@/utils/apiError")>(),
   extractApiErrorMessage: () => "error",
 }));
 
@@ -587,6 +597,7 @@ function mountView(stubOverrides: Record<string, Component | boolean> = {}, atta
         ConfirmDialog: true,
         PaymentProviderList: true,
         PaymentProviderDialog: true,
+        AlipayBillSettingsCard: true,
         GroupBadge: true,
         GroupOptionItem: true,
         ProxySelector: true,
@@ -665,6 +676,70 @@ describe("admin SettingsView email domain quota copy", () => {
 });
 
 describe("admin SettingsView payment visible method controls", () => {
+  it.each(["#payment-settings", "#builtin-epay-settings"])("opens the %s deep link while payments are disabled without changing configuration", async (hash) => {
+    const previousURL = window.location.href;
+    window.history.replaceState(null, "", `/admin/settings${hash}`);
+    getSettings.mockResolvedValue({ ...baseSettingsResponse, payment_enabled: false });
+    const wrapper = mountView();
+    try {
+      await flushPromises();
+      expect(wrapper.get("#settings-tab-payment").attributes("aria-selected")).toBe("true");
+      expect(wrapper.get("#settings-tab-payment").attributes("aria-controls")).toBe("payment-settings");
+      expect(wrapper.get("#payment-settings").isVisible()).toBe(true);
+      expect(wrapper.getComponent(PaymentProviderList).isVisible()).toBe(true);
+      expect(updateSettings).not.toHaveBeenCalled();
+      expect(updateProvider).not.toHaveBeenCalled();
+    } finally {
+      wrapper.unmount();
+      window.history.replaceState(null, "", previousURL);
+    }
+  });
+
+  it("opens payment settings when the hash changes on an already open settings page", async () => {
+    const previousURL = window.location.href;
+    window.history.replaceState(null, "", "/admin/settings");
+    const wrapper = mountView();
+    try {
+      await flushPromises();
+      expect(wrapper.get("#settings-tab-general").attributes("aria-selected")).toBe("true");
+      window.history.replaceState(null, "", "/admin/settings#payment-settings");
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+      await flushPromises();
+      expect(wrapper.get("#settings-tab-payment").attributes("aria-selected")).toBe("true");
+      expect(wrapper.get("#payment-settings").isVisible()).toBe(true);
+      expect(updateSettings).not.toHaveBeenCalled();
+    } finally {
+      wrapper.unmount();
+      window.history.replaceState(null, "", previousURL);
+    }
+  });
+
+  it.each([
+    { paymentEnabled: false, types: [] as string[], canCreate: false },
+    { paymentEnabled: true, types: ["easypay"], canCreate: true },
+  ])("shows the standalone gateway with payments=$paymentEnabled and enabled types=$types", async ({ paymentEnabled, types, canCreate }) => {
+    getSettings.mockResolvedValue({
+      ...baseSettingsResponse, payment_enabled: paymentEnabled, payment_enabled_types: types,
+      payment_visible_method_alipay_source: "", payment_visible_method_alipay_enabled: false,
+    });
+    const wrapper = mountView();
+    await flushPromises();
+    await openPaymentTab(wrapper);
+    const card = wrapper.getComponent(AlipayBillSettingsCard);
+    const list = wrapper.getComponent(PaymentProviderList);
+    expect(card.isVisible()).toBe(true);
+    expect(card.props("loading")).toBe(false);
+    expect(list.props("canCreate")).toBe(canCreate);
+    expect(list.props("enabledPaymentTypes")).toEqual(types);
+    expect(list.props("allPaymentTypes").some(option => option.value === "alipay_bill")).toBe(false);
+    expect(wrapper.getComponent(PaymentProviderDialog).props("allKeyOptions").some(option => option.value === "alipay_bill")).toBe(false);
+    expect(wrapper.getComponent(PaymentProviderDialog).props("enabledKeyOptions").map(option => option.value)).toEqual(types);
+    expect(list.props("alipaySource")).toBe("");
+    expect(updateSettings).not.toHaveBeenCalled();
+    expect(updateProvider).not.toHaveBeenCalled();
+    expect(createProvider).not.toHaveBeenCalled();
+  });
+
   it.each([true, false])("opens the email deep link with email verification enabled=%s without saving settings", async (enabled) => {
     const previousURL = window.location.href;
     window.history.replaceState(null, "", "/admin/settings#email-settings");
@@ -683,6 +758,84 @@ describe("admin SettingsView payment visible method controls", () => {
       wrapper.unmount();
       window.history.replaceState(null, "", previousURL);
     }
+  });
+
+  it("refreshes an independently saved disabled gateway without publishing pending global changes", async () => {
+    const provider = {
+      id: 9, provider_key: "alipay_bill", name: "Bill draft", config: { appId: "app-1" },
+      supported_types: ["alipay"], enabled: false, payment_mode: "qrcode",
+      refund_enabled: false, allow_user_refund: false, limits: "", sort_order: 0,
+    };
+    getSettings.mockResolvedValue({
+      ...baseSettingsResponse, payment_enabled: false, payment_enabled_types: [],
+      payment_visible_method_alipay_source: "", payment_visible_method_alipay_enabled: false,
+    });
+    const wrapper = mountView();
+    await flushPromises();
+    await openPaymentTab(wrapper);
+    const masterToggle = wrapper.get('#payment-settings input.toggle-stub[type="checkbox"]');
+    await masterToggle.setValue(true);
+    getProviders.mockResolvedValue({ data: [provider] });
+    const card = wrapper.getComponent(AlipayBillSettingsCard);
+    card.vm.$emit("saved", provider);
+    await flushPromises();
+    expect(getProviders).toHaveBeenCalledTimes(2);
+    expect(card.props("providers")).toEqual([provider]);
+    expect(updateSettings).not.toHaveBeenCalled();
+    expect(getPaymentConfig).not.toHaveBeenCalled();
+    expect(updatePaymentConfig).not.toHaveBeenCalled();
+    expect((masterToggle.element as HTMLInputElement).checked).toBe(true);
+    expect(wrapper.getComponent(PaymentProviderList).props("alipaySource")).toBe("");
+  });
+
+  it("activates the gateway from fresh raw types with a narrow save while preserving pending form changes", async () => {
+    const provider = { id: 9, provider_key: "alipay_bill", enabled: true };
+    getSettings.mockResolvedValue({
+      ...baseSettingsResponse, payment_enabled: false, payment_enabled_types: ["easypay", "stripe"],
+      payment_visible_method_alipay_source: "easypay_alipay",
+    });
+    getPaymentConfig.mockResolvedValue({ data: { enabled_payment_types: ["easypay", "stripe", "airwallex"] } });
+    updatePaymentConfig.mockResolvedValue({ data: {} });
+    const wrapper = mountView();
+    await flushPromises();
+    await openPaymentTab(wrapper);
+    const paymentSettings = wrapper.get("#payment-settings");
+    const masterToggle = paymentSettings.get('input.toggle-stub[type="checkbox"]');
+    await masterToggle.setValue(true);
+    for (const type of ["stripe", "wxpay"]) {
+      await paymentSettings.findAll("button").find(button => button.text() === `payment.methods.${type}`)!.trigger("click");
+    }
+    wrapper.getComponent(AlipayBillSettingsCard).vm.$emit("saved", provider);
+    await flushPromises();
+    expect(getPaymentConfig).toHaveBeenCalledTimes(1);
+    expect(updatePaymentConfig).toHaveBeenCalledWith({ enabled_payment_types: ["easypay", "stripe", "airwallex", "alipay_bill"] });
+    const list = wrapper.getComponent(PaymentProviderList);
+    expect(list.props("enabledPaymentTypes")).toEqual(["easypay", "airwallex", "alipay_bill", "wxpay"]);
+    expect(list.props("alipaySource")).toBe("easypay_alipay");
+    expect((masterToggle.element as HTMLInputElement).checked).toBe(true);
+    expect(updateSettings).not.toHaveBeenCalled();
+  });
+
+  it("avoids writing payment config when the saved gateway type is already enabled", async () => {
+    getPaymentConfig.mockResolvedValue({ data: { enabled_payment_types: ["easypay", "alipay_bill"] } });
+    const wrapper = mountView();
+    await flushPromises();
+    wrapper.getComponent(AlipayBillSettingsCard).vm.$emit("saved", { id: 9, provider_key: "alipay_bill", enabled: true });
+    await flushPromises();
+    expect(getPaymentConfig).toHaveBeenCalledTimes(1);
+    expect(updatePaymentConfig).not.toHaveBeenCalled();
+    expect(updateSettings).not.toHaveBeenCalled();
+  });
+
+  it("reports a saved gateway whose narrow activation failed without publishing page changes", async () => {
+    getPaymentConfig.mockResolvedValue({ data: { enabled_payment_types: ["easypay"] } });
+    updatePaymentConfig.mockRejectedValue(new Error("Activation failed"));
+    const wrapper = mountView();
+    await flushPromises();
+    wrapper.getComponent(AlipayBillSettingsCard).vm.$emit("saved", { id: 9, provider_key: "alipay_bill", enabled: true });
+    await flushPromises();
+    expect(showError).toHaveBeenCalledWith("admin.settings.payment.billActivationFailed");
+    expect(updateSettings).not.toHaveBeenCalled();
   });
 
   it("opens email settings when the hash changes on an already open settings page", async () => {
@@ -819,6 +972,8 @@ describe("admin SettingsView payment visible method controls", () => {
     getGroups.mockReset();
     listProxies.mockReset();
     getProviders.mockReset();
+    getPaymentConfig.mockReset();
+    updatePaymentConfig.mockReset();
     updateProvider.mockReset();
     createProvider.mockReset();
     deleteProvider.mockReset();
@@ -1365,7 +1520,7 @@ describe("admin SettingsView payment visible method controls", () => {
     }
   });
 
-  it("does not submit legacy visible payment method settings", async () => {
+  it("submits the normalized Alipay source while preserving unrelated WeChat routing", async () => {
     const wrapper = mountView();
 
     await flushPromises();
@@ -1375,10 +1530,29 @@ describe("admin SettingsView payment visible method controls", () => {
 
     expect(updateSettings).toHaveBeenCalledTimes(1);
     const payload = updateSettings.mock.calls[0]?.[0];
-    expect(payload).not.toHaveProperty("payment_visible_method_alipay_source");
+    expect(payload).toHaveProperty("payment_visible_method_alipay_source", "official_alipay");
     expect(payload).not.toHaveProperty("payment_visible_method_wxpay_source");
-    expect(payload).not.toHaveProperty("payment_visible_method_alipay_enabled");
+    expect(payload).toHaveProperty("payment_visible_method_alipay_enabled", true);
     expect(payload).not.toHaveProperty("payment_visible_method_wxpay_enabled");
+  });
+
+  it("saves the selected Alipay source immediately without changing old provider enablement", async () => {
+    const PaymentProviderListStub = defineComponent({
+      props: ["alipaySource"],
+      emits: ["selectAlipaySource"],
+      setup(props, { emit }) {
+        return () => h("button", { class: "select-alipay-source", onClick: () => emit("selectAlipaySource", "alipay_bill") }, props.alipaySource);
+      },
+    });
+    const wrapper = mountView({ PaymentProviderList: PaymentProviderListStub });
+    await flushPromises();
+    await openPaymentTab(wrapper);
+    expect(wrapper.get(".select-alipay-source").text()).toBe("official_alipay");
+    await wrapper.get(".select-alipay-source").trigger("click");
+    await flushPromises();
+    expect(updateSettings).toHaveBeenCalledWith({ payment_visible_method_alipay_source: "alipay_bill", payment_visible_method_alipay_enabled: true });
+    expect(wrapper.get(".select-alipay-source").text()).toBe("alipay_bill");
+    expect(updateProvider).not.toHaveBeenCalled();
   });
 
   it("submits the admin recharge affiliate rebate setting", async () => {
@@ -1513,9 +1687,12 @@ describe("admin SettingsView payment visible method controls", () => {
       sort_order: 0,
     };
     getProviders.mockReset();
+    getPaymentConfig.mockReset();
+    updatePaymentConfig.mockReset();
+    const existingProvider = { ...provider, id: 8, provider_key: "easypay", name: "Existing Alipay", enabled: true };
     getProviders
-      .mockResolvedValueOnce({ data: [provider] })
-      .mockResolvedValueOnce({ data: [{ ...provider, enabled: true }] });
+      .mockResolvedValueOnce({ data: [provider, existingProvider] })
+      .mockResolvedValueOnce({ data: [{ ...provider, enabled: true }, existingProvider] });
     updateProvider.mockResolvedValue({ data: { ...provider, enabled: true } });
 
     const PaymentProviderListStub = defineComponent({
@@ -1933,6 +2110,8 @@ describe("admin SettingsView payment visible method controls", () => {
       sort_order: 0,
     };
     getProviders.mockReset();
+    getPaymentConfig.mockReset();
+    updatePaymentConfig.mockReset();
     getProviders.mockResolvedValue({ data: [providerWithNullTypes] });
 
     let receivedProviders: Array<Record<string, unknown>> = [];
@@ -1978,6 +2157,8 @@ describe("admin SettingsView wechat connect controls", () => {
     getGroups.mockReset();
     listProxies.mockReset();
     getProviders.mockReset();
+    getPaymentConfig.mockReset();
+    updatePaymentConfig.mockReset();
     updateProvider.mockReset();
     createProvider.mockReset();
     deleteProvider.mockReset();
@@ -2224,6 +2405,8 @@ describe("admin SettingsView platform quota matrix", () => {
     getGroups.mockReset();
     listProxies.mockReset();
     getProviders.mockReset();
+    getPaymentConfig.mockReset();
+    updatePaymentConfig.mockReset();
     updateProvider.mockReset();
     createProvider.mockReset();
     deleteProvider.mockReset();

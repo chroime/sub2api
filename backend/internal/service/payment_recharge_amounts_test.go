@@ -17,7 +17,7 @@ import (
 func TestValidateOrderInputAcceptsOnlyFixedRechargeAmounts(t *testing.T) {
 	svc := &PaymentService{}
 	ctx := context.Background()
-	for _, amount := range []float64{10, 20, 50, 100, 200, 500, 1000, 2000, 5000} {
+	for _, amount := range []float64{0.1, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000} {
 		t.Run("allowed_"+strconv.FormatFloat(amount, 'f', -1, 64), func(t *testing.T) {
 			plan, err := svc.validateOrderInput(ctx, CreateOrderRequest{OrderType: payment.OrderTypeBalance, Amount: amount}, &PaymentConfig{})
 			require.NoError(t, err)
@@ -41,7 +41,7 @@ func TestValidateOrderInputKeepsRechargeRange(t *testing.T) {
 		_, err := svc.validateOrderInput(context.Background(), CreateOrderRequest{OrderType: payment.OrderTypeBalance, Amount: amount}, cfg)
 		require.NoError(t, err, "amount %v must remain available at inclusive range boundaries", amount)
 	}
-	for _, amount := range []float64{10, 500} {
+	for _, amount := range []float64{0.1, 10, 500} {
 		_, err := svc.validateOrderInput(context.Background(), CreateOrderRequest{OrderType: payment.OrderTypeBalance, Amount: amount}, cfg)
 		require.Equal(t, "INVALID_AMOUNT", infraerrors.Reason(err))
 		require.Equal(t, map[string]string{"min": "20.00", "max": "200.00"}, infraerrors.FromError(err).Metadata)
@@ -52,7 +52,7 @@ func TestRechargeAmountsReturnsIndependentSlices(t *testing.T) {
 	cfg := &PaymentConfig{}
 	amounts := cfg.RechargeAmounts()
 	amounts[0] = 12.34
-	require.Equal(t, []float64{10, 20, 50, 100, 200, 500, 1000, 2000, 5000}, cfg.RechargeAmounts())
+	require.Equal(t, []float64{0.1, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000}, cfg.RechargeAmounts())
 	_, err := (&PaymentService{}).validateOrderInput(context.Background(), CreateOrderRequest{OrderType: payment.OrderTypeBalance, Amount: 12.34}, cfg)
 	require.Equal(t, "INVALID_AMOUNT", infraerrors.Reason(err))
 }
