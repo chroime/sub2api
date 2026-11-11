@@ -253,7 +253,7 @@ func TestBillPostgresAdminCancelAndTimeoutDoNotImmediatelyRelease(t *testing.T) 
 			ctx := context.Background()
 			start := time.Now().UTC().Truncate(time.Second).Add(-20 * time.Second)
 			if kind == "timeout" {
-				start = time.Now().UTC().Truncate(time.Second).Add(-2 * time.Minute)
+				start = time.Now().UTC().Truncate(time.Second).Add(-70 * time.Second)
 			}
 			order := matchingBillLocalOrder(t, s, id, "PG_NONUSER_CANCEL_"+kind, start)
 			wantStatus := OrderStatusCancelled

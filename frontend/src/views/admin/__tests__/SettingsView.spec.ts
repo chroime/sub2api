@@ -598,6 +598,7 @@ function mountView(stubOverrides: Record<string, Component | boolean> = {}, atta
         PaymentProviderList: true,
         PaymentProviderDialog: true,
         AlipayBillSettingsCard: true,
+        RechargeNotificationSettingsCard: true,
         GroupBadge: true,
         GroupOptionItem: true,
         ProxySelector: true,
@@ -754,6 +755,24 @@ describe("admin SettingsView payment visible method controls", () => {
       await wrapper.get("#settings-tab-general").trigger("click");
       expect(wrapper.get("#settings-tab-general").attributes("aria-selected")).toBe("true");
       expect(wrapper.get("#email-settings").attributes("style")).toContain("display: none");
+    } finally {
+      wrapper.unmount();
+      window.history.replaceState(null, "", previousURL);
+    }
+  });
+
+  it("shows standalone recharge notifications only in payment settings without saving page fields", async () => {
+    const previousURL = window.location.href;
+    window.history.replaceState(null, "", "/admin/settings");
+    const wrapper = mountView({ RechargeNotificationSettingsCard: true });
+    try {
+      await flushPromises();
+      expect(wrapper.find('recharge-notification-settings-card-stub').exists()).toBe(false);
+      await openPaymentTab(wrapper);
+      await flushPromises();
+      expect(wrapper.get('recharge-notification-settings-card-stub').isVisible()).toBe(true);
+      expect(updateSettings).not.toHaveBeenCalled();
+      expect(updatePaymentConfig).not.toHaveBeenCalled();
     } finally {
       wrapper.unmount();
       window.history.replaceState(null, "", previousURL);

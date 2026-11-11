@@ -2,7 +2,7 @@ import apiClient from '../client'
 
 export type BalanceNotificationStatus = 'pending' | 'sending' | 'sent' | 'failed' | 'suppressed'
 export type BalanceNotificationTrigger = 'automatic' | 'manual_batch'
-export type UserNotificationEvent = 'balance.low' | 'system.health_snapshot'
+export type UserNotificationEvent = 'balance.low' | 'system.health_snapshot' | 'payment.recharge_success_admin'
 
 export interface BalanceNotification {
   id: number

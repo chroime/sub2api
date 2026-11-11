@@ -67,13 +67,15 @@ type PaymentConfig struct {
 	// RechargeBonusMode 阶梯模式：bonus（赠金）/ discount（折扣），已归一化。
 	RechargeBonusMode string `json:"recharge_bonus_mode"`
 	// RechargeBonusNotice 充值页展示的 Markdown 活动文案；空表示不展示。
-	RechargeBonusNotice  string `json:"recharge_bonus_notice"`
-	LoadBalanceStrategy  string `json:"load_balance_strategy"`
-	ProductNamePrefix    string `json:"product_name_prefix"`
-	ProductNameSuffix    string `json:"product_name_suffix"`
-	HelpImageURL         string `json:"help_image_url"`
-	HelpText             string `json:"help_text"`
-	StripePublishableKey string `json:"stripe_publishable_key,omitempty"`
+	RechargeBonusNotice        string   `json:"recharge_bonus_notice"`
+	AdminRechargeNotifyEnabled bool     `json:"admin_recharge_notify_enabled"`
+	AdminRechargeNotifyEmails  []string `json:"admin_recharge_notify_emails"`
+	LoadBalanceStrategy        string   `json:"load_balance_strategy"`
+	ProductNamePrefix          string   `json:"product_name_prefix"`
+	ProductNameSuffix          string   `json:"product_name_suffix"`
+	HelpImageURL               string   `json:"help_image_url"`
+	HelpText                   string   `json:"help_text"`
+	StripePublishableKey       string   `json:"stripe_publishable_key,omitempty"`
 
 	// Cancel rate limit settings
 	CancelRateLimitEnabled bool   `json:"cancel_rate_limit_enabled"`
@@ -102,14 +104,16 @@ type UpdatePaymentConfigRequest struct {
 	SubscriptionUSDToCNYRate  *float64 `json:"subscription_usd_to_cny_rate"`
 	RechargeFeeRate           *float64 `json:"recharge_fee_rate"`
 	// RechargeBonusTiers nil 表示不更新；空切片表示清空阶梯。
-	RechargeBonusTiers  *[]RechargeBonusTier `json:"recharge_bonus_tiers"`
-	RechargeBonusMode   *string              `json:"recharge_bonus_mode"`
-	RechargeBonusNotice *string              `json:"recharge_bonus_notice"`
-	LoadBalanceStrategy *string              `json:"load_balance_strategy"`
-	ProductNamePrefix   *string              `json:"product_name_prefix"`
-	ProductNameSuffix   *string              `json:"product_name_suffix"`
-	HelpImageURL        *string              `json:"help_image_url"`
-	HelpText            *string              `json:"help_text"`
+	RechargeBonusTiers         *[]RechargeBonusTier `json:"recharge_bonus_tiers"`
+	RechargeBonusMode          *string              `json:"recharge_bonus_mode"`
+	RechargeBonusNotice        *string              `json:"recharge_bonus_notice"`
+	AdminRechargeNotifyEnabled *bool                `json:"admin_recharge_notify_enabled"`
+	AdminRechargeNotifyEmails  *[]string            `json:"admin_recharge_notify_emails"`
+	LoadBalanceStrategy        *string              `json:"load_balance_strategy"`
+	ProductNamePrefix          *string              `json:"product_name_prefix"`
+	ProductNameSuffix          *string              `json:"product_name_suffix"`
+	HelpImageURL               *string              `json:"help_image_url"`
+	HelpText                   *string              `json:"help_text"`
 
 	// Cancel rate limit settings
 	CancelRateLimitEnabled *bool   `json:"cancel_rate_limit_enabled"`
@@ -245,6 +249,7 @@ func (s *PaymentConfigService) getPaymentConfig(ctx context.Context, preservePro
 		SettingDailyRechargeLimit, SettingOrderTimeoutMinutes, SettingMaxPendingOrders,
 		SettingEnabledPaymentTypes, SettingBalancePayDisabled, SettingBalanceRechargeMult, SettingSubscriptionUSDToCNYRate, SettingRechargeFeeRate, SettingLoadBalanceStrategy,
 		SettingRechargeBonusTiers, SettingRechargeBonusMode, SettingRechargeBonusNotice,
+		SettingPaymentAdminRechargeNotifyEnabled, SettingPaymentAdminRechargeNotifyEmails,
 		SettingProductNamePrefix, SettingProductNameSuffix,
 		SettingHelpImageURL, SettingHelpText,
 		SettingCancelRateLimitOn, SettingCancelRateLimitMax,
@@ -317,6 +322,7 @@ func (s *PaymentConfigService) parsePaymentConfig(vals map[string]string) *Payme
 		AlipayMobilePrecreateDeepLink: vals[SettingAlipayMobilePrecreateDeepLink] == "true",
 	}
 	cfg.RechargeBonusMode, _ = NormalizeRechargeBonusMode(vals[SettingRechargeBonusMode])
+	cfg.AdminRechargeNotifyEnabled, cfg.AdminRechargeNotifyEmails, _ = parsePaymentAdminRechargeNotificationConfig(vals)
 	cfg.AlipayMobilePrecreateDeepLink = pcEnvBoolOverride(
 		SettingAlipayMobilePrecreateDeepLink,
 		cfg.AlipayMobilePrecreateDeepLink,
@@ -410,7 +416,14 @@ func (s *PaymentConfigService) UpdatePaymentConfig(ctx context.Context, req Upda
 			return infraerrors.BadRequest("INVALID_RECHARGE_BONUS_NOTICE", err.Error())
 		}
 	}
+	adminRechargeNotificationUpdate, err := s.resolveAdminRechargeNotificationUpdate(ctx, req)
+	if err != nil {
+		return err
+	}
 	m := make(map[string]string)
+	for key, value := range adminRechargeNotificationUpdate {
+		m[key] = value
+	}
 	if req.Enabled != nil {
 		m[SettingPaymentEnabled] = formatBoolOrEmpty(req.Enabled)
 	}

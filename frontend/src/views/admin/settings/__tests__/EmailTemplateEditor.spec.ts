@@ -39,6 +39,17 @@ describe('EmailTemplateEditor health snapshot', () => {
     expect(wrapper.get('iframe').attributes('srcdoc')).toContain('Operational')
     wrapper.unmount()
   })
+  it('offers the administrator recharge placeholders when the server omits the placeholder list', async () => {
+    getEmailTemplates.mockResolvedValue({ events: [{ value: 'payment.recharge_success_admin', optional: false }], locales: ['zh', 'en'], placeholders: [] })
+    getEmailTemplate.mockResolvedValue({ event: 'payment.recharge_success_admin', locale: 'zh', subject: 'Recharge', html: '<p>{{order_id}}</p>', is_custom: false })
+    const wrapper = mountEditor()
+    await flushPromises()
+    const placeholders = wrapper.findAll('button').map(button => button.text())
+    for (const name of ['user_id', 'user_email', 'user_name', 'order_id', 'out_trade_no', 'pay_amount', 'payment_currency', 'recharge_amount', 'payment_method', 'completed_at']) {
+      expect(placeholders).toContain(`{{${name}}}`)
+    }
+    wrapper.unmount()
+  })
 
   it('offers all platform destination placeholders when the API has no placeholder list', async () => {
     getEmailTemplate.mockResolvedValue({ event: 'system.health_snapshot', locale: 'zh', subject: 'Groups and rates', html: '<p>{{platform_url}}</p>', is_custom: false })
@@ -48,6 +59,20 @@ describe('EmailTemplateEditor health snapshot', () => {
     for (const name of ['platform_url', 'docs_url', 'model_plaza_url', 'canvas_url']) {
       expect(placeholders).toContain(`{{${name}}}`)
     }
+    wrapper.unmount()
+  })
+  it.each([
+    ['zh', '充值成功通知（管理员）', '余额实际到账后', '支付设置中专门配置', '按订单', '不影响用户充值入账'],
+    ['en', 'Recharge Success Notice (Admin)', 'balance is credited', 'dedicated recharge notification recipients', 'per order', 'does not affect the credited balance']
+  ])('explains administrator recharge mail in %s', async (language, label, timing, recipients, deduplication, failure) => {
+    currentLocale.value = language
+    getEmailTemplates.mockResolvedValue({ events: [{ value: 'payment.recharge_success_admin', optional: false }], locales: ['zh', 'en'], placeholders: ['order_id'] })
+    getEmailTemplate.mockResolvedValue({ event: 'payment.recharge_success_admin', locale: language, subject: 'Recharge', html: '<p>{{order_id}}</p>', is_custom: false, placeholders: ['order_id'] })
+    const wrapper = mountEditor()
+    await flushPromises()
+    expect(wrapper.get('button#email-template-event').text()).toBe(label)
+    for (const text of [timing, recipients, deduplication, failure]) expect(wrapper.text()).toContain(text)
+    expect(getEmailTemplate).toHaveBeenCalledWith('payment.recharge_success_admin', language)
     wrapper.unmount()
   })
 

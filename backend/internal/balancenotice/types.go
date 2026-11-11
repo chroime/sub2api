@@ -12,8 +12,9 @@ import (
 const Retention = 90 * 24 * time.Hour
 
 const (
-	EventBalanceLow           = "balance.low"
-	EventSystemHealthSnapshot = "system.health_snapshot"
+	EventBalanceLow                  = "balance.low"
+	EventSystemHealthSnapshot        = "system.health_snapshot"
+	EventPaymentRechargeSuccessAdmin = "payment.recharge_success_admin"
 )
 
 var (
@@ -73,7 +74,7 @@ func (q Query) Normalize(now time.Time) (Query, error) {
 	q.Status = strings.TrimSpace(q.Status)
 	q.TriggerType = strings.TrimSpace(q.TriggerType)
 	q.EventType = strings.TrimSpace(q.EventType)
-	if q.EventType != "" && q.EventType != EventBalanceLow && q.EventType != EventSystemHealthSnapshot {
+	if q.EventType != "" && q.EventType != EventBalanceLow && q.EventType != EventSystemHealthSnapshot && q.EventType != EventPaymentRechargeSuccessAdmin {
 		return q, ErrInvalid
 	}
 	if q.Status != "" && q.Status != "pending" && q.Status != "sending" && q.Status != "sent" && q.Status != "failed" && q.Status != "suppressed" {

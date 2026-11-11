@@ -54,6 +54,12 @@ func TestSQLStorePostgres(t *testing.T) {
 	require.NoError(t, err)
 	_, err = fixture.Exec(string(eventMigration))
 	require.NoError(t, err)
+	_, err = fixture.Exec(`INSERT INTO user_balance_notification_records(notification_id,trigger_type,user_id,recipient,subject,status,event_type) VALUES('00000000-0000-0000-0000-000000000002','automatic',77,'admin@example.test','Recharge admin notice','sent','payment.recharge_success_admin')`)
+	require.Error(t, err, "the previous event constraint must reject the newly introduced event")
+	adminEventMigration, err := os.ReadFile("../../migrations/288_payment_recharge_admin_notification_event.sql")
+	require.NoError(t, err)
+	_, err = fixture.Exec(string(adminEventMigration))
+	require.NoError(t, err)
 	var legacyEvent, legacySubject string
 	require.NoError(t, fixture.QueryRow(`SELECT event_type,subject FROM user_balance_notification_records WHERE id=$1`, legacyID).Scan(&legacyEvent, &legacySubject))
 	require.Equal(t, EventBalanceLow, legacyEvent)
@@ -142,5 +148,33 @@ func TestSQLStorePostgres(t *testing.T) {
 		require.Equal(t, EventBalanceLow, r.EventType)
 	}
 	_, err = fixture.Exec(`UPDATE user_balance_notification_records SET event_type='auth.verify_code' WHERE id=$1`, healthDetail.ID)
+	require.Error(t, err)
+	for _, outcome := range []string{"sent", "failed"} {
+		admin := s.Begin(Input{EventType: EventPaymentRechargeSuccessAdmin, TriggerType: "automatic", UserID: 42, UserEmail: "payer@example.test", UserName: "充值用户", Recipient: outcome + "-admin@example.test", DeliveryKey: "payment-order-123-" + outcome})
+		require.NotNil(t, admin)
+		admin.Content("用户充值成功", "<p>订单123：实付 ¥10.00，到账 $10.00</p>")
+		admin.Attempt()
+		if outcome == "sent" {
+			admin.Sent()
+		} else {
+			admin.Fail(fmt.Errorf("smtp temporary failure"))
+		}
+	}
+	adminPage, err := s.List(t.Context(), Query{EventType: EventPaymentRechargeSuccessAdmin, TriggerType: "automatic", UserID: 42})
+	require.NoError(t, err)
+	require.EqualValues(t, 2, adminPage.Total)
+	require.Equal(t, Summary{Total: 2, Sent: 1, Failed: 1}, adminPage.Summary)
+	for _, row := range adminPage.Items {
+		require.Equal(t, EventPaymentRechargeSuccessAdmin, row.EventType)
+		require.Equal(t, "payer@example.test", row.UserEmail)
+		require.Equal(t, "充值用户", row.UserName)
+		require.Nil(t, row.Balance)
+		require.Nil(t, row.Threshold)
+		detail, err := s.Get(t.Context(), row.ID)
+		require.NoError(t, err)
+		require.Equal(t, "<p>订单123：实付 ¥10.00，到账 $10.00</p>", detail.Body)
+		require.Equal(t, "payment-order-123-"+row.Status, detail.DeliveryKey)
+	}
+	_, err = fixture.Exec(`UPDATE user_balance_notification_records SET event_type='payment.recharge_success_admin.unknown' WHERE id=$1`, healthDetail.ID)
 	require.Error(t, err)
 }

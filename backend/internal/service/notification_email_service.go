@@ -29,6 +29,7 @@ const (
 	NotificationEmailEventSubscriptionExpiryReminder  = "subscription.expiry_reminder"
 	NotificationEmailEventBalanceLow                  = "balance.low"
 	NotificationEmailEventBalanceRechargeSuccess      = "balance.recharge_success"
+	NotificationEmailEventPaymentRechargeSuccessAdmin = "payment.recharge_success_admin"
 	NotificationEmailEventAccountQuotaAlert           = "account.quota_alert"
 	NotificationEmailEventContentModerationViolation  = "content_moderation.violation_notice"
 	NotificationEmailEventContentModerationDisabled   = "content_moderation.account_disabled"
@@ -51,9 +52,13 @@ const (
 )
 
 var (
-	notificationEmailPlaceholderPattern = regexp.MustCompile(`{{\s*([a-zA-Z][a-zA-Z0-9_]*)\s*}}`)
-	notificationEmailLocales            = []string{notificationEmailDefaultLocale, notificationEmailLocaleChinese}
-	notificationEmailCommonPlaceholders = []string{"site_name", "recipient_name", "recipient_email"}
+	notificationEmailPlaceholderPattern        = regexp.MustCompile(`{{\s*([a-zA-Z][a-zA-Z0-9_]*)\s*}}`)
+	notificationEmailLocales                   = []string{notificationEmailDefaultLocale, notificationEmailLocaleChinese}
+	notificationEmailCommonPlaceholders        = []string{"site_name", "recipient_name", "recipient_email"}
+	notificationEmailAdminRechargePlaceholders = []string{
+		"user_id", "user_email", "user_name", "order_id", "out_trade_no",
+		"pay_amount", "payment_currency", "recharge_amount", "payment_method", "completed_at",
+	}
 	// Keep summary values separate so admins can rearrange or omit individual metrics in the template.
 	notificationEmailOpsSummaryPlaceholders = []string{
 		"report_summary_display",
@@ -396,7 +401,7 @@ func (s *NotificationEmailService) Send(ctx context.Context, input NotificationE
 // must not be counted as delivered by administrator batch operations.
 func (s *NotificationEmailService) SendDelivered(ctx context.Context, input NotificationEmailSendInput) (delivered bool, sendErr error) {
 	delivery := input.BalanceDelivery
-	if input.Event != NotificationEmailEventBalanceLow && input.Event != NotificationEmailEventSystemHealthSnapshot {
+	if input.Event != NotificationEmailEventBalanceLow && input.Event != NotificationEmailEventSystemHealthSnapshot && input.Event != NotificationEmailEventPaymentRechargeSuccessAdmin {
 		delivery = nil
 	}
 	defer func() {
@@ -581,6 +586,23 @@ func (s *NotificationEmailService) sampleVariables(ctx context.Context, event, l
 		variables[key] = value
 	}
 	variables["site_name"] = s.siteName(ctx)
+	if event == NotificationEmailEventPaymentRechargeSuccessAdmin {
+		variables["recipient_name"] = "Administrator"
+		variables["recipient_email"] = "admin@example.com"
+		variables["user_id"] = "73"
+		variables["user_email"] = "payer@example.com"
+		variables["user_name"] = "Alex"
+		variables["out_trade_no"] = "20261111180000EXAMPLE"
+		variables["pay_amount"] = "50.00"
+		variables["payment_currency"] = "CNY"
+		variables["payment_method"] = "Alipay"
+		variables["completed_at"] = "2026-11-11 18:00:00 +08:00"
+		if normalizeNotificationLocale(locale) == notificationEmailLocaleChinese {
+			variables["recipient_name"] = "管理员"
+			variables["user_name"] = "张三"
+			variables["payment_method"] = "支付宝"
+		}
+	}
 	if variables["unsubscribe_url"] == "" && info.Optional {
 		variables["unsubscribe_url"] = "https://example.com/unsubscribe"
 	}
@@ -591,6 +613,15 @@ func (s *NotificationEmailService) runtimeVariables(ctx context.Context, event, 
 	variables := s.sampleVariables(ctx, event, locale)
 	for key, value := range input.Variables {
 		variables[key] = value
+	}
+	if event == NotificationEmailEventPaymentRechargeSuccessAdmin {
+		// Editor examples must never become account, payment or recipient data
+		// in a live administrator notification whose caller omitted a value.
+		for _, placeholder := range append(append([]string{}, notificationEmailAdminRechargePlaceholders...), "recipient_name") {
+			if _, exists := input.Variables[placeholder]; !exists {
+				variables[placeholder] = ""
+			}
+		}
 	}
 	if event == NotificationEmailEventSystemHealthSnapshot {
 		for _, placeholder := range []string{"health_status", "health_status_detail", "health_checked_at", "active_group_count", "group_summary_html", "platform_url", "docs_url", "model_plaza_url", "canvas_url"} {
@@ -1120,6 +1151,7 @@ var notificationEmailEventOrder = []string{
 	NotificationEmailEventSubscriptionExpiryReminder,
 	NotificationEmailEventBalanceLow,
 	NotificationEmailEventBalanceRechargeSuccess,
+	NotificationEmailEventPaymentRechargeSuccessAdmin,
 	NotificationEmailEventAccountQuotaAlert,
 	NotificationEmailEventContentModerationViolation,
 	NotificationEmailEventContentModerationDisabled,
@@ -1185,6 +1217,14 @@ var notificationEmailEventDefinitions = map[string]NotificationEmailEventInfo{
 		Category:     "billing",
 		Optional:     false,
 		Placeholders: append(append([]string{}, notificationEmailCommonPlaceholders...), "recharge_amount", "current_balance", "order_id"),
+	},
+	NotificationEmailEventPaymentRechargeSuccessAdmin: {
+		Event:        NotificationEmailEventPaymentRechargeSuccessAdmin,
+		Label:        "Recharge success notification for administrators",
+		Description:  "Sent to configured payment recharge notification recipients after the user's balance recharge is completed.",
+		Category:     "admin",
+		Optional:     false,
+		Placeholders: append(append([]string{}, notificationEmailCommonPlaceholders...), notificationEmailAdminRechargePlaceholders...),
 	},
 	NotificationEmailEventAccountQuotaAlert: {
 		Event:       NotificationEmailEventAccountQuotaAlert,
@@ -1392,6 +1432,42 @@ var notificationEmailOfficialTemplates = map[string]map[string]notificationEmail
 <p>您的余额充值 <strong>${{recharge_amount}}</strong> 已完成。</p>
 <p>当前余额：<strong>${{current_balance}}</strong></p>
 			<p>订单号：{{order_id}}</p>`),
+		},
+	},
+	NotificationEmailEventPaymentRechargeSuccessAdmin: {
+		notificationEmailDefaultLocale: {
+			Subject: "[{{site_name}}] User recharge completed - order {{order_id}}",
+			HTML: notificationEmailCard("#16a34a", "User recharge completed", `
+<p>Hello {{recipient_name}},</p>
+<p>A user's recharge has completed and the balance has been credited.</p>
+<table style="width:100%;border-collapse:collapse;text-align:left;">
+  <tr><td>User</td><td>{{user_name}} ({{user_email}})</td></tr>
+  <tr><td>User ID</td><td>{{user_id}}</td></tr>
+  <tr><td>Order ID</td><td>{{order_id}}</td></tr>
+  <tr><td>Merchant order number</td><td>{{out_trade_no}}</td></tr>
+  <tr><td>Actual payment</td><td><strong>{{payment_currency}} {{pay_amount}}</strong></td></tr>
+  <tr><td>Balance credited</td><td><strong>USD {{recharge_amount}}</strong></td></tr>
+  <tr><td>Payment method</td><td>{{payment_method}}</td></tr>
+  <tr><td>Completed at</td><td>{{completed_at}}</td></tr>
+</table>
+<p class="muted">This notification is sent after the balance is credited. Actual payment and credited balance may use different currencies.</p>`),
+		},
+		notificationEmailLocaleChinese: {
+			Subject: "[{{site_name}}] 用户充值成功 - 订单 {{order_id}}",
+			HTML: notificationEmailCard("#16a34a", "用户充值成功", `
+<p>{{recipient_name}}，您好：</p>
+<p>用户充值已完成，余额已实际到账。</p>
+<table style="width:100%;border-collapse:collapse;text-align:left;">
+  <tr><td>充值用户</td><td>{{user_name}}（{{user_email}}）</td></tr>
+  <tr><td>用户 ID</td><td>{{user_id}}</td></tr>
+  <tr><td>订单号</td><td>{{order_id}}</td></tr>
+  <tr><td>商户订单号</td><td>{{out_trade_no}}</td></tr>
+  <tr><td>实付金额</td><td><strong>{{payment_currency}} {{pay_amount}}</strong></td></tr>
+  <tr><td>到账余额</td><td><strong>USD {{recharge_amount}}</strong></td></tr>
+  <tr><td>支付方式</td><td>{{payment_method}}</td></tr>
+  <tr><td>完成时间</td><td>{{completed_at}}</td></tr>
+</table>
+<p class="muted">本通知在余额到账后发送。实付金额与到账余额的币种可能不同，请分别核对。</p>`),
 		},
 	},
 	NotificationEmailEventAccountQuotaAlert: {

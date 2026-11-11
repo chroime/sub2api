@@ -31,6 +31,31 @@ describe('user balance notification records', () => {
     expect(api.list).toHaveBeenLastCalledWith(expect.objectContaining({ event_type: 'system.health_snapshot', page: 1 }))
     w.unmount()
   })
+  it('identifies administrator recharge mail and filters it by its own event', async () => {
+    vi.mocked(api.list).mockResolvedValue(result([row({ event_type: 'payment.recharge_success_admin', recipient: 'admin@example.test', subject: '充值成功：订单 #42', balance: null, threshold: null })]))
+    const w = render(); await flushPromises()
+    expect(w.text()).toContain('充值成功通知（管理员）')
+    expect(w.text()).toContain('user@example.test')
+    expect(w.text()).toContain('admin@example.test')
+    expect(w.text()).not.toContain('触发时余额')
+    const eventSelect = w.findAllComponents({ name: 'Select' }).find(c => c.props('id') === 'notice-event')!
+    expect(eventSelect.props('options')).toContainEqual({ value: 'payment.recharge_success_admin', label: '充值成功通知（管理员）' })
+    eventSelect.vm.$emit('update:modelValue', 'payment.recharge_success_admin')
+    await w.get('form').trigger('submit'); await flushPromises()
+    expect(api.list).toHaveBeenLastCalledWith(expect.objectContaining({ event_type: 'payment.recharge_success_admin', page: 1 }))
+    w.unmount()
+  })
+  it.each([
+    ['duplicate', '此订单的充值成功通知已发送给该管理员邮箱'],
+    ['no_recipient', '未配置充值通知收件邮箱']
+  ])('explains the %s skip for administrator recharge mail without balance-alert copy', async (suppression_reason, message) => {
+    vi.mocked(api.list).mockResolvedValue(result([row({ event_type: 'payment.recharge_success_admin', status: 'suppressed', suppression_reason, attempts: 0 })]))
+    const w = render(); await flushPromises()
+    expect(w.text()).toContain(message)
+    expect(w.text()).not.toContain('当天已向该邮箱')
+    expect(w.text()).not.toContain('已验证且启用')
+    w.unmount()
+  })
   it('applies filters and returns to the first page', async () => {
     const w = render(); await flushPromises()
     await w.get('[data-test="notice-user-email"]').setValue('account@')

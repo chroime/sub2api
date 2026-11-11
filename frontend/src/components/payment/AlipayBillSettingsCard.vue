@@ -1,17 +1,26 @@
 <template>
   <section id="builtin-epay-settings" class="card scroll-mt-40" :aria-label="t('admin.settings.payment.billGatewayTitle')">
-    <div class="flex flex-wrap items-start justify-between gap-3 border-b border-gray-100 px-4 py-3 dark:border-dark-700">
-      <div>
+    <div class="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-3 dark:border-dark-700">
+      <div class="min-w-0 flex-1">
         <h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ t('admin.settings.payment.billGatewayTitle') }}</h2>
         <p class="mt-1 max-w-3xl text-xs leading-5 text-gray-500 dark:text-gray-400">{{ t('admin.settings.payment.billGatewayHint') }}</p>
       </div>
-      <button type="button" class="btn btn-secondary btn-sm" :disabled="loading || saving" @click="newDraft">{{ t('admin.settings.payment.billNewDraft') }}</button>
+      <Toggle
+        v-if="chosenId"
+        :model-value="enabled"
+        :disabled="loading || saving || !chosenId"
+        :aria-label="t('admin.settings.payment.billEnableCollection')"
+        @update:model-value="setCollectionEnabled"
+      />
     </div>
     <div class="space-y-4 p-4">
-      <label v-if="billProviders.length" class="block max-w-md text-sm text-gray-700 dark:text-gray-300">
-        {{ t('admin.settings.payment.billSavedInstance') }}
-        <Select data-testid="bill-instance" :model-value="chosenId" :options="instanceOptions" class="mt-1" :disabled="saving || loading" @update:model-value="chooseInstance(String($event))" />
-      </label>
+      <div class="flex flex-wrap items-end justify-between gap-3">
+        <label v-if="billProviders.length" class="block w-full max-w-md text-sm text-gray-700 dark:text-gray-300">
+          {{ t('admin.settings.payment.billSavedInstance') }}
+          <Select data-testid="bill-instance" :model-value="chosenId" :options="instanceOptions" class="mt-1" :disabled="saving || loading" @update:model-value="chooseInstance(String($event))" />
+        </label>
+        <button type="button" class="btn btn-secondary btn-sm" :disabled="loading || saving" @click="newDraft">{{ t('admin.settings.payment.billNewDraft') }}</button>
+      </div>
       <p v-if="loading" class="text-sm text-gray-500">{{ t('common.loading') }}</p>
       <p v-else-if="!chosenId" class="text-sm text-gray-500">{{ t('admin.settings.payment.billSelectInstanceHint') }}</p>
       <fieldset v-else :disabled="saving || loading" class="space-y-4">
@@ -20,7 +29,6 @@
             {{ t('admin.settings.payment.providerName') }}
             <input v-model="name" data-testid="bill-name" class="input mt-1" type="text" />
           </label>
-          <ToggleSwitch :label="t('admin.settings.payment.billEnableCollection')" :checked="enabled" @toggle="enabled = !enabled" />
         </div>
         <ProviderConfigFields :model-value="config" :fields="credentialFields" :editing="!!selectedSaved" field-prefix="bill-config" @update:model-value="updateCredentialConfig" />
         <p v-if="credentialsLoading" role="status" class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.settings.payment.billCredentialsLoading') }}</p>
@@ -81,11 +89,11 @@ import { useI18n } from 'vue-i18n'
 import { adminPaymentAPI } from '@/api/admin/payment'
 import { extractI18nErrorMessage } from '@/utils/apiError'
 import Select from '@/components/common/Select.vue'
+import Toggle from '@/components/common/Toggle.vue'
 import type { AlipayBillTestResult, ProviderInstance } from '@/types/payment'
 import ProviderConfigFields from './ProviderConfigFields.vue'
 import AlipayBillRulesEditor from './AlipayBillRulesEditor.vue'
 import AlipayBillReviewPanel from './AlipayBillReviewPanel.vue'
-import ToggleSwitch from './ToggleSwitch.vue'
 import { PROVIDER_CONFIG_FIELDS } from './providerConfig'
 import { parseAlipayBillRules, serializeAlipayBillRules, validateAlipayBillRules } from './alipayBillRules'
 import { generateEasyPayKey, parseEasyPayNotifyOrigins } from './alipayBillGateway'
@@ -105,6 +113,10 @@ const instanceOptions = computed(() => [
 const selectedSaved = ref<ProviderInstance | null>(null)
 const name = ref('')
 const enabled = ref(false)
+function setCollectionEnabled(value: boolean) {
+  if (props.loading || saving.value || !chosenId.value) return
+  enabled.value = value
+}
 const config = ref<Record<string, string>>({})
 const epayEnabled = ref(false)
 const originsText = ref(origin)

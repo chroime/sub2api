@@ -120,7 +120,7 @@ func TestAuditStoreFailureAndNilTrackerDoNotPanic(t *testing.T) {
 
 func TestQueryRejectsInvalidFiltersAndKeepsPaginationBounded(t *testing.T) {
 	now := time.Now().UTC()
-	for _, q := range []Query{{Status: "invented"}, {TriggerType: "astrbot"}, {EventType: "auth.verify_code"}, {Page: -1}, {PageSize: 101}, {UserID: -2}, {From: now, To: now.Add(-time.Hour)}} {
+	for _, q := range []Query{{Status: "invented"}, {TriggerType: "astrbot"}, {EventType: "auth.verify_code"}, {EventType: "payment.recharge_success"}, {Page: -1}, {PageSize: 101}, {UserID: -2}, {From: now, To: now.Add(-time.Hour)}} {
 		_, err := q.Normalize(now)
 		require.ErrorIs(t, err, ErrInvalid)
 	}
@@ -129,7 +129,7 @@ func TestQueryRejectsInvalidFiltersAndKeepsPaginationBounded(t *testing.T) {
 	require.Equal(t, 1, q.Page)
 	require.Equal(t, 20, q.PageSize)
 	require.Equal(t, now.Add(-Retention), q.From)
-	for _, event := range []string{EventBalanceLow, EventSystemHealthSnapshot} {
+	for _, event := range []string{EventBalanceLow, EventSystemHealthSnapshot, "payment.recharge_success_admin"} {
 		q, err = (Query{EventType: " " + event + " "}).Normalize(now)
 		require.NoError(t, err)
 		require.Equal(t, event, q.EventType)
@@ -153,6 +153,57 @@ func TestHealthDeliveryRecordsEventWithoutBalanceAmounts(t *testing.T) {
 	require.Equal(t, Retention, r.ExpiresAt.Sub(r.CreatedAt))
 	require.Nil(t, svc.Begin(Input{EventType: "auth.verify_code", UserID: 7}), "authentication mail must not enter user campaign records")
 	require.Len(t, store.rows, 1)
+}
+
+func TestPaymentRechargeAdminDeliveryKeepsPayerAndRecipient(t *testing.T) {
+	for _, outcome := range []string{"sent", "failed", "suppressed"} {
+		t.Run(outcome, func(t *testing.T) {
+			store := &memoryStore{}
+			svc := NewService(store)
+			d := svc.Begin(Input{
+				EventType:   "payment.recharge_success_admin",
+				TriggerType: "automatic",
+				UserID:      42,
+				UserEmail:   "payer@example.test",
+				UserName:    "充值用户",
+				Recipient:   " admin@example.test ",
+				DeliveryKey: "payment-order-recipient-hash",
+			})
+			require.NotNil(t, d, "administrator recharge notices must enter the delivery audit")
+			d.Content("充值成功通知", "<p>订单 123：实付 ¥10.00，到账 $10.00</p>")
+			switch outcome {
+			case "sent":
+				d.Attempt()
+				d.Sent()
+			case "failed":
+				d.Attempt()
+				d.Fail(errors.New("smtp unavailable"))
+			case "suppressed":
+				d.Suppress("duplicate")
+			}
+			r := store.only(t)
+			require.Equal(t, "payment.recharge_success_admin", r.EventType)
+			require.EqualValues(t, 42, r.UserID)
+			require.Equal(t, "payer@example.test", r.UserEmail)
+			require.Equal(t, "充值用户", r.UserName)
+			require.Equal(t, "admin@example.test", r.Recipient)
+			require.Equal(t, "payment-order-recipient-hash", r.DeliveryKey)
+			require.Equal(t, "automatic", r.TriggerType)
+			require.Equal(t, outcome, r.Status)
+			require.Equal(t, Retention, r.ExpiresAt.Sub(r.CreatedAt))
+			require.Nil(t, r.Balance)
+			require.Nil(t, r.Threshold)
+		})
+	}
+}
+
+func TestDeliveryAuditRejectsUnregisteredPaymentAndAuthenticationEvents(t *testing.T) {
+	store := &memoryStore{}
+	svc := NewService(store)
+	for _, event := range []string{"payment.recharge_success", "payment.recharge_success_admin.unknown", "auth.verify_code"} {
+		require.Nil(t, svc.Begin(Input{EventType: event, UserID: 42, Recipient: "admin@example.test"}), event)
+	}
+	require.Empty(t, store.rows)
 }
 
 func TestEventFilterUsesBoundParameters(t *testing.T) {

@@ -5,8 +5,8 @@ import PaymentStatusPanel from '../PaymentStatusPanel.vue'
 import PaymentQRCodeView from '@/views/user/PaymentQRCodeView.vue'
 import { decidePaymentLaunch, readPaymentRecoverySnapshot } from '../paymentFlow'
 
-const { pollOrderStatus, verifyOrder, push, query } = vi.hoisted(() => ({
-  pollOrderStatus: vi.fn(), verifyOrder: vi.fn(), push: vi.fn(), query: {} as Record<string, string>,
+const { pollOrderStatus, verifyOrder, cancelOrder, push, query } = vi.hoisted(() => ({
+  pollOrderStatus: vi.fn(), verifyOrder: vi.fn(), cancelOrder: vi.fn(), push: vi.fn(), query: {} as Record<string, string>,
 }))
 vi.mock('vue-i18n', async (importOriginal) => ({
   ...await importOriginal<typeof import('vue-i18n')>(),
@@ -14,7 +14,7 @@ vi.mock('vue-i18n', async (importOriginal) => ({
 }))
 vi.mock('@/stores/payment', () => ({ usePaymentStore: () => ({ pollOrderStatus }) }))
 vi.mock('@/stores', () => ({ useAppStore: () => ({ showError: vi.fn() }) }))
-vi.mock('@/api/payment', () => ({ paymentAPI: { verifyOrder } }))
+vi.mock('@/api/payment', () => ({ paymentAPI: { verifyOrder, cancelOrder } }))
 vi.mock('qrcode', () => ({ default: { toCanvas: vi.fn().mockResolvedValue(undefined) } }))
 vi.mock('vue-router', () => ({ useRoute: () => ({ query }), useRouter: () => ({ push }) }))
 
@@ -28,6 +28,7 @@ beforeEach(() => {
     out_trade_no: 'bill-order-42', status: Date.now() >= Date.parse(query.expires_at) ? 'EXPIRED' : 'PENDING',
   }))
   verifyOrder.mockReset()
+  cancelOrder.mockReset().mockResolvedValue({ data: { message: 'cancelled' } })
   push.mockReset()
   Object.assign(query, {
     order_id: '42', qr: 'https://qr.alipay.com/fixed-ten', pay_url: 'https://qr.alipay.com/fixed-ten',
@@ -62,7 +63,7 @@ describe.each(['dialog', 'panel', 'page'] as const)('fixed-code payment window: 
     expect(wrapper.text()).toContain('payment.result.processing')
     expect(wrapper.emitted('success')).toBeUndefined()
     expect(push).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(60_000)
+    await vi.advanceTimersByTimeAsync(90_000)
     expect(wrapper.text()).not.toContain('payment.qr.expired')
     pollOrderStatus.mockResolvedValue({ id: 42, amount: 10, pay_amount: 10, status: 'COMPLETED' })
     await vi.advanceTimersByTimeAsync(3000)
@@ -121,9 +122,9 @@ describe.each(['dialog', 'panel', 'page'] as const)('fixed-code payment window: 
     else expect(wrapper.emitted('success')).toHaveLength(1)
   })
 
-  it('bounds bill waiting to two minutes after expiry and points to order history', async () => {
+  it('bounds bill waiting to thirty seconds after expiry and points to order history', async () => {
     const wrapper = await open(kind)
-    await vi.advanceTimersByTimeAsync(181_000)
+    await vi.advanceTimersByTimeAsync(91_000)
     expect(wrapper.text()).toContain('payment.qr.billUnconfirmedTitle')
     expect(wrapper.text()).toContain('payment.qr.billExpiredDesc')
     expect(wrapper.text()).not.toContain('payment.qr.billReconciling')
@@ -137,15 +138,54 @@ describe.each(['dialog', 'panel', 'page'] as const)('fixed-code payment window: 
     expect(vi.getTimerCount()).toBe(0)
   })
 
+  it('shows the absolute reconciliation countdown and ends it without resetting on polls', async () => {
+    const wrapper = await open(kind)
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(wrapper.get('[data-test="bill-reconciliation-countdown"]').text()).toContain('00:30')
+    await vi.advanceTimersByTimeAsync(16_000)
+    expect(wrapper.get('[data-test="bill-reconciliation-countdown"]').text()).toContain('00:14')
+    await vi.advanceTimersByTimeAsync(14_000)
+    expect(wrapper.find('[data-test="bill-reconciliation-countdown"]').exists()).toBe(false)
+    expect(wrapper.find('.animate-spin').exists()).toBe(false)
+    expect(wrapper.text()).toContain('payment.qr.billUnconfirmedTitle')
+    expect(wrapper.find('a[href="/orders"]').exists()).toBe(true)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('restores only the remaining reconciliation time instead of starting another thirty seconds', async () => {
+    query.expires_at = new Date(Date.now() - 16_000).toISOString()
+    const wrapper = await open(kind)
+    await flushPromises()
+    expect(wrapper.get('[data-test="bill-reconciliation-countdown"]').text()).toContain('00:14')
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(wrapper.get('[data-test="bill-reconciliation-countdown"]').text()).toContain('00:09')
+    await vi.advanceTimersByTimeAsync(9_000)
+    expect(wrapper.find('[data-test="bill-reconciliation-countdown"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('payment.qr.billUnconfirmedTitle')
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('ends reconciliation from the clock even when the order API never returns', async () => {
+    pollOrderStatus.mockImplementation(() => new Promise(() => {}))
+    const wrapper = await open(kind)
+    await vi.advanceTimersByTimeAsync(76_000)
+    expect(wrapper.get('[data-test="bill-reconciliation-countdown"]').text()).toContain('00:14')
+    await vi.advanceTimersByTimeAsync(14_000)
+    expect(wrapper.text()).toContain('payment.qr.billUnconfirmedTitle')
+    expect(wrapper.find('.animate-spin').exists()).toBe(false)
+    expect(wrapper.find('[data-test="bill-reconciliation-countdown"]').exists()).toBe(false)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
   it('restores an expired checkout without showing or extending its payment code', async () => {
-    query.expires_at = new Date(Date.now() - 90_000).toISOString()
+    query.expires_at = new Date(Date.now() - 20_000).toISOString()
     const wrapper = await open(kind)
     await flushPromises()
     expect(wrapper.find('canvas').exists()).toBe(false)
     expect(wrapper.text()).toContain('payment.qr.billReconcilingTitle')
     expect(wrapper.text()).toContain('payment.qr.billReconciling')
     expect(wrapper.text()).not.toContain('payment.qr.expired')
-    await vi.advanceTimersByTimeAsync(31_000)
+    await vi.advanceTimersByTimeAsync(11_000)
     expect(wrapper.text()).toContain('payment.qr.billUnconfirmedTitle')
     expect(wrapper.text()).toContain('payment.qr.billExpiredDesc')
     expect(vi.getTimerCount()).toBe(0)
@@ -178,6 +218,97 @@ describe.each(['dialog', 'panel', 'page'] as const)('fixed-code payment window: 
   })
 })
 
+describe.each(['dialog', 'page'] as const)('checkout cancellation: %s', kind => {
+  it('keeps polling a confirmed payment when cancellation returns already_paid', async () => {
+    cancelOrder.mockResolvedValue({ data: { message: 'already_paid' } })
+    pollOrderStatus.mockResolvedValue({ id: 42, amount: 10, pay_amount: 10, status: 'PAID' })
+    const wrapper = await open(kind)
+    const cancel = wrapper.findAll('button').find(button => button.text() === 'payment.qr.cancelOrder')!
+    await cancel.trigger('click')
+    await flushPromises()
+    expect(cancelOrder).toHaveBeenCalledWith(42)
+    expect(wrapper.text()).toContain('payment.result.processing')
+    expect(wrapper.find('canvas').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('payment.qr.cancelled')
+    expect(wrapper.text()).not.toContain('payment.qr.expired')
+    expect(wrapper.emitted('close')).toBeUndefined()
+    expect(push).not.toHaveBeenCalled()
+    const calls = pollOrderStatus.mock.calls.length
+    pollOrderStatus.mockResolvedValue({ id: 42, amount: 10, pay_amount: 10, status: 'COMPLETED' })
+    await vi.advanceTimersByTimeAsync(3000)
+    expect(pollOrderStatus.mock.calls.length).toBeGreaterThan(calls)
+    if (kind === 'page') expect(push).toHaveBeenCalledWith(expect.objectContaining({ path: '/payment/result' }))
+    else expect(wrapper.emitted('success')).toHaveLength(1)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('shows a polled cancellation without presenting it as an expired or unpaid order', async () => {
+    pollOrderStatus.mockResolvedValue({ id: 42, amount: 10, pay_amount: 10, status: 'CANCELLED' })
+    const wrapper = await open(kind)
+    await vi.advanceTimersByTimeAsync(3000)
+    expect(wrapper.text()).toContain('payment.qr.cancelled')
+    expect(wrapper.text()).toContain('payment.qr.billCancelledReviewDesc')
+    expect(wrapper.text()).not.toContain('payment.qr.billCancelledDesc')
+    expect(wrapper.text()).not.toContain('payment.qr.expired')
+    expect(wrapper.text()).not.toContain('payment.qr.billExpiredDesc')
+    expect(wrapper.text()).not.toContain('payment.qr.billUnconfirmedTitle')
+    expect(wrapper.find('canvas').exists()).toBe(false)
+    expect(wrapper.find('a[href="/orders"]').exists()).toBe(true)
+    expect(wrapper.emitted('success')).toBeUndefined()
+    expect(push).not.toHaveBeenCalled()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('resumes confirmed-payment polling when the cancellation reply arrives after checkout expiry', async () => {
+    let finishCancel!: (value: unknown) => void
+    cancelOrder.mockImplementation(() => new Promise(resolve => { finishCancel = resolve }))
+    pollOrderStatus.mockResolvedValue({ id: 42, amount: 10, pay_amount: 10, status: 'PAID' })
+    query.expires_at = new Date(Date.now() + 1000).toISOString()
+    const wrapper = await open(kind, false)
+    const cancel = wrapper.findAll('button').find(button => button.text() === 'payment.qr.cancelOrder')!
+    await cancel.trigger('click')
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(vi.getTimerCount()).toBe(0)
+    finishCancel({ data: { message: 'already_paid' } })
+    await flushPromises()
+    expect(wrapper.text()).toContain('payment.result.processing')
+    expect(wrapper.text()).not.toContain('payment.qr.expired')
+    expect(wrapper.emitted('close')).toBeUndefined()
+    expect(push).not.toHaveBeenCalled()
+    pollOrderStatus.mockResolvedValue({ id: 42, amount: 10, pay_amount: 10, status: 'COMPLETED' })
+    await vi.advanceTimersByTimeAsync(3000)
+    if (kind === 'page') expect(push).toHaveBeenCalledWith(expect.objectContaining({ path: '/payment/result' }))
+    else expect(wrapper.emitted('success')).toHaveLength(1)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('ignores a cancellation reply after the user has left checkout', async () => {
+    let finishCancel!: (value: unknown) => void
+    cancelOrder.mockImplementation(() => new Promise(resolve => { finishCancel = resolve }))
+    const wrapper = await open(kind)
+    const cancel = wrapper.findAll('button').find(button => button.text() === 'payment.qr.cancelOrder')!
+    await cancel.trigger('click')
+    wrapper.unmount()
+    finishCancel({ data: { message: 'already_paid' } })
+    await flushPromises()
+    expect(wrapper.emitted('close')).toBeUndefined()
+    expect(wrapper.emitted('success')).toBeUndefined()
+    expect(push).not.toHaveBeenCalled()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('preserves the existing navigation after a successful user cancellation', async () => {
+    const wrapper = await open(kind)
+    const cancel = wrapper.findAll('button').find(button => button.text() === 'payment.qr.cancelOrder')!
+    await cancel.trigger('click')
+    await flushPromises()
+    if (kind === 'page') expect(push).toHaveBeenCalledWith('/purchase')
+    else expect(wrapper.emitted('close')).toHaveLength(1)
+    expect(wrapper.emitted('success')).toBeUndefined()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+})
+
 it('carries fixed-code semantics into recovery and restores only the bill waiting window', () => {
   const decision = decidePaymentLaunch({
     order_id: 42, amount: 10, pay_amount: 10, fee_rate: 0, expires_at: query.expires_at,
@@ -187,7 +318,7 @@ it('carries fixed-code semantics into recovery and restores only the bill waitin
   expect(decision.paymentState.billAmountMatching).toBe(true)
   const snapshot = JSON.stringify(decision.recovery)
   expect(readPaymentRecoverySnapshot(snapshot, { now: Date.now() + 75_000 })?.billAmountMatching).toBe(true)
-  expect(readPaymentRecoverySnapshot(snapshot, { now: Date.now() + 181_000 })).toBeNull()
+  expect(readPaymentRecoverySnapshot(snapshot, { now: Date.now() + 91_000 })).toBeNull()
 })
 
 it('does not settle after the user exits bill waiting while a poll is in flight', async () => {

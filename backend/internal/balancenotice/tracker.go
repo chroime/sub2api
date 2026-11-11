@@ -45,7 +45,7 @@ func (s *Service) Begin(in Input) *Delivery {
 	if in.EventType == "" {
 		in.EventType = EventBalanceLow
 	}
-	if in.EventType != EventBalanceLow && in.EventType != EventSystemHealthSnapshot {
+	if in.EventType != EventBalanceLow && in.EventType != EventSystemHealthSnapshot && in.EventType != EventPaymentRechargeSuccessAdmin {
 		return nil
 	}
 	if in.TriggerType != "manual_batch" {

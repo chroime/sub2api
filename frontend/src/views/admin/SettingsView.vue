@@ -8434,6 +8434,8 @@
             v-model:notice="form.payment_recharge_bonus_notice"
           />
 
+          <RechargeNotificationSettingsCard v-if="activeTab === 'payment'" />
+
           <AlipayBillSettingsCard
             :providers="providers"
             :loading="providersLoading"
@@ -9016,6 +9018,7 @@ import ConfirmDialog from "@/components/common/ConfirmDialog.vue";
 import PaymentProviderList from "@/components/payment/PaymentProviderList.vue";
 import PaymentProviderDialog from "@/components/payment/PaymentProviderDialog.vue";
 import AlipayBillSettingsCard from "@/components/payment/AlipayBillSettingsCard.vue";
+import RechargeNotificationSettingsCard from "@/components/payment/RechargeNotificationSettingsCard.vue";
 import GroupBadge from "@/components/common/GroupBadge.vue";
 import GroupOptionItem from "@/components/common/GroupOptionItem.vue";
 import Toggle from "@/components/common/Toggle.vue";

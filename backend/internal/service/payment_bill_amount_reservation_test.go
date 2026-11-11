@@ -127,7 +127,7 @@ func TestBillAmountCancelledExceptionDoesNotHideOtherReservation(t *testing.T) {
 	require.NoError(t, err)
 	err = billAmountReservationCheckAt(t, s, start.Add(80*time.Second))
 	require.Equal(t, "ALIPAY_BILL_AMOUNT_BUSY", infraerrors.Reason(err))
-	require.Equal(t, "100", infraerrors.FromError(err).Metadata["retry_after_seconds"], "maximum effective blocker must include older non-cancelled history")
+	require.Equal(t, "10", infraerrors.FromError(err).Metadata["retry_after_seconds"], "maximum effective blocker must include older non-cancelled history")
 }
 
 func createBillAmountLocalFixture(ctx context.Context, s *PaymentService, id int64, cfg map[string]string, user *dbent.User, amount float64) (*dbent.PaymentOrder, error) {
@@ -150,7 +150,7 @@ func TestBillAmountReuseRequiresCooldownAndSuccessfulRecentSync(t *testing.T) {
 		defer tx.Rollback()
 		return s.lockBillAmountReservation(ctx, tx, order.ReceiverID, order.AmountMinor, at)
 	}
-	endCooling := order.ExpiresAt.Add(2 * time.Minute)
+	endCooling := order.ExpiresAt.Add(30 * time.Second)
 	require.Equal(t, "ALIPAY_BILL_AMOUNT_BUSY", infraerrors.Reason(check(endCooling.Add(-time.Second))))
 	require.Equal(t, "ALIPAY_BILL_SYNC_REQUIRED", infraerrors.Reason(check(endCooling)))
 	_, err = s.entClient.ExecContext(ctx, `INSERT INTO payment_bill_sync_state(receiver_id,cursor_at,lease_until,lease_owner,error_code,updated_at) VALUES($1,$2,$3,'fixture','sync_failed',$4)`, order.ReceiverID, endCooling, time.Unix(0, 0).UTC(), endCooling)

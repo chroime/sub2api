@@ -78,8 +78,12 @@
           <p class="text-lg font-bold text-gray-900 dark:text-white">{{ t(billAmountMatching ? (billAwaiting ? 'payment.qr.billReconcilingTitle' : 'payment.qr.billUnconfirmedTitle') : 'payment.qr.expired') }}</p>
           <p v-if="billAmountMatching" class="text-center text-sm text-gray-500 dark:text-gray-400">{{ t(billAwaiting ? 'payment.qr.billReconciling' : 'payment.qr.billExpiredDesc') }}</p>
           <p v-else class="text-sm text-gray-500 dark:text-gray-400">{{ t('payment.qr.expiredDesc') }}</p>
+          <div v-if="billAwaiting" data-test="bill-reconciliation-countdown" class="space-y-1 text-center" role="timer" :aria-label="t('payment.qr.billReconciliationRemaining')">
+            <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('payment.qr.billReconciliationRemaining') }}</p>
+            <p class="text-2xl font-semibold tabular-nums text-orange-600 dark:text-orange-400">{{ billCountdownDisplay }}</p>
+          </div>
           <a v-if="billAmountMatching" class="btn btn-secondary" href="/orders">{{ t('payment.result.viewOrders') }}</a>
-          <button class="btn btn-primary" @click="handleDone">{{ t('common.confirm') }}</button>
+          <button class="btn btn-primary" @click="handleDone">{{ t('payment.result.backToRecharge') }}</button>
         </div>
       </div>
     </template>
@@ -249,7 +253,7 @@ import QRCode from 'qrcode'
 import alipayIcon from '@/assets/icons/alipay.svg'
 import wxpayIcon from '@/assets/icons/wxpay.svg'
 import paymentIcon from '@/assets/icons/payment.svg'
-import { canWaitForBill } from './billPaymentWindow'
+import { billReconciliationSecondsRemaining } from './billPaymentWindow'
 import { usePaymentFulfillmentWait } from './usePaymentFulfillmentWait'
 import {
   createAlipayDeepLinkLauncher,
@@ -303,6 +307,8 @@ const localeCode = computed(() => {
 // Terminal outcome: null = still active, 'success' | 'cancelled' | 'expired'
 const outcome = ref<PaymentOutcome | null>(null)
 const billAwaiting = ref(false)
+const billWaitingSeconds = ref(0)
+const billCountdownDisplay = computed(() => `${Math.floor(billWaitingSeconds.value / 60).toString().padStart(2, '0')}:${(billWaitingSeconds.value % 60).toString().padStart(2, '0')}`)
 const { waiting: fulfillmentPending, timedOut: fulfillmentTimedOut, start: waitForFulfillment, stop: stopFulfillmentWait } = usePaymentFulfillmentWait(cleanup)
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
@@ -489,7 +495,8 @@ function startCountdown(seconds: number) {
 
 function expirePayment() {
   if (fulfillmentPending.value) return
-  if (canWaitForBill(props.billAmountMatching === true, props.expiresAt)) {
+  billWaitingSeconds.value = billReconciliationSecondsRemaining(props.expiresAt)
+  if (props.billAmountMatching === true && billWaitingSeconds.value > 0) {
     billAwaiting.value = true
     alipayLauncher?.dispose()
     alipayLauncher = null

@@ -15,9 +15,10 @@ import (
 )
 
 const (
-	billAmountOrderTTL   = time.Minute
-	billAmountReuseDelay = 2 * time.Minute
-	billAmountSyncAge    = 2 * time.Minute
+	billAmountOrderTTL         = time.Minute
+	billAmountReuseDelay       = 30 * time.Second
+	billAmountLegacyReuseDelay = 2 * time.Minute
+	billAmountSyncAge          = 2 * time.Minute
 )
 
 // Provider IDs deliberately are not part of this key. All providers and both
@@ -40,7 +41,7 @@ func (s *PaymentService) lockBillAmountReservation(ctx context.Context, tx *dben
 		return err
 	}
 	client := tx.Client()
-	var lastExpiry, reuseAfter time.Time
+	var coverageThrough, reuseAfter time.Time
 	cancelledBlocker := false
 	rows, err := client.QueryContext(ctx, `SELECT a.expires_at,a.reuse_after,a.closed_at,CASE WHEN o.status='CANCELLED' THEN 1 ELSE 0 END,
 		EXISTS(SELECT 1 FROM payment_bill_claims c WHERE c.order_id=a.order_id OR c.epay_order_id=a.epay_order_id)
@@ -60,9 +61,6 @@ func (s *PaymentService) lockBillAmountReservation(ctx context.Context, tx *dben
 		if closed.Valid {
 			expiry = closed.Time
 		}
-		if expiry.After(lastExpiry) {
-			lastExpiry = expiry
-		}
 		effectiveReuse := recordedReuse
 		// Confirmed claims permanently close amount ownership; fulfillment or
 		// callback retries must not reopen it. Old confirmed rows with no closure
@@ -70,6 +68,15 @@ func (s *PaymentService) lockBillAmountReservation(ctx context.Context, tx *dben
 		// Cancelled orders still retain their full original payment window.
 		if confirmed || cancelled == 1 {
 			effectiveReuse = expiry
+		} else if shorter := expiry.Add(billAmountReuseDelay); shorter.Before(effectiveReuse) {
+			// Honor the current shorter visibility buffer for already-issued
+			// reservations without rewriting their original historical policy.
+			effectiveReuse = shorter
+		}
+		// Unconfirmed windows require a complete successful statement after
+		// the visibility buffer, not merely one covering the payment deadline.
+		if effectiveReuse.After(coverageThrough) {
+			coverageThrough = effectiveReuse
 		}
 		if effectiveReuse.After(reuseAfter) || (effectiveReuse.Equal(reuseAfter) && cancelled == 0) {
 			reuseAfter = effectiveReuse
@@ -112,11 +119,11 @@ func (s *PaymentService) lockBillAmountReservation(ctx context.Context, tx *dben
 		if rowsErr != nil {
 			return rowsErr
 		}
-		if legacyExpiry.After(lastExpiry) {
-			lastExpiry = legacyExpiry
+		if legacyExpiry.After(coverageThrough) {
+			coverageThrough = legacyExpiry
 		}
-		if !legacyExpiry.IsZero() && !legacyExpiry.Add(billAmountReuseDelay).Before(reuseAfter) {
-			reuseAfter = legacyExpiry.Add(billAmountReuseDelay)
+		if !legacyExpiry.IsZero() && !legacyExpiry.Add(billAmountLegacyReuseDelay).Before(reuseAfter) {
+			reuseAfter = legacyExpiry.Add(billAmountLegacyReuseDelay)
 			cancelledBlocker = false
 		}
 	}
@@ -127,7 +134,7 @@ func (s *PaymentService) lockBillAmountReservation(ctx context.Context, tx *dben
 		}
 		return infraerrors.Conflict("ALIPAY_BILL_AMOUNT_BUSY", "this payment amount is reserved; retry after the payment and cooling window").WithMetadata(map[string]string{"retry_after_seconds": strconv.FormatInt(seconds, 10)})
 	}
-	if lastExpiry.IsZero() {
+	if coverageThrough.IsZero() {
 		return nil
 	}
 	rows, err = client.QueryContext(ctx, `SELECT cursor_at,error_code,updated_at FROM payment_bill_sync_state WHERE receiver_id=$1`, receiver)
@@ -152,7 +159,7 @@ func (s *PaymentService) lockBillAmountReservation(ctx context.Context, tx *dben
 	// Acquiring a sync lease also refreshes updated_at. The durable cursor must
 	// itself be recent, so starting an in-flight query cannot make stale state
 	// appear to be a newly successful sync.
-	if !found || !cursor.Valid || cursor.Time.Before(lastExpiry) || cursor.Time.Before(now.Add(-billAmountSyncAge)) || syncError != "" || updated.Before(now.Add(-billAmountSyncAge)) {
+	if !found || !cursor.Valid || cursor.Time.Before(coverageThrough) || cursor.Time.Before(now.Add(-billAmountSyncAge)) || syncError != "" || updated.Before(now.Add(-billAmountSyncAge)) {
 		return infraerrors.Conflict("ALIPAY_BILL_SYNC_REQUIRED", "the previous amount reservation is awaiting a successful recent bill sync")
 	}
 	rows, err = client.QueryContext(ctx, `SELECT COALESCE(MAX(CASE WHEN o.status='CANCELLED' THEN 1 ELSE 0 END),0),COUNT(*)
@@ -161,8 +168,6 @@ func (s *PaymentService) lockBillAmountReservation(ctx context.Context, tx *dben
 		JOIN payment_bill_receipts r ON r.receiver_id=a.receiver_id AND r.amount_minor=a.amount_minor
 			AND r.trans_at>=a.created_at AND r.trans_at<COALESCE(a.closed_at,a.expires_at)
 		WHERE a.receiver_id=$1 AND a.amount_minor=$2 AND a.user_cancelled_at IS NULL AND r.status='review'
-			AND (o.status='CANCELLED' OR a.closed_at IS NOT NULL
-				OR EXISTS(SELECT 1 FROM payment_bill_claims c WHERE c.order_id=a.order_id OR c.epay_order_id=a.epay_order_id))
 			AND r.order_id IS NULL AND r.epay_order_id IS NULL
 			AND NOT EXISTS(SELECT 1 FROM payment_bill_claims c WHERE c.receipt_id=r.id OR (r.alipay_order_no<>'' AND c.alipay_order_no=r.alipay_order_no))
 	`, receiver, amountMinor)
@@ -187,7 +192,7 @@ func (s *PaymentService) lockBillAmountReservation(ctx context.Context, tx *dben
 		if cancelledReview > 0 {
 			return infraerrors.Conflict("ALIPAY_BILL_CANCELLED_PAYMENT_REVIEW", "a receipt in a cancelled payment window needs review before reusing this amount")
 		}
-		return infraerrors.Conflict("ALIPAY_BILL_PAYMENT_REVIEW", "an additional receipt in a confirmed payment window needs review before reusing this amount")
+		return infraerrors.Conflict("ALIPAY_BILL_PAYMENT_REVIEW", "an unclaimed receipt in a previous payment window needs review before reusing this amount")
 	}
 	return nil
 }

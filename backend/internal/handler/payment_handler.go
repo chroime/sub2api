@@ -38,7 +38,7 @@ func (h *PaymentHandler) GetPaymentConfig(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
-	response.Success(c, cfg)
+	response.Success(c, paymentConfigForUser(cfg))
 }
 
 // GetPlans returns subscription plans available for sale.

@@ -23,9 +23,14 @@ let applied: BalanceNotificationQuery = { page_size: 20, trigger_type: props.ini
 const statusValues: BalanceNotificationStatus[] = ['pending', 'sending', 'sent', 'failed', 'suppressed']
 const statuses = computed(() => [{ value: '', label: tr('all') }, ...statusValues.map(value => ({ value, label: tr(`status_${value}`) }))])
 const triggers = computed(() => [{ value: '', label: tr('all') }, ...(['automatic', 'manual_batch'] as const).map(value => ({ value, label: tr(value) }))])
-const events = computed(() => [{ value: '', label: tr('all') }, { value: 'balance.low', label: tr('eventBalance') }, { value: 'system.health_snapshot', label: tr('eventHealth') }])
+const eventLabels: Record<UserNotificationEvent, string> = {
+  'balance.low': 'eventBalance',
+  'system.health_snapshot': 'eventHealth',
+  'payment.recharge_success_admin': 'eventRechargeAdmin',
+}
+const events = computed(() => [{ value: '', label: tr('all') }, ...Object.entries(eventLabels).map(([value, label]) => ({ value, label: tr(label) }))])
 function isBalance(row: BalanceNotification) { return !row.event_type || row.event_type === 'balance.low' }
-function eventLabel(row: BalanceNotification) { return tr(isBalance(row) ? 'eventBalance' : 'eventHealth') }
+function eventLabel(row: BalanceNotification) { return tr(eventLabels[row.event_type ?? 'balance.low']) }
 const columns = computed(() => [
   { key: 'user', label: tr('user') }, { key: 'recipient', label: tr('recipient') },
   { key: 'content', label: tr('content') }, { key: 'trigger', label: tr('trigger') },
@@ -46,6 +51,10 @@ const reasonKeys = new Set(['duplicate', 'unsubscribed', 'no_recipient', 'invali
 function reason(row: BalanceNotification) {
   const value = row.last_error || row.suppression_reason
   if (acceptanceUnconfirmed(row)) return tr('reasons.email_delivery_unconfirmed')
+  if (row.event_type === 'payment.recharge_success_admin') {
+    if (value === 'duplicate') return tr('reasons.duplicate_order')
+    if (value === 'no_recipient') return tr('reasons.no_admin_recipient')
+  }
   return reasonKeys.has(value) ? tr(`reasons.${value}`) : value
 }
 function dateQuery(value: string) { return value ? new Date(`${value}+08:00`).toISOString() : undefined }

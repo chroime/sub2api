@@ -486,7 +486,10 @@ func (s *PaymentService) markCompleted(ctx context.Context, o *dbent.PaymentOrde
 			"creditedAmount": o.Amount,
 			"payAmount":      o.PayAmount,
 		})
-		s.dispatchPaymentFulfillmentNotification(o, auditAction)
+		notificationOrder := *o
+		notificationOrder.Status = OrderStatusCompleted
+		notificationOrder.CompletedAt = &now
+		s.dispatchPaymentFulfillmentNotification(&notificationOrder, auditAction)
 	}
 	return nil
 }
@@ -494,6 +497,15 @@ func (s *PaymentService) markCompleted(ctx context.Context, o *dbent.PaymentOrde
 func (s *PaymentService) dispatchPaymentFulfillmentNotification(o *dbent.PaymentOrder, auditAction string) {
 	if s == nil || s.notificationEmailService == nil || o == nil {
 		return
+	}
+	if auditAction == "RECHARGE_SUCCESS" {
+		// Administrator delivery has its own deadline per recipient and cannot
+		// be blocked by a slow or rejected user receipt email.
+		go func() {
+			if err := s.sendAdminRechargeSuccessNotifications(context.Background(), o); err != nil {
+				slog.Warn("administrator recharge notification email failed", "order_id", o.ID, "err", err.Error())
+			}
+		}()
 	}
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), emailSendTimeout)

@@ -3,7 +3,11 @@
     <!-- QR Code + Polling State -->
     <div v-if="!success" class="flex flex-col items-center space-y-4">
       <!-- QR Code mode -->
-      <template v-if="fulfillmentPending">
+      <template v-if="cancelled">
+        <p class="text-center text-sm text-gray-500 dark:text-gray-400">{{ t(billAmountMatching ? 'payment.qr.billCancelledReviewDesc' : 'payment.qr.cancelledDesc') }}</p>
+        <a class="btn btn-secondary" href="/orders">{{ t('payment.result.viewOrders') }}</a>
+      </template>
+      <template v-else-if="fulfillmentPending">
         <div v-if="!fulfillmentTimedOut" class="h-10 w-10 animate-spin rounded-full border-4 border-primary-500 border-t-transparent"></div>
         <p class="text-lg font-semibold text-gray-900 dark:text-white">{{ t('payment.result.processing') }}</p>
         <p class="text-center text-sm text-gray-500 dark:text-gray-400">{{ t(fulfillmentTimedOut ? 'payment.result.fulfillmentDelayed' : 'payment.result.fulfillmentPending') }}</p>
@@ -28,13 +32,17 @@
         </div>
       </template>
       <!-- Countdown -->
-      <div v-if="expired && !fulfillmentPending" class="text-center">
+      <div v-if="expired && !fulfillmentPending && !cancelled" class="text-center">
         <div v-if="billAwaiting" class="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-orange-500 border-t-transparent"></div>
         <p v-if="!billAmountMatching" class="text-lg font-medium text-red-500">{{ t('payment.qr.expired') }}</p>
         <p v-if="billAmountMatching" class="mt-2 text-sm text-gray-500 dark:text-gray-400">{{ t(billAwaiting ? 'payment.qr.billReconciling' : 'payment.qr.billExpiredDesc') }}</p>
+        <div v-if="billAwaiting" data-test="bill-reconciliation-countdown" class="mt-3 space-y-1" role="timer" :aria-label="t('payment.qr.billReconciliationRemaining')">
+          <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('payment.qr.billReconciliationRemaining') }}</p>
+          <p class="text-2xl font-semibold tabular-nums text-orange-600 dark:text-orange-400">{{ billCountdownDisplay }}</p>
+        </div>
         <a v-if="billAmountMatching" class="btn btn-secondary mt-3" href="/orders">{{ t('payment.result.viewOrders') }}</a>
       </div>
-      <div v-else-if="!fulfillmentPending" class="text-center">
+      <div v-else-if="!fulfillmentPending && !cancelled" class="text-center">
         <p class="text-sm text-gray-500 dark:text-gray-400">{{ qrUrl ? t('payment.qr.expiresIn') : '' }}</p>
         <p class="mt-1 text-2xl font-bold tabular-nums text-gray-900 dark:text-white">{{ countdownDisplay }}</p>
         <p class="mt-1 text-xs text-gray-400 dark:text-gray-500">{{ t(billAmountMatching ? 'payment.qr.billPaymentHint' : 'payment.qr.waitingPayment') }}</p>
@@ -65,13 +73,13 @@
     </div>
     <template #footer>
       <div class="flex justify-end gap-3">
-        <button v-if="!success && !expired && !fulfillmentPending" class="btn btn-secondary" :disabled="cancelling" @click="handleCancel">
+        <button v-if="!success && !expired && !fulfillmentPending && !cancelled" class="btn btn-secondary" :disabled="cancelling" @click="handleCancel">
           {{ cancelling ? t('common.processing') : t('payment.qr.cancelOrder') }}
         </button>
         <button v-if="success" class="btn btn-primary" @click="handleDone">
           {{ t('common.confirm') }}
         </button>
-        <button v-if="expired" class="btn btn-primary" @click="handleClose">
+        <button v-if="expired || cancelled" class="btn btn-primary" @click="handleClose">
           {{ t('payment.result.backToRecharge') }}
         </button>
       </div>
@@ -94,7 +102,7 @@ import { currencySymbol } from '@/components/payment/currency'
 import QRCode from 'qrcode'
 import alipayIcon from '@/assets/icons/alipay.svg'
 import wxpayIcon from '@/assets/icons/wxpay.svg'
-import { canWaitForBill } from './billPaymentWindow'
+import { billReconciliationSecondsRemaining } from './billPaymentWindow'
 import { usePaymentFulfillmentWait } from './usePaymentFulfillmentWait'
 
 const props = defineProps<{
@@ -121,7 +129,10 @@ const qrCanvas = ref<HTMLCanvasElement | null>(null)
 const qrUrl = ref('')
 const remainingSeconds = ref(0)
 const expired = ref(false)
+const cancelled = ref(false)
 const billAwaiting = ref(false)
+const billWaitingSeconds = ref(0)
+const billCountdownDisplay = computed(() => `${Math.floor(billWaitingSeconds.value / 60).toString().padStart(2, '0')}:${(billWaitingSeconds.value % 60).toString().padStart(2, '0')}`)
 const { waiting: fulfillmentPending, timedOut: fulfillmentTimedOut, start: waitForFulfillment, stop: stopFulfillmentWait, reset: resetFulfillmentWait } = usePaymentFulfillmentWait(cleanup)
 const cancelling = ref(false)
 const success = ref(false)
@@ -132,6 +143,7 @@ let pollTimer: ReturnType<typeof setInterval> | null = null
 let countdownTimer: ReturnType<typeof setInterval> | null = null
 let verifyAttempts = 0
 let lastVerifyAt = 0
+let disposed = false
 
 const VERIFY_RETRY_INTERVAL_MS = 15000
 const VERIFY_RETRY_MAX_ATTEMPTS = 6
@@ -141,6 +153,7 @@ const isWxpay = computed(() => isBuiltInWxpayMethod(props.paymentType))
 
 const dialogTitle = computed(() => {
   if (success.value) return t('payment.result.success')
+  if (cancelled.value) return t('payment.qr.cancelled')
   if (fulfillmentPending.value) return t('payment.result.processing')
   if (props.billAmountMatching && expired.value) return t(billAwaiting.value ? 'payment.qr.billReconcilingTitle' : 'payment.qr.billUnconfirmedTitle')
   if (!qrUrl.value) return t('payment.qr.payInNewWindow')
@@ -230,8 +243,14 @@ async function pollStatus() {
       waitForFulfillment()
     } else if (order.status === 'EXPIRED') {
       expirePayment()
-    } else if (order.status === 'CANCELLED' || order.status === 'FAILED') {
-      if (order.status === 'FAILED' && fulfillmentPending.value) return
+    } else if (order.status === 'CANCELLED') {
+      resetFulfillmentWait()
+      cleanup()
+      billAwaiting.value = false
+      expired.value = false
+      cancelled.value = true
+    } else if (order.status === 'FAILED') {
+      if (fulfillmentPending.value) return
       resetFulfillmentWait()
       cleanup()
       billAwaiting.value = false
@@ -275,9 +294,10 @@ function startCountdown(seconds: number) {
 }
 
 function expirePayment() {
-  if (fulfillmentPending.value) return
+  if (fulfillmentPending.value || cancelled.value) return
   expired.value = true
-  billAwaiting.value = canWaitForBill(props.billAmountMatching === true, props.expiresAt)
+  billWaitingSeconds.value = billReconciliationSecondsRemaining(props.expiresAt)
+  billAwaiting.value = props.billAmountMatching === true && billWaitingSeconds.value > 0
   if (!billAwaiting.value) cleanup()
 }
 
@@ -285,7 +305,14 @@ async function handleCancel() {
   if (!props.orderId || cancelling.value) return
   cancelling.value = true
   try {
-    await paymentAPI.cancelOrder(props.orderId)
+    const result = await paymentAPI.cancelOrder(props.orderId)
+    if (disposed || !props.show || success.value || cancelled.value) return
+    if (result.data?.message === 'already_paid') {
+      waitForFulfillment()
+      if (!pollTimer) pollTimer = setInterval(pollStatus, 3000)
+      await pollStatus()
+      return
+    }
     cleanup()
     emit('close')
   } catch (err: unknown) {
@@ -318,7 +345,9 @@ function init() {
   success.value = false
   paidOrder.value = null
   expired.value = false
+  cancelled.value = false
   billAwaiting.value = false
+  billWaitingSeconds.value = 0
   cancelling.value = false
   qrUrl.value = props.qrCode
   verifyAttempts = 0
@@ -345,5 +374,5 @@ watch(() => props.show, (isOpen) => {
 
 watch(qrUrl, () => renderQR())
 
-onUnmounted(() => cleanup())
+onUnmounted(() => { disposed = true; cleanup() })
 </script>

@@ -37,6 +37,8 @@ export interface AdminPaymentConfig {
   product_name_suffix: string
   help_image_url: string
   help_text: string
+  admin_recharge_notify_enabled: boolean
+  admin_recharge_notify_emails: string[]
 }
 
 /** Fields accepted by PUT /admin/payment/config (all optional via pointer semantics) */
@@ -57,6 +59,8 @@ export interface UpdatePaymentConfigRequest {
   product_name_suffix?: string
   help_image_url?: string
   help_text?: string
+  admin_recharge_notify_enabled?: boolean
+  admin_recharge_notify_emails?: string[]
 }
 
 export interface RefundResult {
