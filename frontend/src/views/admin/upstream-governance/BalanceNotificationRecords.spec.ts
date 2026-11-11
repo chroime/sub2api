@@ -14,8 +14,21 @@ describe('user balance notification records', () => {
   beforeEach(() => { vi.resetAllMocks(); vi.mocked(api.list).mockResolvedValue(result()) })
   it('shows exact user/recipient snapshots and balance without fetching message bodies', async () => {
     const w = render(); await flushPromises()
-    expect(w.text()).toContain('用户余额通知'); expect(w.text()).toContain('user@example.test'); expect(w.text()).toContain('notify@example.test'); expect(w.text()).toContain('$0.065')
+    expect(w.text()).toContain('用户邮件记录'); expect(w.text()).toContain('user@example.test'); expect(w.text()).toContain('notify@example.test'); expect(w.text()).toContain('$0.065')
     expect(w.text()).toContain('2026-10-27 09:00:00'); expect(api.detail).not.toHaveBeenCalled()
+    w.unmount()
+  })
+  it('shows manual health mail subjects and event filters without inventing balance values', async () => {
+    vi.mocked(api.list).mockResolvedValue(result([row({ event_type: 'system.health_snapshot', trigger_type: 'manual_batch', subject: '当前服务状态', balance: null, threshold: null, status: 'failed', last_error: 'email_delivery_failed' })]))
+    const w = render(); await flushPromises()
+    expect(w.text()).toContain('当前服务状态')
+    expect(w.text()).toContain('系统状态通知')
+    expect(w.text()).toContain('管理员主动发送')
+    expect(w.text()).toContain('邮件发送失败，请检查邮件服务配置')
+    expect(w.text()).not.toContain('触发时余额')
+    w.findAllComponents({ name: 'Select' }).find(c => c.props('id') === 'notice-event')!.vm.$emit('update:modelValue', 'system.health_snapshot')
+    await w.get('form').trigger('submit'); await flushPromises()
+    expect(api.list).toHaveBeenLastCalledWith(expect.objectContaining({ event_type: 'system.health_snapshot', page: 1 }))
     w.unmount()
   })
   it('applies filters and returns to the first page', async () => {
@@ -38,6 +51,16 @@ describe('user balance notification records', () => {
     vi.mocked(api.list).mockResolvedValue(result([row({ id: 2, status: 'suppressed', suppression_reason: 'duplicate', attempts: 0 }), row({ id: 3, status: 'failed', last_error: 'smtp rcpt: 550 recipient rejected' })]))
     const w = render(); await flushPromises()
     expect(w.text()).toContain('重复发送保护'); expect(w.text()).toContain('smtp rcpt: 550 recipient rejected'); expect(w.text()).not.toContain('等待自动重试')
+    w.unmount()
+  })
+  it('shows SMTP acceptance uncertainty as an unconfirmed neutral result', async () => {
+    vi.mocked(api.list).mockResolvedValue(result([row({ status: 'failed', last_error: 'smtp acceptance unconfirmed: connection closed after body' })]))
+    const w = render(); await flushPromises()
+    expect(w.text()).toContain('结果未确认')
+    expect(w.text()).toContain('不要直接重复发送')
+    const badge = w.findAll('span').find(span => span.text() === '结果未确认')!
+    expect(badge.classes()).toContain('bg-gray-100')
+    expect(badge.classes()).not.toContain('text-red-700')
     w.unmount()
   })
   it('does not round a tiny effective percentage threshold to zero', async () => {

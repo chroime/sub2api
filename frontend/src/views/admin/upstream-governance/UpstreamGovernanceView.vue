@@ -51,7 +51,7 @@ const tab = computed({
     if (navigationLocked.value) return
     const entry = SMART_OPERATIONS_SECTIONS.find(item => item.id === section)!
     const query = { ...route.query }
-    if (section === 'settings' || section === 'account-quality') delete query.site
+    if (section === 'settings' || section === 'account-quality' || section === 'records') delete query.site
     // Model monitoring always reopens on upstream groups.
     delete query.target
     void router.push({ path: entry.path, query })
@@ -71,8 +71,12 @@ function chooseModelTarget(target: 'upstream' | 'local') {
   void router.push({ path: '/admin/upstream-governance/models', query })
 }
 const groupsView = ref<'import' | 'accounts'>('import')
-const settingsView = ref<'settings' | 'templates' | 'records'>('settings')
-const recordsChannel = ref<'email' | 'astrbot' | 'users'>('email')
+const settingsView = ref<'settings' | 'templates'>('settings')
+const recordsChannel = computed<'email' | 'astrbot' | 'users'>(() => route.query.channel === 'astrbot' || route.query.channel === 'users' ? route.query.channel : 'email')
+const recordsTrigger = computed(() => route.query.trigger_type === 'manual_batch' || route.query.trigger_type === 'automatic' ? route.query.trigger_type : undefined)
+function chooseRecordsChannel(channel: 'email' | 'astrbot' | 'users') {
+  void router.replace({ path: '/admin/upstream-governance/records', query: { ...route.query, channel } })
+}
 // Old links (import, monitor, local-monitor, notifications) move to the
 // regrouped sections without leaving their id in the address bar.
 watch(() => route.params.section, value => {
@@ -84,9 +88,8 @@ watch(() => route.params.section, value => {
     delete query.site
   }
   if (value === 'notifications') {
-    // The former tab listed the low-balance mails sent to platform users.
-    settingsView.value = 'records'
-    recordsChannel.value = 'users'
+    // Preserve old links to platform-user notification records.
+    query.channel = 'users'
     delete query.site
   }
   void router.replace({ path: SMART_OPERATIONS_SECTIONS.find(item => item.id === section)!.path, query })
@@ -101,7 +104,7 @@ const automation = ref<AutomationConfiguration | null>(null), balanceHealth = re
 const readinessLoading = ref(false), readinessReadFailed = ref(false)
 const automationBusy = ref(false), observationBusy = ref(false), pricingBusy = ref(false), reconciliationBusy = ref(false), keyBusy = ref(false), modelBusy = ref(false)
 const qualityBusy = ref(false), templatesBusy = ref(false)
-const siteIndependent = computed(() => tab.value === 'settings' || tab.value === 'account-quality' || localModels.value)
+const siteIndependent = computed(() => tab.value === 'settings' || tab.value === 'account-quality' || tab.value === 'records' || localModels.value)
 const localWorkspaceLoading = ref(false), localWorkspaceError = ref('')
 const keysOpen = ref(false), keySelections = ref<KeySelection[]>([]), reconciliationEpoch = ref(0)
 const importPreviewEpoch = ref(0)
@@ -301,7 +304,7 @@ function retryLocalWorkspace() {
 }
 watch([tab, localModels, showOverview, () => route.query.site], ([section, local, overview, siteQuery]) => {
   if (isLegacySmartOperationsSection(route.params.section)) return
-  if ((section === 'account-quality' || section === 'settings' || local) && siteQuery !== undefined) {
+  if ((section === 'account-quality' || section === 'settings' || section === 'records' || local) && siteQuery !== undefined) {
     const query = { ...route.query }
     delete query.site
     void router.replace({ path: route.path, query })
@@ -634,13 +637,13 @@ onUnmounted(() => {
         <div class="min-w-0">
           <h2 class="text-2xl font-semibold tracking-tight">{{ t('governance.smartOperations.title') }}</h2>
         </div>
-        <div class="flex flex-wrap gap-2">
+        <div v-if="tab !== 'records'" class="flex flex-wrap gap-2">
           <button class="btn btn-secondary" :disabled="working || navigationLocked" @click="load"><Icon name="refresh" size="sm" class="mr-2" />{{ t('common.refresh') }}</button>
           <button id="governance-add-site" class="btn btn-primary" :disabled="working || navigationLocked" @click="onboarding = true"><Icon name="plus" size="sm" class="mr-2" />{{ t('governance.add') }}</button>
         </div>
       </header>
-      <div class="grid min-w-0 items-start gap-5 xl:grid-cols-[17.5rem_minmax(0,1fr)]" data-test="smart-operations-workspace">
-      <aside class="min-w-0 space-y-3 xl:sticky xl:top-24" data-test="smart-operations-site-rail" :aria-label="t('governance.upstreamSites')">
+      <div class="grid min-w-0 items-start gap-5" :class="tab !== 'records' ? 'xl:grid-cols-[17.5rem_minmax(0,1fr)]' : ''" data-test="smart-operations-workspace">
+      <aside v-if="tab !== 'records'" class="min-w-0 space-y-3 xl:sticky xl:top-24" data-test="smart-operations-site-rail" :aria-label="t('governance.upstreamSites')">
         <button id="governance-all-sites" class="flex min-h-11 w-full items-center gap-2 rounded-xl border px-4 py-3 text-left text-sm font-medium transition-colors disabled:opacity-50" :class="showOverview && tab === 'overview' ? 'border-primary-200 bg-primary-50 text-primary-800 dark:border-primary-800 dark:bg-primary-900/20 dark:text-primary-200' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-200'" type="button" :disabled="navigationLocked" :aria-current="showOverview && tab === 'overview' ? 'page' : undefined" @click="showAllSiteTasks"><Icon name="globe" size="sm" />{{ t('governance.workbench.allSitesEntry') }}</button>
         <GovernanceSitesOverview compact :sites="sites" :selected-site-id="showOverview ? null : active?.id" :disabled="navigationLocked" @select="chooseSite" />
       </aside>
@@ -653,12 +656,12 @@ onUnmounted(() => {
       <p v-if="siteNotFound" role="status" class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-300">{{ t('governance.smartOperations.siteNotFound') }}</p>
       <template v-if="tab === 'settings'">
         <div class="flex flex-wrap gap-1 rounded-lg bg-gray-100 p-1 dark:bg-dark-800" role="group" data-test="settings-views">
-          <button v-for="view in (['settings', 'templates', 'records'] as const)" :key="view" type="button" :data-test="'settings-view-' + view" class="min-h-9 rounded-md px-3 text-sm transition-colors" :class="settingsView === view ? 'bg-white font-medium text-gray-900 shadow-sm dark:bg-dark-600 dark:text-gray-100' : 'text-gray-500'" :aria-pressed="settingsView === view" @click="settingsView = view">{{ t(`governance.settingsTab.${view}`) }}</button>
+          <button v-for="view in (['settings', 'templates'] as const)" :key="view" type="button" :data-test="'settings-view-' + view" class="min-h-9 rounded-md px-3 text-sm transition-colors" :class="settingsView === view ? 'bg-white font-medium text-gray-900 shadow-sm dark:bg-dark-600 dark:text-gray-100' : 'text-gray-500'" :aria-pressed="settingsView === view" @click="settingsView = view">{{ t(`governance.settingsTab.${view}`) }}</button>
         </div>
         <GlobalSettingsView v-if="settingsView === 'settings'" />
         <ImportTemplatesView v-else-if="settingsView === 'templates'" @busy="templatesBusy = $event" />
-        <DeliveryRecords v-else :initial-channel="recordsChannel" />
       </template>
+      <DeliveryRecords v-else-if="tab === 'records'" :initial-channel="recordsChannel" :initial-trigger="recordsTrigger" @update:channel="chooseRecordsChannel" />
       <AccountQualityView v-else-if="tab === 'account-quality'" @busy="qualityBusy = $event" />
       <GovernanceWorkbench v-else-if="tab === 'overview' && !siteNotFound && (showOverview || active)" :site-id="showOverview ? undefined : active?.id" :disabled="navigationLocked" @navigate="navigateFromWorkbench" />
       <div v-if="tab === 'models'" class="flex flex-wrap items-center gap-3">

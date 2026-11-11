@@ -13,23 +13,23 @@ type SQLStore struct{ db *sql.DB }
 
 func NewSQLStore(db *sql.DB) *SQLStore { return &SQLStore{db: db} }
 
-const columns = `id,notification_id,trigger_type,batch_id,user_id,user_email,user_name,recipient,balance,threshold,subject,status,suppression_reason,attempts,last_attempt_at,sent_at,last_error,created_at,updated_at,expires_at`
+const columns = `id,notification_id,event_type,trigger_type,batch_id,user_id,user_email,user_name,recipient,balance,threshold,subject,status,suppression_reason,attempts,last_attempt_at,sent_at,last_error,created_at,updated_at,expires_at`
 
 func (s *SQLStore) Save(ctx context.Context, r *Record) error {
 	return s.db.QueryRowContext(ctx, `INSERT INTO user_balance_notification_records
-(notification_id,trigger_type,batch_id,user_id,user_email,user_name,recipient,balance,threshold,subject,body,status,suppression_reason,attempts,last_attempt_at,sent_at,last_error,delivery_key,created_at,updated_at,expires_at)
-VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
+(notification_id,trigger_type,batch_id,user_id,user_email,user_name,recipient,balance,threshold,subject,body,status,suppression_reason,attempts,last_attempt_at,sent_at,last_error,delivery_key,created_at,updated_at,expires_at,event_type)
+VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
 ON CONFLICT(notification_id,recipient) DO UPDATE SET subject=EXCLUDED.subject,body=EXCLUDED.body,status=EXCLUDED.status,
 suppression_reason=EXCLUDED.suppression_reason,attempts=EXCLUDED.attempts,last_attempt_at=EXCLUDED.last_attempt_at,
 sent_at=EXCLUDED.sent_at,last_error=EXCLUDED.last_error,balance=EXCLUDED.balance,threshold=EXCLUDED.threshold,updated_at=EXCLUDED.updated_at
-RETURNING id`, r.NotificationID, r.TriggerType, r.BatchID, r.UserID, r.UserEmail, r.UserName, r.Recipient, r.Balance, r.Threshold, r.Subject, r.Body, r.Status, r.SuppressionReason, r.Attempts, r.LastAttemptAt, r.SentAt, r.LastError, r.DeliveryKey, r.CreatedAt, r.UpdatedAt, r.ExpiresAt).Scan(&r.ID)
+RETURNING id`, r.NotificationID, r.TriggerType, r.BatchID, r.UserID, r.UserEmail, r.UserName, r.Recipient, r.Balance, r.Threshold, r.Subject, r.Body, r.Status, r.SuppressionReason, r.Attempts, r.LastAttemptAt, r.SentAt, r.LastError, r.DeliveryKey, r.CreatedAt, r.UpdatedAt, r.ExpiresAt, r.EventType).Scan(&r.ID)
 }
 
 type scanner interface{ Scan(...any) error }
 
 func scan(row scanner, detail bool) (*Record, error) {
 	r := new(Record)
-	args := []any{&r.ID, &r.NotificationID, &r.TriggerType, &r.BatchID, &r.UserID, &r.UserEmail, &r.UserName, &r.Recipient, &r.Balance, &r.Threshold, &r.Subject, &r.Status, &r.SuppressionReason, &r.Attempts, &r.LastAttemptAt, &r.SentAt, &r.LastError, &r.CreatedAt, &r.UpdatedAt, &r.ExpiresAt}
+	args := []any{&r.ID, &r.NotificationID, &r.EventType, &r.TriggerType, &r.BatchID, &r.UserID, &r.UserEmail, &r.UserName, &r.Recipient, &r.Balance, &r.Threshold, &r.Subject, &r.Status, &r.SuppressionReason, &r.Attempts, &r.LastAttemptAt, &r.SentAt, &r.LastError, &r.CreatedAt, &r.UpdatedAt, &r.ExpiresAt}
 	if detail {
 		args = append(args, &r.Body, &r.DeliveryKey)
 	}
@@ -61,6 +61,9 @@ func filters(q Query, now time.Time) (string, []any) {
 	}
 	if q.TriggerType != "" {
 		add("trigger_type", q.TriggerType)
+	}
+	if q.EventType != "" {
+		add("event_type", q.EventType)
 	}
 	for _, f := range []struct{ column, value string }{{"user_email", q.UserEmail}, {"recipient", q.Recipient}} {
 		if f.value != "" {

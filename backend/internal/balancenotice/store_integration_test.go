@@ -46,6 +46,20 @@ func TestSQLStorePostgres(t *testing.T) {
 	require.NoError(t, err)
 	_, err = fixture.Exec(string(precisionMigration))
 	require.NoError(t, err)
+	// A row written by the previous version must stay visible and retain its
+	// low-balance classification after the additive migration.
+	var legacyID int64
+	require.NoError(t, fixture.QueryRow(`INSERT INTO user_balance_notification_records(notification_id,trigger_type,user_id,recipient,subject,status) VALUES('00000000-0000-0000-0000-000000000001','automatic',77,'legacy@example.test','Existing balance notice','sent') RETURNING id`).Scan(&legacyID))
+	eventMigration, err := os.ReadFile("../../migrations/287_user_notification_record_event_type.sql")
+	require.NoError(t, err)
+	_, err = fixture.Exec(string(eventMigration))
+	require.NoError(t, err)
+	var legacyEvent, legacySubject string
+	require.NoError(t, fixture.QueryRow(`SELECT event_type,subject FROM user_balance_notification_records WHERE id=$1`, legacyID).Scan(&legacyEvent, &legacySubject))
+	require.Equal(t, EventBalanceLow, legacyEvent)
+	require.Equal(t, "Existing balance notice", legacySubject)
+	_, err = fixture.Exec(`DELETE FROM user_balance_notification_records WHERE id=$1`, legacyID)
+	require.NoError(t, err)
 	s := NewService(NewSQLStore(fixture))
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	s.now = func() time.Time { return now }
@@ -104,5 +118,29 @@ func TestSQLStorePostgres(t *testing.T) {
 	require.Len(t, tinyPage.Items, 1)
 	require.Equal(t, 0.0000000001, *tinyPage.Items[0].Threshold)
 	_, err = fixture.Exec(`UPDATE user_balance_notification_records SET status='delivered'`)
+	require.Error(t, err)
+	health := s.Begin(Input{EventType: EventSystemHealthSnapshot, TriggerType: "manual_batch", BatchID: "health-batch-fixture", UserID: 7, UserEmail: "user@example.test", Recipient: "user@example.test"})
+	health.Content("Actual status", "<p>Actual system status</p>")
+	health.Attempt()
+	health.Sent()
+	healthPage, err := s.List(t.Context(), Query{EventType: EventSystemHealthSnapshot, TriggerType: "manual_batch", Status: "sent"})
+	require.NoError(t, err)
+	require.EqualValues(t, 1, healthPage.Total)
+	require.Equal(t, Summary{Total: 1, Sent: 1}, healthPage.Summary)
+	require.Equal(t, EventSystemHealthSnapshot, healthPage.Items[0].EventType)
+	require.Nil(t, healthPage.Items[0].Balance)
+	require.Nil(t, healthPage.Items[0].Threshold)
+	require.Empty(t, healthPage.Items[0].Body)
+	healthDetail, err := s.Get(t.Context(), healthPage.Items[0].ID)
+	require.NoError(t, err)
+	require.Equal(t, EventSystemHealthSnapshot, healthDetail.EventType)
+	require.Equal(t, "<p>Actual system status</p>", healthDetail.Body)
+	balancePage, err := s.List(t.Context(), Query{EventType: EventBalanceLow})
+	require.NoError(t, err)
+	require.EqualValues(t, 3, balancePage.Total)
+	for _, r := range balancePage.Items {
+		require.Equal(t, EventBalanceLow, r.EventType)
+	}
+	_, err = fixture.Exec(`UPDATE user_balance_notification_records SET event_type='auth.verify_code' WHERE id=$1`, healthDetail.ID)
 	require.Error(t, err)
 }

@@ -65,6 +65,7 @@ const sectionCases = [
   ['/history', 'history'],
   ['/models', 'models'],
   ['/account-quality', 'accountQuality'],
+  ['/records', 'records'],
   ['/settings', 'settings'],
 ] as const
 // Pre-regrouping links still resolve and highlight their new section.
@@ -73,7 +74,7 @@ const legacySectionCases = [
   ['/monitor', 'automation'],
   ['/pricing', 'automation'],
   ['/local-monitor', 'models'],
-  ['/notifications', 'settings'],
+  ['/notifications', 'records'],
 ] as const
 
 async function mountSidebar(path = '/admin/dashboard') {
@@ -155,6 +156,7 @@ describe('AppSidebar Smart Operations navigation', () => {
       ['governance.smartOperations.sections.history', `${rootPath}/history`],
       ['governance.smartOperations.sections.models', `${rootPath}/models`],
       ['governance.smartOperations.sections.accountQuality', `${rootPath}/account-quality`],
+      ['governance.smartOperations.sections.records', `${rootPath}/records`],
       ['governance.smartOperations.sections.settings', `${rootPath}/settings`],
     ])
     expect(router.currentRoute.value.path).toBe('/admin/dashboard')
@@ -219,7 +221,7 @@ describe('AppSidebar Smart Operations navigation', () => {
 
     expect(wrapper.get('aside').classes()).toContain('w-64')
     expect(button.attributes('aria-expanded')).toBe('true')
-    expect(wrapper.findAll(`a[href^="${rootPath}"]`)).toHaveLength(7)
+    expect(wrapper.findAll(`a[href^="${rootPath}"]`)).toHaveLength(8)
     expect(router.currentRoute.value.path).toBe('/admin/dashboard')
   })
 
@@ -276,7 +278,7 @@ describe('AppSidebar Smart Operations navigation', () => {
     const { wrapper } = await mountSidebar(rootPath)
 
     expect(smartOperationsButton(wrapper).attributes('aria-expanded')).toBe('true')
-    expect(wrapper.findAll(`a[href^="${rootPath}"]`)).toHaveLength(7)
+    expect(wrapper.findAll(`a[href^="${rootPath}"]`)).toHaveLength(8)
   })
 
   it('does not expose Smart Operations to regular users', async () => {

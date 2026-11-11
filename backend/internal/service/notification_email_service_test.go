@@ -690,19 +690,30 @@ func TestNotificationEmailMemorySettingRepoSatisfiesInterface(t *testing.T) {
 }
 
 type notificationEmailTestSMTPServer struct {
-	listener      net.Listener
-	wg            sync.WaitGroup
-	messages      atomic.Int64
-	messageMu     sync.Mutex
-	messageBodies []string
+	listener        net.Listener
+	wg              sync.WaitGroup
+	messages        atomic.Int64
+	authentications atomic.Int64
+	connections     atomic.Int64
+	hooks           notificationEmailSMTPHooks
+	messageMu       sync.Mutex
+	messageBodies   []string
 }
 
-func startNotificationEmailTestSMTPServer(t *testing.T) *notificationEmailTestSMTPServer {
+type notificationEmailSMTPHooks struct {
+	beforeCommand func(string) (reply string, disconnect bool, handled bool)
+	afterData     func() (reply string, disconnect bool)
+}
+
+func startNotificationEmailTestSMTPServer(t *testing.T, hooks ...notificationEmailSMTPHooks) *notificationEmailTestSMTPServer {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 
 	server := &notificationEmailTestSMTPServer{listener: listener}
+	if len(hooks) > 0 {
+		server.hooks = hooks[0]
+	}
 	server.wg.Add(1)
 	go server.serve()
 	t.Cleanup(server.close)
@@ -762,6 +773,7 @@ func (s *notificationEmailTestSMTPServer) serve() {
 		if err != nil {
 			return
 		}
+		s.connections.Add(1)
 		s.handleConn(conn)
 	}
 }
@@ -784,6 +796,18 @@ func (s *notificationEmailTestSMTPServer) handleConn(conn net.Conn) {
 			return
 		}
 		cmd := strings.ToUpper(strings.TrimRight(line, "\r\n"))
+		if s.hooks.beforeCommand != nil {
+			reply, disconnect, handled := s.hooks.beforeCommand(cmd)
+			if handled {
+				if reply != "" && !writeLine(reply) {
+					return
+				}
+				if disconnect {
+					return
+				}
+				continue
+			}
+		}
 		switch {
 		case strings.HasPrefix(cmd, "EHLO"), strings.HasPrefix(cmd, "HELO"):
 			if _, err := rw.WriteString("250-localhost\r\n250 AUTH PLAIN\r\n"); err != nil {
@@ -793,6 +817,7 @@ func (s *notificationEmailTestSMTPServer) handleConn(conn net.Conn) {
 				return
 			}
 		case strings.HasPrefix(cmd, "AUTH"):
+			s.authentications.Add(1)
 			if !writeLine("235 2.7.0 Authentication successful") {
 				return
 			}
@@ -817,13 +842,25 @@ func (s *notificationEmailTestSMTPServer) handleConn(conn net.Conn) {
 				if strings.TrimRight(dataLine, "\r\n") == "." {
 					break
 				}
+				// SMTP escapes a leading dot during DATA. Decode transport framing
+				// before comparing the accepted message with its rendered record.
+				if strings.HasPrefix(dataLine, "..") {
+					dataLine = dataLine[1:]
+				}
 				_, _ = message.WriteString(dataLine)
 			}
 			s.messageMu.Lock()
 			s.messageBodies = append(s.messageBodies, message.String())
 			s.messageMu.Unlock()
 			s.messages.Add(1)
-			if !writeLine("250 2.0.0 OK") {
+			reply, disconnect := "250 2.0.0 OK", false
+			if s.hooks.afterData != nil {
+				reply, disconnect = s.hooks.afterData()
+			}
+			if reply != "" && !writeLine(reply) {
+				return
+			}
+			if disconnect {
 				return
 			}
 		case strings.HasPrefix(cmd, "QUIT"):

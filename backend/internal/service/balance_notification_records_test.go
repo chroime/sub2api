@@ -43,8 +43,12 @@ func (m *balanceRecordStore) only(t *testing.T) balancenotice.Record {
 }
 
 func balanceRecordFixture(t *testing.T) (*NotificationEmailService, *BalanceNotifyService, *notificationEmailMemorySettingRepo, *balanceRecordStore, *notificationEmailTestSMTPServer) {
+	return balanceRecordFixtureWithSMTPHooks(t)
+}
+
+func balanceRecordFixtureWithSMTPHooks(t *testing.T, hooks ...notificationEmailSMTPHooks) (*NotificationEmailService, *BalanceNotifyService, *notificationEmailMemorySettingRepo, *balanceRecordStore, *notificationEmailTestSMTPServer) {
 	t.Helper()
-	smtp := startNotificationEmailTestSMTPServer(t)
+	smtp := startNotificationEmailTestSMTPServer(t, hooks...)
 	repo := newNotificationEmailMemorySettingRepo()
 	require.NoError(t, repo.SetMultiple(t.Context(), smtp.settings()))
 	for k, v := range map[string]string{SettingKeySiteName: "测试平台", notificationEmailUnsubscribeSecretKey: "test-unsubscribe-secret"} {
@@ -64,6 +68,7 @@ func TestBalanceRecordsAutomaticSMTPAndDailySuppression(t *testing.T) {
 	svc.sendBalanceLowEmails(t.Context(), []string{"notify@example.test"}, 7, "用户7", "user@example.test", 0.065, 1, "Test", "https://example.test/pay")
 	r := store.only(t)
 	require.Equal(t, "sent", r.Status)
+	require.Equal(t, NotificationEmailEventBalanceLow, r.EventType)
 	require.Equal(t, "user@example.test", r.UserEmail)
 	require.Equal(t, "notify@example.test", r.Recipient)
 	require.Equal(t, 0.065, *r.Balance)
@@ -109,7 +114,7 @@ func TestBalanceRecordsUnsubscribeNoRecipientAndFallback(t *testing.T) {
 	_ = n
 }
 
-func TestBalanceRecordsBatchSkipsAndOtherTemplatesAreExcluded(t *testing.T) {
+func TestBalanceRecordsBatchSkipsAndHealthTemplateAreRecorded(t *testing.T) {
 	n, _, repo, store, smtp := balanceRecordFixture(t)
 	require.NoError(t, repo.Set(t.Context(), SettingKeyBalanceLowNotifyThreshold, "1"))
 	users := &bulkEmailUsersStub{users: map[int64]*User{7: {ID: 7, Email: "user7@example.test", Balance: 0.065, BalanceNotifyEnabled: true}, 8: {ID: 8, Email: "user8@example.test", Balance: 2, BalanceNotifyEnabled: true}, 9: {ID: 9, Email: "user9@example.test", Balance: 0.1, BalanceNotifyEnabled: false}}}
@@ -122,6 +127,7 @@ func TestBalanceRecordsBatchSkipsAndOtherTemplatesAreExcluded(t *testing.T) {
 	batches := map[string]bool{}
 	for _, r := range store.rows {
 		require.Equal(t, "manual_batch", r.TriggerType)
+		require.Equal(t, NotificationEmailEventBalanceLow, r.EventType)
 		require.NotEmpty(t, r.BatchID)
 		batches[r.BatchID] = true
 		if r.UserID == 7 {
@@ -137,7 +143,83 @@ func TestBalanceRecordsBatchSkipsAndOtherTemplatesAreExcluded(t *testing.T) {
 	store.rows = nil
 	_, err = svc.Send(t.Context(), UserBulkEmailInput{UserIDs: []int64{7}, Event: NotificationEmailEventSystemHealthSnapshot, Locale: "zh"})
 	require.NoError(t, err)
-	require.Empty(t, store.rows)
+	require.Equal(t, "suppressed", store.only(t).Status)
+	require.Equal(t, NotificationEmailEventSystemHealthSnapshot, store.only(t).EventType)
+	require.Equal(t, "service_links_not_configured", store.only(t).SuppressionReason)
+}
+
+func TestUserMailRecordsHealthSMTPAcceptanceFailureAndUnsubscribe(t *testing.T) {
+	for _, kind := range []string{"sent", "failed", "unsubscribed"} {
+		t.Run(kind, func(t *testing.T) {
+			n, _, repo, store, smtp := balanceRecordFixture(t)
+			users := &bulkEmailUsersStub{users: map[int64]*User{7: {ID: 7, Username: "Health recipient", Email: "health@example.test", Balance: 2}}}
+			svc := &UserBulkEmailService{users: users, settings: repo, sender: n, records: n.BalanceNotificationRecords()}
+			if kind == "failed" {
+				smtp.close()
+			}
+			if kind == "unsubscribed" {
+				require.NoError(t, repo.Set(t.Context(), notificationEmailPreferenceKey(NotificationEmailEventSystemHealthSnapshot, "health@example.test"), "unsubscribed"))
+			}
+			links := bulkEmailTestLinks()
+			result, err := svc.Send(t.Context(), UserBulkEmailInput{UserIDs: []int64{7}, Event: NotificationEmailEventSystemHealthSnapshot, Locale: "zh", Links: &links})
+			require.NoError(t, err)
+			r := store.only(t)
+			require.Equal(t, NotificationEmailEventSystemHealthSnapshot, r.EventType)
+			require.Equal(t, "manual_batch", r.TriggerType)
+			require.NotEmpty(t, r.BatchID)
+			require.Equal(t, "health@example.test", r.Recipient)
+			require.Equal(t, "Health recipient", r.UserName)
+			require.Nil(t, r.Balance, "a health notice must not be presented as a balance trigger")
+			require.Nil(t, r.Threshold)
+			switch kind {
+			case "sent":
+				require.Equal(t, 1, result.Sent)
+				require.Equal(t, "sent", r.Status)
+				require.Equal(t, 1, r.Attempts)
+				require.NotNil(t, r.SentAt)
+				require.NotEmpty(t, r.Subject)
+				require.NotEmpty(t, r.Body)
+				require.Equal(t, int64(1), smtp.messageCount())
+				require.Equal(t, strings.TrimSpace(r.Body), strings.TrimSpace(strings.ReplaceAll(smtp.lastMessageBody(t), "\r\n", "\n")))
+			case "failed":
+				require.Equal(t, 1, result.Failed)
+				require.Equal(t, "failed", r.Status)
+				require.Equal(t, 1, r.Attempts)
+				require.NotEmpty(t, r.LastError)
+				require.Nil(t, r.SentAt)
+			case "unsubscribed":
+				require.Equal(t, 1, result.Skipped)
+				require.Equal(t, "suppressed", r.Status)
+				require.Equal(t, "unsubscribed", r.SuppressionReason)
+				require.Zero(t, r.Attempts)
+				require.Equal(t, int64(0), smtp.messageCount())
+			}
+		})
+	}
+}
+
+func TestUserMailRecordsHealthEarlyOutcomesAndPreview(t *testing.T) {
+	n, _, repo, store, smtp := balanceRecordFixture(t)
+	users := &bulkEmailUsersStub{users: map[int64]*User{7: {ID: 7, Email: "health@example.test"}}}
+	svc := &UserBulkEmailService{users: users, settings: repo, sender: n, records: n.BalanceNotificationRecords()}
+	links := bulkEmailTestLinks()
+	_, err := svc.Preview(t.Context(), UserBulkEmailPreviewInput{UserID: 7, Event: NotificationEmailEventSystemHealthSnapshot, Locale: "zh", Links: &links})
+	require.NoError(t, err)
+	require.Empty(t, store.rows, "preview must not create a delivery record")
+	require.Zero(t, smtp.messageCount())
+	item := svc.sendUser(t.Context(), 999, NotificationEmailEventSystemHealthSnapshot, "zh", nil, nil, "missing-health-user")
+	require.Equal(t, "user_not_found", item.Error)
+	require.Equal(t, "suppressed", store.only(t).Status)
+	require.Equal(t, NotificationEmailEventSystemHealthSnapshot, store.only(t).EventType)
+	require.Equal(t, "user_not_found", store.only(t).SuppressionReason)
+	store.rows = nil
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	item = svc.sendUser(ctx, 7, NotificationEmailEventSystemHealthSnapshot, "zh", nil, nil, "cancelled-health-batch")
+	require.Equal(t, "request_cancelled", item.Error)
+	require.Equal(t, "failed", store.only(t).Status)
+	require.Equal(t, NotificationEmailEventSystemHealthSnapshot, store.only(t).EventType)
+	require.Zero(t, store.only(t).Attempts)
 }
 
 func TestBalanceRecordsEarlyBatchOutcomesAreRecorded(t *testing.T) {

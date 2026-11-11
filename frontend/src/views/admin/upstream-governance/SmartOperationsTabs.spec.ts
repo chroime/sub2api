@@ -56,15 +56,15 @@ describe('Smart Operations tabs', () => {
     expect(tablist.attributes('aria-orientation')).toBe('horizontal')
     // Every Chinese label is four characters.
     expect(tabs.every(tab => [...tab.text()].length === 4)).toBe(true)
-    expect(tabs.map(tab => tab.text())).toEqual(['运维总览', '分组密钥', '自动策略', '运行记录', '模型监测', '账号质量', '全局设置'])
+    expect(tabs.map(tab => tab.text())).toEqual(['运维总览', '分组密钥', '自动策略', '运行记录', '模型监测', '账号质量', '发送记录', '全局设置'])
     expect(tabs.map(tab => tab.attributes('id'))).toEqual([
-      'governance-overview-tab', 'governance-groups-tab', 'governance-automation-tab', 'governance-history-tab', 'governance-models-tab', 'governance-account-quality-tab', 'governance-settings-tab'
+      'governance-overview-tab', 'governance-groups-tab', 'governance-automation-tab', 'governance-history-tab', 'governance-models-tab', 'governance-account-quality-tab', 'governance-records-tab', 'governance-settings-tab'
     ])
     expect(tabs.map(tab => tab.attributes('aria-controls'))).toEqual([
-      undefined, undefined, undefined, undefined, 'governance-models-panel', undefined, undefined
+      undefined, undefined, undefined, undefined, 'governance-models-panel', undefined, undefined, undefined
     ])
-    expect(tabs.map(tab => tab.attributes('aria-selected'))).toEqual(['false', 'false', 'false', 'false', 'true', 'false', 'false'])
-    expect(tabs.map(tab => tab.attributes('tabindex'))).toEqual(['-1', '-1', '-1', '-1', '0', '-1', '-1'])
+    expect(tabs.map(tab => tab.attributes('aria-selected'))).toEqual(['false', 'false', 'false', 'false', 'true', 'false', 'false', 'false'])
+    expect(tabs.map(tab => tab.attributes('tabindex'))).toEqual(['-1', '-1', '-1', '-1', '0', '-1', '-1', '-1'])
     // Site sections and the cross-site sections are separated once.
     const order = [...tablist.element.children].map(node => (node as HTMLElement).dataset.test === 'tab-scope-divider' ? '|' : node.id)
     expect(order.indexOf('|')).toBe(order.indexOf('governance-history-tab') + 1)
@@ -198,7 +198,7 @@ describe('Smart Operations tabs', () => {
   it('prevents pointer and keyboard activation while disabled and restores the tab stop', async () => {
     const wrapper = renderTabs('models', true)
     const tabs = wrapper.findAll<HTMLButtonElement>('[role="tab"]')
-    expect(tabs).toHaveLength(7)
+    expect(tabs).toHaveLength(8)
     expect(tabs.every(tab => tab.element.disabled && tab.attributes('tabindex') === '-1')).toBe(true)
 
     await wrapper.get('#governance-groups-tab').trigger('click')
@@ -215,7 +215,7 @@ describe('Smart Operations tabs', () => {
     const wrapper = renderTabs('overview', false, 'en')
     expect(wrapper.get('[role="tablist"]').attributes('aria-label')).toBe('Smart Operations')
     expect(wrapper.findAll('[role="tab"]').map(tab => tab.text())).toEqual([
-      'Overview', 'Groups & keys', 'Collection & automation', 'History', 'Model monitoring', 'Account quality', 'Settings'
+      'Overview', 'Groups & keys', 'Collection & automation', 'History', 'Model monitoring', 'Account quality', 'Delivery records', 'Settings'
     ])
   })
 })

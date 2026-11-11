@@ -2,14 +2,16 @@
 import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import api, { type DeliveryChannel, type DeliveryRecord, type Page } from '@/api/admin/upstream-governance'
+import type { BalanceNotificationTrigger } from '@/api/admin/balance-notifications'
 import BalanceNotificationRecords from './BalanceNotificationRecords.vue'
 import StatusIndicator from './StatusIndicator.vue'
 import { formatGovernanceTime } from './format'
 
 // Every outbound notification in one place: upstream change mails, AstrBot
-// group messages, and the low-balance mails sent to platform users.
+// group messages, and automatic or administrator-requested platform-user mails.
 type Channel = DeliveryChannel | 'users'
-const props = defineProps<{ initialChannel?: Channel }>()
+const props = defineProps<{ initialChannel?: Channel; initialTrigger?: BalanceNotificationTrigger }>()
+const emit = defineEmits<{ 'update:channel': [channel: Channel] }>()
 const { t } = useI18n()
 const channel = ref<Channel>(props.initialChannel ?? 'email')
 const result = ref<Page<DeliveryRecord> | null>(null)
@@ -51,19 +53,27 @@ async function load(page = 1) {
     if (request === generation) loading.value = false
   }
 }
-watch(channel, () => { result.value = null; void load() })
+watch(channel, value => {
+  generation++
+  result.value = null
+  failed.value = false
+  loading.value = false
+  emit('update:channel', value)
+  void load()
+})
+watch(() => props.initialChannel, value => { channel.value = value ?? 'email' })
 onMounted(() => { void load() })
 onUnmounted(() => { generation++ })
 </script>
 <template>
-  <section data-test="delivery-records" class="min-w-0 space-y-4">
+  <section data-test="delivery-records" class="min-w-0 space-y-4 rounded-xl border border-gray-200 bg-white p-4 dark:border-dark-600 dark:bg-dark-800 sm:p-5">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div class="flex flex-wrap gap-1 rounded-lg bg-gray-100 p-1 dark:bg-dark-700" role="group" :aria-label="t('governance.deliveryRecords.channel')">
         <button v-for="option in (['email', 'astrbot', 'users'] as const)" :key="option" type="button" :data-test="'delivery-channel-' + option" class="min-h-8 rounded-md px-3 text-sm transition-colors" :class="channel === option ? 'bg-white font-medium text-gray-900 shadow-sm dark:bg-dark-600 dark:text-gray-100' : 'text-gray-500'" :aria-pressed="channel === option" @click="channel = option">{{ t(`governance.deliveryRecords.channels.${option}`) }}</button>
       </div>
       <button v-if="channel !== 'users'" type="button" class="btn btn-secondary text-xs" :disabled="loading" @click="load(result?.page || 1)">{{ t('common.refresh') }}</button>
     </div>
-    <BalanceNotificationRecords v-if="channel === 'users'" />
+    <BalanceNotificationRecords v-if="channel === 'users'" :initial-trigger="initialTrigger" />
     <template v-else>
       <p v-if="failed" role="alert" class="rounded-lg bg-red-50 p-3 text-sm text-red-600 dark:bg-red-900/10">{{ t('governance.deliveryRecords.readFailed') }}</p>
       <p v-else-if="loading && !result" role="status" class="p-6 text-center text-sm text-gray-500">{{ t('common.loading') }}</p>

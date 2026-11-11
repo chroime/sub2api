@@ -18,6 +18,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
@@ -109,6 +110,9 @@ type EmailService struct {
 	settingRepo              SettingRepository
 	cache                    EmailCache
 	notificationEmailService *NotificationEmailService
+	bulkGateOnce             sync.Once
+	bulkGate                 chan struct{}
+	bulkLastStarted          time.Time
 }
 
 // NewEmailService 创建邮件服务实例
@@ -254,6 +258,13 @@ func smtpTLSConfig(host string) *tls.Config {
 //   - UseTLS=false：明文连接后若服务器支持 STARTTLS 则机会式升级，
 //     与 smtp.SendMail 的默认行为一致。
 func (s *EmailService) connectSMTP(config *SMTPConfig) (*smtp.Client, error) {
+	client, _, err := s.connectSMTPWithConn(config)
+	return client, err
+}
+
+// connectSMTPWithConn retains the socket only for batch transports that renew
+// its deadline per message. The ordinary single-message path remains unchanged.
+func (s *EmailService) connectSMTPWithConn(config *SMTPConfig) (*smtp.Client, net.Conn, error) {
 	addr := fmt.Sprintf("%s:%d", config.Host, config.Port)
 	dialer := &net.Dialer{Timeout: smtpDialTimeout}
 	tlsConfig := smtpTLSConfig(config.Host)
@@ -261,43 +272,52 @@ func (s *EmailService) connectSMTP(config *SMTPConfig) (*smtp.Client, error) {
 	if config.UseTLS {
 		conn, err := tls.DialWithDialer(dialer, "tcp", addr, tlsConfig)
 		if err == nil {
-			return newSMTPClient(conn, config.Host)
+			client, err := newSMTPClient(conn, config.Host)
+			if err != nil {
+				return nil, nil, err
+			}
+			return client, conn, nil
 		}
 		var recordErr tls.RecordHeaderError
 		if !errors.As(err, &recordErr) {
-			return nil, fmt.Errorf("tls dial: %w", err)
+			return nil, nil, fmt.Errorf("tls dial: %w", err)
 		}
 		// SMTP 服务器先发问候语：明文问候会让 TLS 握手立刻返回
 		// RecordHeaderError，据此可靠判定对端期望 STARTTLS。
-		return s.connectSMTPStartTLS(dialer, addr, config.Host, tlsConfig, true)
+		return s.connectSMTPStartTLSWithConn(dialer, addr, config.Host, tlsConfig, true)
 	}
 
-	return s.connectSMTPStartTLS(dialer, addr, config.Host, tlsConfig, false)
+	return s.connectSMTPStartTLSWithConn(dialer, addr, config.Host, tlsConfig, false)
 }
 
 // connectSMTPStartTLS 建立明文连接并按需升级 STARTTLS。
 // mandatory 为 true 时服务器必须支持 STARTTLS，否则报错。
 func (s *EmailService) connectSMTPStartTLS(dialer *net.Dialer, addr, host string, tlsConfig *tls.Config, mandatory bool) (*smtp.Client, error) {
+	client, _, err := s.connectSMTPStartTLSWithConn(dialer, addr, host, tlsConfig, mandatory)
+	return client, err
+}
+
+func (s *EmailService) connectSMTPStartTLSWithConn(dialer *net.Dialer, addr, host string, tlsConfig *tls.Config, mandatory bool) (*smtp.Client, net.Conn, error) {
 	conn, err := dialer.Dial("tcp", addr)
 	if err != nil {
-		return nil, fmt.Errorf("smtp dial: %w", err)
+		return nil, nil, fmt.Errorf("smtp dial: %w", err)
 	}
 	client, err := newSMTPClient(conn, host)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if ok, _ := client.Extension("STARTTLS"); !ok {
 		if mandatory {
 			_ = client.Close()
-			return nil, errors.New("smtp server does not support STARTTLS")
+			return nil, nil, errors.New("smtp server does not support STARTTLS")
 		}
-		return client, nil
+		return client, conn, nil
 	}
 	if err := client.StartTLS(tlsConfig); err != nil {
 		_ = client.Close()
-		return nil, fmt.Errorf("starttls: %w", err)
+		return nil, nil, fmt.Errorf("starttls: %w", err)
 	}
-	return client, nil
+	return client, conn, nil
 }
 
 func newSMTPClient(conn net.Conn, host string) (*smtp.Client, error) {

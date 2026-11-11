@@ -99,6 +99,7 @@
         <p v-if="error" class="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300" role="alert">
           {{ error }}<span v-if="sendUncertain" class="mt-1 block">{{ t('admin.users.bulkEmail.unknownResult') }}</span>
         </p>
+        <a v-if="sendUncertain" href="/admin/upstream-governance/records?channel=users&amp;trigger_type=manual_batch" class="btn btn-secondary inline-flex" data-test="email-records">{{ t('admin.users.bulkEmail.viewRecords') }}</a>
       </template>
 
       <section v-else class="space-y-4" data-test="email-results" aria-live="polite">
@@ -107,11 +108,13 @@
           <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">
             {{ t('admin.users.bulkEmail.summary', { total: result.total, sent: result.sent, failed: result.failed, skipped: result.skipped }) }}
           </p>
+          <p v-if="unconfirmedRecipients" class="mt-2 text-sm text-amber-700 dark:text-amber-300" data-test="email-results-unconfirmed">{{ t('admin.users.bulkEmail.unconfirmedCount', { count: unconfirmedRecipients }) }}</p>
         </div>
+        <a href="/admin/upstream-governance/records?channel=users&amp;trigger_type=manual_batch" class="btn btn-secondary inline-flex" data-test="email-records">{{ t('admin.users.bulkEmail.viewRecords') }}</a>
         <DataTable :columns="resultColumns" :data="result.items" row-key="user_id">
-          <template #cell-status="{ value }">
-            <span :class="['badge', value === 'sent' ? 'badge-success' : value === 'failed' ? 'badge-danger' : 'badge-gray']">
-              {{ t(`admin.users.bulkEmail.${value}`) }}
+          <template #cell-status="{ row, value }">
+            <span :class="['badge', acceptanceUnconfirmed(row.error) ? 'badge-gray' : value === 'sent' ? 'badge-success' : value === 'failed' ? 'badge-danger' : 'badge-gray']">
+              {{ recipientStatusMessage(row) }}
             </span>
           </template>
           <template #cell-error="{ value }">
@@ -145,6 +148,7 @@ import DataTable from '@/components/common/DataTable.vue'
 import Select from '@/components/common/Select.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { extractApiErrorMessage } from '@/utils/apiError'
+import { currentSiteUserMailLinks } from './userMailLinks'
 
 const props = defineProps<{ show: boolean; selectedIds: number[] }>()
 const emit = defineEmits<{ close: [] }>()
@@ -159,8 +163,8 @@ const previewLoading = ref(false)
 const sending = ref(false)
 const sendUncertain = ref(false)
 const error = ref('')
-const emptyLinks = (): UserBulkEmailLinks => ({ platform_url: '', docs_url: '', model_plaza_url: '', canvas_url: '' })
-const links = ref<UserBulkEmailLinks>(emptyLinks())
+const defaultLinks = () => currentSiteUserMailLinks(window.location.href)
+const links = ref<UserBulkEmailLinks>(defaultLinks())
 const linksEdited = ref(false)
 const linkFields = [
   { key: 'platform_url', label: 'platformUrl' },
@@ -206,11 +210,15 @@ const recipientErrorCodes = new Set([
   'user_not_found', 'unsubscribed', 'invalid_email', 'balance_above_threshold',
   'balance_threshold_not_configured', 'notification_data_unavailable', 'email_delivery_failed',
   'notification_suppressed', 'user_lookup_failed', 'notification_preference_unavailable', 'request_cancelled',
-  'service_links_not_configured'
+  'service_links_not_configured', 'email_delivery_unconfirmed'
 ])
+const acceptanceUnconfirmed = (value: unknown) => typeof value === 'string' && (value === 'email_delivery_unconfirmed' || value.includes('smtp acceptance unconfirmed:'))
+const recipientStatusMessage = (item: { status?: string; error?: string }) => acceptanceUnconfirmed(item.error) ? t('admin.users.bulkEmail.unconfirmed') : t(`admin.users.bulkEmail.${item.status || 'failed'}`)
+const unconfirmedRecipients = computed(() => result.value?.items.filter(item => acceptanceUnconfirmed(item.error)).length ?? 0)
 
 const recipientErrorMessage = (value: unknown): string => {
   if (typeof value !== 'string' || !value.trim()) return '—'
+  if (acceptanceUnconfirmed(value)) return t('admin.users.bulkEmail.errors.email_delivery_unconfirmed')
   return recipientErrorCodes.has(value) ? t(`admin.users.bulkEmail.errors.${value}`) : value
 }
 
@@ -236,7 +244,7 @@ watch(() => props.show, (show) => {
     mailLocale.value = locale?.value === 'en' ? 'en' : 'zh'
     result.value = null
     sendUncertain.value = false
-    links.value = emptyLinks()
+    links.value = defaultLinks()
     linksEdited.value = false
   }
 }, { immediate: true })
@@ -260,7 +268,11 @@ const loadPreview = async () => {
     })
     if (sequence === previewSequence) {
       if (event.value === 'system.health_snapshot' && response.links) {
-        links.value = { ...emptyLinks(), ...response.links }
+        // The explicit current-site draft takes precedence over configured URLs.
+        // A partial response must not clear defaults or a hand-edited address.
+        for (const { key } of linkFields) {
+          if (!links.value[key] && !linksEdited.value) links.value[key] = response.links[key] || ''
+        }
       }
       preview.value = response
     }

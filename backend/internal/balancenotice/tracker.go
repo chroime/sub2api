@@ -42,11 +42,17 @@ func (s *Service) Begin(in Input) *Delivery {
 	if s == nil || s.store == nil || in.UserID <= 0 {
 		return nil
 	}
+	if in.EventType == "" {
+		in.EventType = EventBalanceLow
+	}
+	if in.EventType != EventBalanceLow && in.EventType != EventSystemHealthSnapshot {
+		return nil
+	}
 	if in.TriggerType != "manual_batch" {
 		in.TriggerType = "automatic"
 	}
 	now := s.now()
-	d := &Delivery{service: s, record: Record{NotificationID: uuid.NewString(), TriggerType: in.TriggerType, BatchID: in.BatchID, UserID: in.UserID, UserEmail: in.UserEmail, UserName: in.UserName, Recipient: strings.TrimSpace(in.Recipient), Balance: numeric(in.Balance), Threshold: numeric(in.Threshold), DeliveryKey: in.DeliveryKey, Status: "pending", CreatedAt: now, UpdatedAt: now, ExpiresAt: now.Add(Retention)}}
+	d := &Delivery{service: s, record: Record{NotificationID: uuid.NewString(), EventType: in.EventType, TriggerType: in.TriggerType, BatchID: in.BatchID, UserID: in.UserID, UserEmail: in.UserEmail, UserName: in.UserName, Recipient: strings.TrimSpace(in.Recipient), Balance: numeric(in.Balance), Threshold: numeric(in.Threshold), DeliveryKey: in.DeliveryKey, Status: "pending", CreatedAt: now, UpdatedAt: now, ExpiresAt: now.Add(Retention)}}
 	d.persist()
 	return d
 }
@@ -55,7 +61,7 @@ func (d *Delivery) persist() {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	if err := d.service.store.Save(ctx, &d.record); err != nil {
-		slog.Warn("balance notification record write failed", "user_id", d.record.UserID, "notification_id", d.record.NotificationID, "error", logredact.RedactText(err.Error()))
+		slog.Warn("user notification record write failed", "user_id", d.record.UserID, "notification_id", d.record.NotificationID, "error", logredact.RedactText(err.Error()))
 	}
 }
 

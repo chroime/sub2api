@@ -971,7 +971,7 @@ function isChildActive(child: NavItem): boolean {
 
 function childLocation(child: NavItem): RouteLocationRaw {
   if (child.smartOperationsSection && route.name === 'AdminUpstreamGovernance' && route.query.site !== undefined) {
-    if (child.smartOperationsSection === 'settings' || child.smartOperationsSection === 'account-quality') return child.path
+    if (child.smartOperationsSection === 'settings' || child.smartOperationsSection === 'account-quality' || child.smartOperationsSection === 'records') return child.path
     return { path: child.path, query: { site: route.query.site } }
   }
   return child.path

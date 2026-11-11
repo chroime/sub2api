@@ -1,4 +1,4 @@
-// Package balancenotice records platform-user low-balance email outcomes.
+// Package balancenotice records platform-user notification email outcomes.
 // It observes delivery; it never schedules, retries or suppresses messages.
 package balancenotice
 
@@ -11,6 +11,11 @@ import (
 
 const Retention = 90 * 24 * time.Hour
 
+const (
+	EventBalanceLow           = "balance.low"
+	EventSystemHealthSnapshot = "system.health_snapshot"
+)
+
 var (
 	ErrInvalid  = errors.New("invalid balance notification query")
 	ErrNotFound = errors.New("balance notification record not found")
@@ -19,6 +24,7 @@ var (
 type Record struct {
 	ID                int64      `json:"id"`
 	NotificationID    string     `json:"notification_id"`
+	EventType         string     `json:"event_type"`
 	TriggerType       string     `json:"trigger_type"`
 	BatchID           string     `json:"batch_id"`
 	UserID            int64      `json:"user_id"`
@@ -42,16 +48,16 @@ type Record struct {
 }
 
 type Input struct {
-	TriggerType, BatchID, UserEmail, UserName, Recipient, DeliveryKey string
-	UserID                                                            int64
-	Balance, Threshold                                                *float64
+	EventType, TriggerType, BatchID, UserEmail, UserName, Recipient, DeliveryKey string
+	UserID                                                                       int64
+	Balance, Threshold                                                           *float64
 }
 
 type Query struct {
-	Page, PageSize                            int
-	UserID                                    int64
-	UserEmail, Recipient, Status, TriggerType string
-	From, To                                  time.Time
+	Page, PageSize                                       int
+	UserID                                               int64
+	UserEmail, Recipient, Status, TriggerType, EventType string
+	From, To                                             time.Time
 }
 
 func (q Query) Normalize(now time.Time) (Query, error) {
@@ -66,6 +72,10 @@ func (q Query) Normalize(now time.Time) (Query, error) {
 	}
 	q.Status = strings.TrimSpace(q.Status)
 	q.TriggerType = strings.TrimSpace(q.TriggerType)
+	q.EventType = strings.TrimSpace(q.EventType)
+	if q.EventType != "" && q.EventType != EventBalanceLow && q.EventType != EventSystemHealthSnapshot {
+		return q, ErrInvalid
+	}
 	if q.Status != "" && q.Status != "pending" && q.Status != "sending" && q.Status != "sent" && q.Status != "failed" && q.Status != "suppressed" {
 		return q, ErrInvalid
 	}

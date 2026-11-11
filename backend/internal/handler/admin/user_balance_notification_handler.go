@@ -27,7 +27,7 @@ func (h *UpstreamGovernanceHandler) ListBalanceNotifications(c *gin.Context) {
 	if !ok {
 		return
 	}
-	q := balancenotice.Query{Page: page, PageSize: size, Status: c.Query("status"), TriggerType: c.Query("trigger_type"), UserEmail: c.Query("user_email"), Recipient: c.Query("recipient")}
+	q := balancenotice.Query{Page: page, PageSize: size, Status: c.Query("status"), TriggerType: c.Query("trigger_type"), EventType: c.Query("event_type"), UserEmail: c.Query("user_email"), Recipient: c.Query("recipient")}
 	if raw, exists := c.GetQuery("user_id"); exists {
 		id, err := strconv.ParseInt(raw, 10, 64)
 		if err != nil || id <= 0 || strconv.FormatInt(id, 10) != raw {

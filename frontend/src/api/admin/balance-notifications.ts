@@ -2,10 +2,12 @@ import apiClient from '../client'
 
 export type BalanceNotificationStatus = 'pending' | 'sending' | 'sent' | 'failed' | 'suppressed'
 export type BalanceNotificationTrigger = 'automatic' | 'manual_batch'
+export type UserNotificationEvent = 'balance.low' | 'system.health_snapshot'
 
 export interface BalanceNotification {
   id: number
   notification_id: string
+  event_type?: UserNotificationEvent
   trigger_type: BalanceNotificationTrigger
   batch_id: string
   user_id: number
@@ -39,6 +41,7 @@ export interface BalanceNotificationQuery {
   recipient?: string
   status?: BalanceNotificationStatus
   trigger_type?: BalanceNotificationTrigger
+  event_type?: UserNotificationEvent
   from?: string
   to?: string
 }

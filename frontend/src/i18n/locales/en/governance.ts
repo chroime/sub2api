@@ -108,7 +108,7 @@ export default {
   },
   deliveryRecords: {
     channel: 'Channel',
-    channels: { email: 'Upstream change mails', astrbot: 'AstrBot group messages', users: 'User balance mails' },
+    channels: { email: 'Upstream change mails', astrbot: 'AstrBot group messages', users: 'User emails' },
     hints: { email: 'Mails to administrators about upstream group and rate changes.', astrbot: 'Local group change messages sent to QQ groups.' },
     time: 'Time',
     site: 'Upstream',
@@ -399,6 +399,7 @@ export default {
     title: "Smart Operations",
     description: "Manage upstream connections, group imports, model monitoring, and automation in one place.",
     sections: {
+      records: 'Delivery records',
 	  notifications: 'Notification records',
       accountQuality: "Account quality",
       overview: "Overview",
@@ -412,6 +413,7 @@ export default {
       settings: "Settings",
     },
     descriptions: {
+      records: 'Review upstream notifications, group messages, and user email delivery outcomes.',
 	  notifications: 'Review low-balance messages sent to platform users and their delivery outcomes.',
       accountQuality: "Check fixed accounts, review evidence and manage independent quality gates.",
       overview: "Review current tasks and manage upstream connections, authorization, and collection status.",

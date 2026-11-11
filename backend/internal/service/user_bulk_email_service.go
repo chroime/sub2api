@@ -171,8 +171,16 @@ func (s *UserBulkEmailService) Send(ctx context.Context, input UserBulkEmailInpu
 	result := &UserBulkEmailResult{Items: make([]UserBulkEmailItem, 0, len(ids)), Total: len(ids)}
 	health := make(map[int64]userBulkGroupHealth)
 	batchID := uuid.NewString()
+	var transport *bulkSMTPTransport
+	if notifications, ok := s.sender.(*NotificationEmailService); ok {
+		transport, err = newBulkSMTPTransport(ctx, notifications.emailService)
+		if err != nil {
+			return nil, err
+		}
+		defer transport.Close()
+	}
 	for _, id := range ids {
-		item := s.sendUser(ctx, id, event, locale, health, input.Links, batchID)
+		item := s.sendUserWithTransport(ctx, id, event, locale, health, input.Links, batchID, transport)
 		result.Items = append(result.Items, item)
 		switch item.Status {
 		case "sent":
@@ -187,22 +195,23 @@ func (s *UserBulkEmailService) Send(ctx context.Context, input UserBulkEmailInpu
 }
 
 func (s *UserBulkEmailService) sendUser(ctx context.Context, id int64, event, locale string, health map[int64]userBulkGroupHealth, links *NotificationEmailLinks, batchIDs ...string) (item UserBulkEmailItem) {
-	item = UserBulkEmailItem{UserID: id, Status: "failed"}
-	var delivery *balancenotice.Delivery
-	var knownUser *User
-	amountsResolved := false
 	batchID := ""
 	if len(batchIDs) > 0 {
 		batchID = batchIDs[0]
 	}
+	return s.sendUserWithTransport(ctx, id, event, locale, health, links, batchID, nil)
+}
+
+func (s *UserBulkEmailService) sendUserWithTransport(ctx context.Context, id int64, event, locale string, health map[int64]userBulkGroupHealth, links *NotificationEmailLinks, batchID string, transport *bulkSMTPTransport) (item UserBulkEmailItem) {
+	item = UserBulkEmailItem{UserID: id, Status: "failed"}
+	var delivery *balancenotice.Delivery
+	var knownUser *User
+	amountsResolved := false
 	defer func() {
-		if event != NotificationEmailEventBalanceLow {
-			return
-		}
 		if delivery == nil {
-			delivery = s.records.Begin(balancenotice.Input{UserID: id, TriggerType: "manual_batch", BatchID: batchID})
+			delivery = s.records.Begin(balancenotice.Input{UserID: id, EventType: event, TriggerType: "manual_batch", BatchID: batchID})
 		}
-		if s.records != nil && knownUser != nil && !amountsResolved {
+		if event == NotificationEmailEventBalanceLow && s.records != nil && knownUser != nil && !amountsResolved {
 			delivery.Amounts(&knownUser.Balance, s.balanceThresholdForRecord(knownUser))
 		}
 		if delivery != nil {
@@ -228,9 +237,11 @@ func (s *UserBulkEmailService) sendUser(ctx context.Context, id int64, event, lo
 	}
 	item.Email = strings.TrimSpace(user.Email)
 	knownUser = user
+	recordInput := balancenotice.Input{UserID: user.ID, UserEmail: user.Email, UserName: user.Username, Recipient: item.Email, EventType: event, TriggerType: "manual_batch", BatchID: batchID}
 	if event == NotificationEmailEventBalanceLow {
-		delivery = s.records.Begin(balancenotice.Input{UserID: user.ID, UserEmail: user.Email, UserName: user.Username, Recipient: item.Email, Balance: &user.Balance, TriggerType: "manual_batch", BatchID: batchID})
+		recordInput.Balance = &user.Balance
 	}
+	delivery = s.records.Begin(recordInput)
 	if !userBulkEmailAddressValid(item.Email) {
 		item.Status, item.Error = "skipped", "invalid_email"
 		return item
@@ -247,6 +258,7 @@ func (s *UserBulkEmailService) sendUser(ctx context.Context, id int64, event, lo
 	mailInput, reason, err := s.messageInput(ctx, user, event, locale, health, links, delivery)
 	amountsResolved = err == nil
 	mailInput.BalanceDelivery = delivery
+	mailInput.bulkTransport = transport
 	if err != nil {
 		item.Error = "notification_data_unavailable"
 		return item
@@ -260,6 +272,10 @@ func (s *UserBulkEmailService) sendUser(ctx context.Context, id int64, event, lo
 	delivered, err := s.sender.SendDelivered(ctx, mailInput)
 	if err != nil {
 		item.Error = "email_delivery_failed"
+		var uncertain *bulkSMTPAcceptanceUnconfirmedError
+		if errors.As(err, &uncertain) {
+			item.Error = "email_delivery_unconfirmed"
+		}
 		return item
 	}
 	if !delivered {

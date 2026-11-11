@@ -10,10 +10,10 @@ const { bulkEmail, previewBulkEmail, translate } = vi.hoisted(() => ({
   translate: vi.fn()
 }))
 const defaultLinks = {
-  platform_url: 'https://platform.example.com',
-  docs_url: 'https://platform.example.com/docs',
-  model_plaza_url: 'https://platform.example.com/model-plaza',
-  canvas_url: 'https://canvas.example.com'
+  platform_url: window.location.origin,
+  docs_url: `${window.location.origin}/docs`,
+  model_plaza_url: `${window.location.origin}/model-plaza`,
+  canvas_url: 'https://canvas.localhost'
 }
 vi.mock('@/api/admin', () => ({ adminAPI: { users: { bulkEmail, previewBulkEmail } } }))
 vi.mock('vue-i18n', () => ({ useI18n: () => ({
@@ -52,13 +52,23 @@ describe('BulkEmailUserModal', () => {
     ] })
   })
 
+  it('prefills links from the current site as soon as the dialog opens', () => {
+    const wrapper = mountModal()
+    expect((wrapper.get('[data-test="email-link-platform_url"]').element as HTMLInputElement).value).toBe(window.location.origin)
+    expect((wrapper.get('[data-test="email-link-docs_url"]').element as HTMLInputElement).value).toBe(`${window.location.origin}/docs`)
+    expect((wrapper.get('[data-test="email-link-model_plaza_url"]').element as HTMLInputElement).value).toBe(`${window.location.origin}/model-plaza`)
+    expect((wrapper.get('[data-test="email-link-canvas_url"]').element as HTMLInputElement).value).toBe('https://canvas.localhost')
+    expect(wrapper.find('[data-test="email-links-warning"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
   it('requires a fresh dynamic preview before sending and shows per-recipient results', async () => {
     const wrapper = mountModal()
     expect(wrapper.findComponent({ name: 'BaseDialog' }).props('width')).toBe('extra-wide')
     expect(wrapper.get('[data-test="send-email"]').attributes('disabled')).toBeDefined()
     await wrapper.get('[data-test="preview-email"]').trigger('click')
     await flushPromises()
-    expect(previewBulkEmail).toHaveBeenCalledWith({ event: 'system.health_snapshot', locale: 'zh', user_id: 4 })
+    expect(previewBulkEmail).toHaveBeenCalledWith({ event: 'system.health_snapshot', locale: 'zh', user_id: 4, links: defaultLinks })
     expect(wrapper.get('[data-test="email-preview-subject"]').text()).toBe('Current system status')
     expect(wrapper.get('iframe').attributes('srcdoc')).toContain('GPT Pro: 0.06x')
     expect(wrapper.get('iframe').attributes('sandbox')).toBe('')
@@ -69,8 +79,22 @@ describe('BulkEmailUserModal', () => {
     expect(bulkEmail).toHaveBeenCalledWith({ user_ids: [4, 7], all: false, event: 'system.health_snapshot', locale: 'zh', links: defaultLinks })
     expect(wrapper.get('[data-test="result-4"]').text()).toContain('admin.users.bulkEmail.sent')
     expect(wrapper.get('[data-test="result-7"]').text()).toContain('SMTP rejected recipient')
+    expect(wrapper.get('[data-test="email-records"]').attributes('href')).toBe('/admin/upstream-governance/records?channel=users&trigger_type=manual_batch')
     expect(wrapper.get('[data-test="email-results"]').text()).toContain('"sent":1,"failed":1,"skipped":0')
     expect(wrapper.find('[data-test="send-email"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('shows SMTP acceptance uncertainty as neutral and warns against duplicate sends', async () => {
+    bulkEmail.mockResolvedValue({ total: 1, sent: 0, failed: 1, skipped: 0, items: [{ user_id: 4, email: 'four@example.com', status: 'failed', error: 'email_delivery_unconfirmed' }] })
+    const wrapper = mountModal()
+    await wrapper.get('[data-test="preview-email"]').trigger('click'); await flushPromises()
+    await wrapper.get('[data-test="send-email"]').trigger('click'); await flushPromises()
+    const row = wrapper.get('[data-test="result-4"]')
+    expect(row.text()).toContain('admin.users.bulkEmail.errors.email_delivery_unconfirmed')
+    expect(row.text()).toContain('admin.users.bulkEmail.unconfirmed')
+    expect(wrapper.get('[data-test="email-results-unconfirmed"]').text()).toContain('"count":1')
+    expect(row.find('.badge-danger').exists()).toBe(false)
     wrapper.unmount()
   })
 
@@ -81,7 +105,7 @@ describe('BulkEmailUserModal', () => {
     await wrapper.get('[data-test="scope-all"]').setValue()
     await wrapper.get('[data-test="preview-email"]').trigger('click')
     await flushPromises()
-    expect(previewBulkEmail).toHaveBeenCalledWith({ event: 'system.health_snapshot', locale: 'zh' })
+    expect(previewBulkEmail).toHaveBeenCalledWith({ event: 'system.health_snapshot', locale: 'zh', links: defaultLinks })
     await wrapper.get('[data-test="send-email"]').trigger('click')
     await flushPromises()
     expect(bulkEmail).toHaveBeenCalledWith({ user_ids: [], all: true, event: 'system.health_snapshot', locale: 'zh', links: defaultLinks })
@@ -135,12 +159,13 @@ describe('BulkEmailUserModal', () => {
     wrapper.unmount()
   })
 
-  it('fills configured destination URLs from the preview without invalidating it', async () => {
+  it('preserves current-site defaults when preview returns configured destination URLs', async () => {
+    previewBulkEmail.mockResolvedValueOnce({ subject: 'Current site', html: '<p>Preview</p>', links: { platform_url: 'https://configured.example.com' } })
     const wrapper = mountModal()
     for (const name of Object.keys(defaultLinks)) {
       expect(wrapper.get(`[data-test="email-link-${name}"]`).attributes('type')).toBe('url')
     }
-    expect(wrapper.find('[data-test="email-links-warning"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="email-links-warning"]').exists()).toBe(false)
     await wrapper.get('[data-test="preview-email"]').trigger('click')
     await flushPromises()
     for (const [name, url] of Object.entries(defaultLinks)) {
@@ -155,6 +180,7 @@ describe('BulkEmailUserModal', () => {
   it('requires all four absolute HTTP URLs and a fresh preview after editing a link', async () => {
     previewBulkEmail.mockResolvedValueOnce({ subject: 'No defaults', html: '<p>Preview</p>', links: {} })
     const wrapper = mountModal()
+    await wrapper.get('[data-test="email-link-canvas_url"]').setValue('')
     await wrapper.get('[data-test="preview-email"]').trigger('click')
     await flushPromises()
     expect(wrapper.find('iframe').exists()).toBe(true)
@@ -177,6 +203,18 @@ describe('BulkEmailUserModal', () => {
     await wrapper.get('[data-test="email-link-canvas_url"]').setValue('javascript:alert(1)')
     expect(wrapper.get('[data-test="send-email"]').attributes('disabled')).toBeDefined()
     expect(bulkEmail).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('keeps edited URLs after a successful preview and uses them for sending', async () => {
+    const wrapper = mountModal()
+    await wrapper.get('[data-test="email-link-platform_url"]').setValue('https://edited.example.com')
+    await wrapper.get('[data-test="preview-email"]').trigger('click')
+    await flushPromises()
+    expect((wrapper.get('[data-test="email-link-platform_url"]').element as HTMLInputElement).value).toBe('https://edited.example.com')
+    await wrapper.get('[data-test="send-email"]').trigger('click')
+    await flushPromises()
+    expect(bulkEmail).toHaveBeenCalledWith(expect.objectContaining({ links: { ...defaultLinks, platform_url: 'https://edited.example.com' } }))
     wrapper.unmount()
   })
 
@@ -206,6 +244,7 @@ describe('BulkEmailUserModal', () => {
     await flushPromises()
     expect(wrapper.get('[role="alert"]').text()).toContain('Connection reset')
     expect(wrapper.get('[role="alert"]').text()).toContain('admin.users.bulkEmail.unknownResult')
+    expect(wrapper.get('[data-test="email-records"]').attributes('href')).toBe('/admin/upstream-governance/records?channel=users&trigger_type=manual_batch')
     expect(wrapper.get('[data-test="send-email"]').attributes('disabled')).toBeDefined()
     expect(bulkEmail).toHaveBeenCalledTimes(1)
     wrapper.unmount()

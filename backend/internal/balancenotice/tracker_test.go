@@ -56,6 +56,7 @@ func TestDeliveryTracksActualContentAndSMTPAcceptance(t *testing.T) {
 	d.Sent()
 	r := store.only(t)
 	require.Equal(t, "sent", r.Status)
+	require.Equal(t, EventBalanceLow, r.EventType)
 	require.Equal(t, "<p>余额0.065</p>", r.Body)
 	require.Equal(t, "user@example.test", r.UserEmail)
 	require.Equal(t, "notify@example.test", r.Recipient)
@@ -119,7 +120,7 @@ func TestAuditStoreFailureAndNilTrackerDoNotPanic(t *testing.T) {
 
 func TestQueryRejectsInvalidFiltersAndKeepsPaginationBounded(t *testing.T) {
 	now := time.Now().UTC()
-	for _, q := range []Query{{Status: "invented"}, {TriggerType: "astrbot"}, {Page: -1}, {PageSize: 101}, {UserID: -2}, {From: now, To: now.Add(-time.Hour)}} {
+	for _, q := range []Query{{Status: "invented"}, {TriggerType: "astrbot"}, {EventType: "auth.verify_code"}, {Page: -1}, {PageSize: 101}, {UserID: -2}, {From: now, To: now.Add(-time.Hour)}} {
 		_, err := q.Normalize(now)
 		require.ErrorIs(t, err, ErrInvalid)
 	}
@@ -128,6 +129,40 @@ func TestQueryRejectsInvalidFiltersAndKeepsPaginationBounded(t *testing.T) {
 	require.Equal(t, 1, q.Page)
 	require.Equal(t, 20, q.PageSize)
 	require.Equal(t, now.Add(-Retention), q.From)
+	for _, event := range []string{EventBalanceLow, EventSystemHealthSnapshot} {
+		q, err = (Query{EventType: " " + event + " "}).Normalize(now)
+		require.NoError(t, err)
+		require.Equal(t, event, q.EventType)
+	}
+}
+
+func TestHealthDeliveryRecordsEventWithoutBalanceAmounts(t *testing.T) {
+	store := &memoryStore{}
+	svc := NewService(store)
+	d := svc.Begin(Input{EventType: EventSystemHealthSnapshot, TriggerType: "manual_batch", BatchID: "health-batch", UserID: 7, Recipient: "health@example.test"})
+	d.Content("System status", "<p>Actual status</p>")
+	d.Attempt()
+	d.Sent()
+	r := store.only(t)
+	require.Equal(t, EventSystemHealthSnapshot, r.EventType)
+	require.Equal(t, "manual_batch", r.TriggerType)
+	require.Equal(t, "health-batch", r.BatchID)
+	require.Nil(t, r.Balance)
+	require.Nil(t, r.Threshold)
+	require.Equal(t, "sent", r.Status)
+	require.Equal(t, Retention, r.ExpiresAt.Sub(r.CreatedAt))
+	require.Nil(t, svc.Begin(Input{EventType: "auth.verify_code", UserID: 7}), "authentication mail must not enter user campaign records")
+	require.Len(t, store.rows, 1)
+}
+
+func TestEventFilterUsesBoundParameters(t *testing.T) {
+	now := time.Now().UTC()
+	q, err := (Query{EventType: EventSystemHealthSnapshot, TriggerType: "manual_batch"}).Normalize(now)
+	require.NoError(t, err)
+	where, args := filters(q, now)
+	require.Contains(t, where, "event_type=$5")
+	require.NotContains(t, where, EventSystemHealthSnapshot)
+	require.Equal(t, EventSystemHealthSnapshot, args[4])
 }
 
 func amount(v float64) *float64 { return &v }

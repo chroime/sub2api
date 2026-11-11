@@ -108,7 +108,7 @@ export default {
   },
   deliveryRecords: {
     channel: '通知渠道',
-    channels: { email: '上游变更邮件', astrbot: 'AstrBot 群消息', users: '用户余额邮件' },
+    channels: { email: '上游变更邮件', astrbot: 'AstrBot 群消息', users: '用户邮件' },
     hints: { email: '发给管理员的上游分组、倍率变化邮件。', astrbot: '发到 QQ 群的本地分组变更消息。' },
     time: '时间',
     site: '上游',
@@ -414,6 +414,7 @@ export default {
     title: "智能运维",
     description: "集中管理上游接入、分组导入、模型监测与自动化任务。",
     sections: {
+      records: '发送记录',
 	  notifications: '通知记录',
       accountQuality: "账号质量",
       overview: "运维总览",
@@ -427,6 +428,7 @@ export default {
       settings: "全局设置",
     },
     descriptions: {
+      records: '查看上游通知、群消息与用户邮件的发送状态和结果。',
 	  notifications: '查询发送给平台用户的余额不足邮件和发送结果。',
       accountQuality: "固定账号执行能力检测，查看原始证据并管理独立质量门。",
       overview: "查看当前待办，管理上游接入、授权状态与采集概况。",

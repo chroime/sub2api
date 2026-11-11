@@ -20,7 +20,7 @@ import { resolveRouteDocumentTitle } from './title'
 const routes: RouteRecordRaw[] = [
   {
     // import, monitor, local-monitor and notifications are pre-regrouping ids kept for old links.
-    path: '/admin/upstream-governance/:section(overview|groups|pricing|automation|history|models|account-quality|settings|import|monitor|local-monitor|notifications)?',
+    path: '/admin/upstream-governance/:section(overview|groups|pricing|automation|history|models|account-quality|records|settings|import|monitor|local-monitor|notifications)?',
     name: 'AdminUpstreamGovernance',
     component: () => import('@/views/admin/upstream-governance/UpstreamGovernanceView.vue'),
     meta: {

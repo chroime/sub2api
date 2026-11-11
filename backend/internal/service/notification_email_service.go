@@ -121,6 +121,7 @@ type NotificationEmailPreviewInput struct {
 
 type NotificationEmailSendInput struct {
 	BalanceDelivery  *balancenotice.Delivery
+	bulkTransport    *bulkSMTPTransport
 	Event            string
 	Locale           string
 	RecipientEmail   string
@@ -395,7 +396,7 @@ func (s *NotificationEmailService) Send(ctx context.Context, input NotificationE
 // must not be counted as delivered by administrator batch operations.
 func (s *NotificationEmailService) SendDelivered(ctx context.Context, input NotificationEmailSendInput) (delivered bool, sendErr error) {
 	delivery := input.BalanceDelivery
-	if input.Event != NotificationEmailEventBalanceLow {
+	if input.Event != NotificationEmailEventBalanceLow && input.Event != NotificationEmailEventSystemHealthSnapshot {
 		delivery = nil
 	}
 	defer func() {
@@ -445,8 +446,14 @@ func (s *NotificationEmailService) SendDelivered(ctx context.Context, input Noti
 	if s.emailService == nil {
 		return false, notificationEmailConfigErr(errors.New("email service is not configured"))
 	}
-	if err := sendRecordedBalanceEmail(ctx, s.emailService, delivery, recipient, rendered.Subject, rendered.HTML); err != nil {
-		return false, notificationEmailDeliveryErr(err)
+	var deliveryErr error
+	if input.bulkTransport != nil {
+		deliveryErr = input.bulkTransport.Send(ctx, delivery, recipient, rendered.Subject, rendered.HTML)
+	} else {
+		deliveryErr = sendRecordedBalanceEmail(ctx, s.emailService, delivery, recipient, rendered.Subject, rendered.HTML)
+	}
+	if deliveryErr != nil {
+		return false, notificationEmailDeliveryErr(deliveryErr)
 	}
 	if deliveryKey != "" {
 		if err := s.settingRepo.Set(ctx, deliveryKey, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {

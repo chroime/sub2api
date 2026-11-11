@@ -67,4 +67,23 @@ describe('DeliveryRecords', () => {
     expect(wrapper.text()).toContain('governance.deliveryRecords.readFailed')
     expect(wrapper.find('[data-test=delivery-record]').exists()).toBe(false)
   })
+
+  it('follows deep-linked channel changes and ignores requests from a previous channel', async () => {
+    let finishEmail!: (result: Awaited<ReturnType<typeof api.deliveryRecords>>) => void
+    vi.mocked(api.deliveryRecords).mockImplementation(channel => channel === 'email'
+      ? new Promise(resolve => { finishEmail = resolve })
+      : Promise.resolve(page([{ id: 4, channel: 'astrbot', kind: 'updated', group_name: 'Current group', status: 'sent', attempts: 0, created_at: '2026-11-11T01:00:00Z' }])))
+    const wrapper = mount(DeliveryRecords)
+    await wrapper.setProps({ initialChannel: 'users' })
+    await flushPromises()
+    expect(wrapper.find('[data-test=balance-notification-records]').exists()).toBe(true)
+    expect(wrapper.emitted('update:channel')).toContainEqual(['users'])
+    await wrapper.setProps({ initialChannel: 'astrbot' })
+    await flushPromises()
+    finishEmail(page([{ id: 9, channel: 'email', kind: 'group_changes', subject: 'Obsolete response', recipient: 'old@example.test', status: 'sent', attempts: 0, created_at: '2026-11-11T01:00:00Z' }]))
+    await flushPromises()
+    expect(wrapper.get('[data-test=delivery-record]').text()).toContain('Current group')
+    expect(wrapper.text()).not.toContain('Obsolete response')
+    wrapper.unmount()
+  })
 })
