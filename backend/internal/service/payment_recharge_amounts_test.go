@@ -17,7 +17,7 @@ import (
 func TestValidateOrderInputAcceptsOnlyFixedRechargeAmounts(t *testing.T) {
 	svc := &PaymentService{}
 	ctx := context.Background()
-	for _, amount := range []float64{0.1, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000} {
+	for _, amount := range []float64{10, 20, 50, 100, 200, 500, 1000, 2000, 5000} {
 		t.Run("allowed_"+strconv.FormatFloat(amount, 'f', -1, 64), func(t *testing.T) {
 			plan, err := svc.validateOrderInput(ctx, CreateOrderRequest{OrderType: payment.OrderTypeBalance, Amount: amount}, &PaymentConfig{})
 			require.NoError(t, err)
@@ -25,7 +25,7 @@ func TestValidateOrderInputAcceptsOnlyFixedRechargeAmounts(t *testing.T) {
 		})
 	}
 
-	for _, amount := range []float64{0, -10, 1, 9.99, 12.34, 30, 99.999, 100.001, 5001, math.NaN(), math.Inf(1), math.Inf(-1), math.Nextafter(10, 0), math.Nextafter(10, 20)} {
+	for _, amount := range []float64{0, -10, 0.1, 1, 9.99, 12.34, 30, 99.999, 100.001, 5001, math.NaN(), math.Inf(1), math.Inf(-1), math.Nextafter(10, 0), math.Nextafter(10, 20)} {
 		t.Run("rejected_"+strconv.FormatFloat(amount, 'f', -1, 64), func(t *testing.T) {
 			plan, err := svc.validateOrderInput(ctx, CreateOrderRequest{OrderType: payment.OrderTypeBalance, Amount: amount}, &PaymentConfig{})
 			require.Nil(t, plan)
@@ -52,7 +52,7 @@ func TestRechargeAmountsReturnsIndependentSlices(t *testing.T) {
 	cfg := &PaymentConfig{}
 	amounts := cfg.RechargeAmounts()
 	amounts[0] = 12.34
-	require.Equal(t, []float64{0.1, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000}, cfg.RechargeAmounts())
+	require.Equal(t, []float64{10, 20, 50, 100, 200, 500, 1000, 2000, 5000}, cfg.RechargeAmounts())
 	_, err := (&PaymentService{}).validateOrderInput(context.Background(), CreateOrderRequest{OrderType: payment.OrderTypeBalance, Amount: 12.34}, cfg)
 	require.Equal(t, "INVALID_AMOUNT", infraerrors.Reason(err))
 }
@@ -94,15 +94,22 @@ func (s *rechargeAmountUserRepoSpy) GetByID(context.Context, int64) (*User, erro
 func TestCreateOrderRejectsCustomRechargeBeforeSideEffects(t *testing.T) {
 	for _, orderType := range []string{"", payment.OrderTypeBalance} {
 		t.Run("order_type_"+orderType, func(t *testing.T) {
-			userRepo := &rechargeAmountUserRepoSpy{}
-			svc := &PaymentService{
-				configService: &PaymentConfigService{settingRepo: &paymentConfigSettingRepoStub{values: map[string]string{SettingPaymentEnabled: "true"}}},
-				userRepo:      userRepo,
+			for _, amount := range []float64{0.1, 12.34} {
+				t.Run("amount_"+strconv.FormatFloat(amount, 'f', -1, 64), func(t *testing.T) {
+					userRepo := &rechargeAmountUserRepoSpy{}
+					svc := &PaymentService{
+						configService: &PaymentConfigService{settingRepo: &paymentConfigSettingRepoStub{values: map[string]string{
+							SettingPaymentEnabled:    "true",
+							SettingMinRechargeAmount: "0.1",
+						}}},
+						userRepo: userRepo,
+					}
+					resp, err := svc.CreateOrder(context.Background(), CreateOrderRequest{UserID: 42, OrderType: orderType, Amount: amount, PaymentType: payment.TypeAlipay})
+					require.Nil(t, resp)
+					require.Equal(t, "INVALID_AMOUNT", infraerrors.Reason(err))
+					require.Zero(t, userRepo.getCalls, "invalid amount must be rejected before user lookup, provider selection, or order creation")
+				})
 			}
-			resp, err := svc.CreateOrder(context.Background(), CreateOrderRequest{UserID: 42, OrderType: orderType, Amount: 12.34, PaymentType: payment.TypeAlipay})
-			require.Nil(t, resp)
-			require.Equal(t, "INVALID_AMOUNT", infraerrors.Reason(err))
-			require.Zero(t, userRepo.getCalls, "invalid amount must be rejected before user lookup, provider selection, or order creation")
 		})
 	}
 }
