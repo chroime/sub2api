@@ -167,6 +167,17 @@ describe('model plaza price comparisons', () => {
     expect(getTokenComparisons(model({ pricing: null, official_pricing: null }), group(), 'input_price')[0])
       .toMatchObject({ reference: null, site: null, comparable: false })
   })
+
+  it('compares independent 12h prices without substituting or labelling them as 1h', () => {
+    const m = model({ pricing: price({ cache_write_price: null, cache_write_12h_price: 2e-6 }) })
+    m.official_pricing!.cache_write_price = null
+    m.official_pricing!.cache_write_12h_price = 4e-6
+    const rows = getTokenComparisons(m, group(), 'cache_write_price')
+    expect(rows.find(row => row.label === '12h')).toMatchObject({ reference: 4, site: 1, comparable: true })
+    expect(rows.some(row => row.label.includes('1h'))).toBe(false)
+    m.official_pricing!.cache_write_12h_price = null
+    expect(getTokenComparisons(m, group(), 'cache_write_price').find(row => row.label === '12h')).toMatchObject({ reference: null, site: 1, comparable: false })
+  })
 })
 
 describe('CNY payable price comparisons', () => {

@@ -98,7 +98,7 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 	// 2. Model mapping
 	billingModel := resolveOpenAIForwardModel(account, normalizedModel, defaultMappedModel)
 	upstreamModel := normalizeOpenAIModelForUpstream(account, billingModel)
-	if err := validateGPT61CompatRequest(body, upstreamModel); err != nil {
+	if err := validateGPT61RawEffort(body, upstreamModel); err != nil {
 		writeAnthropicError(c, http.StatusBadRequest, "invalid_request_error", err.Error())
 		return nil, err
 	}
@@ -154,7 +154,10 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 
 	// 3. Convert Anthropic → Responses after compatibility-only replay guard.
 	anthropicReq.Model = upstreamModel
-	responsesReq, err := anthropicToResponses(s.cfg, &anthropicReq)
+	responsesReq, err := apicompat.AnthropicToResponsesWithOptions(&anthropicReq, apicompat.AnthropicToResponsesOptions{
+		MinOutputTokens:                configuredMinOutputTokens(s.cfg),
+		DeferReasoningEffortValidation: true,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("convert anthropic to responses: %w", err)
 	}
@@ -313,6 +316,11 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 				responsesReq.Reasoning.Effort = gjson.GetBytes(responsesBody, "reasoning.effort").String()
 			}
 		}
+	}
+
+	if err := validateGPT61CompatRequest(responsesBody, upstreamModel); err != nil {
+		writeAnthropicError(c, http.StatusBadRequest, "invalid_request_error", err.Error())
+		return nil, err
 	}
 
 	// 4c. Apply OpenAI fast policy (may filter service_tier or block the request).
@@ -921,13 +929,13 @@ func (s *OpenAIGatewayService) readOpenAICompatBufferedTerminal(
 						recordPrior(&event)
 						if response := openAICompatTerminalResponse(&event, []byte(payload)); isOpenAICompatResponsesTerminalEvent(event.Type) && response != nil {
 							if event.Usage != nil {
-								usage = copyOpenAIUsageFromResponsesUsage(event.Usage)
+								usage = copyOpenAIUsageFromResponsesUsage(event.Usage, usage)
 								if response.Usage == nil {
 									response.Usage = event.Usage
 								}
 							}
 							if response.Usage != nil {
-								usage = copyOpenAIUsageFromResponsesUsage(response.Usage)
+								usage = copyOpenAIUsageFromResponsesUsage(response.Usage, usage)
 							}
 							return response, usage, acc, prior, nil
 						}
@@ -971,13 +979,13 @@ func (s *OpenAIGatewayService) readOpenAICompatBufferedTerminal(
 
 			if response := openAICompatTerminalResponse(&event, []byte(payload)); isOpenAICompatResponsesTerminalEvent(event.Type) && response != nil {
 				if event.Usage != nil {
-					usage = copyOpenAIUsageFromResponsesUsage(event.Usage)
+					usage = copyOpenAIUsageFromResponsesUsage(event.Usage, usage)
 					if response.Usage == nil {
 						response.Usage = event.Usage
 					}
 				}
 				if response.Usage != nil {
-					usage = copyOpenAIUsageFromResponsesUsage(response.Usage)
+					usage = copyOpenAIUsageFromResponsesUsage(response.Usage, usage)
 				}
 				return response, usage, acc, prior, nil
 			}
@@ -1102,11 +1110,11 @@ func (s *OpenAIGatewayService) handleAnthropicStreamingResponse(
 					responseID = id
 				}
 				if event.Response.Usage != nil {
-					usage = copyOpenAIUsageFromResponsesUsage(event.Response.Usage)
+					usage = copyOpenAIUsageFromResponsesUsage(event.Response.Usage, usage)
 				}
 			}
 			if event.Usage != nil {
-				usage = copyOpenAIUsageFromResponsesUsage(event.Usage)
+				usage = copyOpenAIUsageFromResponsesUsage(event.Usage, usage)
 			}
 			// cyber_policy 致命不可重试：标记供 handler 事后记录；以 Anthropic SSE error 事件
 			// 回写让客户端感知并停止重试（F4），丢弃后续转换输出。
@@ -1449,7 +1457,7 @@ func buildAnthropicStreamErrorSSE(errType, message string) string {
 	return "event: error\ndata: " + string(payload) + "\n\n"
 }
 
-func copyOpenAIUsageFromResponsesUsage(usage *apicompat.ResponsesUsage) OpenAIUsage {
+func copyOpenAIUsageFromResponsesUsage(usage *apicompat.ResponsesUsage, parsed ...OpenAIUsage) OpenAIUsage {
 	if usage == nil {
 		return OpenAIUsage{}
 	}
@@ -1460,6 +1468,18 @@ func copyOpenAIUsageFromResponsesUsage(usage *apicompat.ResponsesUsage) OpenAIUs
 	}
 	if usage.InputTokensDetails != nil {
 		result.CacheReadInputTokens = usage.InputTokensDetails.CachedTokens
+	}
+	// Typed compatibility usage preserves canonical aggregate semantics but does
+	// not carry the newer TTL detail. Keep only a complete, validated raw split
+	// for this same aggregate; never invent TTL from a request or stale event.
+	if len(parsed) > 0 {
+		raw := parsed[0]
+		short, long := raw.CacheCreation30mInputTokens, raw.CacheCreation12hInputTokens
+		if raw.CacheCreationInputTokens == result.CacheCreationInputTokens && result.CacheCreationInputTokens > 0 &&
+			short >= 0 && long >= 0 && short <= result.CacheCreationInputTokens && long == result.CacheCreationInputTokens-short {
+			result.CacheCreation30mInputTokens = short
+			result.CacheCreation12hInputTokens = long
+		}
 	}
 	return result
 }

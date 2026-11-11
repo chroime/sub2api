@@ -95,7 +95,7 @@ export function effectivePlazaRate(model: PlazaModel, group: ModelPlazaGroup | n
 }
 
 type PricingSource = UserSupportedModelPricing | PlazaOfficialPricing
-type TokenValues = Pick<UserPricingInterval, TokenPriceField | 'cache_write_1h_price'>
+type TokenValues = Pick<UserPricingInterval, TokenPriceField | 'cache_write_1h_price' | 'cache_write_12h_price'>
 interface TokenRange { min: number; max: number; label?: string; values: TokenValues }
 
 function tokenRanges(pricing: PricingSource | null, resolveRelative: boolean): TokenRange[] {
@@ -165,24 +165,29 @@ export function getTokenComparisons(model: PlazaModel, group: ModelPlazaGroup | 
     // Don't add an empty artificial segment after a finite-only schedule.
     if (!site && !reference && ranges.length > 0) continue
     const { label, compatible } = comparisonRangeLabel(siteRanges, referenceRanges, min, max)
-    const entry = (priceField: TokenPriceField | 'cache_write_1h_price', cache1h = false): PlazaPriceComparison => {
+    const entry = (priceField: TokenPriceField | 'cache_write_1h_price' | 'cache_write_12h_price', ttl?: '1h' | '12h'): PlazaPriceComparison => {
       const referenceAmount = scaled(reference?.[priceField], 1, 1_000_000)
       const siteAmount = group ? scaled(site?.[priceField], rate, 1_000_000) : null
       return {
-        key: `${field}:${min}:${max}${cache1h ? ':1h' : ''}`,
-        label: cache1h ? [label, '1h'].filter(Boolean).join(' · ') : label,
+        key: `${field}:${min}:${max}${ttl ? `:${ttl}` : ''}`,
+        label: ttl ? [label, ttl].filter(Boolean).join(' · ') : label,
         reference: referenceAmount, site: siteAmount,
         currency: configured ? 'CNY' : 'USD', referenceKind: configured ? 'configured' : 'official',
         comparable: referenceAmount !== null && siteAmount !== null && compatible && model.long_context_basis !== 'marginal',
         billingMode: BILLING_MODE_TOKEN,
-        ...(cache1h ? { cache1h: true } : {})
+        ...(ttl === '1h' ? { cache1h: true } : {})
       }
     }
     entries.push(entry(field))
     if (field === 'cache_write_price') {
       const differs = (values: TokenValues | null) => values?.cache_write_1h_price != null &&
         amount(values.cache_write_1h_price) !== null && values.cache_write_1h_price !== values.cache_write_price
-      if (differs(site) || differs(reference)) entries.push(entry('cache_write_1h_price', true))
+      if (differs(site) || differs(reference)) entries.push(entry('cache_write_1h_price', '1h'))
+      // OpenAI's 12h cache is an independent lifetime, never an Anthropic 1h
+      // substitute. Compare only explicitly available prices for this lifetime.
+      if (amount(site?.cache_write_12h_price) !== null || amount(reference?.cache_write_12h_price) !== null) {
+        entries.push(entry('cache_write_12h_price', '12h'))
+      }
     }
   }
   return entries

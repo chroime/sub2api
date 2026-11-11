@@ -165,6 +165,8 @@ func isZeroTokenZeroCostOpenAIUsage(usageLog *UsageLog) bool {
 		usageLog.CacheReadTokens != 0 ||
 		usageLog.CacheCreation5mTokens != 0 ||
 		usageLog.CacheCreation1hTokens != 0 ||
+		usageLog.CacheCreation30mTokens != 0 ||
+		usageLog.CacheCreation12hTokens != 0 ||
 		usageLog.ImageInputTokens != 0 ||
 		usageLog.ImageOutputTokens != 0 {
 		return false
@@ -230,24 +232,39 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		displayOutputTokens = adjusted.Customer.OutputTokens
 	}
 
+	// Keep the lifetime buckets aligned with the customer cache-write total.
+	// Unified token adjustments scale each lifetime; split adjustments fold
+	// cache into normal input and therefore leave no customer lifetime buckets.
+	customerCache30m, customerCache12h := fitCacheBuckets(adjusted.Customer.CacheWriteTokens, result.Usage.CacheCreation30mInputTokens, result.Usage.CacheCreation12hInputTokens)
+	if adjusted.Applied && apiKey != nil {
+		adjustment := tokenUsageAdjustmentForGroup(apiKey.Group)
+		if adjustment.unifiedEnabled() {
+			customerCache30m, customerCache12h = scaleCacheTTLBuckets(result.Usage.CacheCreation30mInputTokens, result.Usage.CacheCreation12hInputTokens, adjustment.UnifiedMultiplier, adjusted.Customer.CacheWriteTokens)
+		}
+	}
+
 	// Calculate cost
 	tokens := UsageTokens{
-		InputTokens:          adjusted.Customer.InputTokens,
-		ImageInputTokens:     max(result.Usage.ImageInputTokens-result.Usage.ImageCacheReadTokens, 0),
-		ImageCacheReadTokens: result.Usage.ImageCacheReadTokens,
-		OutputTokens:         adjusted.Customer.OutputTokens,
-		CacheCreationTokens:  adjusted.Customer.CacheWriteTokens,
-		CacheReadTokens:      adjusted.Customer.CacheReadTokens,
-		ImageOutputTokens:    result.Usage.ImageOutputTokens,
+		InputTokens:            adjusted.Customer.InputTokens,
+		ImageInputTokens:       max(result.Usage.ImageInputTokens-result.Usage.ImageCacheReadTokens, 0),
+		ImageCacheReadTokens:   result.Usage.ImageCacheReadTokens,
+		OutputTokens:           adjusted.Customer.OutputTokens,
+		CacheCreationTokens:    adjusted.Customer.CacheWriteTokens,
+		CacheCreation30mTokens: customerCache30m,
+		CacheCreation12hTokens: customerCache12h,
+		CacheReadTokens:        adjusted.Customer.CacheReadTokens,
+		ImageOutputTokens:      result.Usage.ImageOutputTokens,
 	}
 	rawTokens := UsageTokens{
-		InputTokens:          rawActualInputTokens,
-		ImageInputTokens:     max(result.Usage.ImageInputTokens-result.Usage.ImageCacheReadTokens, 0),
-		ImageCacheReadTokens: result.Usage.ImageCacheReadTokens,
-		OutputTokens:         rawOutputTokens,
-		CacheCreationTokens:  result.Usage.CacheCreationInputTokens,
-		CacheReadTokens:      result.Usage.CacheReadInputTokens,
-		ImageOutputTokens:    result.Usage.ImageOutputTokens,
+		InputTokens:            rawActualInputTokens,
+		ImageInputTokens:       max(result.Usage.ImageInputTokens-result.Usage.ImageCacheReadTokens, 0),
+		ImageCacheReadTokens:   result.Usage.ImageCacheReadTokens,
+		OutputTokens:           rawOutputTokens,
+		CacheCreationTokens:    result.Usage.CacheCreationInputTokens,
+		CacheCreation30mTokens: result.Usage.CacheCreation30mInputTokens,
+		CacheCreation12hTokens: result.Usage.CacheCreation12hInputTokens,
+		CacheReadTokens:        result.Usage.CacheReadInputTokens,
+		ImageOutputTokens:      result.Usage.ImageOutputTokens,
 	}
 
 	// Get rate multiplier
@@ -462,6 +479,8 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		InputTokens:              logInputTokens,
 		OutputTokens:             logOutputTokens,
 		CacheCreationTokens:      adjusted.Customer.CacheWriteTokens,
+		CacheCreation30mTokens:   customerCache30m,
+		CacheCreation12hTokens:   customerCache12h,
 		CacheReadTokens:          adjusted.Customer.CacheReadTokens,
 		ImageInputTokens:         result.Usage.ImageInputTokens,
 		ImageOutputTokens:        result.Usage.ImageOutputTokens,

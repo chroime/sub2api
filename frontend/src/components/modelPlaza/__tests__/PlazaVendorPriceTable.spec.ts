@@ -259,6 +259,21 @@ describe('PlazaVendorPriceTable 长上下文阶梯', () => {
 })
 
 describe('PlazaVendorPriceTable 缓存与思考等级', () => {
+  it.each([false, true])('keeps 12h cache prices distinct in the live vendor table (intervals=%s)', (intervals) => {
+    const m = tokenModel({ name: 'gpt-6-luna', platform: 'openai' })
+    m.pricing!.cache_write_price = null
+    m.pricing!.cache_write_12h_price = 2e-6
+    m.official_pricing = { input_price: 1e-6, output_price: 5e-6, cache_read_price: null, cache_write_price: null, cache_write_12h_price: 4e-6 }
+    if (intervals) {
+      m.pricing!.intervals = [{ min_tokens: 0, max_tokens: null, input_price: null, output_price: null, cache_read_price: null, cache_write_price: null, cache_write_12h_price: 2e-6, per_request_price: null }]
+      m.official_pricing.intervals = [{ min_tokens: 0, max_tokens: null, input_price: 1e-6, output_price: 5e-6, cache_read_price: null, cache_write_price: null, cache_write_12h_price: 4e-6, per_request_price: null }]
+    }
+    const wrapper = mountTable([m])
+    const twelveHour = wrapper.findAll('.plaza-price-pair').find(pair => pair.find('[data-price-tier]').exists() && pair.get('[data-price-tier]').text().includes('12h'))!
+    expect(twelveHour.get('[data-site-price]').text()).toBe('¥2.00')
+    expect(twelveHour.get('[data-reference-price]').text()).toBe('$4.00')
+    expect(wrapper.text()).not.toContain('1h')
+  })
   it('支持 5m/1h 分档时显示 1h 缓存写入价', () => {
     const m = tokenModel()
     m.pricing!.cache_write_1h_price = 6e-6

@@ -180,6 +180,9 @@
                         class="mr-1 font-sans text-gray-400 dark:text-dark-500"
                       >{{ tierLabel(iv) }}</span>
                       <span>{{ official(m, iv[field]) }}</span>
+                      <div v-for="cache in field === 'cache_write_price' ? extraCacheWritePrices(iv) : []" :key="cache.ttl" class="mt-0.5 whitespace-nowrap text-sm text-gray-400 dark:text-dark-500">
+                        {{ cache.ttl }} {{ official(m, cache.price) }}
+                      </div>
                     </div>
                   </template>
                   <template v-else>
@@ -187,11 +190,11 @@
                       {{ official(m, officialPrices(m)![field]) }}
                     </div>
                     <div
-                      v-if="field === 'cache_write_price' && official1hPrice(m) != null"
+                      v-for="cache in field === 'cache_write_price' ? extraCacheWritePrices(isCny(m) ? m.pricing : m.official_pricing) : []"
+                      :key="cache.ttl"
                       class="mt-0.5 whitespace-nowrap text-sm text-gray-400 dark:text-dark-500"
-                      :title="t('modelPlaza.priceTable.cacheWrite1hHint')"
                     >
-                      1h {{ official(m, official1hPrice(m)) }}
+                      {{ cache.ttl }} {{ official(m, cache.price) }}
                     </div>
                   </template>
                 </td>
@@ -398,10 +401,11 @@ function officialIntervals(m: PlazaModel): UserPricingInterval[] {
   return [...(m.official_pricing?.intervals ?? [])].sort((a, b) => a.min_tokens - b.min_tokens)
 }
 
-function official1hPrice(m: PlazaModel): number | null {
-  const p = isCny(m) ? m.pricing : m.official_pricing
-  const v = p?.cache_write_1h_price
-  return v != null && v !== p?.cache_write_price ? v : null
+function extraCacheWritePrices(pricing: { cache_write_price?: number | null; cache_write_1h_price?: number | null; cache_write_12h_price?: number | null } | null) {
+  const prices: { ttl: string; price: number }[] = []
+  if (pricing?.cache_write_1h_price != null && pricing.cache_write_1h_price !== pricing.cache_write_price) prices.push({ ttl: '1h', price: pricing.cache_write_1h_price })
+  if (pricing?.cache_write_12h_price != null) prices.push({ ttl: '12h', price: pricing.cache_write_12h_price })
+  return prices
 }
 
 function unitSuffix(mode: BillingMode): string {

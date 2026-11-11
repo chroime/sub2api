@@ -1,7 +1,7 @@
 import type { AdminUsageLog } from '@/types'
 
 type CacheHitRateUsage = Partial<Pick<AdminUsageLog,
-  'input_tokens' | 'upstream_input_tokens' | 'cache_read_tokens' | 'cache_creation_tokens' | 'cache_creation_5m_tokens' | 'cache_creation_1h_tokens' | 'upstream_cache_read_tokens' | 'upstream_cache_creation_tokens' | 'upstream_cache_creation_5m_tokens' | 'upstream_cache_creation_1h_tokens' | 'usage_limit_audit'
+  'input_tokens' | 'upstream_input_tokens' | 'cache_read_tokens' | 'cache_creation_tokens' | 'cache_creation_5m_tokens' | 'cache_creation_1h_tokens' | 'cache_creation_30m_tokens' | 'cache_creation_12h_tokens' | 'upstream_cache_read_tokens' | 'upstream_cache_creation_tokens' | 'upstream_cache_creation_5m_tokens' | 'upstream_cache_creation_1h_tokens' | 'usage_limit_audit'
 >>
 
 function hasPersistedUpstreamCache(row: CacheHitRateUsage): boolean {
@@ -39,11 +39,13 @@ export function getActualCacheHitRate(row: CacheHitRateUsage): CacheHitRateResul
   const creation1h = useUpstreamCache
     ? (row.upstream_cache_creation_1h_tokens ?? 0)
     : (row.cache_creation_1h_tokens === undefined ? 0 : row.cache_creation_1h_tokens)
-  if (![input, read, creation, creation5m, creation1h].every(isTokenCount)) {
+  const creation30m = useUpstreamCache ? 0 : (row.cache_creation_30m_tokens ?? 0)
+  const creation12h = useUpstreamCache ? 0 : (row.cache_creation_12h_tokens ?? 0)
+  if (![input, read, creation, creation5m, creation1h, creation30m, creation12h].every(isTokenCount)) {
     return { rate: null, reason: 'invalid_tokens' }
   }
 
-  const ttlCreation = creation5m + creation1h
+  const ttlCreation = creation5m + creation1h + creation30m + creation12h
   const totalInput = input + read + Math.max(creation, ttlCreation)
   if (!isTokenCount(ttlCreation) || !isTokenCount(totalInput)) {
     return { rate: null, reason: 'invalid_tokens' }
