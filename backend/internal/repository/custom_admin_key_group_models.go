@@ -25,7 +25,7 @@ func (r *groupRepository) ScopedAdminUpdateGroupModels(ctx context.Context, id i
 	defer func() { _ = tx.Rollback() }()
 	txctx := dbent.NewTxContext(ctx, tx)
 	row, err := tx.Client().Group.Query().Where(group.IDEQ(id), group.DeletedAtIsNil()).
-		Select(group.FieldID, group.FieldName, group.FieldPlatform, group.FieldStatus, group.FieldModelAllowlist).ForUpdate().Only(txctx)
+		Select(group.FieldID, group.FieldName, group.FieldIdentity, group.FieldPlatform, group.FieldStatus, group.FieldModelAllowlist).ForUpdate().Only(txctx)
 	if err != nil {
 		return nil, translatePersistenceError(err, service.ErrGroupNotFound, nil)
 	}
@@ -42,7 +42,7 @@ func (r *groupRepository) ScopedAdminUpdateGroupModels(ctx context.Context, id i
 	if err = tx.Commit(); err != nil {
 		return nil, err
 	}
-	return &service.Group{ID: row.ID, Name: row.Name, Platform: row.Platform, Status: row.Status, ModelAllowlist: cfg}, nil
+	return &service.Group{ID: row.ID, Name: row.Name, Identity: row.Identity, Platform: row.Platform, Status: row.Status, ModelAllowlist: cfg}, nil
 }
 
 // ScopedAdminListGroupModels 在数据库内过滤范围，分页和总数均只包含已授权分组。
@@ -83,7 +83,7 @@ func (r *groupRepository) ScopedAdminListGroupModels(ctx context.Context, params
 	if err != nil {
 		return nil, 0, err
 	}
-	q.Select(group.FieldID, group.FieldName, group.FieldPlatform, group.FieldStatus).Order(group.ByID())
+	q.Select(group.FieldID, group.FieldName, group.FieldIdentity, group.FieldPlatform, group.FieldStatus).Order(group.ByID())
 	if !all {
 		q.Offset(params.Offset()).Limit(params.Limit())
 	}
@@ -95,7 +95,7 @@ func (r *groupRepository) ScopedAdminListGroupModels(ctx context.Context, params
 	modelIDs := make([]int64, 0, len(rows))
 	modelIndexes := make(map[int64]int)
 	for _, row := range rows {
-		result = append(result, service.Group{ID: row.ID, Name: row.Name, Platform: row.Platform, Status: row.Status})
+		result = append(result, service.Group{ID: row.ID, Name: row.Name, Identity: row.Identity, Platform: row.Platform, Status: row.Status})
 		if p.Policy.AllowsGroupConfig("groups.models.read", row.ID, row.Platform) {
 			modelIDs = append(modelIDs, row.ID)
 			modelIndexes[row.ID] = len(result) - 1

@@ -50,6 +50,7 @@
                 <GroupBadge
                   v-if="k.group"
                   :name="k.group.name"
+                  :identity="k.group.identity"
                   :platform="k.group.platform"
                   :subscription-type="k.group.subscription_type"
                   :rate-multiplier="k.group.rate_multiplier"

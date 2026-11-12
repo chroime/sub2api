@@ -427,6 +427,7 @@
                 v-for="sub in row.subscriptions"
                 :key="sub.id"
                 :name="sub.group?.name || ''"
+                :identity="sub.group?.identity"
                 :platform="sub.group?.platform"
                 :subscription-type="sub.group?.subscription_type"
                 :rate-multiplier="sub.group?.rate_multiplier"

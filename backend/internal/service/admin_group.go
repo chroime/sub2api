@@ -385,7 +385,7 @@ func normalizeCreateGroupInputForSimpleMode(input *CreateGroupInput) {
 		return
 	}
 	*input = CreateGroupInput{
-		Name: input.Name, Description: input.Description, I18n: input.I18n, Platform: input.Platform,
+		Name: input.Name, Description: input.Description, I18n: input.I18n, Identity: input.Identity, Platform: input.Platform,
 		RateMultiplier: 1, SubscriptionType: SubscriptionTypeStandard,
 		StreamingACKEnabled: input.StreamingACKEnabled,
 	}
@@ -395,10 +395,14 @@ func normalizeUpdateGroupInputForSimpleMode(input *UpdateGroupInput) {
 	if input == nil {
 		return
 	}
-	*input = UpdateGroupInput{Name: input.Name, Description: input.Description, I18n: input.I18n, StreamingACKEnabled: input.StreamingACKEnabled}
+	*input = UpdateGroupInput{Name: input.Name, Description: input.Description, I18n: input.I18n, Identity: input.Identity, StreamingACKEnabled: input.StreamingACKEnabled}
 }
 
 func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupInput) (*Group, error) {
+	identity, err := domain.NormalizeGroupIdentity(input.Identity)
+	if err != nil {
+		return nil, infraerrors.BadRequest("INVALID_GROUP_IDENTITY", err.Error())
+	}
 	if s.cfg != nil && s.cfg.RunMode == config.RunModeSimple && NormalizeGroupPlatform(input.Platform) == PlatformComposite {
 		return nil, infraerrors.BadRequest("SIMPLE_MODE_GROUP_NOT_BINDABLE", "composite groups are not supported in simple mode")
 	}
@@ -625,6 +629,7 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 		Name:                                 input.Name,
 		Description:                          input.Description,
 		I18n:                                 i18n,
+		Identity:                             identity,
 		Platform:                             platform,
 		RateMultiplier:                       input.RateMultiplier,
 		BillingInputTokenMultiplier:          billingInputMultiplier,
@@ -839,6 +844,14 @@ func (s *adminServiceImpl) validateFallbackGroupOnInvalidRequest(ctx context.Con
 }
 
 func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *UpdateGroupInput) (*Group, error) {
+	var identity *GroupIdentity
+	if input.Identity != nil {
+		normalized, err := domain.NormalizeGroupIdentity(*input.Identity)
+		if err != nil {
+			return nil, infraerrors.BadRequest("INVALID_GROUP_IDENTITY", err.Error())
+		}
+		identity = &normalized
+	}
 	group, err := s.groupRepo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
@@ -855,6 +868,9 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 
 	// 渠道缓存里存了 groupID → platform 的映射，改了平台要让它失效（见函数末尾）
 	previousPlatform := group.Platform
+	if identity != nil {
+		group.Identity = *identity
+	}
 
 	if input.StreamingACKEnabled != nil {
 		group.StreamingACKEnabled = cloneGroupValuePointer(input.StreamingACKEnabled)

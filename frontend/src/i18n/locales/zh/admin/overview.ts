@@ -901,6 +901,14 @@ export default {
 
     // Groups Management
     groups: {
+      identity: {
+        title: '身份标识', optional: '可选', presets: '常用身份',
+        none: '不显示', self: '自营', official: '官方', thirdParty: '第三方',
+        placeholder: '选择预设或填写自定义标识',
+        labelHint: '显示在分组名称前', invalid: '最多 12 个字符，不支持换行或控制字符',
+        color: '标识颜色', customColor: '自定义颜色', preview: '效果预览', previewName: '分组名称',
+        colors: { teal: '青绿', blue: '蓝色', amber: '琥珀', violet: '紫色', rose: '玫红', gray: '灰色' },
+      },
       streamingACK: {
         title: '流式首响 ACK',
         description: '系统总开关开启后，按此分组控制兼容的流式请求；明确设置后优先于账号配置。',

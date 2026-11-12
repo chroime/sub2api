@@ -5,6 +5,7 @@
  */
 
 import { apiClient } from './client'
+import type { GroupIdentity } from '@/types'
 import type { UserPricingInterval, UserSupportedModelPricing } from './channels'
 import type { BillingMode } from '@/constants/channel'
 
@@ -67,6 +68,7 @@ export interface PlazaModel {
 
 export interface ModelPlazaGroup {
   id: number
+  identity?: GroupIdentity
   /** 后台分组管理的自定义顺序；旧版响应缺省按 0 处理。 */
   sort_order?: number
   name: string

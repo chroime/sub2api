@@ -89,19 +89,20 @@ type modelPlazaModel struct {
 
 // modelPlazaGroup 广场分组条目（白名单字段）。
 type modelPlazaGroup struct {
-	ID                 int64    `json:"id"`
-	SortOrder          int      `json:"sort_order"`
-	Name               string   `json:"name"`
-	Description        string   `json:"description"`
-	Platform           string   `json:"platform"`
-	SubscriptionType   string   `json:"subscription_type"`
-	RateMultiplier     float64  `json:"rate_multiplier"`
-	UserRateMultiplier *float64 `json:"user_rate_multiplier,omitempty"`
-	PeakRateEnabled    bool     `json:"peak_rate_enabled"`
-	PeakStart          string   `json:"peak_start"`
-	PeakEnd            string   `json:"peak_end"`
-	PeakRateMultiplier float64  `json:"peak_rate_multiplier"`
-	IsExclusive        bool     `json:"is_exclusive"`
+	ID                 int64                 `json:"id"`
+	SortOrder          int                   `json:"sort_order"`
+	Name               string                `json:"name"`
+	Description        string                `json:"description"`
+	Identity           service.GroupIdentity `json:"identity"`
+	Platform           string                `json:"platform"`
+	SubscriptionType   string                `json:"subscription_type"`
+	RateMultiplier     float64               `json:"rate_multiplier"`
+	UserRateMultiplier *float64              `json:"user_rate_multiplier,omitempty"`
+	PeakRateEnabled    bool                  `json:"peak_rate_enabled"`
+	PeakStart          string                `json:"peak_start"`
+	PeakEnd            string                `json:"peak_end"`
+	PeakRateMultiplier float64               `json:"peak_rate_multiplier"`
+	IsExclusive        bool                  `json:"is_exclusive"`
 	// 生图独立倍率：为 true 时图片计费模型的实付倍率取 ImageRateMultiplier，
 	// 不取分组/用户专属倍率。
 	ImageRateIndependent bool    `json:"image_rate_independent"`
@@ -218,6 +219,7 @@ func toModelPlazaGroupDTO(g *service.PlazaGroup, userRates map[int64]float64) mo
 		SortOrder:                 g.SortOrder,
 		Name:                      g.Name,
 		Description:               g.Description,
+		Identity:                  g.Identity,
 		Platform:                  g.Platform,
 		SubscriptionType:          g.SubscriptionType,
 		RateMultiplier:            g.RateMultiplier,

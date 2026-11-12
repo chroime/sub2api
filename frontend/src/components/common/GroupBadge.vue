@@ -1,10 +1,11 @@
 <template>
   <span
     :class="[
-      'inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium transition-colors',
+      'inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium transition-colors',
       badgeClass
     ]"
   >
+    <GroupIdentityBadge :identity="identity" />
     <!-- Platform logo -->
     <PlatformIcon v-if="platform" :platform="platform" size="sm" />
     <!-- Group name -->
@@ -29,13 +30,15 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { SubscriptionType, GroupPlatform } from '@/types'
+import type { SubscriptionType, GroupPlatform, GroupIdentity } from '@/types'
 import { useAppStore } from '@/stores/app'
 import { formatPeakRateWindow, serverTimezoneLabel } from '@/utils/peak-rate'
 import PlatformIcon from './PlatformIcon.vue'
+import GroupIdentityBadge from './GroupIdentityBadge.vue'
 
 interface Props {
   name: string
+  identity?: GroupIdentity | null
   platform?: GroupPlatform
   subscriptionType?: SubscriptionType
   rateMultiplier?: number
@@ -130,7 +133,7 @@ const labelText = computed(() => {
 
 // Label style based on type and days remaining
 const labelClass = computed(() => {
-  const base = 'px-1.5 py-0.5 rounded text-[10px] font-semibold'
+  const base = 'shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold'
 
   if (!isSubscription.value) {
     // Standard: subtle background (不再为专属倍率使用不同的背景色)
@@ -184,7 +187,7 @@ const labelClass = computed(() => {
 })
 
 const peakRateClass = computed(() => {
-  return 'px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+  return 'shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
 })
 
 // Badge color based on platform and subscription type

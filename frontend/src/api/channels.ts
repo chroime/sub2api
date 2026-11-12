@@ -8,6 +8,7 @@ import type { BillingMode } from '@/constants/channel'
 
 export interface UserAvailableGroup {
   id: number
+  identity?: import('@/types').GroupIdentity
   name: string
   platform: string
   /** 'standard' | 'subscription' — 订阅分组视觉加深，和 API 密钥页保持一致。 */

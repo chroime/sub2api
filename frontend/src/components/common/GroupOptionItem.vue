@@ -8,6 +8,7 @@
       <!-- Row 1: platform badge (name bold) -->
       <GroupBadge
         :name="name"
+        :identity="identity"
         :platform="platform"
         :subscription-type="subscriptionType"
         :show-rate="false"
@@ -62,7 +63,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import GroupBadge from './GroupBadge.vue'
-import type { SubscriptionType, GroupPlatform } from '@/types'
+import type { SubscriptionType, GroupPlatform, GroupIdentity } from '@/types'
 import { useAppStore } from '@/stores/app'
 import { formatPeakRateWindow, serverTimezoneLabel } from '@/utils/peak-rate'
 
@@ -70,6 +71,7 @@ const { t } = useI18n()
 
 interface Props {
   name: string
+  identity?: GroupIdentity | null
   platform: GroupPlatform
   subscriptionType?: SubscriptionType
   rateMultiplier?: number

@@ -28,6 +28,8 @@ const (
 	FieldDescription = "description"
 	// FieldI18n holds the string denoting the i18n field in the database.
 	FieldI18n = "i18n"
+	// FieldIdentity holds the string denoting the identity field in the database.
+	FieldIdentity = "identity"
 	// FieldRateMultiplier holds the string denoting the rate_multiplier field in the database.
 	FieldRateMultiplier = "rate_multiplier"
 	// FieldBillingInputTokenMultiplier holds the string denoting the billing_input_token_multiplier field in the database.
@@ -251,6 +253,7 @@ var Columns = []string{
 	FieldName,
 	FieldDescription,
 	FieldI18n,
+	FieldIdentity,
 	FieldRateMultiplier,
 	FieldBillingInputTokenMultiplier,
 	FieldBillingOutputTokenMultiplier,
@@ -361,6 +364,8 @@ var (
 	NameValidator func(string) error
 	// DefaultI18n holds the default value on creation for the "i18n" field.
 	DefaultI18n domain.GroupI18n
+	// DefaultIdentity holds the default value on creation for the "identity" field.
+	DefaultIdentity domain.GroupIdentity
 	// DefaultRateMultiplier holds the default value on creation for the "rate_multiplier" field.
 	DefaultRateMultiplier float64
 	// DefaultBillingInputTokenMultiplier holds the default value on creation for the "billing_input_token_multiplier" field.

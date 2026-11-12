@@ -3927,6 +3927,7 @@
                         <template #selected="{ option }">
                           <GroupBadge
                             v-if="option"
+                            :identity="(option as unknown as DefaultSubscriptionGroupOption).identity"
                             :name="
                               (
                                 option as unknown as DefaultSubscriptionGroupOption
@@ -3954,6 +3955,7 @@
                         </template>
                         <template #option="{ option, selected }">
                           <GroupOptionItem
+                            :identity="(option as unknown as DefaultSubscriptionGroupOption).identity"
                             :name="
                               (
                                 option as unknown as DefaultSubscriptionGroupOption
@@ -4257,6 +4259,7 @@
                             <template #selected="{ option }">
                               <GroupBadge
                                 v-if="option"
+                                :identity="(option as unknown as DefaultSubscriptionGroupOption).identity"
                                 :name="
                                   (
                                     option as unknown as DefaultSubscriptionGroupOption
@@ -4286,6 +4289,7 @@
                             </template>
                             <template #option="{ option, selected }">
                               <GroupOptionItem
+                                :identity="(option as unknown as DefaultSubscriptionGroupOption).identity"
                                 :name="
                                   (
                                     option as unknown as DefaultSubscriptionGroupOption
@@ -9731,6 +9735,7 @@ function resetClaudeOAuthSystemPromptBlocks(): void {
 
 interface DefaultSubscriptionGroupOption {
   value: number;
+  identity?: AdminGroup['identity'];
   label: string;
   description: string | null;
   platform: AdminGroup["platform"];
@@ -10511,6 +10516,7 @@ const defaultSubscriptionGroupOptions = computed<
   subscriptionGroups.value.map((group) => ({
     value: group.id,
     label: group.name,
+    identity: group.identity,
     description: group.description,
     platform: group.platform,
     subscriptionType: group.subscription_type,

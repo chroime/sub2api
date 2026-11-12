@@ -98,6 +98,20 @@ func (_c *GroupCreate) SetI18n(v domain.GroupI18n) *GroupCreate {
 	return _c
 }
 
+// SetIdentity sets the "identity" field.
+func (_c *GroupCreate) SetIdentity(v domain.GroupIdentity) *GroupCreate {
+	_c.mutation.SetIdentity(v)
+	return _c
+}
+
+// SetNillableIdentity sets the "identity" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableIdentity(v *domain.GroupIdentity) *GroupCreate {
+	if v != nil {
+		_c.SetIdentity(*v)
+	}
+	return _c
+}
+
 // SetRateMultiplier sets the "rate_multiplier" field.
 func (_c *GroupCreate) SetRateMultiplier(v float64) *GroupCreate {
 	_c.mutation.SetRateMultiplier(v)
@@ -1197,6 +1211,10 @@ func (_c *GroupCreate) defaults() error {
 		v := group.DefaultI18n
 		_c.mutation.SetI18n(v)
 	}
+	if _, ok := _c.mutation.Identity(); !ok {
+		v := group.DefaultIdentity
+		_c.mutation.SetIdentity(v)
+	}
 	if _, ok := _c.mutation.RateMultiplier(); !ok {
 		v := group.DefaultRateMultiplier
 		_c.mutation.SetRateMultiplier(v)
@@ -1418,6 +1436,9 @@ func (_c *GroupCreate) check() error {
 	}
 	if _, ok := _c.mutation.I18n(); !ok {
 		return &ValidationError{Name: "i18n", err: errors.New(`ent: missing required field "Group.i18n"`)}
+	}
+	if _, ok := _c.mutation.Identity(); !ok {
+		return &ValidationError{Name: "identity", err: errors.New(`ent: missing required field "Group.identity"`)}
 	}
 	if _, ok := _c.mutation.RateMultiplier(); !ok {
 		return &ValidationError{Name: "rate_multiplier", err: errors.New(`ent: missing required field "Group.rate_multiplier"`)}
@@ -1689,6 +1710,10 @@ func (_c *GroupCreate) createSpec() (*Group, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.I18n(); ok {
 		_spec.SetField(group.FieldI18n, field.TypeJSON, value)
 		_node.I18n = value
+	}
+	if value, ok := _c.mutation.Identity(); ok {
+		_spec.SetField(group.FieldIdentity, field.TypeJSON, value)
+		_node.Identity = value
 	}
 	if value, ok := _c.mutation.RateMultiplier(); ok {
 		_spec.SetField(group.FieldRateMultiplier, field.TypeFloat64, value)
@@ -2199,6 +2224,18 @@ func (u *GroupUpsert) SetI18n(v domain.GroupI18n) *GroupUpsert {
 // UpdateI18n sets the "i18n" field to the value that was provided on create.
 func (u *GroupUpsert) UpdateI18n() *GroupUpsert {
 	u.SetExcluded(group.FieldI18n)
+	return u
+}
+
+// SetIdentity sets the "identity" field.
+func (u *GroupUpsert) SetIdentity(v domain.GroupIdentity) *GroupUpsert {
+	u.Set(group.FieldIdentity, v)
+	return u
+}
+
+// UpdateIdentity sets the "identity" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateIdentity() *GroupUpsert {
+	u.SetExcluded(group.FieldIdentity)
 	return u
 }
 
@@ -3483,6 +3520,20 @@ func (u *GroupUpsertOne) SetI18n(v domain.GroupI18n) *GroupUpsertOne {
 func (u *GroupUpsertOne) UpdateI18n() *GroupUpsertOne {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateI18n()
+	})
+}
+
+// SetIdentity sets the "identity" field.
+func (u *GroupUpsertOne) SetIdentity(v domain.GroupIdentity) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetIdentity(v)
+	})
+}
+
+// UpdateIdentity sets the "identity" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateIdentity() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateIdentity()
 	})
 }
 
@@ -5125,6 +5176,20 @@ func (u *GroupUpsertBulk) SetI18n(v domain.GroupI18n) *GroupUpsertBulk {
 func (u *GroupUpsertBulk) UpdateI18n() *GroupUpsertBulk {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateI18n()
+	})
+}
+
+// SetIdentity sets the "identity" field.
+func (u *GroupUpsertBulk) SetIdentity(v domain.GroupIdentity) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetIdentity(v)
+	})
+}
+
+// UpdateIdentity sets the "identity" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateIdentity() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateIdentity()
 	})
 }
 

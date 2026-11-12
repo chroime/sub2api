@@ -904,6 +904,14 @@ export default {
 
     // Groups
     groups: {
+      identity: {
+        title: 'Identity badge', optional: 'Optional', presets: 'Identity presets',
+        none: 'Hidden', self: 'Self-run', official: 'Official', thirdParty: 'Third-party',
+        placeholder: 'Choose a preset or enter a custom label',
+        labelHint: 'Shown before the group name', invalid: 'Use at most 12 characters without line breaks or control characters',
+        color: 'Badge color', customColor: 'Custom color', preview: 'Preview', previewName: 'Group name',
+        colors: { teal: 'Teal', blue: 'Blue', amber: 'Amber', violet: 'Violet', rose: 'Rose', gray: 'Gray' },
+      },
       streamingACK: {
         title: 'Streaming first-response ACK',
         description: 'Controls compatible streams in this group when the system master switch is on. An explicit choice overrides account settings.',

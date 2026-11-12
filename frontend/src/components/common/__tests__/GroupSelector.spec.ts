@@ -11,13 +11,13 @@ vi.mock('vue-i18n', async () => {
 })
 
 const groups = [
-  { id: 1, name: 'Basic', platform: 'anthropic', status: 'active' },
+  { id: 1, name: 'Basic', platform: 'anthropic', status: 'active', identity: { label: '自营', color: 'teal' } },
   { id: 2, name: 'Composite', platform: 'composite', status: 'active' }
 ] as any
 
 const mountSelector = (modelValue: number[] = []) => mount(GroupSelector, {
   props: { modelValue, groups },
-  global: { stubs: { GroupBadge: { props: ['name'], template: '<span>{{ name }}</span>' }, Icon: true } }
+  global: { stubs: { GroupBadge: { props: ['name', 'identity'], template: '<span>{{ name }}{{ identity?.label }}</span>' }, Icon: true } }
 })
 
 describe('GroupSelector simple-mode binding policy', () => {
@@ -33,6 +33,13 @@ describe('GroupSelector simple-mode binding policy', () => {
   it('keeps composite groups available in advanced mode', () => {
     const wrapper = mountSelector()
     expect(wrapper.text()).toContain('Composite')
+  })
+
+  it('passes explicit identities without changing group selection', async () => {
+    const wrapper = mountSelector()
+    expect(wrapper.text()).toContain('自营')
+    await wrapper.get<HTMLInputElement>('input[type="checkbox"][value="1"]').setValue(true)
+    expect(wrapper.emitted('update:modelValue')).toEqual([[[1]]])
   })
 
   it('cleans hidden historical composite IDs while preserving visible selections', () => {

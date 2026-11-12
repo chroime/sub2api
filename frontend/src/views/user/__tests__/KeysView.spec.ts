@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
-import { nextTick } from 'vue'
+import { nextTick, type Component } from 'vue'
 
-import type { ApiKey } from '@/types'
+import type { ApiKey, Group } from '@/types'
 import { keysAPI } from '@/api'
 import KeysView from '../KeysView.vue'
 
@@ -183,6 +183,7 @@ const DataTableStub = {
           <slot name="cell-id" :value="row.id" :row="row" />
         </div>
         <slot name="cell-name" :value="row.name" :row="row" />
+        <slot name="cell-group" :row="row" />
         <slot name="cell-actions" :row="row" />
         <div data-test="current-concurrency">
           <slot name="cell-current_concurrency" :value="row.current_concurrency" :row="row" />
@@ -234,7 +235,7 @@ const IconStub = {
   template: '<span data-test="icon">{{ name }}</span>',
 }
 
-const mountView = async () => {
+const mountView = async (stubOverrides: Record<string, Component | boolean> = {}) => {
   const wrapper = mount(KeysView, {
     global: {
       stubs: {
@@ -258,6 +259,7 @@ const mountView = async () => {
         GroupBadge: true,
         GroupOptionItem: true,
         Teleport: true,
+        ...stubOverrides,
       },
     },
   })
@@ -378,6 +380,36 @@ describe('user KeysView column settings', () => {
     expect(visibleColumnKeys(wrapper)).not.toContain('last_used_at')
     expect(visibleColumnKeys(wrapper)).not.toContain('last_used_ip')
     expect(visibleColumnKeys(wrapper)).not.toContain('id')
+  })
+
+  it('retains configured identities in key rows, create/edit options and inline group switching', async () => {
+    const identity = { label: '自营', color: 'blue' } as const
+    const group = { id: 11, name: 'Shared label', platform: 'openai', identity, rate_multiplier: 1, subscription_type: 'standard', description: 'Detailed description' } as Group
+    const key = createApiKey({ group_id: group.id, group })
+    getAvailableGroups.mockResolvedValue([group])
+    listKeys.mockResolvedValue({ items: [key], total: 1, page: 1, page_size: 20, pages: 1 })
+    const selectedStub = {
+      ...SelectStub,
+      template: '<div><slot name="selected" :option="options.find(option => option.value === modelValue)" /><div v-for="option in options" :key="option.value"><slot name="option" :option="option" :selected="option.value === modelValue" /></div></div>',
+    }
+    const wrapper = await mountView({ Select: selectedStub })
+    expect(wrapper.findComponent({ name: 'GroupBadge' }).props('identity')).toEqual(identity)
+    await wrapper.get('[data-tour="keys-create-btn"]').trigger('click')
+    const select = wrapper.findComponent('[data-tour="key-form-group"]')
+    expect(select.props('options')[0]).toMatchObject({ identity, description: 'Detailed description' })
+    select.vm.$emit('update:modelValue', group.id)
+    await nextTick()
+    expect(select.findComponent({ name: 'GroupBadge' }).props('identity')).toEqual(identity)
+    expect(select.findComponent({ name: 'GroupOptionItem' }).props('identity')).toEqual(identity)
+    await wrapper.get('[data-test="close-dialog"]').trigger('click')
+    await getButtonByText(wrapper, 'common.edit').trigger('click')
+    expect(wrapper.findComponent('[data-tour="key-form-group"]').props('options')[0].identity).toEqual(identity)
+    await wrapper.get('[data-test="close-dialog"]').trigger('click')
+    const groupButton = wrapper.findAll('button').find(button => button.findComponent({ name: 'GroupBadge' }).exists())!
+    await groupButton.trigger('click')
+    await nextTick()
+    expect(wrapper.findComponent({ name: 'GroupOptionItem' }).props('identity')).toEqual(identity)
+    wrapper.unmount()
   })
 
   it('opens bulk editing with only selected visible keys', async () => {

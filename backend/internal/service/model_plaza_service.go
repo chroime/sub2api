@@ -58,6 +58,7 @@ type PlazaGroup struct {
 	Name               string
 	Description        string
 	I18n               GroupI18n
+	Identity           GroupIdentity
 	Platform           string
 	SubscriptionType   string
 	RateMultiplier     float64
@@ -179,6 +180,7 @@ func (s *ModelPlazaService) ListGroupsWithAccountModels(ctx context.Context, acc
 			Name:                      g.Name,
 			Description:               g.Description,
 			I18n:                      g.I18n,
+			Identity:                  g.Identity,
 			Platform:                  g.Platform,
 			SubscriptionType:          g.SubscriptionType,
 			RateMultiplier:            g.RateMultiplier,

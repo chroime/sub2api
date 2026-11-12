@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 )
@@ -68,27 +69,29 @@ type GroupSortOrderUpdate struct {
 
 // CreateGroupRequest 创建分组请求
 type CreateGroupRequest struct {
-	Name                 string   `json:"name"`
-	Description          string   `json:"description"`
-	RateMultiplier       float64  `json:"rate_multiplier"`
-	IsExclusive          bool     `json:"is_exclusive"`
-	AllowImageGeneration bool     `json:"allow_image_generation"`
-	ImageCountBilling    bool     `json:"image_count_billing"`
-	ImageRateIndependent bool     `json:"image_rate_independent"`
-	ImageRateMultiplier  *float64 `json:"image_rate_multiplier"`
+	Name                 string        `json:"name"`
+	Description          string        `json:"description"`
+	Identity             GroupIdentity `json:"identity"`
+	RateMultiplier       float64       `json:"rate_multiplier"`
+	IsExclusive          bool          `json:"is_exclusive"`
+	AllowImageGeneration bool          `json:"allow_image_generation"`
+	ImageCountBilling    bool          `json:"image_count_billing"`
+	ImageRateIndependent bool          `json:"image_rate_independent"`
+	ImageRateMultiplier  *float64      `json:"image_rate_multiplier"`
 }
 
 // UpdateGroupRequest 更新分组请求
 type UpdateGroupRequest struct {
-	Name                 *string  `json:"name"`
-	Description          *string  `json:"description"`
-	RateMultiplier       *float64 `json:"rate_multiplier"`
-	IsExclusive          *bool    `json:"is_exclusive"`
-	Status               *string  `json:"status"`
-	AllowImageGeneration *bool    `json:"allow_image_generation"`
-	ImageCountBilling    *bool    `json:"image_count_billing"`
-	ImageRateIndependent *bool    `json:"image_rate_independent"`
-	ImageRateMultiplier  *float64 `json:"image_rate_multiplier"`
+	Name                 *string        `json:"name"`
+	Description          *string        `json:"description"`
+	Identity             *GroupIdentity `json:"identity"`
+	RateMultiplier       *float64       `json:"rate_multiplier"`
+	IsExclusive          *bool          `json:"is_exclusive"`
+	Status               *string        `json:"status"`
+	AllowImageGeneration *bool          `json:"allow_image_generation"`
+	ImageCountBilling    *bool          `json:"image_count_billing"`
+	ImageRateIndependent *bool          `json:"image_rate_independent"`
+	ImageRateMultiplier  *float64       `json:"image_rate_multiplier"`
 }
 
 // GroupService 分组管理服务
@@ -107,6 +110,10 @@ func NewGroupService(groupRepo GroupRepository, authCacheInvalidator APIKeyAuthC
 
 // Create 创建分组
 func (s *GroupService) Create(ctx context.Context, req CreateGroupRequest) (*Group, error) {
+	identity, err := domain.NormalizeGroupIdentity(req.Identity)
+	if err != nil {
+		return nil, infraerrors.BadRequest("INVALID_GROUP_IDENTITY", err.Error())
+	}
 	// 该入口固定创建 Anthropic 分组，而按张计费只支持 composite / openai 平台，
 	// 必须拒绝，避免写入永远不生效的开关。
 	if req.ImageCountBilling {
@@ -132,6 +139,7 @@ func (s *GroupService) Create(ctx context.Context, req CreateGroupRequest) (*Gro
 	group := &Group{
 		Name:                 req.Name,
 		Description:          req.Description,
+		Identity:             identity,
 		Platform:             PlatformAnthropic,
 		RateMultiplier:       req.RateMultiplier,
 		IsExclusive:          req.IsExclusive,
@@ -179,12 +187,23 @@ func (s *GroupService) ListActive(ctx context.Context) ([]Group, error) {
 
 // Update 更新分组
 func (s *GroupService) Update(ctx context.Context, id int64, req UpdateGroupRequest) (*Group, error) {
+	var identity *GroupIdentity
+	if req.Identity != nil {
+		normalized, err := domain.NormalizeGroupIdentity(*req.Identity)
+		if err != nil {
+			return nil, infraerrors.BadRequest("INVALID_GROUP_IDENTITY", err.Error())
+		}
+		identity = &normalized
+	}
 	group, err := s.groupRepo.GetByID(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("get group: %w", err)
 	}
 
 	// 更新字段
+	if identity != nil {
+		group.Identity = *identity
+	}
 	if req.Name != nil && *req.Name != group.Name {
 		// 检查新名称是否已存在
 		exists, err := s.groupRepo.ExistsByName(ctx, *req.Name)

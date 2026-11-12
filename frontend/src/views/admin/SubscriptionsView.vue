@@ -237,6 +237,7 @@
             <GroupBadge
               v-if="row.group"
               :name="row.group.name"
+              :identity="row.group.identity"
               :platform="row.group.platform"
               :subscription-type="row.group.subscription_type"
               :rate-multiplier="row.group.rate_multiplier"
@@ -587,6 +588,7 @@
               <GroupBadge
                 v-if="option"
                 :name="(option as unknown as GroupOption).label"
+                :identity="(option as unknown as GroupOption).identity"
                 :platform="(option as unknown as GroupOption).platform"
                 :subscription-type="(option as unknown as GroupOption).subscriptionType"
                 :rate-multiplier="(option as unknown as GroupOption).rate"
@@ -596,6 +598,7 @@
             <template #option="{ option, selected }">
               <GroupOptionItem
                 :name="(option as unknown as GroupOption).label"
+                :identity="(option as unknown as GroupOption).identity"
                 :platform="(option as unknown as GroupOption).platform"
                 :subscription-type="(option as unknown as GroupOption).subscriptionType"
                 :rate-multiplier="(option as unknown as GroupOption).rate"
@@ -876,6 +879,7 @@ const appStore = useAppStore()
 
 interface GroupOption {
   value: number
+  identity?: Group['identity']
   label: string
   description: string | null
   platform: GroupPlatform
@@ -1121,6 +1125,7 @@ const subscriptionGroupOptions = computed(() =>
     .map((g) => ({
       value: g.id,
       label: g.name,
+      identity: g.identity,
       description: g.description,
       platform: g.platform,
       subscriptionType: g.subscription_type,

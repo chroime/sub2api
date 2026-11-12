@@ -4,6 +4,8 @@ import ModelPlazaContent from '../ModelPlazaContent.vue'
 import PlazaVendorTree from '../PlazaVendorTree.vue'
 import PlazaVendorPriceTable from '../PlazaVendorPriceTable.vue'
 import Select from '@/components/common/Select.vue'
+import GroupBadge from '@/components/common/GroupBadge.vue'
+import GroupOptionItem from '@/components/common/GroupOptionItem.vue'
 import type { ModelPlazaGroup, PlazaModel } from '@/api/modelPlaza'
 
 const { auth } = vi.hoisted(() => ({ auth: vi.fn() }))
@@ -88,9 +90,8 @@ describe('model plaza group selection', () => {
     ]
     const wrapper = render(groups, embedded)
     await wrapper.get('#plaza-group-select').trigger('click')
-    expect(wrapper.findAll('[role="option"]').map(option => option.text())).toEqual([
-      'modelPlaza.priceTable.allGroups', 'Z first · 2x', 'B same order · 4x', 'A cheap · 0.01x'
-    ])
+    expect(wrapper.findAllComponents(GroupOptionItem).map(option => option.props('name'))).toEqual(['Z first', 'B same order', 'A cheap'])
+    expect(wrapper.findAllComponents(GroupOptionItem).map(option => option.props('userRateMultiplier'))).toEqual([2, 4, 0.01])
     expect(wrapper.getComponent(Select).props('options').map(option => option.value)).toEqual(['all', 20, 10, 30])
     expect(groups.map(item => item.id)).toEqual([30, 20, 10])
     wrapper.unmount()
@@ -103,6 +104,32 @@ describe('model plaza group selection', () => {
       group({ id: 20, name: 'First', sort_order: -1 })
     ])
     expect(wrapper.getComponent(Select).props('options').map(option => option.value)).toEqual(['all', 20, 10, 30])
+    wrapper.unmount()
+  })
+
+  it('shows explicit group identity and descriptions while retaining custom and peak rates', async () => {
+    const identity = { label: '自营', color: 'teal' } as const
+    const selected = group({ id: 10, name: 'Flagship', description: 'Full description', identity, rate_multiplier: 1, user_rate_multiplier: 0.35, peak_rate_enabled: true, peak_start: '14:00', peak_end: '18:00', peak_rate_multiplier: 2 })
+    const wrapper = render([selected, group({ id: 20, name: 'Unlabelled', is_exclusive: true })], true)
+    await wrapper.get('#plaza-group-select').trigger('click')
+    const option = wrapper.findAllComponents(GroupOptionItem).find(item => item.props('name') === 'Flagship')!
+    expect(option).toBeDefined()
+    expect(option.get('[data-group-identity]').text()).toBe('自营')
+    expect(option.text()).toContain('Full description')
+    expect(option.text()).toContain('0.35x')
+    expect(option.text()).toContain('14:00-18:00 ×2')
+    const unlabelled = wrapper.findAllComponents(GroupOptionItem).find(item => item.props('name') === 'Unlabelled')!
+    expect(unlabelled.find('[data-group-identity]').exists()).toBe(false)
+    await wrapper.findAll('[role="option"]')[1]!.trigger('click')
+    const current = wrapper.get('#plaza-group-select').getComponent(GroupBadge)
+    expect(current.props('identity')).toEqual(identity)
+    expect(current.props('rateMultiplier')).toBe(1)
+    expect(current.props('userRateMultiplier')).toBe(0.35)
+    expect(current.props('alwaysShowRate')).toBe(true)
+    expectModelScope(wrapper, [], selected.id)
+    await selectGroup(wrapper, 'all')
+    expect(wrapper.get('#plaza-group-select').find('[data-group-identity]').exists()).toBe(false)
+    expect(wrapper.get('#plaza-group-select').text()).toBe('modelPlaza.priceTable.allGroups')
     wrapper.unmount()
   })
 

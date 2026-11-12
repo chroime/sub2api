@@ -39,6 +39,7 @@
         />
         <GroupBadge
           :name="group.name"
+          :identity="group.identity"
           :platform="group.platform"
           :subscription-type="group.subscription_type || undefined"
           :rate-multiplier="group.rate_multiplier == null ? undefined : group.rate_multiplier"

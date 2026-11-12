@@ -124,10 +124,14 @@
           default-sort-order="asc"
           @sort="handleSort"
         >
-          <template #cell-name="{ value }">
-            <span class="font-medium text-gray-900 dark:text-white">{{
-              value
-            }}</span>
+          <template #cell-name="{ row }">
+            <GroupBadge
+              :name="row.name"
+              :platform="row.platform"
+              :identity="row.identity"
+              :show-rate="false"
+              :truncate="false"
+            />
           </template>
 
           <template #cell-id="{ value }">
@@ -510,6 +514,13 @@
             data-tour="group-form-name"
           />
         </div>
+        <GroupIdentityEditor
+          id="create-group-identity"
+          ref="createIdentityRef"
+          v-model="createForm.identity"
+          :name="createForm.name"
+          :platform="createForm.platform"
+        />
         <div>
           <GroupI18nField
             v-model="createForm.description"
@@ -2230,6 +2241,13 @@
             data-tour="edit-group-form-name"
           />
         </div>
+        <GroupIdentityEditor
+          id="edit-group-identity"
+          ref="editIdentityRef"
+          v-model="editForm.identity"
+          :name="editForm.name"
+          :platform="editForm.platform"
+        />
         <div>
           <GroupI18nField
             v-model="editForm.description"
@@ -4458,6 +4476,7 @@ import type {
   CompositeRouteEndpoint,
   CompositeRouteMatchType,
   GroupI18n,
+  GroupIdentity,
   GroupPlatform,
   SubscriptionType,
 } from "@/types";
@@ -4479,6 +4498,8 @@ import PlatformIcon from "@/components/common/PlatformIcon.vue";
 import { platformLabel } from "@/utils/platformColors";
 import Icon from "@/components/icons/Icon.vue";
 import GroupI18nField from "@/components/admin/group/GroupI18nField.vue";
+import GroupIdentityEditor from "@/components/admin/group/GroupIdentityEditor.vue";
+import GroupBadge from "@/components/common/GroupBadge.vue";
 import GroupRateMultipliersModal from "@/components/admin/group/GroupRateMultipliersModal.vue";
 import GroupRPMOverridesModal from "@/components/admin/group/GroupRPMOverridesModal.vue";
 import GroupBalancePrechargeSettings from "@/components/admin/group/GroupBalancePrechargeSettings.vue";
@@ -5083,6 +5104,8 @@ const createReasoningEffortPolicyRef = ref<ReasoningEffortPolicyFieldsExpose | n
 const editReasoningEffortPolicyRef = ref<ReasoningEffortPolicyFieldsExpose | null>(null);
 const createInputRoutingRef = ref<{ validate: () => boolean } | null>(null);
 const editInputRoutingRef = ref<{ validate: () => boolean } | null>(null);
+const createIdentityRef = ref<{ validate: () => boolean } | null>(null);
+const editIdentityRef = ref<{ validate: () => boolean } | null>(null);
 
 // 固定账号获取 Codex Model Manifest（仅 openai 分组编辑对话框）
 type CodexManifestAccountsFieldExpose = {
@@ -5134,6 +5157,7 @@ const submitEditAllowlistCustomEntry = () => {
 };
 
 const createForm = reactive({
+  identity: {} as GroupIdentity,
   input_routing: cloneGroupInputRouting(),
   streaming_ack_enabled: false,
   name: "",
@@ -5509,6 +5533,7 @@ const convertApiFormatToRoutingRules = async (
 };
 
 const editForm = reactive({
+  identity: {} as GroupIdentity,
   input_routing: cloneGroupInputRouting(),
   streaming_ack_enabled: null as boolean | null,
   name: "",
@@ -5997,6 +6022,7 @@ const closeCreateModal = () => {
   });
   clearAllAccountSearchState();
   createForm.name = "";
+  createForm.identity = {};
   createForm.description = "";
   createForm.i18n = {};
   createForm.platform = "anthropic";
@@ -6119,6 +6145,7 @@ const validateGroupReasoningMultipliers = (pricing: PricingFormEntry[]): boolean
 };
 
 const handleCreateGroup = async () => {
+  if (createIdentityRef.value && !createIdentityRef.value.validate()) return;
   if (!createForm.name.trim()) {
     appStore.showError(t("admin.groups.nameRequired"));
     return;
@@ -6271,6 +6298,7 @@ const handleCreateGroup = async () => {
     const payload = authStore.isSimpleMode
       ? {
           name: createForm.name,
+          identity: { ...createForm.identity },
           description: createForm.description,
           i18n: createForm.i18n,
           platform: createForm.platform,
@@ -6300,6 +6328,7 @@ const handleEdit = async (group: AdminGroup) => {
   editingGroup.value = group;
   editForm.input_routing = cloneGroupInputRouting(group.input_routing);
   editForm.name = group.name;
+  editForm.identity = { ...group.identity };
   editForm.description = group.description || "";
   editForm.i18n = Object.fromEntries(
     Object.entries(group.i18n ?? {}).map(([locale, text]) => [
@@ -6485,6 +6514,7 @@ const closeEditModal = () => {
 };
 
 const handleUpdateGroup = async () => {
+  if (editIdentityRef.value && !editIdentityRef.value.validate()) return;
   if (!editingGroup.value) return;
   if (!editForm.name.trim()) {
     appStore.showError(t("admin.groups.nameRequired"));
@@ -6659,6 +6689,7 @@ const handleUpdateGroup = async () => {
     const requestData = authStore.isSimpleMode
       ? {
           name: editForm.name,
+          identity: { ...editForm.identity },
           description: editForm.description,
           ...(ackPolicy === null ? {} : { streaming_ack_enabled: ackPolicy }),
           i18n: editForm.i18n,

@@ -11,6 +11,7 @@ import (
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/group"
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
@@ -160,6 +161,10 @@ func createGroupRecord(ctx context.Context, client *dbent.Client, groupIn *servi
 	if groupIn == nil {
 		return errors.New("group is nil")
 	}
+	identity, err := domain.NormalizeGroupIdentity(groupIn.Identity)
+	if err != nil {
+		return fmt.Errorf("invalid group identity: %w", err)
+	}
 	modelPricing, err := json.Marshal(groupIn.ModelPricing)
 	if err != nil {
 		return fmt.Errorf("marshal group model pricing: %w", err)
@@ -256,12 +261,14 @@ func createGroupRecord(ctx context.Context, client *dbent.Client, groupIn *servi
 	if groupIn.I18n != nil {
 		builder = builder.SetI18n(groupIn.I18n)
 	}
+	builder = builder.SetIdentity(identity)
 
 	created, err := builder.Save(ctx)
 	if err != nil {
 		return translatePersistenceError(err, nil, service.ErrGroupExists)
 	}
 	groupIn.ID = created.ID
+	groupIn.Identity = created.Identity
 	groupIn.CreatedAt = created.CreatedAt
 	groupIn.UpdatedAt = created.UpdatedAt
 	return nil
@@ -382,6 +389,10 @@ func (r *groupRepository) GetByIDLite(ctx context.Context, id int64) (*service.G
 }
 
 func (r *groupRepository) Update(ctx context.Context, groupIn *service.Group) error {
+	identity, err := domain.NormalizeGroupIdentity(groupIn.Identity)
+	if err != nil {
+		return fmt.Errorf("invalid group identity: %w", err)
+	}
 	modelPricing, err := json.Marshal(groupIn.ModelPricing)
 	if err != nil {
 		return fmt.Errorf("marshal group model pricing: %w", err)
@@ -554,12 +565,14 @@ func (r *groupRepository) Update(ctx context.Context, groupIn *service.Group) er
 		i18n = service.GroupI18n{}
 	}
 	builder = builder.SetI18n(i18n)
+	builder = builder.SetIdentity(identity)
 
 	updated, err := builder.Save(ctx)
 	if err != nil {
 		return translatePersistenceError(err, service.ErrGroupNotFound, service.ErrGroupExists)
 	}
 	groupIn.UpdatedAt = updated.UpdatedAt
+	groupIn.Identity = updated.Identity
 	if err := enqueueSchedulerOutbox(ctx, r.sql, service.SchedulerOutboxEventGroupChanged, nil, &groupIn.ID, nil); err != nil {
 		logger.LegacyPrintf("repository.group", "[SchedulerOutbox] enqueue group update failed: group=%d err=%v", groupIn.ID, err)
 	}

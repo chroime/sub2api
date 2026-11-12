@@ -99,6 +99,7 @@ func cloneGroupForDuplicate(source *Group, operationID string) *Group {
 		Name:                                 duplicateGroupName(source.Name, 1),
 		Description:                          source.Description,
 		I18n:                                 cloneGroupI18nForDuplicate(source.I18n),
+		Identity:                             source.Identity,
 		Platform:                             source.Platform,
 		RateMultiplier:                       source.RateMultiplier,
 		BillingUnifiedTokenMultiplier:        source.BillingUnifiedTokenMultiplier,

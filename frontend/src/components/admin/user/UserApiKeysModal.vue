@@ -29,6 +29,7 @@
                 <GroupBadge
                   v-if="key.group_id && key.group"
                   :name="key.group.name"
+                  :identity="key.group.identity"
                   :platform="key.group.platform"
                   :subscription-type="key.group.subscription_type"
                   :rate-multiplier="key.group.rate_multiplier"
@@ -89,6 +90,7 @@
         >
           <GroupOptionItem
             :name="group.name"
+            :identity="group.identity"
             :platform="group.platform"
             :subscription-type="group.subscription_type"
             :rate-multiplier="group.rate_multiplier"

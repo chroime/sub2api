@@ -68,9 +68,44 @@
               :search-placeholder="t('modelPlaza.priceTable.groupLabel')"
               @update:model-value="onGroupChange"
             >
+              <template #selected>
+                <GroupBadge
+                  v-if="selectedGroup"
+                  :name="selectedGroup.name"
+                  :identity="selectedGroup.identity"
+                  :platform="selectedGroup.platform as GroupPlatform"
+                  :subscription-type="selectedGroup.subscription_type as SubscriptionType"
+                  :rate-multiplier="selectedGroup.rate_multiplier"
+                  :user-rate-multiplier="selectedGroup.user_rate_multiplier"
+                  :peak-rate-enabled="selectedGroup.peak_rate_enabled"
+                  :peak-start="selectedGroup.peak_start"
+                  :peak-end="selectedGroup.peak_end"
+                  :peak-rate-multiplier="selectedGroup.peak_rate_multiplier"
+                  always-show-rate
+                  class="max-w-full"
+                />
+                <span v-else>{{ t('modelPlaza.priceTable.allGroups') }}</span>
+              </template>
               <template #option="{ option, selected }">
-                <span class="min-w-0 flex-1 truncate text-left text-[15px] leading-6">{{ option.label }}</span>
-                <Icon v-if="selected" name="check" size="sm" class="shrink-0 text-primary-500" :stroke-width="2" />
+                <GroupOptionItem
+                  v-if="(option as PlazaGroupSelectOption).group"
+                  :name="(option as PlazaGroupSelectOption).group!.name"
+                  :identity="(option as PlazaGroupSelectOption).group!.identity"
+                  :platform="(option as PlazaGroupSelectOption).group!.platform as GroupPlatform"
+                  :subscription-type="(option as PlazaGroupSelectOption).group!.subscription_type as SubscriptionType"
+                  :rate-multiplier="(option as PlazaGroupSelectOption).group!.rate_multiplier"
+                  :user-rate-multiplier="(option as PlazaGroupSelectOption).group!.user_rate_multiplier"
+                  :peak-rate-enabled="(option as PlazaGroupSelectOption).group!.peak_rate_enabled"
+                  :peak-start="(option as PlazaGroupSelectOption).group!.peak_start"
+                  :peak-end="(option as PlazaGroupSelectOption).group!.peak_end"
+                  :peak-rate-multiplier="(option as PlazaGroupSelectOption).group!.peak_rate_multiplier"
+                  :description="(option as PlazaGroupSelectOption).group!.description"
+                  :selected="selected"
+                />
+                <template v-else>
+                  <span class="min-w-0 flex-1 truncate text-left text-[15px] leading-6">{{ option.label }}</span>
+                  <Icon v-if="selected" name="check" size="sm" class="shrink-0 text-primary-500" :stroke-width="2" />
+                </template>
               </template>
             </Select>
           </div>
@@ -127,6 +162,9 @@ import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import Icon from '@/components/icons/Icon.vue'
 import Select, { type SelectOption } from '@/components/common/Select.vue'
+import GroupBadge from '@/components/common/GroupBadge.vue'
+import GroupOptionItem from '@/components/common/GroupOptionItem.vue'
+import type { GroupPlatform, SubscriptionType } from '@/types'
 import PlazaVendorTree from './PlazaVendorTree.vue'
 import PlazaVendorPriceTable from './PlazaVendorPriceTable.vue'
 import { buildVendorTree, collectPlazaModels, plazaModelKey } from './plazaVendorTree'
@@ -171,9 +209,13 @@ const sortedGroups = computed(() =>
   [...groups.value].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.id - b.id)
 )
 
-const groupSelectOptions = computed<SelectOption[]>(() => [
+interface PlazaGroupSelectOption extends SelectOption {
+  group?: ModelPlazaGroup
+}
+
+const groupSelectOptions = computed<PlazaGroupSelectOption[]>(() => [
   { value: 'all', label: t('modelPlaza.priceTable.allGroups') },
-  ...sortedGroups.value.map((g) => ({ value: g.id, label: `${g.name} · ${effectiveRate(g)}x` }))
+  ...sortedGroups.value.map((g) => ({ value: g.id, label: `${g.name} · ${effectiveRate(g)}x`, description: g.description, group: g }))
 ])
 
 function onGroupChange(value: string | number | boolean | null) {

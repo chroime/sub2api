@@ -165,6 +165,7 @@
                 <GroupBadge
                   v-if="row.group"
                   :name="row.group.name"
+                  :identity="row.group.identity"
                   :platform="row.group.platform"
                   :subscription-type="row.group.subscription_type"
                   :rate-multiplier="row.group.rate_multiplier"
@@ -570,6 +571,7 @@
               <GroupBadge
                 v-if="option"
                 :name="(option as unknown as GroupOption).label"
+                :identity="(option as unknown as GroupOption).identity"
                 :platform="(option as unknown as GroupOption).platform"
                 :subscription-type="(option as unknown as GroupOption).subscriptionType"
                 :rate-multiplier="(option as unknown as GroupOption).rate"
@@ -584,6 +586,7 @@
             <template #option="{ option, selected }">
               <GroupOptionItem
                 :name="(option as unknown as GroupOption).label"
+                :identity="(option as unknown as GroupOption).identity"
                 :platform="(option as unknown as GroupOption).platform"
                 :subscription-type="(option as unknown as GroupOption).subscriptionType"
                 :rate-multiplier="(option as unknown as GroupOption).rate"
@@ -1221,6 +1224,7 @@
           >
             <GroupOptionItem
               :name="option.label"
+              :identity="option.identity"
               :platform="option.platform"
               :subscription-type="option.subscriptionType"
               :rate-multiplier="option.rate"
@@ -1299,6 +1303,7 @@ const formatDateTimeLocal = (isoDate: string): string => {
 
 interface GroupOption {
   value: number
+  identity?: Group['identity']
   label: string
   description: string | null
   rate: number
@@ -1599,6 +1604,7 @@ const groupOptions = computed(() =>
   groups.value.map((group) => ({
     value: group.id,
     label: group.name,
+    identity: group.identity,
     description: group.description,
     rate: group.rate_multiplier,
     userRate: userGroupRates.value[group.id] ?? null,

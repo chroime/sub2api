@@ -17,6 +17,8 @@ type ReasoningEffortMapping = domain.ReasoningEffortMapping
 type GroupInputRoutingConfig = domain.GroupInputRoutingConfig
 type GroupInputRoutingRule = domain.GroupInputRoutingRule
 
+type GroupIdentity = domain.GroupIdentity
+
 func CloneGroupInputRouting(config GroupInputRoutingConfig) GroupInputRoutingConfig {
 	return domain.CloneGroupInputRouting(config)
 }
@@ -30,6 +32,7 @@ type Group struct {
 	Name           string
 	Description    string
 	I18n           GroupI18n // 名称与描述的界面语言译文；缺失的语言沿用 Name/Description
+	Identity       GroupIdentity
 	Platform       string
 	RateMultiplier float64
 	// BillingInputTokenMultiplier and BillingOutputTokenMultiplier adjust the

@@ -22,6 +22,7 @@
           <GroupBadge
             v-else-if="getGroup(value)"
             :name="getGroup(value)!.name"
+            :identity="getGroup(value)!.identity"
             :platform="getGroup(value)!.platform"
             :rate-multiplier="getGroup(value)!.rate_multiplier"
           />

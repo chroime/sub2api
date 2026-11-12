@@ -580,6 +580,12 @@ export interface GroupLocaleText {
 /** 以语言代码（en、zh…）为键的分组文案译文。 */
 export type GroupI18n = Record<string, GroupLocaleText>
 
+/** Administrator-configured presentation only; independent of group access or routing. */
+export interface GroupIdentity {
+  label?: string
+  color?: 'teal' | 'blue' | 'amber' | 'violet' | 'rose' | 'gray' | `#${string}`
+}
+
 export interface GroupInputRoutingRule {
   id: string
   name: string
@@ -603,6 +609,7 @@ export interface GroupInputRoutingConfig {
 export interface Group {
   id: number
   name: string
+  identity?: GroupIdentity
   description: string | null
   platform: GroupPlatform
   rate_multiplier: number
@@ -842,6 +849,7 @@ export interface UpdateApiKeyRequest {
 }
 
 export interface CreateGroupRequest {
+  identity?: GroupIdentity
   input_routing?: GroupInputRoutingConfig
   streaming_ack_enabled?: boolean
   name: string
@@ -918,6 +926,7 @@ export interface CreateGroupRequest {
 }
 
 export interface UpdateGroupRequest {
+  identity?: GroupIdentity
   input_routing?: GroupInputRoutingConfig
   streaming_ack_enabled?: boolean
   name?: string

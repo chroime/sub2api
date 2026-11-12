@@ -241,6 +241,7 @@ type CreateGroupInput struct {
 	Name                                 string
 	Description                          string
 	I18n                                 GroupI18n
+	Identity                             GroupIdentity
 	Platform                             string
 	RateMultiplier                       float64
 	BillingInputTokenMultiplier          float64
@@ -333,6 +334,7 @@ type UpdateGroupInput struct {
 	Name                                 string
 	Description                          *string
 	I18n                                 *GroupI18n
+	Identity                             *GroupIdentity
 	Platform                             string
 	RateMultiplier                       *float64 // 使用指针以支持设置为0
 	BillingInputTokenMultiplier          *float64
