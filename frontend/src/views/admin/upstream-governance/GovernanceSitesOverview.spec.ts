@@ -34,6 +34,15 @@ function render(props: Record<string, unknown> = {}) {
 }
 
 describe('GovernanceSitesOverview compact mode', () => {
+  it('shows quota-derived dollars in the rail and picker while retaining the observation and raw quota', () => {
+    const wrapper = render({ sites: [{ ...sites[1], balance: { amount: 4993033, unit: 'quota', quota_per_usd: 500000, observed_at: '2026-11-12T06:07:14Z' } }] })
+    const row = wrapper.get('#governance-site-2')
+    expect(row.get('[data-test=site-balance]').text()).toBe('$9.99')
+    expect(row.attributes('title')).toContain('4993033 quota')
+    expect(row.attributes('title')).toContain('2026-11-12 14:07:14')
+    expect(wrapper.getComponent({ name: 'Select' }).props('options')[0].label).toContain('$9.99')
+  })
+
   it('renders a compact site rail with count, controls, scrollable rows, and selected state', () => {
     const wrapper = render({ selectedSiteId: 2 })
 

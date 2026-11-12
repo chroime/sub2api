@@ -71,7 +71,10 @@ func retryAfter(header string, now time.Time) time.Duration {
 	return defaultRetry
 }
 
-type platformConnector struct{ factory ClientFactory }
+type platformConnector struct {
+	factory      ClientFactory
+	quotaDisplay quotaDisplayCache
+}
 
 func NewConnector(factory ClientFactory) Connector { return &platformConnector{factory: factory} }
 

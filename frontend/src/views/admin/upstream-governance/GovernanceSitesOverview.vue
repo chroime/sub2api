@@ -10,6 +10,7 @@ import { formatGovernanceTime } from './format'
 import { siteStateKeys } from './feedback'
 import { cadenceText } from './cadence'
 import StatusIndicator from './StatusIndicator.vue'
+import { quotaBalanceUSD } from './balance-format'
 const props = withDefaults(defineProps<{
   sites: Site[]
   disabled?: boolean
@@ -39,10 +40,10 @@ const platformLogo = (site: Site) => site.platform === 'sub2api' ? sub2apiLogo :
 
 const usd = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const compactNumber = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 })
-// New API quota is not a currency, so it is never converted; it is only
-// abbreviated and labelled with its unit.
 function balanceText(balance: SiteBalance): string {
   if (balance.unit === 'usd') return usd.format(balance.amount)
+  const dollars = quotaBalanceUSD(balance.amount, balance.unit, balance.quota_per_usd)
+  if (dollars != null) return usd.format(dollars)
   const unit = balance.unit === 'quota' ? ` ${t('governance.siteRail.quotaUnit')}` : balance.unit ? ` ${balance.unit}` : ''
   return compactNumber.format(balance.amount) + unit
 }

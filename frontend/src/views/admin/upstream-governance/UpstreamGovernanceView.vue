@@ -731,7 +731,7 @@ onUnmounted(() => {
           <div v-show="tab === 'automation'" data-test="site-automation-tab" class="min-w-0 space-y-5 p-4 sm:p-5">
             <ObservationPricingPanel :key="active.id" section="observation" :site-id="active.id" :disabled="working" @busy="observationBusy = $event" @observation-saved="reloadAfterPolicyChange" />
             <AutomationPolicyPanel :key="active.id" :site-id="active.id" :configuration="automation" :disabled="working" @busy="automationBusy = $event" @saved="automationSaved" @reload="reloadAutomation" />
-            <BalanceCard :key="active.id" :site="active" :health="balanceHealth" :balance="overviewSnapshot?.catalog.account?.balance" :unit="snapshot?.catalog.account?.unit" :disabled="working" @reload="reloadHealth" @saved="balanceSaved" @busy="balanceBusy = $event" />
+            <BalanceCard :key="active.id" :site="active" :health="balanceHealth" :balance="overviewSnapshot?.catalog.account?.balance" :unit="overviewSnapshot?.catalog.account?.unit" :quota-per-usd="overviewSnapshot?.catalog.account?.quota_per_usd" :disabled="working" @reload="reloadHealth" @saved="balanceSaved" @busy="balanceBusy = $event" />
             <!-- Group pricing is a local-group sale price rule; prices themselves are in the group import details. -->
             <ObservationPricingPanel :key="active.id" section="pricing" :site-id="active.id" :disabled="working" @busy="pricingBusy = $event" @pricing-saved="reloadAfterPolicyChange" />
           </div>

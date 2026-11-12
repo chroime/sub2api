@@ -62,6 +62,8 @@ type SiteBalance struct {
 	Amount     float64   `json:"amount"`
 	Unit       string    `json:"unit"`
 	ObservedAt time.Time `json:"observed_at"`
+	// QuotaPerUSD is optional public display metadata; Amount stays in Unit.
+	QuotaPerUSD *float64 `json:"quota_per_usd,omitempty"`
 }
 
 type LoginInput struct {
@@ -203,6 +205,8 @@ type RemoteAccount struct {
 	UsedBalance   *float64 `json:"used_balance"`
 	Unit          string   `json:"unit"`
 	Source        string   `json:"source"`
+	// QuotaPerUSD decorates read responses without changing raw accounting.
+	QuotaPerUSD *float64 `json:"quota_per_usd,omitempty"`
 }
 type Snapshot struct {
 	ID          int64     `json:"id"`

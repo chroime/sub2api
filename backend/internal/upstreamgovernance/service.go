@@ -289,10 +289,30 @@ func (s *Service) ListSites(ctx context.Context) ([]Site, error) {
 		}
 		visible = append(visible, site)
 	}
+	s.decorateSiteBalances(ctx, visible)
 	return visible, nil
 }
 func (s *Service) Catalog(ctx context.Context, id int64) (*Snapshot, error) {
-	return s.store.LatestSnapshot(ctx, id)
+	snapshot, err := s.store.LatestSnapshot(ctx, id)
+	if err != nil || snapshot == nil || snapshot.Catalog.Account == nil || snapshot.Catalog.Account.Unit != "quota" {
+		return snapshot, err
+	}
+	reader, ok := s.connector.(quotaUSDReader)
+	if !ok {
+		return snapshot, nil
+	}
+	site, err := s.store.GetSite(ctx, id)
+	if err != nil || site == nil || site.Platform != "newapi" || site.Version != snapshot.SiteVersion {
+		return snapshot, nil
+	}
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	// Do not mutate shared/stored snapshots or change monitoring units.
+	copy := *snapshot
+	account := *snapshot.Catalog.Account
+	account.QuotaPerUSD = reader.QuotaPerUSD(ctx, *site)
+	copy.Catalog.Account = &account
+	return &copy, nil
 }
 func (s *Service) Bindings(ctx context.Context, id int64) ([]Binding, error) {
 	bindings, err := s.store.ListBindings(ctx, id)

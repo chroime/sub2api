@@ -7,6 +7,7 @@ import { formatGovernanceTime } from './format'
 import { siteStateKeys } from './feedback'
 import { cadenceText } from './cadence'
 import StatusIndicator from './StatusIndicator.vue'
+import { formatBalance, rawBalance } from './balance-format'
 const props = defineProps<{
   site: Site
   snapshot: Snapshot | null
@@ -22,9 +23,8 @@ const emit = defineEmits<{
 }>()
 const { t } = useI18n()
 const amount = (value: number | null | undefined) =>
-  value == null
-    ? t('governance.unknown')
-    : `${Number(value.toFixed(6))} ${props.snapshot?.catalog.account?.unit || ''}`
+  formatBalance(value, props.snapshot?.catalog.account?.unit, props.snapshot?.catalog.account?.quota_per_usd, t('governance.unknown'))
+const rawAmount = (value: number | null | undefined) => rawBalance(value, props.snapshot?.catalog.account?.unit)
 // Once every readiness item is configured the checklist folds into one line.
 const readinessComplete = computed(() =>
   !props.readinessLoading && !props.readinessReadFailed && !!props.readiness?.checks.length
@@ -35,11 +35,11 @@ const readinessComplete = computed(() =>
   <dl data-test="site-status-strip" class="grid min-w-0 gap-px overflow-hidden rounded-xl border border-gray-200 bg-gray-200 dark:border-dark-600 dark:bg-dark-600 sm:grid-cols-2 2xl:grid-cols-4">
     <div class="min-w-0 bg-white p-3 dark:bg-dark-800">
       <dt class="text-xs text-gray-500">{{ t(balanceHealth?.stale ? 'governance.lastKnownBalance' : 'governance.balance') }}</dt>
-      <dd data-test="account-balance" class="mt-1 break-all text-lg font-semibold tabular-nums">{{ amount(snapshot?.catalog.account?.balance) }}</dd>
+      <dd data-test="account-balance" :title="rawAmount(snapshot?.catalog.account?.balance)" class="mt-1 break-all text-lg font-semibold tabular-nums">{{ amount(snapshot?.catalog.account?.balance) }}</dd>
       <p class="mt-0.5 truncate text-xs text-gray-500">{{ snapshot?.catalog.account?.username || snapshot?.catalog.account?.email || t('governance.upstreamAccount') }}</p>
       <div class="mt-1 flex min-w-0 flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500">
-        <p class="inline-flex max-w-full flex-wrap items-baseline gap-x-1"><span>{{ t('governance.frozenBalance') }}</span><span data-test="account-frozen" class="break-all tabular-nums">{{ amount(snapshot?.catalog.account?.frozen_balance) }}</span></p>
-        <p class="inline-flex max-w-full flex-wrap items-baseline gap-x-1"><span>{{ t('governance.usedBalance') }}</span><span data-test="account-used" class="break-all tabular-nums">{{ amount(snapshot?.catalog.account?.used_balance) }}</span></p>
+        <p class="inline-flex max-w-full flex-wrap items-baseline gap-x-1"><span>{{ t('governance.frozenBalance') }}</span><span data-test="account-frozen" :title="rawAmount(snapshot?.catalog.account?.frozen_balance)" class="break-all tabular-nums">{{ amount(snapshot?.catalog.account?.frozen_balance) }}</span></p>
+        <p class="inline-flex max-w-full flex-wrap items-baseline gap-x-1"><span>{{ t('governance.usedBalance') }}</span><span data-test="account-used" :title="rawAmount(snapshot?.catalog.account?.used_balance)" class="break-all tabular-nums">{{ amount(snapshot?.catalog.account?.used_balance) }}</span></p>
       </div>
     </div>
     <div class="min-w-0 bg-white p-3 dark:bg-dark-800">

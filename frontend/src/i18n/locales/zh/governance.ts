@@ -1106,7 +1106,7 @@ export default {
   balance: '可用余额',
   frozenBalance: '冻结余额',
   usedBalance: '已用额度',
-  balanceUnitsHint: '保留上游原始单位，未知金额不按零处理；quota 额度不换算为货币。',
+  balanceUnitsHint: '告警阈值使用上游原始单位；余额仅在上游提供美元换算比例时显示为美元。未知金额不按零处理。',
   selectAll: '全选 {count} 个可见分组',
   selectedCount: '已选 {count} 个',
   bulkTarget: '为所选分组设置目标（可多选）',

@@ -37,6 +37,25 @@ const readiness: ReadinessOverview = {
 }
 
 describe('SiteOverview readiness integration', () => {
+  it('displays USD quota balances while retaining unknown amounts and original quota in tooltips', () => {
+    const wrapper = mount(SiteOverview, {
+      props: { site, snapshot: { ...snapshot, catalog: { ...snapshot.catalog, account: { user_id: 262, username: 'TokenGo', email: '', balance: 4993033, frozen_balance: null, used_balance: 7004, unit: 'quota', quota_per_usd: 500000, source: '/api/user/self' } } }, bindingCount: 0, readiness },
+      global: { plugins: [createI18n({ legacy: false, locale: 'zh', messages: { zh: { governance: zh } } })] },
+    })
+    expect(wrapper.get('[data-test=account-balance]').text()).toBe('$9.986066')
+    expect(wrapper.get('[data-test=account-balance]').attributes('title')).toContain('4993033 quota')
+    expect(wrapper.get('[data-test=account-used]').text()).toBe('$0.014008')
+    expect(wrapper.get('[data-test=account-frozen]').text()).toBe('未知')
+  })
+
+  it.each([undefined, 0, -1, Infinity, NaN])('retains raw quota when the USD divisor is invalid: %s', (divisor) => {
+    const wrapper = mount(SiteOverview, {
+      props: { site, snapshot: { ...snapshot, catalog: { ...snapshot.catalog, account: { user_id: 262, username: '', email: '', balance: 4993033, frozen_balance: null, used_balance: 0, unit: 'quota', quota_per_usd: divisor, source: '/api/user/self' } } }, bindingCount: 0, readiness },
+      global: { plugins: [createI18n({ legacy: false, locale: 'zh', messages: { zh: { governance: zh } } })] },
+    })
+    expect(wrapper.get('[data-test=account-balance]').text()).toBe('4993033 quota')
+  })
+
   it.each([
     { name: 'known amounts', frozen: 1.25, used: 2.5, expectedFrozen: '1.25 USD', expectedUsed: '2.5 USD' },
     { name: 'zero amounts', frozen: 0, used: 0, expectedFrozen: '0 USD', expectedUsed: '0 USD' },

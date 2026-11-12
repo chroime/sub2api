@@ -46,9 +46,10 @@ export interface DeliveryRecord {
 }
 export interface SiteBalance {
   amount: number
-  /** 'usd' for Sub2API sites; 'quota' (not a currency) for New API sites. */
+  /** Native accounting unit; optional quota_per_usd only affects display. */
   unit: string
   observed_at: string
+  quota_per_usd?: number
 }
 export interface BalanceMonitor {
   enabled: boolean
@@ -423,6 +424,7 @@ export interface AccountSummary {
   used_balance: number | null
   unit: string
   source: string
+  quota_per_usd?: number
 }
 export interface ManagedKey {
   id: number

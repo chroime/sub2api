@@ -1091,7 +1091,7 @@ export default {
   balance: 'Available balance',
   frozenBalance: 'Frozen balance',
   usedBalance: 'Used amount',
-  balanceUnitsHint: 'Amounts use the upstream unit. Unknown amounts are not treated as zero; quota is not converted to money.',
+  balanceUnitsHint: 'Alert thresholds use the native upstream unit. Balances display as USD only when the upstream provides a USD conversion scale. Unknown amounts are not treated as zero.',
   selectAll: 'Select all {count} visible groups',
   selectedCount: '{count} selected',
   bulkTarget: 'Set destinations for selected groups (multiple)',
