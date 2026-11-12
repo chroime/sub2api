@@ -8,6 +8,7 @@ import (
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
+	entuser "github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/internal/balancenotice"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 )
@@ -26,6 +27,15 @@ func (s *PaymentService) sendAdminRechargeSuccessNotifications(ctx context.Conte
 	if err != nil || !enabled {
 		return err
 	}
+	var notes string
+	if s.entClient != nil {
+		lookupCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+		profile, err := s.entClient.User.Query().Where(entuser.IDEQ(order.UserID), entuser.DeletedAtIsNil()).Select(entuser.FieldNotes).Only(lookupCtx)
+		cancel()
+		if err == nil {
+			notes = profile.Notes
+		}
+	}
 	const event = NotificationEmailEventPaymentRechargeSuccessAdmin
 	orderID := strconv.FormatInt(order.ID, 10)
 	currency := PaymentOrderCurrency(order)
@@ -33,6 +43,7 @@ func (s *PaymentService) sendAdminRechargeSuccessNotifications(ctx context.Conte
 		"user_id":          strconv.FormatInt(order.UserID, 10),
 		"user_email":       order.UserEmail,
 		"user_name":        firstNonEmpty(order.UserName, order.UserEmail),
+		"user_notes":       notes,
 		"order_id":         orderID,
 		"out_trade_no":     firstNonEmpty(order.OutTradeNo, orderID),
 		"pay_amount":       payment.FormatAmountForCurrency(order.PayAmount, currency),

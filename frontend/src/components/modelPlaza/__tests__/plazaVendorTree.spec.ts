@@ -76,9 +76,39 @@ describe('collectPlazaModels', () => {
     expect(out.map((m) => m.name)).toEqual(['claude-sonnet'])
   })
 
-  it('不同平台的同名模型不合并', () => {
+  it('全部分组合并通过不同平台提供的同名模型', () => {
     const groups = [group(1, [model('grok-4', 'grok', 1e-6), model('grok-4', 'openai', 1e-6)])]
-    expect(collectPlazaModels(groups, 'all')).toHaveLength(2)
+    expect(collectPlazaModels(groups, 'all')).toHaveLength(1)
+  })
+
+  it.each([
+    ['deepseek-v4.1-flash', 'deepseek'],
+    ['glm-5.3', 'zhipu'],
+    ['kimi-k3.1-pro', 'kimi'],
+    ['minimax-m3.1-flash', 'minimax']
+  ])('国模全套与独立分组的 %s 只展示一次，仍按定价来源取价', (name, platform) => {
+    const compatible = model(name, 'openai', 2e-6, 'official')
+    const native = model(name, platform, 3e-6, 'channel')
+    const groups = [group(1, [compatible]), group(2, [native])]
+
+    expect(collectPlazaModels(groups, 'all')).toEqual([native])
+    expect(collectPlazaModels(groups, 1)).toEqual([compatible])
+    expect(collectPlazaModels(groups, 2)).toEqual([native])
+  })
+
+  it('跨平台合并使用目录且保留不同版本与模型 ID，不修改分组数据', () => {
+    const compatible = model('kimi-k2.7', 'openai', 1e-6, 'channel')
+    const native = model('kimi-k2.7', 'kimi', 2e-6, 'group')
+    const newer = model('kimi-k3.1-pro', 'kimi', 3e-6, 'channel')
+    const groups: ModelPlazaGroup[] = [
+      { ...group(1, []), catalog_models: [compatible] },
+      { ...group(2, [native, newer]), catalog_models: [native, newer] }
+    ]
+
+    expect(collectPlazaModels(groups, 'all')).toEqual([native, newer])
+    expect(collectPlazaModels(groups, 1)).toEqual([])
+    expect(collectPlazaModels(groups, 2)).toEqual([native, newer])
+    expect(groups[0].catalog_models).toEqual([compatible])
   })
 
   it('全部分组使用目录并保持来源去重，具体分组只使用实际可用模型', () => {

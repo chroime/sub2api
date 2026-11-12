@@ -56,8 +56,8 @@ var (
 	notificationEmailLocales                   = []string{notificationEmailDefaultLocale, notificationEmailLocaleChinese}
 	notificationEmailCommonPlaceholders        = []string{"site_name", "recipient_name", "recipient_email"}
 	notificationEmailAdminRechargePlaceholders = []string{
-		"user_id", "user_email", "user_name", "order_id", "out_trade_no",
-		"pay_amount", "payment_currency", "recharge_amount", "payment_method", "completed_at",
+		"user_id", "user_email", "user_name", "user_notes", "user_display", "order_id", "out_trade_no",
+		"pay_amount", "pay_amount_display", "payment_currency", "recharge_amount", "payment_method", "completed_at",
 	}
 	// Keep summary values separate so admins can rearrange or omit individual metrics in the template.
 	notificationEmailOpsSummaryPlaceholders = []string{
@@ -380,6 +380,9 @@ func (s *NotificationEmailService) PreviewTemplate(ctx context.Context, input No
 	for key, value := range input.Variables {
 		variables[key] = value
 	}
+	if normalizedEvent == NotificationEmailEventPaymentRechargeSuccessAdmin {
+		adminRechargeEmailVariables(variables)
+	}
 	var sampleHTML map[string]string
 	if normalizedEvent == NotificationEmailEventSystemHealthSnapshot {
 		// Only the built-in illustrative table is trusted in editor previews.
@@ -622,6 +625,7 @@ func (s *NotificationEmailService) runtimeVariables(ctx context.Context, event, 
 				variables[placeholder] = ""
 			}
 		}
+		adminRechargeEmailVariables(variables)
 	}
 	if event == NotificationEmailEventSystemHealthSnapshot {
 		for _, placeholder := range []string{"health_status", "health_status_detail", "health_checked_at", "active_group_count", "group_summary_html", "platform_url", "docs_url", "model_plaza_url", "canvas_url"} {
@@ -1436,38 +1440,12 @@ var notificationEmailOfficialTemplates = map[string]map[string]notificationEmail
 	},
 	NotificationEmailEventPaymentRechargeSuccessAdmin: {
 		notificationEmailDefaultLocale: {
-			Subject: "[{{site_name}}] User recharge completed - order {{order_id}}",
-			HTML: notificationEmailCard("#16a34a", "User recharge completed", `
-<p>Hello {{recipient_name}},</p>
-<p>A user's recharge has completed and the balance has been credited.</p>
-<table style="width:100%;border-collapse:collapse;text-align:left;">
-  <tr><td>User</td><td>{{user_name}} ({{user_email}})</td></tr>
-  <tr><td>User ID</td><td>{{user_id}}</td></tr>
-  <tr><td>Order ID</td><td>{{order_id}}</td></tr>
-  <tr><td>Merchant order number</td><td>{{out_trade_no}}</td></tr>
-  <tr><td>Actual payment</td><td><strong>{{payment_currency}} {{pay_amount}}</strong></td></tr>
-  <tr><td>Balance credited</td><td><strong>USD {{recharge_amount}}</strong></td></tr>
-  <tr><td>Payment method</td><td>{{payment_method}}</td></tr>
-  <tr><td>Completed at</td><td>{{completed_at}}</td></tr>
-</table>
-<p class="muted">This notification is sent after the balance is credited. Actual payment and credited balance may use different currencies.</p>`),
+			Subject: "[{{site_name}}] Payment received - amount {{pay_amount_display}}",
+			HTML:    adminRechargeEmailTemplate(notificationEmailDefaultLocale),
 		},
 		notificationEmailLocaleChinese: {
-			Subject: "[{{site_name}}] 用户充值成功 - 订单 {{order_id}}",
-			HTML: notificationEmailCard("#16a34a", "用户充值成功", `
-<p>{{recipient_name}}，您好：</p>
-<p>用户充值已完成，余额已实际到账。</p>
-<table style="width:100%;border-collapse:collapse;text-align:left;">
-  <tr><td>充值用户</td><td>{{user_name}}（{{user_email}}）</td></tr>
-  <tr><td>用户 ID</td><td>{{user_id}}</td></tr>
-  <tr><td>订单号</td><td>{{order_id}}</td></tr>
-  <tr><td>商户订单号</td><td>{{out_trade_no}}</td></tr>
-  <tr><td>实付金额</td><td><strong>{{payment_currency}} {{pay_amount}}</strong></td></tr>
-  <tr><td>到账余额</td><td><strong>USD {{recharge_amount}}</strong></td></tr>
-  <tr><td>支付方式</td><td>{{payment_method}}</td></tr>
-  <tr><td>完成时间</td><td>{{completed_at}}</td></tr>
-</table>
-<p class="muted">本通知在余额到账后发送。实付金额与到账余额的币种可能不同，请分别核对。</p>`),
+			Subject: "[{{site_name}}] 收款到账通知 - 金额 {{pay_amount_display}}",
+			HTML:    adminRechargeEmailTemplate(notificationEmailLocaleChinese),
 		},
 	},
 	NotificationEmailEventAccountQuotaAlert: {

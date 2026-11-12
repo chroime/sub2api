@@ -4,6 +4,7 @@ package service
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -125,6 +126,43 @@ func TestPaymentAdminRechargeSMTPFailureDoesNotChangeFulfillment(t *testing.T) {
 	require.Equal(t, OrderStatusCompleted, svc.entClient.PaymentOrder.GetX(t.Context(), order.ID).Status)
 	require.Equal(t, 25.14, svc.entClient.User.GetX(t.Context(), order.UserID).Balance)
 	require.Eventually(t, func() bool { return smtp.messageCount() == 2 }, time.Second, 5*time.Millisecond, "the second administrator and the user must still receive mail")
+}
+
+func TestPaymentAdminRechargeUsesUserNotesAndOrderEmail(t *testing.T) {
+	for _, tc := range []struct {
+		name, notes, expected string
+		missingUser           bool
+	}{
+		{"no_notes", "", "payer@example.test", false},
+		{"notes", " VIP 客户 ", "payer@example.test（VIP 客户）", false},
+		{"escaped_notes", `<b>VIP</b>`, "payer@example.test（&lt;b&gt;VIP&lt;/b&gt;）", false},
+		{"missing_user", "", "payer@example.test", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			svc, order, _, records, smtp := adminRechargeFulfillmentFixture(t)
+			_, err := svc.entClient.User.UpdateOneID(order.UserID).SetNotes(tc.notes).Save(t.Context())
+			require.NoError(t, err)
+			if tc.missingUser {
+				order.UserID += 99999
+			}
+			order.UserName = order.UserEmail
+			order.Status = OrderStatusCompleted
+			completed := time.Now()
+			order.CompletedAt = &completed
+			require.NoError(t, svc.sendAdminRechargeSuccessNotifications(t.Context(), order))
+			require.Equal(t, int64(2), smtp.messageCount())
+			require.Len(t, records.snapshot(), 2)
+			for _, row := range records.snapshot() {
+				require.Equal(t, "sent", row.Status)
+				require.Contains(t, row.Body, tc.expected)
+				require.Equal(t, 1, strings.Count(row.Body, "payer@example.test"))
+				if strings.TrimSpace(tc.notes) == "" {
+					require.NotContains(t, row.Body, "payer@example.test（")
+				}
+				require.NotContains(t, row.Body, "<b>VIP</b>")
+			}
+		})
+	}
 }
 
 func TestPaymentAdminRechargeDisabledDoesNotSend(t *testing.T) {

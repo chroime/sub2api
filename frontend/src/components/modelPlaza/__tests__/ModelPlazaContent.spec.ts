@@ -170,9 +170,9 @@ describe('model plaza group selection', () => {
     wrapper.unmount()
   })
 
-  it('deduplicates all groups without replacing a selected group model with another group entry', async () => {
+  it('deduplicates across platforms without replacing a selected group model with another group entry', async () => {
     const official: PlazaModel = { ...model('gpt-shared'), pricing_source: 'official' }
-    const channel: PlazaModel = { ...model('gpt-shared'), pricing_source: 'channel' }
+    const channel: PlazaModel = { ...model('gpt-shared', 'anthropic'), pricing_source: 'channel' }
     const wrapper = render([
       group({ id: 10, name: 'A', models: [official] }),
       group({ id: 20, name: 'B', models: [channel] })

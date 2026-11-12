@@ -1,6 +1,8 @@
 package service
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -22,7 +24,7 @@ func TestNotificationEmailAdminRechargeEventAndOfficialTemplates(t *testing.T) {
 	require.NotNil(t, found, "administrator recharge events must be discoverable in the template editor")
 	require.Equal(t, "admin", found.Category)
 	require.False(t, found.Optional, "recharge administration emails are transactional")
-	for _, placeholder := range []string{"user_id", "user_email", "user_name", "order_id", "out_trade_no", "pay_amount", "payment_currency", "recharge_amount", "payment_method", "completed_at"} {
+	for _, placeholder := range []string{"user_id", "user_email", "user_name", "user_notes", "user_display", "order_id", "out_trade_no", "pay_amount", "pay_amount_display", "payment_currency", "recharge_amount", "payment_method", "completed_at"} {
 		require.Contains(t, found.Placeholders, placeholder)
 	}
 	for _, locale := range []string{"zh", "en"} {
@@ -44,7 +46,8 @@ func TestNotificationEmailAdminRechargeEscapesUserAndSeparatesRecipient(t *testi
 		Event: adminRechargeEmailTestEvent, Locale: "zh", RecipientEmail: "admin@example.test", RecipientName: "管理员",
 		Variables: map[string]string{
 			"user_id": "73", "user_email": "payer@example.test", "user_name": `<img src=x onerror=alert(1)>`,
-			"order_id": "73", "out_trade_no": "20261111PAID73", "pay_amount": "0.10", "payment_currency": "CNY", "recharge_amount": "0.14", "payment_method": "支付宝", "completed_at": "2026-11-11 18:00:00 +08:00",
+			"user_notes": `<img src=x onerror=alert(1)>`,
+			"order_id":   "73", "out_trade_no": "20261111PAID73", "pay_amount": "0.10", "payment_currency": "CNY", "recharge_amount": "0.14", "payment_method": "支付宝", "completed_at": "2026-11-11 18:00:00 +08:00",
 		},
 	})
 	require.NoError(t, err)
@@ -60,7 +63,7 @@ func TestNotificationEmailAdminRechargeEscapesUserAndSeparatesRecipient(t *testi
 func TestNotificationEmailAdminRechargeLiveMissingValuesDoNotUsePreviewSamples(t *testing.T) {
 	repo := newNotificationEmailMemorySettingRepo()
 	svc := NewNotificationEmailService(repo, nil)
-	placeholders := []string{"user_id", "user_email", "user_name", "order_id", "out_trade_no", "pay_amount", "payment_currency", "recharge_amount", "payment_method", "completed_at", "recipient_name"}
+	placeholders := []string{"user_id", "user_email", "user_name", "user_notes", "user_display", "order_id", "out_trade_no", "pay_amount", "pay_amount_display", "payment_currency", "recharge_amount", "payment_method", "completed_at", "recipient_name"}
 	parts := make([]string, len(placeholders))
 	for i, placeholder := range placeholders {
 		parts[i] = "{{" + placeholder + "}}"
@@ -70,6 +73,90 @@ func TestNotificationEmailAdminRechargeLiveMissingValuesDoNotUsePreviewSamples(t
 	preview, err := svc.PreviewSend(t.Context(), NotificationEmailSendInput{Event: adminRechargeEmailTestEvent, Locale: "en", RecipientEmail: "admin@example.test"})
 	require.NoError(t, err)
 	require.Equal(t, "<p>"+strings.Repeat("|", len(parts)-1)+"</p>", preview.HTML)
+}
+
+func TestNotificationEmailAdminRechargeUserDetailsAndSubject(t *testing.T) {
+	repo := newNotificationEmailMemorySettingRepo()
+	require.NoError(t, repo.Set(t.Context(), SettingKeySiteName, "XenoAI"))
+	svc := NewNotificationEmailService(repo, nil)
+	for _, tc := range []struct {
+		name, notes, amount, amountDisplay, userDisplay string
+	}{
+		{"no_notes", "", "10.00", "10", "payer@example.test"},
+		{"blank_notes", " \r\n\t", "0.10", "0.1", "payer@example.test"},
+		{"notes", " VIP customer ", "10.50", "10.5", "payer@example.test（VIP customer）"},
+		{"one_hundred", "", "100.00", "100", "payer@example.test"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			variables := map[string]string{
+				"user_id": "73", "user_email": "payer@example.test", "user_name": "Ignored username", "user_notes": tc.notes,
+				"order_id": "33", "out_trade_no": "20261112194730QJRO5MZ2B3", "pay_amount": tc.amount,
+				"payment_currency": "CNY", "recharge_amount": "10.00", "payment_method": "alipay", "completed_at": "2026-11-12 22:49:50 +08:00",
+			}
+			preview, err := svc.PreviewSend(t.Context(), NotificationEmailSendInput{
+				Event: adminRechargeEmailTestEvent, Locale: "zh", RecipientEmail: "admin@example.test", RecipientName: "管理员", Variables: variables,
+			})
+			require.NoError(t, err)
+			require.Equal(t, "[XenoAI] 收款到账通知 - 金额 "+tc.amountDisplay, preview.Subject)
+			require.Contains(t, preview.HTML, tc.userDisplay)
+			require.Equal(t, 1, strings.Count(preview.HTML, "payer@example.test"))
+			require.NotContains(t, preview.HTML, "Ignored username")
+			require.NotContains(t, preview.HTML, "充值用户")
+			if strings.TrimSpace(tc.notes) == "" {
+				require.NotContains(t, preview.HTML, "payer@example.test（")
+				require.NotContains(t, preview.HTML, "payer@example.test (")
+			}
+			for _, detail := range []string{"20261112194730QJRO5MZ2B3", "CNY " + tc.amount, "USD 10.00", "alipay", "2026-11-12 22:49:50 +08:00"} {
+				require.Contains(t, preview.HTML, detail)
+			}
+			editorPreview, err := svc.PreviewTemplate(t.Context(), NotificationEmailPreviewInput{Event: adminRechargeEmailTestEvent, Locale: "zh", Variables: variables})
+			require.NoError(t, err)
+			require.Equal(t, preview.Subject, editorPreview.Subject)
+			require.Contains(t, editorPreview.HTML, tc.userDisplay)
+		})
+	}
+}
+
+func TestNotificationEmailAdminRechargeSubjectUsesConfiguredSiteName(t *testing.T) {
+	repo := newNotificationEmailMemorySettingRepo()
+	svc := NewNotificationEmailService(repo, nil)
+	for _, siteName := range []string{"Oreniva", "星河 AI"} {
+		require.NoError(t, repo.Set(t.Context(), SettingKeySiteName, siteName))
+		for _, locale := range []string{"zh", "en"} {
+			input := NotificationEmailSendInput{
+				Event: adminRechargeEmailTestEvent, Locale: locale, RecipientEmail: "admin@example.test",
+				Variables: map[string]string{"pay_amount": "100.00"},
+			}
+			preview, err := svc.PreviewSend(t.Context(), input)
+			require.NoError(t, err)
+			want := "[" + siteName + "] 收款到账通知 - 金额 100"
+			if locale == "en" {
+				want = "[" + siteName + "] Payment received - amount 100"
+			}
+			require.Equal(t, want, preview.Subject)
+			editorPreview, err := svc.PreviewTemplate(t.Context(), NotificationEmailPreviewInput{Event: input.Event, Locale: locale, Variables: input.Variables})
+			require.NoError(t, err)
+			require.Equal(t, want, editorPreview.Subject)
+		}
+	}
+}
+
+func TestNotificationEmailAdminRechargeMobilePreview(t *testing.T) {
+	svc := NewNotificationEmailService(newNotificationEmailMemorySettingRepo(), nil)
+	for _, locale := range []string{"zh", "en"} {
+		preview, err := svc.PreviewTemplate(t.Context(), NotificationEmailPreviewInput{
+			Event: adminRechargeEmailTestEvent, Locale: locale, Variables: map[string]string{
+				"user_email": "mobile.recharge.notice@example.test", "user_name": "mobile.recharge.notice@example.test", "user_notes": "VIP 客户 / priority customer",
+				"order_id": "1337", "out_trade_no": "20261112194730QJRO5MZ2B3", "pay_amount": "20.00", "recharge_amount": "20.00",
+			},
+		})
+		require.NoError(t, err)
+		require.Equal(t, 1, strings.Count(preview.HTML, "mobile.recharge.notice@example.test"))
+		if dir := os.Getenv("NOTIFICATION_PREVIEW_DIR"); dir != "" {
+			require.NoError(t, os.MkdirAll(dir, 0755))
+			require.NoError(t, os.WriteFile(filepath.Join(dir, "recharge-admin-"+locale+".html"), []byte(preview.HTML), 0644))
+		}
+	}
 }
 
 func TestNotificationEmailAdminRechargeTracksActualDeliveryAndDuplicates(t *testing.T) {
