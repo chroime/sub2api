@@ -10,7 +10,7 @@ import { formatGovernanceTime } from './format'
 // Every outbound notification in one place: upstream change mails, AstrBot
 // group messages, and automatic or administrator-requested platform-user mails.
 type Channel = DeliveryChannel | 'users'
-const props = defineProps<{ initialChannel?: Channel; initialTrigger?: BalanceNotificationTrigger }>()
+const props = defineProps<{ initialChannel?: Channel; initialTrigger?: BalanceNotificationTrigger; refreshKey?: number }>()
 const emit = defineEmits<{ 'update:channel': [channel: Channel] }>()
 const { t } = useI18n()
 const channel = ref<Channel>(props.initialChannel ?? 'email')
@@ -62,6 +62,7 @@ watch(channel, value => {
   void load()
 })
 watch(() => props.initialChannel, value => { channel.value = value ?? 'email' })
+watch(() => props.refreshKey, () => { void load(result.value?.page || 1) })
 onMounted(() => { void load() })
 onUnmounted(() => { generation++ })
 </script>
@@ -73,7 +74,7 @@ onUnmounted(() => { generation++ })
       </div>
       <button v-if="channel !== 'users'" type="button" class="btn btn-secondary text-xs" :disabled="loading" @click="load(result?.page || 1)">{{ t('common.refresh') }}</button>
     </div>
-    <BalanceNotificationRecords v-if="channel === 'users'" :initial-trigger="initialTrigger" />
+    <BalanceNotificationRecords v-if="channel === 'users'" :initial-trigger="initialTrigger" :refresh-key="refreshKey" />
     <template v-else>
       <p v-if="failed" role="alert" class="rounded-lg bg-red-50 p-3 text-sm text-red-600 dark:bg-red-900/10">{{ t('governance.deliveryRecords.readFailed') }}</p>
       <p v-else-if="loading && !result" role="status" class="p-6 text-center text-sm text-gray-500">{{ t('common.loading') }}</p>

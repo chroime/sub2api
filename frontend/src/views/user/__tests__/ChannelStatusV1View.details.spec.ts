@@ -20,7 +20,7 @@ beforeEach(() => {
   vi.resetAllMocks()
   localStorage.clear()
   localStorage.setItem('channel-status-auto-refresh', JSON.stringify({ enabled: true, interval_seconds: 30 }))
-  mocks.list.mockImplementation(async () => ({ items: [{ id: 1, name: 'Monitor', primary_model: 'model', primary_status: 'operational', availability_7d: 99 }] }))
+  mocks.list.mockImplementation(async () => ({ items: [{ id: 1, name: 'Monitor', provider: 'openai', primary_model: 'model', primary_status: 'operational', availability_7d: 99 }] }))
   mocks.status.mockResolvedValue(detail(90))
 })
 

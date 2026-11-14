@@ -145,6 +145,62 @@ func (_c *ChannelMonitorCreate) SetNillableGroupName(v *string) *ChannelMonitorC
 	return _c
 }
 
+// SetLocalAPIKeyID sets the "local_api_key_id" field.
+func (_c *ChannelMonitorCreate) SetLocalAPIKeyID(v int64) *ChannelMonitorCreate {
+	_c.mutation.SetLocalAPIKeyID(v)
+	return _c
+}
+
+// SetNillableLocalAPIKeyID sets the "local_api_key_id" field if the given value is not nil.
+func (_c *ChannelMonitorCreate) SetNillableLocalAPIKeyID(v *int64) *ChannelMonitorCreate {
+	if v != nil {
+		_c.SetLocalAPIKeyID(*v)
+	}
+	return _c
+}
+
+// SetGroupID sets the "group_id" field.
+func (_c *ChannelMonitorCreate) SetGroupID(v int64) *ChannelMonitorCreate {
+	_c.mutation.SetGroupID(v)
+	return _c
+}
+
+// SetNillableGroupID sets the "group_id" field if the given value is not nil.
+func (_c *ChannelMonitorCreate) SetNillableGroupID(v *int64) *ChannelMonitorCreate {
+	if v != nil {
+		_c.SetGroupID(*v)
+	}
+	return _c
+}
+
+// SetGroupBindingMode sets the "group_binding_mode" field.
+func (_c *ChannelMonitorCreate) SetGroupBindingMode(v string) *ChannelMonitorCreate {
+	_c.mutation.SetGroupBindingMode(v)
+	return _c
+}
+
+// SetNillableGroupBindingMode sets the "group_binding_mode" field if the given value is not nil.
+func (_c *ChannelMonitorCreate) SetNillableGroupBindingMode(v *string) *ChannelMonitorCreate {
+	if v != nil {
+		_c.SetGroupBindingMode(*v)
+	}
+	return _c
+}
+
+// SetGroupBindingChangedAt sets the "group_binding_changed_at" field.
+func (_c *ChannelMonitorCreate) SetGroupBindingChangedAt(v time.Time) *ChannelMonitorCreate {
+	_c.mutation.SetGroupBindingChangedAt(v)
+	return _c
+}
+
+// SetNillableGroupBindingChangedAt sets the "group_binding_changed_at" field if the given value is not nil.
+func (_c *ChannelMonitorCreate) SetNillableGroupBindingChangedAt(v *time.Time) *ChannelMonitorCreate {
+	if v != nil {
+		_c.SetGroupBindingChangedAt(*v)
+	}
+	return _c
+}
+
 // SetEnabled sets the "enabled" field.
 func (_c *ChannelMonitorCreate) SetEnabled(v bool) *ChannelMonitorCreate {
 	_c.mutation.SetEnabled(v)
@@ -361,6 +417,10 @@ func (_c *ChannelMonitorCreate) defaults() {
 		v := channelmonitor.DefaultGroupName
 		_c.mutation.SetGroupName(v)
 	}
+	if _, ok := _c.mutation.GroupBindingMode(); !ok {
+		v := channelmonitor.DefaultGroupBindingMode
+		_c.mutation.SetGroupBindingMode(v)
+	}
 	if _, ok := _c.mutation.Enabled(); !ok {
 		v := channelmonitor.DefaultEnabled
 		_c.mutation.SetEnabled(v)
@@ -453,6 +513,14 @@ func (_c *ChannelMonitorCreate) check() error {
 	if v, ok := _c.mutation.GroupName(); ok {
 		if err := channelmonitor.GroupNameValidator(v); err != nil {
 			return &ValidationError{Name: "group_name", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitor.group_name": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.GroupBindingMode(); !ok {
+		return &ValidationError{Name: "group_binding_mode", err: errors.New(`ent: missing required field "ChannelMonitor.group_binding_mode"`)}
+	}
+	if v, ok := _c.mutation.GroupBindingMode(); ok {
+		if err := channelmonitor.GroupBindingModeValidator(v); err != nil {
+			return &ValidationError{Name: "group_binding_mode", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitor.group_binding_mode": %w`, err)}
 		}
 	}
 	if _, ok := _c.mutation.Enabled(); !ok {
@@ -570,6 +638,22 @@ func (_c *ChannelMonitorCreate) createSpec() (*ChannelMonitor, *sqlgraph.CreateS
 	if value, ok := _c.mutation.GroupName(); ok {
 		_spec.SetField(channelmonitor.FieldGroupName, field.TypeString, value)
 		_node.GroupName = value
+	}
+	if value, ok := _c.mutation.LocalAPIKeyID(); ok {
+		_spec.SetField(channelmonitor.FieldLocalAPIKeyID, field.TypeInt64, value)
+		_node.LocalAPIKeyID = &value
+	}
+	if value, ok := _c.mutation.GroupID(); ok {
+		_spec.SetField(channelmonitor.FieldGroupID, field.TypeInt64, value)
+		_node.GroupID = &value
+	}
+	if value, ok := _c.mutation.GroupBindingMode(); ok {
+		_spec.SetField(channelmonitor.FieldGroupBindingMode, field.TypeString, value)
+		_node.GroupBindingMode = value
+	}
+	if value, ok := _c.mutation.GroupBindingChangedAt(); ok {
+		_spec.SetField(channelmonitor.FieldGroupBindingChangedAt, field.TypeTime, value)
+		_node.GroupBindingChangedAt = &value
 	}
 	if value, ok := _c.mutation.Enabled(); ok {
 		_spec.SetField(channelmonitor.FieldEnabled, field.TypeBool, value)
@@ -855,6 +939,84 @@ func (u *ChannelMonitorUpsert) UpdateGroupName() *ChannelMonitorUpsert {
 // ClearGroupName clears the value of the "group_name" field.
 func (u *ChannelMonitorUpsert) ClearGroupName() *ChannelMonitorUpsert {
 	u.SetNull(channelmonitor.FieldGroupName)
+	return u
+}
+
+// SetLocalAPIKeyID sets the "local_api_key_id" field.
+func (u *ChannelMonitorUpsert) SetLocalAPIKeyID(v int64) *ChannelMonitorUpsert {
+	u.Set(channelmonitor.FieldLocalAPIKeyID, v)
+	return u
+}
+
+// UpdateLocalAPIKeyID sets the "local_api_key_id" field to the value that was provided on create.
+func (u *ChannelMonitorUpsert) UpdateLocalAPIKeyID() *ChannelMonitorUpsert {
+	u.SetExcluded(channelmonitor.FieldLocalAPIKeyID)
+	return u
+}
+
+// AddLocalAPIKeyID adds v to the "local_api_key_id" field.
+func (u *ChannelMonitorUpsert) AddLocalAPIKeyID(v int64) *ChannelMonitorUpsert {
+	u.Add(channelmonitor.FieldLocalAPIKeyID, v)
+	return u
+}
+
+// ClearLocalAPIKeyID clears the value of the "local_api_key_id" field.
+func (u *ChannelMonitorUpsert) ClearLocalAPIKeyID() *ChannelMonitorUpsert {
+	u.SetNull(channelmonitor.FieldLocalAPIKeyID)
+	return u
+}
+
+// SetGroupID sets the "group_id" field.
+func (u *ChannelMonitorUpsert) SetGroupID(v int64) *ChannelMonitorUpsert {
+	u.Set(channelmonitor.FieldGroupID, v)
+	return u
+}
+
+// UpdateGroupID sets the "group_id" field to the value that was provided on create.
+func (u *ChannelMonitorUpsert) UpdateGroupID() *ChannelMonitorUpsert {
+	u.SetExcluded(channelmonitor.FieldGroupID)
+	return u
+}
+
+// AddGroupID adds v to the "group_id" field.
+func (u *ChannelMonitorUpsert) AddGroupID(v int64) *ChannelMonitorUpsert {
+	u.Add(channelmonitor.FieldGroupID, v)
+	return u
+}
+
+// ClearGroupID clears the value of the "group_id" field.
+func (u *ChannelMonitorUpsert) ClearGroupID() *ChannelMonitorUpsert {
+	u.SetNull(channelmonitor.FieldGroupID)
+	return u
+}
+
+// SetGroupBindingMode sets the "group_binding_mode" field.
+func (u *ChannelMonitorUpsert) SetGroupBindingMode(v string) *ChannelMonitorUpsert {
+	u.Set(channelmonitor.FieldGroupBindingMode, v)
+	return u
+}
+
+// UpdateGroupBindingMode sets the "group_binding_mode" field to the value that was provided on create.
+func (u *ChannelMonitorUpsert) UpdateGroupBindingMode() *ChannelMonitorUpsert {
+	u.SetExcluded(channelmonitor.FieldGroupBindingMode)
+	return u
+}
+
+// SetGroupBindingChangedAt sets the "group_binding_changed_at" field.
+func (u *ChannelMonitorUpsert) SetGroupBindingChangedAt(v time.Time) *ChannelMonitorUpsert {
+	u.Set(channelmonitor.FieldGroupBindingChangedAt, v)
+	return u
+}
+
+// UpdateGroupBindingChangedAt sets the "group_binding_changed_at" field to the value that was provided on create.
+func (u *ChannelMonitorUpsert) UpdateGroupBindingChangedAt() *ChannelMonitorUpsert {
+	u.SetExcluded(channelmonitor.FieldGroupBindingChangedAt)
+	return u
+}
+
+// ClearGroupBindingChangedAt clears the value of the "group_binding_changed_at" field.
+func (u *ChannelMonitorUpsert) ClearGroupBindingChangedAt() *ChannelMonitorUpsert {
+	u.SetNull(channelmonitor.FieldGroupBindingChangedAt)
 	return u
 }
 
@@ -1237,6 +1399,97 @@ func (u *ChannelMonitorUpsertOne) UpdateGroupName() *ChannelMonitorUpsertOne {
 func (u *ChannelMonitorUpsertOne) ClearGroupName() *ChannelMonitorUpsertOne {
 	return u.Update(func(s *ChannelMonitorUpsert) {
 		s.ClearGroupName()
+	})
+}
+
+// SetLocalAPIKeyID sets the "local_api_key_id" field.
+func (u *ChannelMonitorUpsertOne) SetLocalAPIKeyID(v int64) *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.SetLocalAPIKeyID(v)
+	})
+}
+
+// AddLocalAPIKeyID adds v to the "local_api_key_id" field.
+func (u *ChannelMonitorUpsertOne) AddLocalAPIKeyID(v int64) *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.AddLocalAPIKeyID(v)
+	})
+}
+
+// UpdateLocalAPIKeyID sets the "local_api_key_id" field to the value that was provided on create.
+func (u *ChannelMonitorUpsertOne) UpdateLocalAPIKeyID() *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.UpdateLocalAPIKeyID()
+	})
+}
+
+// ClearLocalAPIKeyID clears the value of the "local_api_key_id" field.
+func (u *ChannelMonitorUpsertOne) ClearLocalAPIKeyID() *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.ClearLocalAPIKeyID()
+	})
+}
+
+// SetGroupID sets the "group_id" field.
+func (u *ChannelMonitorUpsertOne) SetGroupID(v int64) *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.SetGroupID(v)
+	})
+}
+
+// AddGroupID adds v to the "group_id" field.
+func (u *ChannelMonitorUpsertOne) AddGroupID(v int64) *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.AddGroupID(v)
+	})
+}
+
+// UpdateGroupID sets the "group_id" field to the value that was provided on create.
+func (u *ChannelMonitorUpsertOne) UpdateGroupID() *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.UpdateGroupID()
+	})
+}
+
+// ClearGroupID clears the value of the "group_id" field.
+func (u *ChannelMonitorUpsertOne) ClearGroupID() *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.ClearGroupID()
+	})
+}
+
+// SetGroupBindingMode sets the "group_binding_mode" field.
+func (u *ChannelMonitorUpsertOne) SetGroupBindingMode(v string) *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.SetGroupBindingMode(v)
+	})
+}
+
+// UpdateGroupBindingMode sets the "group_binding_mode" field to the value that was provided on create.
+func (u *ChannelMonitorUpsertOne) UpdateGroupBindingMode() *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.UpdateGroupBindingMode()
+	})
+}
+
+// SetGroupBindingChangedAt sets the "group_binding_changed_at" field.
+func (u *ChannelMonitorUpsertOne) SetGroupBindingChangedAt(v time.Time) *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.SetGroupBindingChangedAt(v)
+	})
+}
+
+// UpdateGroupBindingChangedAt sets the "group_binding_changed_at" field to the value that was provided on create.
+func (u *ChannelMonitorUpsertOne) UpdateGroupBindingChangedAt() *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.UpdateGroupBindingChangedAt()
+	})
+}
+
+// ClearGroupBindingChangedAt clears the value of the "group_binding_changed_at" field.
+func (u *ChannelMonitorUpsertOne) ClearGroupBindingChangedAt() *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.ClearGroupBindingChangedAt()
 	})
 }
 
@@ -1812,6 +2065,97 @@ func (u *ChannelMonitorUpsertBulk) UpdateGroupName() *ChannelMonitorUpsertBulk {
 func (u *ChannelMonitorUpsertBulk) ClearGroupName() *ChannelMonitorUpsertBulk {
 	return u.Update(func(s *ChannelMonitorUpsert) {
 		s.ClearGroupName()
+	})
+}
+
+// SetLocalAPIKeyID sets the "local_api_key_id" field.
+func (u *ChannelMonitorUpsertBulk) SetLocalAPIKeyID(v int64) *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.SetLocalAPIKeyID(v)
+	})
+}
+
+// AddLocalAPIKeyID adds v to the "local_api_key_id" field.
+func (u *ChannelMonitorUpsertBulk) AddLocalAPIKeyID(v int64) *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.AddLocalAPIKeyID(v)
+	})
+}
+
+// UpdateLocalAPIKeyID sets the "local_api_key_id" field to the value that was provided on create.
+func (u *ChannelMonitorUpsertBulk) UpdateLocalAPIKeyID() *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.UpdateLocalAPIKeyID()
+	})
+}
+
+// ClearLocalAPIKeyID clears the value of the "local_api_key_id" field.
+func (u *ChannelMonitorUpsertBulk) ClearLocalAPIKeyID() *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.ClearLocalAPIKeyID()
+	})
+}
+
+// SetGroupID sets the "group_id" field.
+func (u *ChannelMonitorUpsertBulk) SetGroupID(v int64) *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.SetGroupID(v)
+	})
+}
+
+// AddGroupID adds v to the "group_id" field.
+func (u *ChannelMonitorUpsertBulk) AddGroupID(v int64) *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.AddGroupID(v)
+	})
+}
+
+// UpdateGroupID sets the "group_id" field to the value that was provided on create.
+func (u *ChannelMonitorUpsertBulk) UpdateGroupID() *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.UpdateGroupID()
+	})
+}
+
+// ClearGroupID clears the value of the "group_id" field.
+func (u *ChannelMonitorUpsertBulk) ClearGroupID() *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.ClearGroupID()
+	})
+}
+
+// SetGroupBindingMode sets the "group_binding_mode" field.
+func (u *ChannelMonitorUpsertBulk) SetGroupBindingMode(v string) *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.SetGroupBindingMode(v)
+	})
+}
+
+// UpdateGroupBindingMode sets the "group_binding_mode" field to the value that was provided on create.
+func (u *ChannelMonitorUpsertBulk) UpdateGroupBindingMode() *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.UpdateGroupBindingMode()
+	})
+}
+
+// SetGroupBindingChangedAt sets the "group_binding_changed_at" field.
+func (u *ChannelMonitorUpsertBulk) SetGroupBindingChangedAt(v time.Time) *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.SetGroupBindingChangedAt(v)
+	})
+}
+
+// UpdateGroupBindingChangedAt sets the "group_binding_changed_at" field to the value that was provided on create.
+func (u *ChannelMonitorUpsertBulk) UpdateGroupBindingChangedAt() *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.UpdateGroupBindingChangedAt()
+	})
+}
+
+// ClearGroupBindingChangedAt clears the value of the "group_binding_changed_at" field.
+func (u *ChannelMonitorUpsertBulk) ClearGroupBindingChangedAt() *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.ClearGroupBindingChangedAt()
 	})
 }
 

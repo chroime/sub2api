@@ -6,11 +6,13 @@ import PlatformIcon from '@/components/common/PlatformIcon.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { getModelsByPlatform } from '@/composables/useModelWhitelist'
 import type { ManagedKey, RemoteGroup, Transport } from '@/api/admin/upstream-governance'
-import api, { type LocalModelTarget, type ModelAPIMode, type ModelBatchInput, type ModelEffort, type ModelPolicy, type ModelRun, type ModelRunPage, type ModelStats, type ModelTargetType, type ModelTestConfig, type ModelTestTemplate } from '@/api/admin/upstream-model-monitoring'
+import api, { type LocalModelTarget, type ModelAPIMode, type ModelBatchInput, type ModelEffort, type ModelPolicy, type ModelRun, type ModelRunFilters as RunFilters, type ModelRunPage, type ModelStats, type ModelTargetType, type ModelTestConfig, type ModelTestTemplate } from '@/api/admin/upstream-model-monitoring'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import ModelRunDetail from './ModelRunDetail.vue'
 import ModelComparison from './ModelComparison.vue'
 import StatusIndicator from './StatusIndicator.vue'
+import ModelRunFilters from './ModelRunFilters.vue'
+import ModelRunTable from './ModelRunTable.vue'
 import { errorKey } from './feedback'
 import { formatGovernanceTime } from './format'
 import { intervalValidationKey } from './interval'
@@ -41,13 +43,16 @@ const policies = ref<ModelPolicy[]>([]), runs = ref<ModelRunPage | null>(null), 
 const loading = ref(false), busy = ref(false), error = ref(''), notice = ref(''), editorOpen = ref(false)
 const localTargetsLoading = ref(false), localTargetsError = ref('')
 const page = ref(1), batchId = ref(''), detailId = ref(''), deleteId = ref<number | null>(null), deleteRunId = ref<string | null>(null), hideRunId = ref<string | null>(null)
+const runFilters = ref<RunFilters>({})
+const hasRunFilters = computed(() => Object.keys(runFilters.value).length > 0)
 const comparison = ref<{ batchId: string; template: ModelTestTemplate; sample: number } | null>(null)
 const stats = ref<ModelStats | null>(null), statsError = ref(''), statsDays = ref(7), statsExpanded = ref(false)
 let statsGeneration = 0
 const editingPolicy = ref<ModelPolicy | null>(null)
-// New monitoring defaults to an hourly long-term policy with a small daily budget.
+// Keep Pelican defaults modest; candy defaults to one check every 30 minutes.
 const defaultInterval = 60, defaultDailyLimit = 12
 const policyName = ref(''), interval = ref(defaultInterval), dailyLimit = ref(defaultDailyLimit), policyEnabled = ref(true), notifyEnabled = ref(false), recipients = ref(''), failureThreshold = ref(3), takeOverLegacy = ref(false)
+const intervalCustomized = ref(false), budgetCustomized = ref(false)
 const modes: ModelAPIMode[] = ['chat_completions', 'responses', 'anthropic', 'gemini']
 const efforts: ModelEffort[] = ['low', 'medium', 'high']
 const templates: ModelTestTemplate[] = ['candy', 'pelican', 'token_audit', 'context', 'probe']
@@ -107,15 +112,18 @@ function modeAvailable(mode: ModelAPIMode) {
 const modeOptions = computed(() => modes.map(value => ({ value, label: mt(`mode_${value}`), platform: value === 'anthropic' ? 'anthropic' : value === 'gemini' ? 'gemini' : 'openai', disabled: !modeAvailable(value) })))
 const tokenizerOptions = computed(() => ['auto', 'o200k_base', 'cl100k_base', 'none'].map(value => ({ value, label: value === 'auto' || value === 'none' ? mt(`tokenizer_${value}`) : value })))
 const requestCount = computed(() => config.value.efforts.length * config.value.templates.length * (Number.isInteger(config.value.samples) ? config.value.samples : 0))
+watch([() => config.value.templates.includes('candy'), requestCount], ([candy, count]) => {
+  if (editingPolicy.value || !editorOpen.value) return
+  if (!intervalCustomized.value) interval.value = candy ? 30 : defaultInterval
+  if (!budgetCustomized.value) dailyLimit.value = candy ? 48 * Math.max(1, count) : defaultDailyLimit
+})
 const counts = computed(() => runs.value?.counts || Object.fromEntries([...statuses].map(status => [status, runs.value?.items.filter(run => run.status === status).length || 0])))
 const runningCount = computed(() => (counts.value.queued || 0) + (counts.value.running || 0))
 const completedCount = computed(() => Object.entries(counts.value).reduce((sum, [status, count]) => sum + (status === 'queued' || status === 'running' ? 0 : count), 0))
 const pages = computed(() => Math.max(1, Math.ceil((runs.value?.total || 0) / (runs.value?.page_size || 20))))
-const progress = computed(() => runs.value?.total ? Math.min(100, Math.round(100 * completedCount.value / runs.value.total)) : 0)
+const scopeTotal = computed(() => runs.value?.scope_total ?? runs.value?.total ?? 0)
+const progress = computed(() => scopeTotal.value ? Math.min(100, Math.round(100 * completedCount.value / scopeTotal.value)) : 0)
 const activePolicyCount = computed(() => policies.value.filter(policy => policy.enabled).length)
-const stateLabel = (state: string) => statuses.has(state) ? mt(`state_${state}`) : state
-const runTone = (state: string) => state === 'succeeded' ? 'success' : state === 'failed' ? 'danger' : state === 'indeterminate' ? 'warning' : ['queued', 'running'].includes(state) ? 'info' : 'neutral'
-const reviewTone = (review: ModelRun['review']) => review === 'pass' ? 'success' : review === 'fail' ? 'danger' : 'neutral'
 const countValue = (value: number | null | undefined) => value == null ? mt('unknown') : String(value)
 const keyLabel = (id: number) => {
   const key = props.managedKeys.find(value => value.id === id)
@@ -192,11 +200,15 @@ async function refresh(silent = false) {
   clearTimer()
   const request = generation, refreshId = ++refreshGeneration, id = props.siteId
   if (!silent) { loading.value = true; error.value = '' }
-  const results = await Promise.allSettled([api.policies(id), api.runs(id, page.value, batchId.value)])
+  const runRequest = hasRunFilters.value ? api.runs(id, page.value, batchId.value, runFilters.value) : api.runs(id, page.value, batchId.value)
+  const results = await Promise.allSettled([api.policies(id), runRequest])
   if (request !== generation || refreshId !== refreshGeneration) return
   if (results[0].status === 'fulfilled') policies.value = results[0].value || []
   else error.value = failure(results[0].reason)
-  if (results[1].status === 'fulfilled') runs.value = results[1].value
+  if (results[1].status === 'fulfilled') {
+    runs.value = results[1].value
+    if (page.value > pages.value) { page.value = pages.value; void refresh(silent); return }
+  }
   else error.value = failure(results[1].reason)
   loading.value = false
   void refreshStats()
@@ -242,6 +254,7 @@ function newConfiguration() {
   if (locked.value) return
   localSelectionTouched = false; localModelTouched = false; localModeTouched = false
   editingPolicy.value = null; config.value = initialConfig(); policyName.value = ''; interval.value = defaultInterval; dailyLimit.value = defaultDailyLimit; policyEnabled.value = true
+  intervalCustomized.value = false; budgetCustomized.value = false
   notifyEnabled.value = false; recipients.value = ''; failureThreshold.value = 3; takeOverLegacy.value = false
   error.value = ''; notice.value = ''; editorOpen.value = true
   if (props.localOnly) applyLocalTargetDefault()
@@ -262,6 +275,7 @@ watch(() => props.siteId, () => {
   generation++; refreshGeneration++; ++localTargetsGeneration; ++localTargetsRequest; clearTimer(); pendingStart = null
   policies.value = []; runs.value = null; loading.value = false; busy.value = false; error.value = ''; notice.value = ''
   page.value = 1; batchId.value = ''; detailId.value = ''; deleteId.value = null; deleteRunId.value = null; hideRunId.value = null; editorOpen.value = false
+  runFilters.value = {}
   comparison.value = null; statsGeneration++; stats.value = null; statsError.value = ''; statsExpanded.value = false
   editingPolicy.value = null; localSelectionTouched = false; localModelTouched = false; localModeTouched = false; config.value = initialConfig()
   if (!props.localOnly && readyKeys.value[0]) changeKey(readyKeys.value[0].id)
@@ -352,6 +366,7 @@ function editPolicy(policy: ModelPolicy) {
 }
 function installPolicy(policy: ModelPolicy) {
   localSelectionTouched = true; localModelTouched = true; localModeTouched = true
+  intervalCustomized.value = true; budgetCustomized.value = true
   editingPolicy.value = policy; config.value = { ...initialConfig(), ...policy.config, efforts: [...policy.config.efforts], templates: [...policy.config.templates] }
   config.value.target_type = props.localOnly ? 'local_group' : 'upstream'
   config.value.first_content_timeout_seconds ||= 60; config.value.idle_timeout_seconds ||= 30
@@ -396,9 +411,6 @@ async function removeRun(run: ModelRun) {
     }
   })
 }
-function canHideRun(run: ModelRun) {
-  return run.request.template === 'pelican' && run.request.config.target_type === 'local_group'
-}
 async function hideRun(run: ModelRun) {
   const request = generation, id = props.siteId
   await mutate(async () => {
@@ -407,6 +419,11 @@ async function hideRun(run: ModelRun) {
   })
 }
 function showBatch(id: string) { if (locked.value) return; batchId.value = id; page.value = 1; void refresh() }
+function applyRunFilters(value: RunFilters) {
+  if (locked.value) return
+  runFilters.value = value; page.value = 1; hideRunId.value = null; deleteRunId.value = null
+  void refresh()
+}
 function changePage(value: number) { if (locked.value || loading.value) return; page.value = value; void refresh() }
 function reviewed(value: ModelRun) { if (runs.value) runs.value.items = runs.value.items.map(run => run.id === value.id ? value : run) }
 function compare(run: ModelRun) { comparison.value = { batchId: run.batch_id, template: run.request.template, sample: run.request.sample } }
@@ -414,7 +431,7 @@ function comparisonDetail(id: string) { comparison.value = null; detailId.value 
 </script>
 
 <template>
-  <section class="min-w-0 space-y-5" data-test="model-monitor-panel" :aria-label="mt('title')">
+  <section class="model-monitor min-w-0 space-y-5" data-test="model-monitor-panel" :aria-label="mt('title')">
     <header class="flex flex-wrap items-start justify-between gap-3"><div class="flex flex-wrap gap-2"><button type="button" class="btn btn-secondary text-sm" :disabled="locked || loading" :aria-label="t('common.refresh')" @click="refresh()"><Icon name="refresh" size="sm" /></button><button type="button" data-test="model-new" class="btn btn-primary text-sm" :disabled="locked" @click="newConfiguration">{{ mt('newTest') }}</button></div></header>
     <p v-if="error" role="alert" class="rounded-xl bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">{{ error }}</p><p v-if="notice" role="status" class="rounded-xl bg-primary-50 p-3 text-sm text-primary-700 dark:bg-primary-900/20 dark:text-primary-300">{{ notice }}</p>
     <div class="grid grid-cols-2 gap-3 xl:grid-cols-4"><div class="rounded-xl bg-gray-50 p-4 dark:bg-dark-900"><p class="text-xs text-gray-500">{{ mt('scheduledPolicies') }}</p><p class="mt-1 text-xl font-semibold tabular-nums">{{ activePolicyCount }}<span class="ml-1 text-xs font-normal text-gray-400">/ {{ policies.length }}</span></p></div><div class="rounded-xl bg-gray-50 p-4 dark:bg-dark-900"><p class="text-xs text-gray-500">{{ mt('inProgress') }}</p><p class="mt-1 text-xl font-semibold tabular-nums">{{ runningCount }}</p></div><div class="rounded-xl bg-gray-50 p-4 dark:bg-dark-900"><p class="text-xs text-gray-500">{{ mt('finished') }}</p><p class="mt-1 text-xl font-semibold tabular-nums">{{ completedCount }}</p></div><div class="rounded-xl bg-gray-50 p-4 dark:bg-dark-900"><p class="text-xs text-gray-500">{{ mt('needsAttention') }}</p><p class="mt-1 text-xl font-semibold tabular-nums">{{ (counts.failed || 0) + (counts.indeterminate || 0) }}</p></div></div>
@@ -445,7 +462,7 @@ function comparisonDetail(id: string) { comparison.value = null; detailId.value 
         </section>
         <section data-test="model-policy-card" class="min-w-0 space-y-4 rounded-xl border border-gray-200 p-4 dark:border-dark-600 sm:p-5">
           <div><h4 class="font-semibold">{{ mt('scheduledConfiguration') }}</h4><p class="mt-1 text-xs leading-relaxed text-gray-500">{{ mt('scheduleHint') }}</p></div>
-          <div class="grid gap-4 sm:grid-cols-2"><label class="text-sm">{{ mt('policyName') }}<input v-model="policyName" data-test="model-policy-name" maxlength="120" class="input mt-1 w-full" /></label><label class="text-sm">{{ t('governance.interval') }}<input v-model.number="interval" data-test="model-policy-interval" type="number" min="1" step="1" class="input mt-1 w-full" /></label><label class="text-sm">{{ mt('dailyLimit') }}<input v-model.number="dailyLimit" data-test="model-daily-limit" type="number" min="1" max="1000000" step="1" class="input mt-1 w-full" /></label><label class="text-sm">{{ mt('failureThreshold') }}<input v-model.number="failureThreshold" type="number" min="1" max="100" step="1" class="input mt-1 w-full" /></label><label class="governance-checkbox-label flex items-center gap-2 text-sm font-medium sm:col-span-2"><input v-model="policyEnabled" data-test="model-policy-enabled" type="checkbox" class="governance-checkbox" />{{ mt('policyEnabledLabel') }}</label><label class="governance-checkbox-label flex items-center gap-2 text-sm"><input v-model="notifyEnabled" data-test="model-notify" type="checkbox" class="governance-checkbox" />{{ mt('emailNotifications') }}</label><label class="governance-checkbox-label flex items-center gap-2 text-sm"><input v-model="takeOverLegacy" data-test="model-take-over" type="checkbox" class="governance-checkbox" />{{ mt('takeOverLegacy') }}</label><label v-if="notifyEnabled" class="text-sm sm:col-span-2">{{ mt('recipients') }}<textarea v-model="recipients" data-test="model-recipients" class="input mt-1 min-h-20 w-full" /></label></div>
+          <div class="grid gap-4 sm:grid-cols-2"><label class="text-sm">{{ mt('policyName') }}<input v-model="policyName" data-test="model-policy-name" maxlength="120" class="input mt-1 w-full" /></label><label class="text-sm">{{ t('governance.interval') }}<input v-model.number="interval" data-test="model-policy-interval" @input="intervalCustomized = true" type="number" min="1" step="1" class="input mt-1 w-full" /></label><label class="text-sm">{{ mt('dailyLimit') }}<input v-model.number="dailyLimit" data-test="model-daily-limit" @input="budgetCustomized = true" type="number" min="1" max="1000000" step="1" class="input mt-1 w-full" /></label><label class="text-sm">{{ mt('failureThreshold') }}<input v-model.number="failureThreshold" type="number" min="1" max="100" step="1" class="input mt-1 w-full" /></label><label class="governance-checkbox-label flex items-center gap-2 text-sm font-medium sm:col-span-2"><input v-model="policyEnabled" data-test="model-policy-enabled" type="checkbox" class="governance-checkbox" />{{ mt('policyEnabledLabel') }}</label><label class="governance-checkbox-label flex items-center gap-2 text-sm"><input v-model="notifyEnabled" data-test="model-notify" type="checkbox" class="governance-checkbox" />{{ mt('emailNotifications') }}</label><label class="governance-checkbox-label flex items-center gap-2 text-sm"><input v-model="takeOverLegacy" data-test="model-take-over" type="checkbox" class="governance-checkbox" />{{ mt('takeOverLegacy') }}</label><label v-if="notifyEnabled" class="text-sm sm:col-span-2">{{ mt('recipients') }}<textarea v-model="recipients" data-test="model-recipients" class="input mt-1 min-h-20 w-full" /></label></div>
         </section>
         <div data-test="model-editor-actions" class="flex flex-wrap items-center justify-end gap-2 border-t border-gray-100 pt-4 dark:border-dark-700"><button type="button" data-test="model-policy-save" class="btn btn-primary" :disabled="locked || !canRunTarget" @click="savePolicy()">{{ mt('savePolicy') }}</button><button data-test="model-start" type="submit" class="btn btn-secondary" :disabled="locked || !canRunTarget">{{ busy ? t('common.loading') : mt('runNow') }}</button></div>
       </fieldset></form>
@@ -457,24 +474,42 @@ function comparisonDetail(id: string) { comparison.value = null; detailId.value 
       <details v-for="group in statsGroups" :key="`${group.config_hash}:${group.template}:${group.effort}:${group.template_version}:${group.adapter_version}`" class="rounded-xl border border-gray-200 p-4 dark:border-dark-600"><summary class="cursor-pointer text-sm"><span class="font-medium">{{ group.model }}</span><span class="ml-2 text-xs text-gray-500">{{ mt(`template_${group.template}`) }} · {{ group.effort }} · {{ group.samples }} {{ mt('sampleUnits') }}</span></summary><div class="mt-4 space-y-3"><p class="text-xs text-gray-500">{{ group.api_mode }} · {{ statsTargetLabel(group) }} · {{ group.template_version || mt('unknown') }} / {{ group.adapter_version || mt('unknown') }}</p><div class="grid grid-cols-2 gap-3 text-xs sm:grid-cols-4"><p>{{ mt('successSamples') }} <strong>{{ group.successes }} / {{ group.samples }}</strong></p><p>{{ mt('failedSamples') }} <strong>{{ group.failures }}</strong></p><p>TTFT p50 <strong>{{ group.comparable && (group.ttft_samples || 0) >= 5 ? countValue(group.p50_ttft_ms) : mt('insufficientSamples') }}</strong><span v-if="group.comparable && (group.ttft_samples || 0) >= 5 && group.p50_ttft_ms != null"> ms</span></p><p>TTFT p95 <strong>{{ group.comparable && (group.ttft_samples || 0) >= 5 ? countValue(group.p95_ttft_ms) : mt('insufficientSamples') }}</strong><span v-if="group.comparable && (group.ttft_samples || 0) >= 5 && group.p95_ttft_ms != null"> ms</span></p></div><div class="flex gap-1 overflow-x-auto py-1" :aria-label="mt('healthMatrix')"><span v-for="point in group.points" :key="point.at" role="img" :aria-label="`${formatGovernanceTime(point.at)}: ${point.successes}/${point.samples}, ${point.failures} ${mt('failedSamples')}`" :title="`${formatGovernanceTime(point.at)} · ${mt('successSamples')} ${point.successes}/${point.samples} · ${mt('failedSamples')} ${point.failures} · TTFT ${countValue(point.ttft_ms)}`" class="h-7 min-w-3 flex-1 rounded-sm" :class="point.failures > 0 ? 'bg-red-400 dark:bg-red-600' : point.successes > 0 ? 'bg-emerald-400 dark:bg-emerald-600' : 'bg-gray-200 dark:bg-dark-600'" /></div><div class="flex flex-wrap gap-3 text-xs text-gray-500"><span>● {{ mt('matrixSuccess') }}</span><span class="text-red-600 dark:text-red-300">● {{ mt('matrixFailure') }}</span><span>{{ mt('unknown') }} {{ group.unknown }} · {{ mt('latestRun') }} {{ formatGovernanceTime(group.last_run_at) }}</span></div></div></details>
       <button v-if="(stats?.groups.length || 0) > 6" type="button" class="text-sm font-medium text-primary-700 dark:text-primary-300" @click="statsExpanded = !statsExpanded">{{ mt(statsExpanded ? 'collapseStats' : 'expandStats') }}</button><p v-if="stats?.truncated" class="text-xs text-gray-500">{{ mt('statsTruncated') }}</p>
     </section>
-    <section class="space-y-3"><div class="flex items-center justify-between gap-3"><h4 class="font-semibold">{{ mt('policies') }}</h4><span class="text-xs text-gray-500">{{ policies.length }}</span></div><p v-if="!policies.length" class="rounded-xl border border-dashed border-gray-200 p-5 text-sm text-gray-500 dark:border-dark-600">{{ mt('noPolicies') }}</p><article v-for="policy in policies" :key="policy.id" class="rounded-xl border border-gray-200 p-4 dark:border-dark-600"><div class="flex flex-wrap items-center gap-3"><PlatformIcon :platform="policy.config.platform" size="md" /><div class="min-w-0 flex-1"><p class="break-words text-sm font-semibold">{{ policy.name }}</p><p class="mt-1 break-all text-xs text-gray-500">{{ policy.config.model }} · {{ policy.config.efforts.join(' / ') }} · {{ policy.interval_minutes }} {{ t('governance.minutes') }}</p><p v-if="policy.enabled" class="mt-1 text-xs text-gray-500">{{ mt('nextRun') }} {{ formatGovernanceTime(policy.next_run_at) }}</p></div><StatusIndicator :label="mt(policy.enabled ? 'enabled' : 'paused')" :tone="policy.enabled ? 'success' : 'neutral'" /><div class="flex flex-wrap gap-2"><button type="button" class="btn btn-secondary text-xs" :disabled="locked" :data-test="`model-policy-run-${policy.id}`" @click="runPolicy(policy)">{{ mt('runNow') }}</button><button type="button" class="btn btn-secondary text-xs" :disabled="locked" :data-test="`model-policy-edit-${policy.id}`" @click="editPolicy(policy)">{{ t('common.edit') }}</button><button type="button" class="btn btn-secondary text-xs" :disabled="locked" :data-test="`model-policy-toggle-${policy.id}`" @click="togglePolicy(policy)">{{ mt(policy.enabled ? 'pause' : 'enable') }}</button><button type="button" class="rounded-lg p-2 text-gray-400 hover:text-red-600" :disabled="locked" :aria-label="t('common.delete')" @click="deleteId = policy.id"><Icon name="trash" size="sm" /></button></div></div><p v-if="policy.last_error" class="mt-2 break-all text-xs text-amber-700 dark:text-amber-300">{{ policy.last_error }}</p><p v-if="policy.notify_error" class="mt-2 break-all text-xs text-red-600">{{ mt('notificationFailure') }}：{{ policy.notify_error }}</p><p v-else-if="policy.notify_at" class="mt-2 text-xs text-gray-500">{{ mt('lastNotification') }} {{ formatGovernanceTime(policy.notify_at) }}</p><div v-if="deleteId === policy.id" class="mt-3 flex flex-wrap items-center gap-3 rounded-lg bg-red-50 p-3 text-sm dark:bg-red-900/20"><span class="mr-auto">{{ mt('deletePolicyHint') }}</span><button type="button" class="btn btn-danger text-xs" :disabled="locked" :data-test="`model-policy-delete-${policy.id}`" @click="removePolicy(policy)">{{ t('common.delete') }}</button><button type="button" class="btn btn-secondary text-xs" :disabled="locked" @click="deleteId = null">{{ t('common.cancel') }}</button></div></article></section>
-    <section class="space-y-3"><div class="flex flex-wrap items-center justify-between gap-3"><div><h4 class="font-semibold">{{ batchId ? mt('batchProgress') : mt('runHistory') }}</h4><p v-if="batchId" class="mt-1 break-all text-xs text-gray-400">{{ batchId }}</p></div><div class="flex flex-wrap gap-2"><button v-if="batchId" type="button" class="btn btn-secondary text-xs" :disabled="locked" @click="showBatch('')">{{ mt('allRuns') }}</button><button v-if="batchId && runningCount" type="button" data-test="model-batch-cancel" class="btn btn-secondary text-xs" :disabled="locked" @click="cancelBatch">{{ mt('cancelBatch') }}</button></div></div>
-      <div v-if="batchId" class="space-y-2"><div class="flex justify-between text-xs text-gray-500"><span>{{ completedCount }} / {{ runs?.total || 0 }} {{ mt('finished') }}</span><span>{{ progress }}%</span></div><div role="progressbar" :aria-label="mt('batchProgress')" :aria-valuenow="progress" aria-valuemin="0" aria-valuemax="100" class="h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-dark-700"><div class="h-full rounded-full bg-primary-500 transition-[width] motion-reduce:transition-none" :style="{ width: `${progress}%` }" /></div><p class="text-xs text-gray-500">{{ mt('cancelHint') }}</p></div>
-      <p v-if="loading" role="status" class="py-3 text-center text-sm text-gray-500">{{ t('common.loading') }}</p><p v-else-if="!runs?.items.length" class="rounded-xl border border-dashed border-gray-200 p-5 text-sm text-gray-500 dark:border-dark-600">{{ mt('noRuns') }}</p>
-      <article v-for="run in runs?.items || []" :key="run.id" class="flex flex-wrap items-center gap-3 rounded-xl border border-gray-200 p-4 dark:border-dark-600"><PlatformIcon :platform="run.request.config.platform" size="md" /><div class="min-w-0 flex-1"><p class="break-all text-sm font-semibold">{{ run.request.config.model }}</p><p class="mt-1 text-xs text-gray-500">{{ targetLabel(run.request.config) }} · {{ mt(`template_${run.request.template}`) }} · {{ run.request.effort }} · {{ mt('sample') }} {{ run.request.sample }}</p><time class="mt-1 block text-xs tabular-nums text-gray-400">{{ formatGovernanceTime(run.created_at) }}</time></div><div class="min-w-0 max-w-full text-xs text-gray-500">
-        <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <span class="inline-flex items-center gap-1">
-            <StatusIndicator :label="stateLabel(run.status)" :tone="runTone(run.status)" aria-hidden="true" :tabindex="-1" />
-            <span class="leading-5">{{ stateLabel(run.status) }}</span>
-          </span>
-          <span class="inline-flex items-center gap-1">
-            <StatusIndicator :label="`${mt('manualReview')}：${mt(`review_${run.review || 'pending'}`)}`" :tone="reviewTone(run.review)" aria-hidden="true" :tabindex="-1" />
-            <span class="leading-5">{{ mt('manualReview') }}：{{ mt(`review_${run.review || 'pending'}`) }}</span>
-          </span>
-        </div><p class="mt-1">TTFT {{ countValue(run.result?.ttft_ms) }}<span v-if="run.result?.ttft_ms != null"> ms</span> · {{ countValue(run.result?.duration_ms) }}<span v-if="run.result?.duration_ms != null"> ms</span></p></div><div class="flex flex-wrap gap-2"><button type="button" class="btn btn-secondary text-xs" :data-test="`model-run-${run.id}`" @click="detailId = run.id">{{ mt('details') }}</button><button type="button" class="btn btn-secondary text-xs" :data-test="`model-compare-${run.id}`" @click="compare(run)">{{ mt('compare') }}</button><button v-if="!batchId" type="button" class="btn btn-secondary text-xs" :disabled="locked" @click="showBatch(run.batch_id)">{{ mt('viewBatch') }}</button><button v-if="canHideRun(run)" type="button" class="btn btn-secondary text-xs" :disabled="locked" :data-test="`model-run-hide-${run.id}`" :aria-label="mt('hideRun')" :title="mt('hideRun')" @click="hideRunId = run.id"><Icon name="eyeOff" size="sm" aria-hidden="true" /></button><button type="button" class="btn btn-secondary text-xs" :disabled="locked" :data-test="`model-run-delete-${run.id}`" :aria-label="mt('deleteRun')" :title="mt('deleteRun')" @click="deleteRunId = run.id"><Icon name="trash" size="sm" aria-hidden="true" /></button></div><div v-if="hideRunId === run.id" class="mt-3 flex w-full flex-wrap items-center gap-3 rounded-lg bg-amber-50 p-3 text-sm dark:bg-amber-900/20"><span class="mr-auto">{{ mt('hideRunHint') }}</span><button type="button" class="btn btn-primary text-xs" :disabled="locked" :data-test="`model-run-hide-confirm-${run.id}`" @click="hideRun(run)">{{ mt('hideRun') }}</button><button type="button" class="btn btn-secondary text-xs" :disabled="locked" @click="hideRunId = null">{{ t('common.cancel') }}</button></div><div v-if="deleteRunId === run.id" class="mt-3 flex w-full flex-wrap items-center gap-3 rounded-lg bg-red-50 p-3 text-sm dark:bg-red-900/20"><span class="mr-auto">{{ mt('deleteRunHint') }}</span><button type="button" class="btn btn-danger text-xs" :disabled="locked" :data-test="`model-run-delete-confirm-${run.id}`" @click="removeRun(run)">{{ t('common.delete') }}</button><button type="button" class="btn btn-secondary text-xs" :disabled="locked" @click="deleteRunId = null">{{ t('common.cancel') }}</button></div></article>
-      <div v-if="runs?.total" class="flex items-center justify-end gap-3 text-xs text-gray-500"><button type="button" class="btn btn-secondary text-xs" :disabled="locked || loading || page <= 1" @click="changePage(page - 1)">{{ t('governance.previous') }}</button><span>{{ page }} / {{ pages }}</span><button type="button" class="btn btn-secondary text-xs" :disabled="locked || loading || page >= pages" @click="changePage(page + 1)">{{ t('governance.next') }}</button></div>
+    <section class="space-y-3"><div class="flex items-center justify-between gap-3"><h4 class="font-semibold">{{ mt('policies') }}</h4><span class="text-xs text-gray-500">{{ policies.length }}</span></div><p v-if="!policies.length" class="rounded-xl border border-dashed border-gray-200 p-5 text-sm text-gray-500 dark:border-dark-600">{{ mt('noPolicies') }}</p><article v-for="policy in policies" :key="policy.id" class="rounded-xl border border-gray-200 p-4 dark:border-dark-600"><div class="flex flex-wrap items-center gap-3"><PlatformIcon :platform="policy.config.platform" size="md" /><div class="min-w-0 flex-1"><p class="break-words text-sm font-semibold">{{ policy.name }}</p><p class="mt-1 break-all text-xs text-gray-500">{{ policy.config.model }} · {{ policy.config.efforts.join(' / ') }} · {{ policy.interval_minutes }} {{ t('governance.minutes') }}</p><p v-if="policy.enabled" class="mt-1 text-xs text-gray-500">{{ mt('nextRun') }} {{ formatGovernanceTime(policy.next_run_at) }}</p></div><StatusIndicator :label="mt(policy.enabled ? 'enabled' : 'paused')" :tone="policy.enabled ? 'success' : 'neutral'" /><div class="flex flex-wrap gap-2"><button type="button" class="policy-action btn btn-secondary text-xs" :disabled="locked" :data-test="`model-policy-run-${policy.id}`" :aria-label="mt('runNow')" :title="mt('runNow')" @click="runPolicy(policy)"><Icon name="play" size="sm" aria-hidden="true" /><span class="policy-action-label">{{ mt('runNow') }}</span></button><button type="button" class="policy-action btn btn-secondary text-xs" :disabled="locked" :data-test="`model-policy-edit-${policy.id}`" :aria-label="t('common.edit')" :title="t('common.edit')" @click="editPolicy(policy)"><Icon name="edit" size="sm" aria-hidden="true" /><span class="policy-action-label">{{ t('common.edit') }}</span></button><button type="button" class="policy-action btn btn-secondary text-xs" :disabled="locked" :data-test="`model-policy-toggle-${policy.id}`" :aria-label="mt(policy.enabled ? 'pause' : 'enable')" :title="mt(policy.enabled ? 'pause' : 'enable')" @click="togglePolicy(policy)"><Icon name="power" size="sm" aria-hidden="true" :class="policy.enabled ? 'text-primary-600 dark:text-primary-400' : ''" /><span class="policy-action-label">{{ mt(policy.enabled ? 'pause' : 'enable') }}</span></button><button type="button" class="rounded-lg p-2 text-gray-400 hover:text-red-600" :disabled="locked" :aria-label="t('common.delete')" @click="deleteId = policy.id"><Icon name="trash" size="sm" /></button></div></div><p v-if="policy.last_error" class="mt-2 break-all text-xs text-amber-700 dark:text-amber-300">{{ policy.last_error }}</p><p v-if="policy.notify_error" class="mt-2 break-all text-xs text-red-600">{{ mt('notificationFailure') }}：{{ policy.notify_error }}</p><p v-else-if="policy.notify_at" class="mt-2 text-xs text-gray-500">{{ mt('lastNotification') }} {{ formatGovernanceTime(policy.notify_at) }}</p><div v-if="deleteId === policy.id" class="mt-3 flex flex-wrap items-center gap-3 rounded-lg bg-red-50 p-3 text-sm dark:bg-red-900/20"><span class="mr-auto">{{ mt('deletePolicyHint') }}</span><button type="button" class="btn btn-danger text-xs" :disabled="locked" :data-test="`model-policy-delete-${policy.id}`" @click="removePolicy(policy)">{{ t('common.delete') }}</button><button type="button" class="btn btn-secondary text-xs" :disabled="locked" @click="deleteId = null">{{ t('common.cancel') }}</button></div></article></section>
+    <section class="min-w-0 space-y-3" data-test="model-run-history">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="min-w-0"><h4 class="font-semibold">{{ mt('runHistory') }}</h4><p v-if="batchId" class="mt-1 break-all text-xs text-gray-400">{{ batchId }}</p></div>
+        <div class="flex flex-wrap gap-2">
+          <button v-if="batchId" type="button" class="btn btn-secondary text-xs" :disabled="locked" @click="showBatch('')">{{ mt('allRuns') }}</button>
+          <button v-if="batchId && runningCount" type="button" data-test="model-batch-cancel" class="btn btn-secondary text-xs" :disabled="locked" @click="cancelBatch">{{ mt('cancelBatch') }}</button>
+        </div>
+      </div>
+      <div v-if="batchId" class="space-y-2">
+        <div class="flex justify-between text-xs text-gray-500"><span>{{ completedCount }} / {{ scopeTotal }} {{ mt('finished') }}</span><span>{{ progress }}%</span></div>
+        <div role="progressbar" :aria-label="mt('batchProgress')" :aria-valuenow="progress" aria-valuemin="0" aria-valuemax="100" class="h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-dark-700"><div class="h-full rounded-full bg-primary-500 transition-[width] motion-reduce:transition-none" :style="{ width: `${progress}%` }" /></div>
+        <p class="text-xs text-gray-500">{{ mt('cancelHint') }}</p>
+      </div>
+      <ModelRunFilters :key="siteId" :disabled="locked" :loading="loading" @apply="applyRunFilters" />
+      <ModelRunTable :key="`${siteId}:${page}:${batchId}:${JSON.stringify(runFilters)}`" v-model:hide-id="hideRunId" v-model:delete-id="deleteRunId" :items="runs?.items || []" :loading="loading" :disabled="!!locked" :filtered="hasRunFilters" :batch-id="batchId" :target-label="targetLabel" @detail="detailId = $event" @compare="compare" @batch="showBatch" @hide="hideRun" @remove="removeRun" />
+      <div class="flex flex-wrap items-center justify-between gap-3 text-xs text-gray-500">
+        <span>{{ t('governance.modelMonitoring.filteredTotal', { count: runs?.total || 0 }) }}</span>
+        <div class="flex items-center gap-3">
+          <button type="button" data-test="model-runs-previous" class="btn btn-secondary text-xs" :disabled="locked || loading || page <= 1" @click="changePage(page - 1)">{{ t('governance.previous') }}</button>
+          <span class="tabular-nums">{{ page }} / {{ pages }}</span>
+          <button type="button" data-test="model-runs-next" class="btn btn-secondary text-xs" :disabled="locked || loading || page >= pages" @click="changePage(page + 1)">{{ t('governance.next') }}</button>
+        </div>
+      </div>
     </section>
     <ModelComparison v-if="comparison" :site-id="siteId" :batch-id="comparison.batchId" :template="comparison.template" :sample="comparison.sample" @close="comparison = null" @detail="comparisonDetail" />
     <ModelRunDetail v-if="detailId" :site-id="siteId" :run-id="detailId" :disabled="disabled" @close="detailId = ''" @reviewed="reviewed" />
   </section>
 </template>
+
+<style scoped>
+.model-monitor { container: model-monitor / inline-size; }
+.policy-action { min-width: 2.25rem; height: 2.25rem; padding: 0.5rem; }
+.policy-action-label { display: none; }
+@container model-monitor (min-width: 1050px) {
+  .policy-action { padding-inline: 0.75rem; }
+  .policy-action-label { display: inline; }
+}
+</style>

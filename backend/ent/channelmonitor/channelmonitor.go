@@ -39,6 +39,14 @@ const (
 	FieldExtraModels = "extra_models"
 	// FieldGroupName holds the string denoting the group_name field in the database.
 	FieldGroupName = "group_name"
+	// FieldLocalAPIKeyID holds the string denoting the local_api_key_id field in the database.
+	FieldLocalAPIKeyID = "local_api_key_id"
+	// FieldGroupID holds the string denoting the group_id field in the database.
+	FieldGroupID = "group_id"
+	// FieldGroupBindingMode holds the string denoting the group_binding_mode field in the database.
+	FieldGroupBindingMode = "group_binding_mode"
+	// FieldGroupBindingChangedAt holds the string denoting the group_binding_changed_at field in the database.
+	FieldGroupBindingChangedAt = "group_binding_changed_at"
 	// FieldEnabled holds the string denoting the enabled field in the database.
 	FieldEnabled = "enabled"
 	// FieldSortOrder holds the string denoting the sort_order field in the database.
@@ -105,6 +113,10 @@ var Columns = []string{
 	FieldPrimaryModel,
 	FieldExtraModels,
 	FieldGroupName,
+	FieldLocalAPIKeyID,
+	FieldGroupID,
+	FieldGroupBindingMode,
+	FieldGroupBindingChangedAt,
 	FieldEnabled,
 	FieldSortOrder,
 	FieldIntervalSeconds,
@@ -156,6 +168,10 @@ var (
 	DefaultGroupName string
 	// GroupNameValidator is a validator for the "group_name" field. It is called by the builders before save.
 	GroupNameValidator func(string) error
+	// DefaultGroupBindingMode holds the default value on creation for the "group_binding_mode" field.
+	DefaultGroupBindingMode string
+	// GroupBindingModeValidator is a validator for the "group_binding_mode" field. It is called by the builders before save.
+	GroupBindingModeValidator func(string) error
 	// DefaultEnabled holds the default value on creation for the "enabled" field.
 	DefaultEnabled bool
 	// DefaultSortOrder holds the default value on creation for the "sort_order" field.
@@ -268,6 +284,26 @@ func ByPrimaryModel(opts ...sql.OrderTermOption) OrderOption {
 // ByGroupName orders the results by the group_name field.
 func ByGroupName(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldGroupName, opts...).ToFunc()
+}
+
+// ByLocalAPIKeyID orders the results by the local_api_key_id field.
+func ByLocalAPIKeyID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldLocalAPIKeyID, opts...).ToFunc()
+}
+
+// ByGroupID orders the results by the group_id field.
+func ByGroupID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldGroupID, opts...).ToFunc()
+}
+
+// ByGroupBindingMode orders the results by the group_binding_mode field.
+func ByGroupBindingMode(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldGroupBindingMode, opts...).ToFunc()
+}
+
+// ByGroupBindingChangedAt orders the results by the group_binding_changed_at field.
+func ByGroupBindingChangedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldGroupBindingChangedAt, opts...).ToFunc()
 }
 
 // ByEnabled orders the results by the enabled field.

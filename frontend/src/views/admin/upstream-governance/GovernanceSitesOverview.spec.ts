@@ -1,4 +1,4 @@
-import { enableAutoUnmount, mount } from '@vue/test-utils'
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
 import { createI18n } from 'vue-i18n'
 import en from '@/i18n/locales/en/governance'
@@ -6,6 +6,9 @@ import zh from '@/i18n/locales/zh/governance'
 import enCommon from '@/i18n/locales/en/common'
 import type { Site } from '@/api/admin/upstream-governance'
 import GovernanceSitesOverview from './GovernanceSitesOverview.vue'
+
+const fixtureIcon = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB'
+vi.mock('@/api/admin/upstream-governance', () => ({ default: { siteIcon: vi.fn(async () => ({ data_url: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB' })) } }))
 
 vi.hoisted(() => { vi.stubGlobal('__INTLIFY_JIT_COMPILATION__', true) })
 afterAll(() => vi.unstubAllGlobals())
@@ -34,6 +37,40 @@ function render(props: Record<string, unknown> = {}) {
 }
 
 describe('GovernanceSitesOverview compact mode', () => {
+  it('shows each site favicon with a platform marker and falls back after an image error', async () => {
+    const wrapper = render()
+    await flushPromises()
+    const row = wrapper.get('#governance-site-1')
+    expect(row.get('[data-test=site-favicon]').attributes('src')).toBe(fixtureIcon)
+    expect(row.get('[data-test=site-favicon]').attributes('referrerpolicy')).toBe('no-referrer')
+    expect(row.get('[data-test=site-platform-logo]').attributes('alt')).toBe('Sub2API')
+    await row.get('[data-test=site-favicon]').trigger('error')
+    expect(row.find('[data-test=site-favicon]').exists()).toBe(false)
+    expect(row.find('[data-test=site-icon-fallback]').exists()).toBe(true)
+    await wrapper.setProps({ sites: [{ ...sites[0], base_url: 'https://new.example/console?ignored=1#ignored' }] })
+    await flushPromises()
+    expect(wrapper.get('#governance-site-1 [data-test=site-favicon]').attributes('src')).toBe(fixtureIcon)
+  })
+
+  it.each(['javascript:alert(1)', 'https://user:secret@upstream.example', 'http://upstream.example'])('uses only a local fallback for an invalid icon origin %s', base_url => {
+    const wrapper = render({ sites: [{ ...sites[0], base_url }] })
+    expect(wrapper.get('#governance-site-1').find('[data-test=site-favicon]').exists()).toBe(false)
+    expect(wrapper.get('#governance-site-1 [data-test=site-icon-fallback]').exists()).toBe(true)
+  })
+
+  it('shows site identity in the expanded list and the narrow-screen picker', async () => {
+    const expanded = render({ compact: false })
+    await flushPromises()
+    expect(expanded.get('#governance-site-1 [data-test=site-favicon]').attributes('src')).toBe(fixtureIcon)
+    expect(expanded.get('#governance-site-2 [data-test=site-platform-logo]').attributes('alt')).toBe('New API')
+    expect(expanded.get('#governance-site-2').text()).not.toContain('newapi')
+    const wrapper = render({ selectedSiteId: 2 })
+    await flushPromises()
+    expect(wrapper.get('[data-test=site-picker] [data-test=site-favicon]').attributes('src')).toBe(fixtureIcon)
+    await wrapper.get('[data-test=site-picker] button').trigger('click')
+    expect(document.querySelectorAll('.select-dropdown-portal [data-test=site-platform-logo]')).toHaveLength(2)
+  })
+
   it('shows quota-derived dollars in the rail and picker while retaining the observation and raw quota', () => {
     const wrapper = render({ sites: [{ ...sites[1], balance: { amount: 4993033, unit: 'quota', quota_per_usd: 500000, observed_at: '2026-11-12T06:07:14Z' } }] })
     const row = wrapper.get('#governance-site-2')

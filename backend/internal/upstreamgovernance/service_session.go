@@ -48,7 +48,7 @@ func (s *Service) refreshSupported(site Site) bool {
 	_, connectorOK := s.connector.(sessionRefresher)
 	_, verifierOK := s.connector.(sessionVerifier)
 	_, storeOK := s.store.(runtimeSessionStore)
-	return site.Platform == "sub2api" && connectorOK && verifierOK && storeOK && s.durableKey && s.cipher != nil
+	return (site.Platform == "sub2api" || site.Platform == "newapi") && connectorOK && verifierOK && storeOK && s.durableKey && s.cipher != nil
 }
 
 func blockedSession(session Session) bool {
@@ -83,7 +83,7 @@ func (s *Service) AuthorizationStatus(ctx context.Context, id int64) (*Authoriza
 		}
 		return nil, err
 	}
-	result.HasSession, result.HasRefreshToken = true, session.RefreshToken != ""
+	result.HasSession, result.HasRefreshToken = true, hasSessionRefreshCredential(*site, session)
 	result.ExpiresAt, result.IssuedAt = session.ExpiresAt, session.IssuedAt
 	result.RefreshState = session.RefreshState
 	if result.RefreshState == "" {
@@ -150,7 +150,7 @@ func (s *Service) managementSessionLocked(ctx context.Context, site *Site, force
 	if !force && !due {
 		return session, nil
 	}
-	if session.RefreshToken == "" || !s.refreshSupported(*site) {
+	if !hasSessionRefreshCredential(*site, session) || !s.refreshSupported(*site) {
 		if expired || force {
 			return Session{}, s.requireAuthorizationLocked(ctx, site, session)
 		}
@@ -171,7 +171,7 @@ func (s *Service) managementSessionLocked(ctx context.Context, site *Site, force
 	if err != nil {
 		return Session{}, s.requireAuthorizationLocked(persistCtx, site, session)
 	}
-	if rotated.AccessToken == "" || rotated.RefreshToken == "" || rotated.UserID != session.UserID || rotated.UserAgent != session.UserAgent || rotated.ExpiresAt == nil || !s.now().Before(*rotated.ExpiresAt) {
+	if rotated.AccessToken == "" || !hasSessionRefreshCredential(*site, rotated) || rotated.SessionID != session.SessionID || rotated.UserID != session.UserID || rotated.UserAgent != session.UserAgent || rotated.ExpiresAt == nil || !s.now().Before(*rotated.ExpiresAt) {
 		return Session{}, s.requireAuthorizationLocked(persistCtx, site, session)
 	}
 	rotated.RefreshState, rotated.RefreshAttemptedAt = "identity_pending", &attempted
@@ -221,7 +221,7 @@ func (s *Service) refreshDueSessions(ctx context.Context) error {
 		if err != nil {
 			return true
 		}
-		refreshDue := s.refreshSupported(candidate) && session.RefreshToken != "" && !blockedSession(session) && (session.RefreshState == "identity_pending" || sessionRefreshDue(session, s.now()))
+		refreshDue := s.refreshSupported(candidate) && hasSessionRefreshCredential(candidate, session) && !blockedSession(session) && (session.RefreshState == "identity_pending" || sessionRefreshDue(session, s.now()))
 		_, autoState := s.autoReauthorizationState(candidate, session)
 		autoDue := autoState == autoReauthorizationReady && (blockedSession(session) || session.ExpiresAt != nil && !s.now().Before(*session.ExpiresAt))
 		if !refreshDue && !autoDue {

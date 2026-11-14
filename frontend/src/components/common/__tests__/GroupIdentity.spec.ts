@@ -3,7 +3,10 @@ import { describe, expect, it, vi } from 'vitest'
 import GroupBadge from '../GroupBadge.vue'
 import GroupOptionItem from '../GroupOptionItem.vue'
 
-vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
+vi.mock('vue-i18n', async importOriginal => ({
+  ...await importOriginal<typeof import('vue-i18n')>(),
+  useI18n: () => ({ t: (key: string) => key })
+}))
 vi.mock('@/stores/app', () => ({ useAppStore: () => ({ cachedPublicSettings: { server_utc_offset: '+08:00' } }) }))
 
 describe('explicit group identity', () => {

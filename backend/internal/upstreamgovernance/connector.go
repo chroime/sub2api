@@ -74,6 +74,7 @@ func retryAfter(header string, now time.Time) time.Duration {
 type platformConnector struct {
 	factory      ClientFactory
 	quotaDisplay quotaDisplayCache
+	icons        siteIconCache
 }
 
 func NewConnector(factory ClientFactory) Connector { return &platformConnector{factory: factory} }
@@ -139,6 +140,14 @@ func (c *platformConnector) request(ctx context.Context, site Site, session Sess
 			}
 			req.AddCookie(&http.Cookie{Name: name, Value: value})
 		}
+	}
+	// This HttpOnly credential is intentionally absent from the general cookie
+	// allowlist and from every other management, relay, and platform endpoint.
+	if site.Platform == "newapi" && method == "POST" && path == newAPIRefreshPath && session.RefreshToken != "" {
+		if !hasSessionRefreshCredential(site, session) {
+			return out, nil, ErrInvalid
+		}
+		req.AddCookie(&http.Cookie{Name: newAPIRefreshCookieName, Value: session.RefreshToken})
 	}
 	for key, values := range headers {
 		req.Header[key] = values
@@ -257,16 +266,26 @@ func (c *platformConnector) Login(ctx context.Context, s Site, input LoginInput)
 	if input.UserAgent == "" {
 		input.UserAgent = defaultSessionUserAgent
 	}
-	session := Session{AccessToken: input.SessionToken, RefreshToken: input.RefreshToken, UserAgent: input.UserAgent}
+	session := Session{AccessToken: input.SessionToken, RefreshToken: input.RefreshToken, SessionID: input.SessionID, UserAgent: input.UserAgent}
 	if e := sessionTiming(&session, input.ExpiresIn, time.Now()); e != nil {
 		return Session{}, nil, e
 	}
 	if input.SessionToken != "" {
 		session.AuthVariant = "bearer"
+		if s.Platform == "newapi" && input.RefreshToken != "" {
+			sid, ok := newAPIRefreshSessionID(input.RefreshToken)
+			if !ok || session.SessionID != "" && session.SessionID != sid {
+				return Session{}, nil, ErrInvalid
+			}
+			session.SessionID = sid
+		}
 		// A supplied ID explicitly selects the pinned legacy management-PAT profile.
 		if s.Platform == "newapi" && input.UserID > 0 {
 			session.AuthVariant = "newapi_legacy_bearer"
 			session.UserID = input.UserID
+		}
+		if s.Platform == "newapi" && session.SessionID != "" {
+			session.AuthVariant, session.UserID = newAPISessionVariant, input.UserID
 		}
 		verified, e := c.identity(ctx, s, session)
 		return verified, nil, e
@@ -398,6 +417,12 @@ func (c *platformConnector) Login(ctx context.Context, s Site, input LoginInput)
 		}
 	} else if session.AccessToken == "" {
 		return Session{}, nil, ErrUnsupported
+	}
+	if s.Platform == "newapi" && session.AccessToken != "" {
+		session, e = newAPISessionFromResponse(s, session, result, false)
+		if e != nil {
+			return Session{}, nil, e
+		}
 	}
 	verified, e := c.identity(ctx, s, session)
 	return verified, nil, e

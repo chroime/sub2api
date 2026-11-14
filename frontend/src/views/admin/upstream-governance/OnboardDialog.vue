@@ -65,6 +65,7 @@ async function onboard() {
         interval_minutes: 15,
         fast_interval_seconds: defaults?.defaults.fast_interval_seconds ?? 60,
         full_interval_seconds: defaults?.defaults.full_interval_seconds ?? 900,
+        ...(form.value.mode === 'password' ? { login_credentials: { username: form.value.username.trim(), password: form.value.password } } : {}),
       })
       if (disposed) return
       emit('created', savedSite.value)

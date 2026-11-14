@@ -11,12 +11,14 @@ const {
   accountsGetById,
   monitorCreate,
   monitorUpdate,
+  groupsGetAll,
 } = vi.hoisted(() => ({
   listTemplates: vi.fn(),
   accountsList: vi.fn(),
   accountsGetById: vi.fn(),
   monitorCreate: vi.fn(),
   monitorUpdate: vi.fn(),
+  groupsGetAll: vi.fn(),
 }))
 
 
@@ -43,6 +45,7 @@ vi.mock('@/api/admin', () => ({
       list: (...args: unknown[]) => accountsList(...args),
       getById: (...args: unknown[]) => accountsGetById(...args),
     },
+    groups: { getAll: groupsGetAll },
   },
 }))
 
@@ -169,6 +172,58 @@ describe('MonitorFormDialog linked account selector', () => {
     accountsGetById.mockReset()
     monitorCreate.mockReset().mockResolvedValue({})
     monitorUpdate.mockReset().mockResolvedValue({})
+    groupsGetAll.mockReset().mockResolvedValue([{ id: 71, name: 'external target', platform: 'openai', status: 'active' }])
+  })
+
+  it('binds a selected local probe key by its group ID', async () => {
+    const wrapper = mountDialog(makeMonitor())
+    await flushPromises()
+    wrapper.getComponent({ name: 'MonitorKeyPickerDialog' }).vm.$emit('pick', {
+      id: 12, key: 'sk-local-test', group_id: 71,
+      group: { id: 71, name: 'actual key group', platform: 'openai' },
+    })
+    await flushPromises()
+    await wrapper.get('#channel-monitor-form').trigger('submit')
+    await flushPromises()
+    expect(monitorUpdate).toHaveBeenCalledWith(42, expect.objectContaining({ group_id: 71, api_key: 'sk-local-test' }))
+    expect(monitorUpdate.mock.calls[0][1]).not.toHaveProperty('group_name')
+    expect(wrapper.text()).toContain('actual key group')
+  })
+
+  it('offers an explicit group selector for an external probe key', async () => {
+    const wrapper = mountDialog(makeMonitor())
+    await flushPromises()
+    expect(groupsGetAll).toHaveBeenCalled()
+    const select = wrapper.get('[data-testid="monitor-bound-group"]')
+    await select.get('button').trigger('click')
+    await nextTick()
+    const dropdown = document.body.querySelector<HTMLElement>('.select-dropdown-portal')!
+    clickOption(dropdown, 'external target')
+    await nextTick()
+    await wrapper.get('#channel-monitor-form').trigger('submit')
+    await flushPromises()
+    expect(monitorUpdate).toHaveBeenCalledWith(42, expect.objectContaining({ group_id: 71 }))
+  })
+
+  it('preserves the existing local key association when saving without a replacement key', async () => {
+    const wrapper = mountDialog(makeMonitor({ group_id: 71, group_name: 'current key group', local_api_key_id: 12, group_binding_mode: 'key', group_binding_status: 'key' }))
+    await flushPromises()
+    expect(wrapper.get('[data-testid="monitor-bound-group"]').text()).toContain('current key group')
+    expect(wrapper.get('[data-testid="monitor-bound-group"]').find('button').exists()).toBe(false)
+    await wrapper.get('#channel-monitor-form').trigger('submit')
+    await flushPromises()
+    expect(monitorUpdate).toHaveBeenCalledWith(42, expect.objectContaining({ group_id: 71 }))
+    expect(monitorUpdate.mock.calls[0][1]).not.toHaveProperty('api_key')
+  })
+
+  it('clears the previous key group when a replacement credential is typed', async () => {
+    const wrapper = mountDialog(makeMonitor({ group_id: 71, group_name: 'old key group', local_api_key_id: 12, group_binding_mode: 'key' }))
+    await flushPromises()
+    await wrapper.get('input[type="password"]').setValue('external-replacement')
+    expect(wrapper.get('[data-testid="monitor-bound-group"]').find('button').exists()).toBe(true)
+    await wrapper.get('#channel-monitor-form').trigger('submit')
+    await flushPromises()
+    expect(monitorUpdate).toHaveBeenCalledWith(42, expect.objectContaining({ group_id: 0, api_key: 'external-replacement' }))
   })
 
   it('loads the first page of provider accounts when quota mode is enabled', async () => {

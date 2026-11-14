@@ -32,23 +32,28 @@ const (
 
 // ChannelMonitor 渠道监控配置（service 层模型，不直接暴露 ent 类型）。
 type ChannelMonitor struct {
-	ID              int64
-	Name            string
-	Provider        string
-	APIMode         string
-	Endpoint        string
-	APIKey          string // 解密后的明文 API Key（仅在 service 内部使用，handler 层不应直接序列化返回）
-	PrimaryModel    string
-	ExtraModels     []string
-	GroupName       string
-	Enabled         bool
-	SortOrder       int
-	IntervalSeconds int
-	JitterSeconds   int // 每次调度 ± [0, jitter] 的随机偏移（秒），0 = 固定间隔
-	LastCheckedAt   *time.Time
-	CreatedBy       int64
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
+	ID                    int64
+	Name                  string
+	Provider              string
+	APIMode               string
+	Endpoint              string
+	APIKey                string // 解密后的明文 API Key（仅在 service 内部使用，handler 层不应直接序列化返回）
+	PrimaryModel          string
+	ExtraModels           []string
+	GroupName             string
+	LocalAPIKeyID         *int64
+	GroupID               *int64
+	GroupBindingMode      string
+	GroupBindingStatus    string // key/manual/none/key_missing/no_group/group_missing/group_inactive/platform_mismatch
+	GroupBindingChangedAt *time.Time
+	Enabled               bool
+	SortOrder             int
+	IntervalSeconds       int
+	JitterSeconds         int // 每次调度 ± [0, jitter] 的随机偏移（秒），0 = 固定间隔
+	LastCheckedAt         *time.Time
+	CreatedBy             int64
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
 
 	// 配额模式（check_mode = quota / quota_probe）：
 	// 关联已有账号复用账号侧用量服务，Endpoint/APIKey 可为空（quota 模式）。
@@ -125,6 +130,7 @@ type ChannelMonitorCreateParams struct {
 	PrimaryModel     string
 	ExtraModels      []string
 	GroupName        string
+	GroupID          *int64 // External keys may explicitly select a local group.
 	Enabled          bool
 	IntervalSeconds  int
 	JitterSeconds    int
@@ -149,6 +155,7 @@ type ChannelMonitorUpdateParams struct {
 	PrimaryModel    *string
 	ExtraModels     *[]string
 	GroupName       *string
+	GroupID         *int64 // nil = unchanged, zero = clear manual association.
 	Enabled         *bool
 	IntervalSeconds *int
 	JitterSeconds   *int
@@ -185,13 +192,18 @@ type UserMonitorView struct {
 	Name                 string
 	Provider             string
 	GroupName            string
+	GroupID              *int64
 	PrimaryModel         string
 	PrimaryStatus        string
 	PrimaryLatencyMs     *int
-	PrimaryPingLatencyMs *int    // 主模型最近一次 ping 延迟
-	Availability7d       float64 // 0-100
+	PrimaryPingLatencyMs *int       // 主模型最近一次 ping 延迟
+	ProbeValidUntil      *time.Time // Derived from the actual probe schedule; nil without history.
+	Availability7d       float64    // 0-100
 	ExtraModels          []ExtraModelStatus
 	Timeline             []UserMonitorTimelinePoint // 主模型最近 N 个历史点（按 checked_at DESC，最新在前）
+	Intelligence         *MonitorIntelligence
+	UsageMetrics         map[string]MonitorUsageMetric // 7d / 15d / 30d
+	UserRateMultiplier   *float64                      // requesting user's override, otherwise the matched group default
 	// LatestQuota 主模型最近一次配额快照；channel_monitor_show_quota=false
 	// 时由 handler 服务端剥离。
 	LatestQuota *domain.MonitorQuotaSnapshot
@@ -218,6 +230,7 @@ type UserMonitorDetail struct {
 	Name      string
 	Provider  string
 	GroupName string
+	GroupID   *int64
 	Models    []ModelDetail
 }
 

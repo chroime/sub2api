@@ -17,6 +17,11 @@ describe('account quality API boundaries', () => {
     expect(apiClient.post).toHaveBeenCalledWith('/admin/account-quality/bindings/8/run', { version: 3, request_id: 'diagnostic-unique-id' })
   })
 
+  it('unbinds only the versioned assignment selected by the administrator', async () => {
+    await api.unbind(11, 3)
+    expect(apiClient.delete).toHaveBeenCalledWith('/admin/account-quality/bindings/11', { params: { version: 3 } })
+  })
+
   it('encodes evidence IDs and keeps state control on the quality gate endpoint', async () => {
     await api.runDetail('run/with/slash')
     expect(apiClient.get).toHaveBeenCalledWith('/admin/account-quality/runs/run%2Fwith%2Fslash')

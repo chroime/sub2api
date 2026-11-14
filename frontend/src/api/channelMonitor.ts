@@ -26,18 +26,41 @@ export interface UserMonitorView {
   name: string
   provider: Provider
   group_name: string
+  group_id?: number | null
   primary_model: string
   primary_status: MonitorStatus
   primary_latency_ms: number | null
   primary_ping_latency_ms: number | null
+  /** Server deadline derived from the probe's actual interval and jitter. */
+  probe_valid_until?: string | null
   availability_7d: number
   extra_models: UserMonitorExtraModel[]
   timeline: MonitorTimelinePoint[]
+  intelligence?: MonitorIntelligence | null
+  usage_metrics?: Partial<Record<'7d' | '15d' | '30d', MonitorUsageMetric>>
+  /** Current user's override takes precedence over the exact group's default. */
+  user_rate_multiplier?: number | null
   /**
    * 主模型最近配额快照。仅当系统开启 channel_monitor_show_quota 时
    * 服务端才会下发（关闭时服务端已剥离，前端 flag 仅作纵深防御）。
    */
   latest_quota?: MonitorQuotaSnapshot | null
+}
+
+export interface MonitorUsageMetric {
+  cache_rate_pct: number | null
+  first_token_ms: number | null
+}
+
+export interface MonitorIntelligence {
+  window_end: string
+  series: MonitorIntelligenceSeries[]
+}
+
+export interface MonitorIntelligenceSeries {
+  model: string
+  effort: string
+  points: Array<{ id?: string; status: 'pass' | 'fail' | 'error' | 'pending'; checked_at: string }>
 }
 
 export interface UserMonitorListResponse {
@@ -59,6 +82,7 @@ export interface UserMonitorDetail {
   name: string
   provider: Provider
   group_name: string
+  group_id?: number | null
   models: UserMonitorModelDetail[]
 }
 

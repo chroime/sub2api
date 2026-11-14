@@ -1,43 +1,20 @@
 <template>
   <AppLayout>
     <div class="iq-page mx-auto min-h-full max-w-screen-2xl space-y-8 px-4 py-6 sm:px-6 lg:px-8" data-test="iq-detection-page">
-    <header class="flex flex-wrap items-end justify-between gap-4">
-      <div>
-        <h1 class="mt-2 text-2xl font-semibold tracking-tight text-gray-900 dark:text-white sm:text-3xl">{{ t('iqDetection.title') }}</h1>
-        <p class="mt-2 max-w-2xl text-sm leading-6 text-gray-500 dark:text-dark-300">{{ t('iqDetection.description') }}</p>
-      </div>
-      <button type="button" class="btn btn-secondary" :disabled="loading" data-test="iq-refresh" @click="load">
-        <Icon name="refresh" size="sm" />
-        {{ loading ? t('common.loading') : t('common.refresh') }}
-      </button>
-    </header>
-
     <p v-if="error" role="alert" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-900/20 dark:text-red-200">{{ error }}</p>
     <p v-if="loading" role="status" class="rounded-xl border border-gray-200 bg-white px-5 py-10 text-center text-sm text-gray-500 shadow-sm dark:border-dark-700 dark:bg-dark-800">{{ t('common.loading') }}</p>
 
     <template v-else>
-      <section class="space-y-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-dark-700 dark:bg-dark-800" aria-labelledby="iq-timeline-title">
-        <div class="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h2 id="iq-timeline-title" class="text-lg font-semibold text-gray-900 dark:text-white">{{ t('iqDetection.timelineTitle') }}</h2>
-          </div>
-          <div class="flex flex-wrap gap-3 text-xs text-gray-500 dark:text-dark-400"><span><i class="iq-dot bg-emerald-500" />{{ t('iqDetection.pass') }}</span><span><i class="iq-dot bg-rose-500" />{{ t('iqDetection.fail') }}</span></div>
-        </div>
-        <div class="overflow-x-auto" data-test="iq-timeline" :aria-label="t('iqDetection.timelineTitle')">
-          <div class="flex min-w-[388px] gap-1">
-            <span v-for="point in dashboard.timeline" :key="point.at" data-test="iq-timeline-point" class="h-8 min-w-1 flex-1 rounded-sm" :class="timelineClass(point.status)" :title="`${formatTime(point.at)} · ${timelineLabel(point.status)}`" />
-          </div>
-        </div>
-        <div class="flex justify-between text-[11px] text-gray-400"><span>{{ t('iqDetection.hoursAgo', { hours: dashboard.window_hours }) }}</span><span>{{ t('iqDetection.now') }}</span></div>
-      </section>
-
       <section class="space-y-4" aria-labelledby="iq-pelican-title">
         <div class="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 id="iq-pelican-title" class="text-lg font-semibold text-gray-900 dark:text-white">{{ t('iqDetection.pelicanTitle') }}</h2>
             <p class="mt-1 text-xs text-gray-500 dark:text-dark-400">{{ t('iqDetection.pelicanHint') }}</p>
           </div>
-          <span class="text-xs text-gray-500 dark:text-dark-400">{{ t('iqDetection.recentCount', { count: dashboard.pelican_works.length }) }}</span>
+          <div class="flex items-center gap-3">
+            <span class="text-xs text-gray-500 dark:text-dark-400">{{ t('iqDetection.pageCount', { count: dashboard.pelican_works.length }) }}</span>
+            <button type="button" class="btn btn-secondary" :disabled="loading || pelicanLoading" data-test="iq-refresh" @click="load"><Icon name="refresh" size="sm" />{{ t('common.refresh') }}</button>
+          </div>
         </div>
         <div v-if="dashboard.pelican_works.length" class="grid grid-cols-1 items-start gap-5 md:grid-cols-2 lg:grid-cols-4" data-test="pelican-work-grid">
           <article v-for="work in dashboard.pelican_works" :key="work.id" class="group flex h-[620px] min-w-0 flex-col overflow-hidden rounded-[1.35rem] border border-gray-200/90 bg-white shadow-sm ring-1 ring-black/[0.02] transition duration-300 hover:-translate-y-0.5 hover:shadow-lg dark:border-dark-700 dark:bg-dark-800 dark:ring-white/[0.03]" data-test="pelican-work-card">
@@ -144,8 +121,6 @@ function formatTime(value: string) {
   return `${values.year}-${values.month}-${values.day} ${values.hour}:${values.minute}:${values.second}`
 }
 function effortLabel(value: string) { return value?.trim() || '—' }
-function timelineClass(status: string) { return status === 'fail' ? 'bg-rose-500' : 'bg-emerald-500' }
-function timelineLabel(status: string) { return status === 'fail' ? t('iqDetection.fail') : t('iqDetection.pass') }
 function previewFrameStyle(id: string) {
   const measuredHeight = previewMetrics.value[id]?.card?.height
   if (!measuredHeight) return { height: '100%', transform: 'translateX(-50%) scale(1)', transformOrigin: 'top center' }
@@ -238,6 +213,5 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .iq-page { background: linear-gradient(180deg, rgba(239, 246, 243, .7), transparent 18rem); }
-.iq-dot { display: inline-block; width: .55rem; height: .55rem; border-radius: 9999px; margin-right: .35rem; vertical-align: .02rem; }
 .iq-pelican-preview { touch-action: pan-y; }
 </style>

@@ -3,6 +3,24 @@
 @tailwind utilities;
 
 @layer base {
+  *, ::before, ::after {
+    --app-gradient-from-color: initial;
+    --app-gradient-to-color: initial;
+  }
+
+  /* Keep gradient panels readable when the image cannot be drawn. Base-layer
+     defaults let explicit component and utility backgrounds take precedence. */
+  .bg-gradient-to-t,
+  .bg-gradient-to-tr,
+  .bg-gradient-to-r,
+  .bg-gradient-to-br,
+  .bg-gradient-to-b,
+  .bg-gradient-to-bl,
+  .bg-gradient-to-l,
+  .bg-gradient-to-tl {
+    background-color: var(--app-gradient-to-color, var(--app-gradient-from-color, transparent));
+  }
+
   * {
     @apply border-gray-200 dark:border-dark-700;
   }
@@ -711,7 +729,7 @@
   }
 
   .progress-bar {
-    @apply h-full bg-gradient-to-r from-primary-500 to-primary-400;
+    @apply h-full bg-primary-500 bg-gradient-to-r from-primary-500 to-primary-400;
     @apply transition-all duration-300;
   }
 
@@ -802,7 +820,7 @@
 @layer utilities {
   /* 文字渐变 */
   .text-gradient {
-    @apply bg-gradient-to-r from-primary-500 to-accent-500 bg-clip-text text-transparent;
+    @apply bg-primary-600 bg-gradient-to-r from-primary-500 to-accent-500 bg-clip-text text-transparent;
   }
 
   /* 玻璃效果 */

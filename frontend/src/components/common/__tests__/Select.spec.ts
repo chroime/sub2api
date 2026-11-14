@@ -14,6 +14,29 @@ vi.mock('vue-i18n', async () => {
 
 const originalInnerWidth = window.innerWidth
 const originalInnerHeight = window.innerHeight
+
+describe('Select search clearing', () => {
+  it('clears only the search and retains focus and the selected value', async () => {
+    const wrapper = mount(Select, { props: { modelValue: 1, searchable: true, options: [
+      { value: 1, label: 'OpenAI' }, { value: 2, label: 'Claude' },
+    ] } })
+    await wrapper.get('button').trigger('click')
+    await nextTick()
+    const input = document.body.querySelector<HTMLInputElement>('.select-search-input')!
+    input.value = 'Claude'
+    input.dispatchEvent(new Event('input'))
+    await nextTick()
+    const clear = document.body.querySelector<HTMLButtonElement>('[data-clear-select-search]')
+    expect(clear).not.toBeNull()
+    clear!.click()
+    await nextTick()
+    expect(input.value).toBe('')
+    expect(document.activeElement).toBe(input)
+    expect(document.body.querySelectorAll('.select-option')).toHaveLength(2)
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+    wrapper.unmount()
+  })
+})
 let unmountWrapper: (() => void) | undefined
 
 const setViewportWidth = (width: number) => {

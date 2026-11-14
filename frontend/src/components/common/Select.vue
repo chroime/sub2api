@@ -60,6 +60,7 @@
           @click.stop
           @mousedown.stop
           @keydown="onDropdownKeyDown"
+          @focusout="onDropdownFocusOut"
         >
           <!-- Search input -->
           <div v-if="isSearchable" class="select-search">
@@ -73,20 +74,31 @@
               class="select-search-input"
               @click.stop
             />
+            <button v-if="searchQuery" type="button" data-clear-select-search
+              class="shrink-0 rounded p-0.5 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+              :aria-label="t('common.clearSearch')" @mousedown.prevent @click.stop="clearSearch">
+              <Icon name="x" size="sm" />
+            </button>
           </div>
 
           <!-- Options list -->
           <div class="select-options" ref="optionsListRef">
+            <div v-if="$slots['options-header']" class="select-options-header sticky top-0 z-10 bg-white dark:bg-dark-800">
+              <slot name="options-header" />
+            </div>
             <div
               v-for="(option, index) in filteredOptions"
               :key="`${typeof getOptionValue(option)}:${String(getOptionValue(option) ?? '')}`"
               role="option"
               :aria-selected="isSelected(option)"
               :aria-disabled="isOptionDisabled(option)"
+              :tabindex="interactiveOptions && !isOptionDisabled(option) ? 0 : undefined"
               @click.stop="!isOptionDisabled(option) && selectOption(option)"
               @mouseenter="handleOptionMouseEnter(option, index)"
+              @focus="handleOptionMouseEnter(option, index)"
               :class="[
                 'select-option',
+                interactiveOptions && 'select-option-interactive',
                 isGroupHeaderOption(option) && 'select-option-group',
                 isSelected(option) && 'select-option-selected',
                 isOptionDisabled(option) && !isGroupHeaderOption(option) && 'select-option-disabled',
@@ -156,6 +168,8 @@ interface Props {
   id?: string
   ariaLabel?: string
   ariaDescribedby?: string
+  dropdownWidth?: number
+  interactiveOptions?: boolean
   /** 远程搜索模式：输入不在本地过滤 options，而是防抖后 emit('search', query)，由父组件请求数据更新 options */
   remote?: boolean
   /** 远程搜索模式下的加载态：options 为空时下拉显示 loading 文案 */
@@ -166,6 +180,7 @@ interface Emits {
   (e: 'update:modelValue', value: string | number | boolean | null): void
   (e: 'change', value: string | number | boolean | null, option: SelectOption | null): void
   (e: 'search', query: string): void
+  (e: 'open-change', open: boolean): void
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -219,7 +234,7 @@ const dropdownStyle = computed(() => {
   const rect = triggerRect.value
   const viewportRight = Math.max(dropdownViewportPadding, window.innerWidth - dropdownViewportPadding)
   const preferredWidth = Math.min(
-    Math.max(dropdownMinimumWidth, rect.width),
+    Math.max(dropdownMinimumWidth, rect.width, props.dropdownWidth || 0),
     Math.max(0, viewportRight - dropdownViewportPadding)
   )
   const left = Math.min(
@@ -238,6 +253,7 @@ const dropdownStyle = computed(() => {
     maxHeight: `${Math.max(0, availableHeight)}px`,
     zIndex: '100000020'
   }
+  if (props.dropdownWidth) style.width = `${preferredWidth}px`
 
   if (dropdownPosition.value === 'top') {
     style.bottom = `${window.innerHeight - rect.top + 4}px`
@@ -401,6 +417,7 @@ watch(() => props.disabled, (disabled) => {
 })
 
 watch(isOpen, (open) => {
+  emit('open-change', open)
   if (open) {
     calculateDropdownPosition()
     // Reset focused index to current selection or first item
@@ -434,6 +451,11 @@ watch(isOpen, (open) => {
     window.removeEventListener('resize', calculateDropdownPosition)
   }
 })
+
+function clearSearch() {
+  searchQuery.value = ''
+  void nextTick(() => searchInputRef.value?.focus())
+}
 
 watch(() => props.disabled, (disabled) => {
   if (disabled) isOpen.value = false
@@ -480,16 +502,18 @@ const onTriggerEscape = (event: KeyboardEvent) => {
 
 const onDropdownKeyDown = (e: KeyboardEvent) => {
   if (e.isComposing) return
+  // Nested detail and search-clear buttons handle their own activation.
+  if (props.interactiveOptions && (e.key === 'Enter' || e.key === ' ') && e.target instanceof HTMLElement && e.target.closest('button')) return
   switch (e.key) {
     case 'ArrowDown':
       e.preventDefault()
       focusedIndex.value = findNextEnabledIndex(focusedIndex.value + 1)
-      if (focusedIndex.value >= 0) scrollToFocused()
+      if (focusedIndex.value >= 0) scrollToFocused(props.interactiveOptions)
       break
     case 'ArrowUp':
       e.preventDefault()
       focusedIndex.value = findPrevEnabledIndex(focusedIndex.value - 1)
-      if (focusedIndex.value >= 0) scrollToFocused()
+      if (focusedIndex.value >= 0) scrollToFocused(props.interactiveOptions)
       break
     case 'Enter':
       e.preventDefault()
@@ -505,20 +529,29 @@ const onDropdownKeyDown = (e: KeyboardEvent) => {
       triggerRef.value?.focus()
       break
     case 'Tab':
-      isOpen.value = false
+      if (!props.interactiveOptions) isOpen.value = false
       break
   }
 }
 
-const scrollToFocused = () => {
+const onDropdownFocusOut = (event: FocusEvent) => {
+  if (!props.interactiveOptions) return
+  const next = event.relatedTarget
+  if (next instanceof HTMLElement && (dropdownRef.value?.contains(next) || next.closest('[data-group-monitor-detail]'))) return
+  isOpen.value = false
+}
+
+const scrollToFocused = (focus = false) => {
   nextTick(() => {
     const list = optionsListRef.value
     if (!list) return
-    const focusedEl = list.children[focusedIndex.value] as HTMLElement
+    const focusedEl = list.querySelectorAll<HTMLElement>(':scope > .select-option')[focusedIndex.value]
     if (!focusedEl) return
+    if (focus) focusedEl.focus({ preventScroll: true })
 
-    if (focusedEl.offsetTop < list.scrollTop) {
-      list.scrollTop = focusedEl.offsetTop
+    const headerHeight = list.querySelector<HTMLElement>('.select-options-header')?.offsetHeight || 0
+    if (focusedEl.offsetTop < list.scrollTop + headerHeight) {
+      list.scrollTop = focusedEl.offsetTop - headerHeight
     } else if (focusedEl.offsetTop + focusedEl.offsetHeight > list.scrollTop + list.offsetHeight) {
       list.scrollTop = focusedEl.offsetTop + focusedEl.offsetHeight - list.offsetHeight
     }
@@ -604,12 +637,12 @@ onUnmounted(() => {
 }
 
 .select-dropdown-portal .select-search {
-  @apply flex items-center gap-2 px-3 py-2;
+  @apply flex shrink-0 items-center gap-2 px-3 py-2;
   @apply border-b border-gray-100 dark:border-dark-700;
 }
 
 .select-dropdown-portal .select-search-input {
-  @apply flex-1 bg-transparent text-sm;
+  @apply min-w-0 flex-1 bg-transparent text-sm;
   @apply text-gray-900 dark:text-gray-100;
   @apply placeholder:text-gray-400 dark:placeholder:text-dark-400;
   @apply focus:outline-none;
@@ -631,6 +664,10 @@ onUnmounted(() => {
 .select-dropdown-portal .select-option-selected {
   @apply bg-primary-50 dark:bg-primary-900/20;
   @apply text-primary-700 dark:text-primary-300;
+}
+
+.select-dropdown-portal .select-option-interactive {
+  @apply px-2.5 outline-none;
 }
 
 .select-dropdown-portal .select-option-focused {

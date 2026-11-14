@@ -8,36 +8,25 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/payment/provider"
-	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/stretchr/testify/require"
 )
 
-func TestBillAmountShortGraceRequiresThirtySecondsAndPostGraceSync(t *testing.T) {
+func TestBillAmountExpiryReleasesWithoutGraceOrSync(t *testing.T) {
 	s, id := newBillReceiptTestService(t)
 	ctx := context.Background()
 	start := time.Now().UTC().Truncate(time.Second).Add(-time.Minute)
 	order := matchingBillLocalOrder(t, s, id, "SHORT_GRACE", start)
 	_, err := s.entClient.PaymentOrder.UpdateOneID(order.ID).SetStatus(OrderStatusExpired).Save(ctx)
 	require.NoError(t, err)
-	end := order.ExpiresAt.Add(30 * time.Second)
-	err = billAmountReservationCheckAt(t, s, end.Add(-time.Second))
-	require.Equal(t, "ALIPAY_BILL_AMOUNT_BUSY", infraerrors.Reason(err))
-	require.Equal(t, "1", infraerrors.FromError(err).Metadata["retry_after_seconds"])
-	require.Equal(t, "ALIPAY_BILL_SYNC_REQUIRED", infraerrors.Reason(billAmountReservationCheckAt(t, s, end)))
-	// Merely covering the original payment deadline no longer suffices: the
-	// successful sync must cover the end of the shorter visibility buffer too.
-	billAmountSuccessfulSyncFixture(t, s, order.ExpiresAt)
-	require.Equal(t, "ALIPAY_BILL_SYNC_REQUIRED", infraerrors.Reason(billAmountReservationCheckAt(t, s, end)))
-	billAmountSuccessfulSyncFixture(t, s, end.Add(-time.Second))
-	require.Equal(t, "ALIPAY_BILL_SYNC_REQUIRED", infraerrors.Reason(billAmountReservationCheckAt(t, s, end)))
-	billAmountSuccessfulSyncFixture(t, s, end)
-	require.NoError(t, billAmountReservationCheckAt(t, s, end))
+	require.NoError(t, billAmountReservationCheckAt(t, s, order.ExpiresAt))
+	require.NoError(t, billAmountReservationCheckAt(t, s, order.ExpiresAt.Add(time.Second)))
+	billAmountSuccessfulSyncFixture(t, s, order.ExpiresAt.Add(-time.Second))
 	_, err = s.entClient.ExecContext(ctx, `UPDATE payment_bill_sync_state SET error_code='sync_failed'`)
 	require.NoError(t, err)
-	require.Equal(t, "ALIPAY_BILL_SYNC_REQUIRED", infraerrors.Reason(billAmountReservationCheckAt(t, s, end.Add(time.Second))))
+	require.NoError(t, billAmountReservationCheckAt(t, s, order.ExpiresAt.Add(30*time.Second)))
 }
 
-func TestBillAmountShortGraceCapsOldReservationWithoutRewritingHistory(t *testing.T) {
+func TestBillAmountExpiredReservationReleasesWithoutRewritingHistory(t *testing.T) {
 	s, id := newBillReceiptTestService(t)
 	ctx := context.Background()
 	start := time.Now().UTC().Truncate(time.Second).Add(-2 * time.Minute)
@@ -55,7 +44,7 @@ func TestBillAmountShortGraceCapsOldReservationWithoutRewritingHistory(t *testin
 	require.True(t, recordedReuse.Equal(order.ExpiresAt.Add(2*time.Minute)), "the old issued reservation remains auditable")
 }
 
-func TestBillAmountShortGraceDoesNotReleaseUnclaimedOldWindowReceipt(t *testing.T) {
+func TestBillAmountExpiredReservationRetainsUnclaimedReceiptWithoutBlockingReuse(t *testing.T) {
 	s, id := newBillReceiptTestService(t)
 	ctx := context.Background()
 	start := time.Now().UTC().Truncate(time.Second).Add(-2 * time.Minute)
@@ -71,13 +60,13 @@ func TestBillAmountShortGraceDoesNotReleaseUnclaimedOldWindowReceipt(t *testing.
 	}
 	now := time.Now().UTC()
 	billAmountSuccessfulSyncFixture(t, s, now)
-	require.Equal(t, "ALIPAY_BILL_PAYMENT_REVIEW", infraerrors.Reason(billAmountReservationCheckAt(t, s, now)), "elapsed protection must not discard an unresolved old-window receipt")
+	require.NoError(t, billAmountReservationCheckAt(t, s, now), "an old review receipt must not extend amount occupancy")
 	_, err = s.entClient.ExecContext(ctx, `UPDATE payment_bill_receipts SET status='ignored'`)
 	require.NoError(t, err)
 	require.NoError(t, billAmountReservationCheckAt(t, s, now))
 }
 
-func TestBillAmountNewReservationStoresThirtySecondGrace(t *testing.T) {
+func TestBillAmountNewReservationStoresNoAdditionalWait(t *testing.T) {
 	s, id, _ := newBuiltinEasyPayServiceFixture(t, "https://merchant.example")
 	ctx := context.Background()
 	created, err := s.CreateBuiltinEasyPayOrder(ctx, builtinEasyPayTestParams(id, "https://merchant.example"))
@@ -88,5 +77,5 @@ func TestBillAmountNewReservationStoresThirtySecondGrace(t *testing.T) {
 	require.True(t, rows.Next())
 	var expiry, reuse time.Time
 	require.NoError(t, rows.Scan(&expiry, &reuse))
-	require.Equal(t, 30*time.Second, reuse.Sub(expiry))
+	require.Zero(t, reuse.Sub(expiry))
 }

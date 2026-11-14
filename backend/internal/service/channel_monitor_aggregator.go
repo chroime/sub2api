@@ -106,6 +106,12 @@ func (s *ChannelMonitorService) BatchMonitorStatusSummary(
 //	1 次批量 7d availability；
 //	1 次批量 timeline（主模型最近 N 条）。
 func (s *ChannelMonitorService) ListUserView(ctx context.Context) ([]*UserMonitorView, error) {
+	return s.ListUserViewForUser(ctx, 0)
+}
+
+// ListUserViewForUser enriches the public probe view with the requesting user's
+// effective multiplier. Personalized results must not be shared between users.
+func (s *ChannelMonitorService) ListUserViewForUser(ctx context.Context, userID int64) ([]*UserMonitorView, error) {
 	monitors, err := s.repo.ListEnabled(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list enabled monitors: %w", err)
@@ -113,17 +119,29 @@ func (s *ChannelMonitorService) ListUserView(ctx context.Context) ([]*UserMonito
 	if len(monitors) == 0 {
 		return []*UserMonitorView{}, nil
 	}
+	if err := s.refreshMonitorBindings(ctx, monitors); err != nil {
+		return nil, fmt.Errorf("resolve monitor groups: %w", err)
+	}
 
 	ids, primaryByID, extrasByID := collectMonitorIndexes(monitors)
 	resetsByID := collectMonitorResets(monitors)
 	summaries := s.BatchMonitorStatusSummary(ctx, ids, primaryByID, extrasByID, resetsByID)
 	latestMap := s.batchLatest(ctx, ids)
 	timelineMap := s.batchTimeline(ctx, ids, primaryByID, resetsByID)
+	intelligence := s.intelligenceForMonitors(ctx, ids)
+	usageMetrics := s.usageMetricsForMonitors(ctx, ids, monitors)
+	userRates := s.userRatesForMonitors(ctx, ids, userID)
 
 	views := make([]*UserMonitorView, 0, len(monitors))
 	for _, m := range monitors {
 		primaryLatest := pickLatest(latestMap[m.ID], m.PrimaryModel)
-		views = append(views, buildUserViewFromSummary(m, summaries[m.ID], primaryLatest, timelineMap[m.ID]))
+		view := buildUserViewFromSummary(m, summaries[m.ID], primaryLatest, timelineMap[m.ID])
+		view.Intelligence = intelligence[m.ID]
+		view.UsageMetrics = usageMetrics[m.ID]
+		if rate, ok := userRates[m.ID]; ok {
+			view.UserRateMultiplier = &rate
+		}
+		views = append(views, view)
 	}
 	return views, nil
 }
@@ -198,6 +216,9 @@ func (s *ChannelMonitorService) GetUserDetail(ctx context.Context, id int64) (*U
 	if err != nil {
 		return nil, err
 	}
+	if err := s.refreshMonitorBindings(ctx, []*ChannelMonitor{m}); err != nil {
+		return nil, err
+	}
 	if !m.Enabled {
 		return nil, ErrChannelMonitorNotFound
 	}
@@ -217,6 +238,7 @@ func (s *ChannelMonitorService) GetUserDetail(ctx context.Context, id int64) (*U
 		Name:      m.Name,
 		Provider:  m.Provider,
 		GroupName: m.GroupName,
+		GroupID:   cloneInt64Pointer(m.GroupID),
 		Models:    models,
 	}, nil
 }
@@ -328,12 +350,18 @@ func buildUserViewFromSummary(
 		Name:             m.Name,
 		Provider:         m.Provider,
 		GroupName:        m.GroupName,
+		GroupID:          cloneInt64Pointer(m.GroupID),
 		PrimaryModel:     m.PrimaryModel,
 		PrimaryStatus:    summary.PrimaryStatus,
 		PrimaryLatencyMs: summary.PrimaryLatencyMs,
 		Availability7d:   summary.Availability7d,
 		ExtraModels:      summary.ExtraModels,
 		Timeline:         buildTimelinePoints(timelineEntries),
+	}
+	if len(view.Timeline) > 0 {
+		validFor := max(120, 2*max(15, m.IntervalSeconds)+max(0, m.JitterSeconds))
+		deadline := view.Timeline[0].CheckedAt.Add(time.Duration(validFor) * time.Second)
+		view.ProbeValidUntil = &deadline
 	}
 	if primaryLatest != nil {
 		view.PrimaryPingLatencyMs = primaryLatest.PingLatencyMs
@@ -441,17 +469,23 @@ func buildResetTimeline(entries []*ChannelMonitorHistoryEntry, reset *ChannelMon
 	for _, position := range positions {
 		degradedSet[position] = struct{}{}
 	}
-	// Build synthetic points from oldest to newest, then append newest first to
-	// match the repository timeline ordering.
+	// Each reset gets simulated display latencies of 1500–2500ms. Seed only from
+	// the reset identity, so refreshing or adding real checks does not change
+	// the value attached to an existing baseline timestamp.
+	latencyRandom := rand.New(rand.NewSource(availabilityResetLayoutSeed(reset, 0, 0)))
+	// Positions count from oldest to newest. Append in the reverse order, with
+	// the nearest timestamp first, to match repository history and UI truncation.
 	for position := missing - 1; position >= 0; position-- {
 		status := MonitorStatusOperational
 		if _, ok := degradedSet[position]; ok {
 			status = MonitorStatusDegraded
 		}
+		latency := latencyRandom.Intn(1001) + 1500
 		real = append(real, &ChannelMonitorHistoryEntry{
 			Model:     reset.Model,
 			Status:    status,
-			CheckedAt: reset.ResetAt.Add(-time.Duration(position+1) * time.Minute),
+			LatencyMs: &latency,
+			CheckedAt: reset.ResetAt.Add(-time.Duration(missing-position) * time.Minute),
 		})
 	}
 	return real

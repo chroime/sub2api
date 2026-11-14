@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/payment/provider"
-	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/stretchr/testify/require"
 )
 
@@ -25,7 +24,7 @@ func billClosedAtFixture(t *testing.T, s *PaymentService, local, external int64)
 	return closed.Time
 }
 
-func TestBillAmountFastConfirmationClosesWindowAndReleasesAfterSync(t *testing.T) {
+func TestBillAmountFastConfirmationClosesWindowAndReleasesImmediately(t *testing.T) {
 	s, id := newBillReceiptTestService(t)
 	ctx := context.Background()
 	start := time.Now().UTC().Truncate(time.Second).Add(-20 * time.Second)
@@ -42,9 +41,9 @@ func TestBillAmountFastConfirmationClosesWindowAndReleasesAfterSync(t *testing.T
 	require.Zero(t, closed.Nanosecond())
 	require.False(t, closed.Before(before), "never move the closing boundary back to the payer's timestamp")
 	require.True(t, closed.Before(o.ExpiresAt))
-	require.Equal(t, "ALIPAY_BILL_AMOUNT_BUSY", infraerrors.Reason(billAmountReservationCheckAt(t, s, closed.Add(-time.Nanosecond))))
+	require.NoError(t, billAmountReservationCheckAt(t, s, time.Now().UTC()))
 	billAmountSuccessfulSyncFixture(t, s, closed.Add(-time.Second))
-	require.Equal(t, "ALIPAY_BILL_SYNC_REQUIRED", infraerrors.Reason(billAmountReservationCheckAt(t, s, closed)))
+	require.NoError(t, billAmountReservationCheckAt(t, s, closed))
 	billAmountSuccessfulSyncFixture(t, s, closed)
 	require.NoError(t, billAmountReservationCheckAt(t, s, closed), "confirmed payments must not wait for the original minute plus cooling delay")
 
@@ -95,7 +94,7 @@ func TestBillAmountConfirmedWindowExtraReceiptRequiresReview(t *testing.T) {
 	entry.TransAt = start.Add(6 * time.Second)
 	extra, _, err := s.storeBillReceipt(ctx, id, r.ReceiverID, entry)
 	require.NoError(t, err)
-	require.Equal(t, "ALIPAY_BILL_PAYMENT_REVIEW", infraerrors.Reason(billAmountReservationCheckAt(t, s, closed)))
+	require.NoError(t, billAmountReservationCheckAt(t, s, closed), "an old extra receipt must not block a new payment")
 	matched, err = s.reconcileBillReceiptThrough(ctx, extra, closed)
 	require.NoError(t, err)
 	require.False(t, matched, "an extra payment must never credit the completed order twice")

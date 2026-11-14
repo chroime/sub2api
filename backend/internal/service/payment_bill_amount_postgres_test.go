@@ -55,7 +55,7 @@ func newBillAmountPostgresService(t *testing.T) (*PaymentService, int64) {
 		_ = admin.Close()
 	})
 	require.NoError(t, client.Schema.Create(ctx))
-	for _, name := range []string{"282_payment_bill_receipts.sql", "283_payment_epay_orders.sql", "284_payment_bill_amount_reservations.sql", "285_payment_bill_amount_closure.sql", "286_payment_bill_user_cancel_release.sql"} {
+	for _, name := range []string{"282_payment_bill_receipts.sql", "283_payment_epay_orders.sql", "284_payment_bill_amount_reservations.sql", "285_payment_bill_amount_closure.sql", "286_payment_bill_user_cancel_release.sql", "290_payment_bill_amount_no_cooldown.sql"} {
 		migration, err := os.ReadFile(filepath.Join("..", "..", "migrations", name))
 		require.NoError(t, err)
 		_, err = db.Exec(string(migration))

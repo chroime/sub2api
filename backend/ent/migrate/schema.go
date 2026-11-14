@@ -632,6 +632,10 @@ var (
 		{Name: "primary_model", Type: field.TypeString, Size: 200},
 		{Name: "extra_models", Type: field.TypeJSON},
 		{Name: "group_name", Type: field.TypeString, Nullable: true, Size: 100, Default: ""},
+		{Name: "local_api_key_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "group_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "group_binding_mode", Type: field.TypeString, Size: 16, Default: "legacy"},
+		{Name: "group_binding_changed_at", Type: field.TypeTime, Nullable: true},
 		{Name: "enabled", Type: field.TypeBool, Default: true},
 		{Name: "sort_order", Type: field.TypeInt, Default: 0},
 		{Name: "interval_seconds", Type: field.TypeInt},
@@ -651,7 +655,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "channel_monitors_channel_monitor_request_templates_request_template",
-				Columns:    []*schema.Column{ChannelMonitorsColumns[22]},
+				Columns:    []*schema.Column{ChannelMonitorsColumns[26]},
 				RefColumns: []*schema.Column{ChannelMonitorRequestTemplatesColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -660,7 +664,7 @@ var (
 			{
 				Name:    "channelmonitor_enabled_last_checked_at",
 				Unique:  false,
-				Columns: []*schema.Column{ChannelMonitorsColumns[13], ChannelMonitorsColumns[17]},
+				Columns: []*schema.Column{ChannelMonitorsColumns[17], ChannelMonitorsColumns[21]},
 			},
 			{
 				Name:    "channelmonitor_provider",
@@ -678,9 +682,19 @@ var (
 				Columns: []*schema.Column{ChannelMonitorsColumns[12]},
 			},
 			{
+				Name:    "channelmonitor_local_api_key_id",
+				Unique:  false,
+				Columns: []*schema.Column{ChannelMonitorsColumns[13]},
+			},
+			{
+				Name:    "channelmonitor_group_id",
+				Unique:  false,
+				Columns: []*schema.Column{ChannelMonitorsColumns[14]},
+			},
+			{
 				Name:    "channelmonitor_template_id",
 				Unique:  false,
-				Columns: []*schema.Column{ChannelMonitorsColumns[22]},
+				Columns: []*schema.Column{ChannelMonitorsColumns[26]},
 			},
 			{
 				Name:    "channelmonitor_account_id",
@@ -690,7 +704,7 @@ var (
 			{
 				Name:    "channelmonitor_sort_order",
 				Unique:  false,
-				Columns: []*schema.Column{ChannelMonitorsColumns[14]},
+				Columns: []*schema.Column{ChannelMonitorsColumns[18]},
 			},
 		},
 	}

@@ -90,7 +90,7 @@ func checkBillAmountReceiptTarget(ctx context.Context, client *dbent.Client, r *
 		reason = "amount_window_ambiguous"
 	}
 	// A complete observed batch covering the payment's whole second suffices;
-	// the remaining original payment minute is not a confirmation delay.
+	// the remaining configured payment time is not a confirmation delay.
 	paymentSecondEnd := r.TransAt.Truncate(time.Second).Add(time.Second)
 	if reason == "" && (paymentSecondEnd.After(time.Now().UTC()) || coveredThrough.Before(paymentSecondEnd)) {
 		reason = "amount_window_pending"
@@ -162,7 +162,7 @@ func (s *PaymentService) reconcileBillAmountReceipt(ctx context.Context, r *Paym
 	if err != nil || reason != "" {
 		return false, reason, err
 	}
-	const evidence = "unique reserved receiver and exact amount; official payment time inside 60-second window"
+	const evidence = "unique reserved receiver and exact amount; official payment time inside configured order deadline"
 	if target.LocalID > 0 {
 		err = s.claimBillReceiptWithMode(ctx, r.ReceiverID, r.ID, target.LocalID, "system", evidence, billClaimReservedAmount, coveredThrough)
 	} else {

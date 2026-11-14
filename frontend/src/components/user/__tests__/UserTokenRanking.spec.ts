@@ -23,6 +23,7 @@ vi.mock('vue-i18n', () => ({
       'usage.ranking.periods.7d': '近 7 天',
       'usage.ranking.periods.30d': '近 30 天',
       'usage.ranking.total': '总TOKEN',
+      'usage.ranking.tokens': 'Token 用量',
       'usage.ranking.rank': '第{rank}名',
       'usage.ranking.rankLabel': '排名',
       'usage.ranking.user': '用户',
@@ -72,7 +73,7 @@ describe('UserTokenRanking', () => {
     expect(getTokenRanking).toHaveBeenCalledWith('today')
     expect(wrapper.text()).toContain('用量排行榜')
     expect(wrapper.text()).toContain('a***@g***.com')
-    expect(wrapper.text()).toContain('123456')
+    expect(wrapper.text()).not.toContain('123456')
     expect(wrapper.text()).toContain('第1名')
     expect(wrapper.text()).toContain('第2名')
     expect(wrapper.text()).toContain('第3名')
@@ -80,6 +81,20 @@ describe('UserTokenRanking', () => {
     expect(wrapper.find('[data-rank="1"]').classes()).toContain('rank-gold')
     expect(wrapper.find('[data-rank="2"]').classes()).toContain('rank-silver')
     expect(wrapper.find('[data-rank="3"]').classes()).toContain('rank-bronze')
+  })
+
+  it('shows only rank, user and individual tokens without request counts', async () => {
+    getTokenRanking.mockResolvedValue(ranking)
+    const wrapper = mountRanking()
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain('请求数')
+    expect(wrapper.text()).not.toContain('usage.ranking.requestsLabel')
+    expect(wrapper.text()).not.toContain('总TOKEN')
+    expect(wrapper.findAll('thead th').map(header => header.text())).toEqual(['排名', '用户', 'Token 用量'])
+    expect(wrapper.findAll('tbody tr')).toHaveLength(1)
+    expect(wrapper.findAll('tbody td')).toHaveLength(3)
+    for (const item of ranking.ranking) expect(wrapper.text()).toContain(String(item.total_tokens))
   })
 
   it('reloads the selected period without changing the ranking endpoint', async () => {

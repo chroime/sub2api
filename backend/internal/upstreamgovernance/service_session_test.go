@@ -140,6 +140,105 @@ func TestSessionRefreshPersistsPendingAndPairBeforeUseWithoutVersionChange(t *te
 	require.Equal(t, "ready", store.saves[2].RefreshState)
 }
 
+func TestNewAPISessionLifecyclePersistsCookieBeforeUseAndRenewsOnSchedule(t *testing.T) {
+	s, store, c, session := lifecycleEngine(t)
+	store.site.Platform = "newapi"
+	store.site.NextSyncAt = s.now().Add(24 * time.Hour)
+	version, next := store.site.Version, store.site.NextSyncAt
+	session.AuthVariant, session.SessionID = newAPISessionVariant, "fixture-session"
+	session.RefreshToken = "fixture-session.fixture-old-secret"
+	setSessionFixture(t, store.memoryStore, session)
+	c.refresh = func(_ context.Context, site Site, current Session) (Session, error) {
+		require.Equal(t, "newapi", site.Platform)
+		require.Equal(t, "pending", store.saves[0].RefreshState)
+		require.Equal(t, session.RefreshToken, current.RefreshToken)
+		current.AccessToken, current.RefreshToken = "fixture-new-access", "fixture-session.fixture-new-secret"
+		expires := s.now().Add(15 * time.Minute)
+		current.ExpiresAt = &expires
+		return current, nil
+	}
+	c.verify = func(_ context.Context, _ Site, current Session) (Session, error) {
+		persisted, err := s.session(store.site)
+		require.NoError(t, err)
+		require.Equal(t, "identity_pending", persisted.RefreshState)
+		require.Equal(t, current.RefreshToken, persisted.RefreshToken)
+		require.Equal(t, "fixture-session", persisted.SessionID)
+		return current, nil
+	}
+	status, err := s.AuthorizationStatus(t.Context(), 1)
+	require.NoError(t, err)
+	require.True(t, status.RefreshSupported)
+	require.True(t, status.HasRefreshToken)
+	require.True(t, status.AutoRefreshEnabled)
+	require.NoError(t, s.runDue(t.Context()))
+	require.Len(t, store.saves, 3)
+	require.Equal(t, "ready", store.saves[2].RefreshState)
+	require.Equal(t, "fixture-session.fixture-new-secret", store.saves[2].RefreshToken)
+	require.Equal(t, version, store.site.Version)
+	require.Equal(t, next, store.site.NextSyncAt)
+	require.Zero(t, c.discoveryCalls)
+}
+
+func TestNewAPISessionLifecycleRejectsChangedSessionIDBeforeIdentityUse(t *testing.T) {
+	s, store, c, session := lifecycleEngine(t)
+	store.site.Platform = "newapi"
+	session.AuthVariant, session.SessionID = newAPISessionVariant, "fixture-session"
+	session.RefreshToken = "fixture-session.fixture-old-secret"
+	setSessionFixture(t, store.memoryStore, session)
+	c.refresh = func(_ context.Context, _ Site, current Session) (Session, error) {
+		current.AccessToken, current.RefreshToken, current.SessionID = "fixture-new-access", "other-session.fixture-secret", "other-session"
+		expires := s.now().Add(15 * time.Minute)
+		current.ExpiresAt = &expires
+		return current, nil
+	}
+	c.verify = func(context.Context, Site, Session) (Session, error) {
+		t.Fatal("mismatched session must never reach identity verification")
+		return Session{}, nil
+	}
+	_, err := s.Sync(t.Context(), 1)
+	require.ErrorIs(t, err, ErrReauth)
+	require.Zero(t, c.discoveryCalls)
+}
+
+func TestNewAPISessionLifecycleBlocksUncertainRotationAndKeepsPlainImportsUsable(t *testing.T) {
+	t.Run("uncertain cookie rotation", func(t *testing.T) {
+		s, store, c, session := lifecycleEngine(t)
+		store.site.Platform = "newapi"
+		session.AuthVariant, session.SessionID = newAPISessionVariant, "fixture-session"
+		session.RefreshToken = "fixture-session.fixture-old-secret"
+		setSessionFixture(t, store.memoryStore, session)
+		calls := 0
+		c.refresh = func(context.Context, Site, Session) (Session, error) {
+			calls++
+			return Session{}, errors.New("fixture transport ambiguity")
+		}
+		_, err := s.Sync(t.Context(), 1)
+		require.ErrorIs(t, err, ErrReauth)
+		_, err = s.Sync(t.Context(), 1)
+		require.ErrorIs(t, err, ErrReauth)
+		require.Equal(t, 1, calls)
+		require.Zero(t, c.discoveryCalls)
+	})
+	t.Run("JSON without cookie", func(t *testing.T) {
+		s, store, c, session := lifecycleEngine(t)
+		store.site.Platform = "newapi"
+		session.AuthVariant, session.SessionID, session.RefreshToken = newAPISessionVariant, "fixture-session", ""
+		setSessionFixture(t, store.memoryStore, session)
+		status, err := s.AuthorizationStatus(t.Context(), 1)
+		require.NoError(t, err)
+		require.False(t, status.HasRefreshToken)
+		require.False(t, status.AutoRefreshEnabled)
+		require.False(t, status.ReauthorizationRequired)
+		c.refresh = func(context.Context, Site, Session) (Session, error) {
+			t.Fatal("JSON-only imports have no refresh credential")
+			return Session{}, nil
+		}
+		_, err = s.Sync(t.Context(), 1)
+		require.NoError(t, err)
+		require.Positive(t, c.discoveryCalls)
+	})
+}
+
 func TestSessionRefreshPersistenceFailureAndUncertainRotationNeverReuseToken(t *testing.T) {
 	for _, failSave := range []int{1, 2, 0} {
 		t.Run(string(rune('0'+failSave)), func(t *testing.T) {

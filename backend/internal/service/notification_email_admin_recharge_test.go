@@ -97,7 +97,7 @@ func TestNotificationEmailAdminRechargeUserDetailsAndSubject(t *testing.T) {
 				Event: adminRechargeEmailTestEvent, Locale: "zh", RecipientEmail: "admin@example.test", RecipientName: "管理员", Variables: variables,
 			})
 			require.NoError(t, err)
-			require.Equal(t, "[XenoAI] 收款到账通知 - 金额 "+tc.amountDisplay, preview.Subject)
+			require.Equal(t, "[XenoAI] 收款到账通知 - 金额 "+tc.amountDisplay+" 元", preview.Subject)
 			require.Contains(t, preview.HTML, tc.userDisplay)
 			require.Equal(t, 1, strings.Count(preview.HTML, "payer@example.test"))
 			require.NotContains(t, preview.HTML, "Ignored username")
@@ -129,7 +129,7 @@ func TestNotificationEmailAdminRechargeSubjectUsesConfiguredSiteName(t *testing.
 			}
 			preview, err := svc.PreviewSend(t.Context(), input)
 			require.NoError(t, err)
-			want := "[" + siteName + "] 收款到账通知 - 金额 100"
+			want := "[" + siteName + "] 收款到账通知 - 金额 100 元"
 			if locale == "en" {
 				want = "[" + siteName + "] Payment received - amount 100"
 			}

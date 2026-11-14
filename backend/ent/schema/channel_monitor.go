@@ -75,6 +75,12 @@ func (ChannelMonitor) Fields() []ent.Field {
 			Optional().
 			Default("").
 			MaxLen(100),
+		// Keep missing source IDs for diagnostics; authorization never relies on
+		// these IDs, and service validation resolves the actual current group.
+		field.Int64("local_api_key_id").Optional().Nillable(),
+		field.Int64("group_id").Optional().Nillable(),
+		field.String("group_binding_mode").Default("legacy").MaxLen(16),
+		field.Time("group_binding_changed_at").Optional().Nillable(),
 		field.Bool("enabled").
 			Default(true),
 		field.Int("sort_order").
@@ -134,6 +140,8 @@ func (ChannelMonitor) Indexes() []ent.Index {
 		index.Fields("provider"),
 		index.Fields("provider", "api_mode"),
 		index.Fields("group_name"),
+		index.Fields("local_api_key_id"),
+		index.Fields("group_id"),
 		index.Fields("template_id"),
 		index.Fields("account_id"),
 		index.Fields("sort_order"),

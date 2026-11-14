@@ -1,5 +1,6 @@
 export default {
   iqDetection: {
+    pageCount: '本页 {count} 件',
     title: '智商监测',
     description: '查看本地分组模型监测产生的鹈鹕作品。',
     recentCount: '最近 {count} 次',

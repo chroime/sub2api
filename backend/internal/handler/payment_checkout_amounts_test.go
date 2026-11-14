@@ -43,9 +43,9 @@ func TestGetCheckoutInfoReturnsConfiguredRechargeAmounts(t *testing.T) {
 		max  string
 		want []float64
 	}{
-		{name: "all presets", want: []float64{10, 20, 50, 100, 200, 500, 1000, 2000, 5000}},
-		{name: "low configured minimum retains production presets", min: "0.1", want: []float64{10, 20, 50, 100, 200, 500, 1000, 2000, 5000}},
-		{name: "retired test amount is not available", min: "0.1", max: "0.1", want: []float64{}},
+		{name: "default minimum excludes tenth amount", want: []float64{10, 20, 50, 100, 200, 500, 1000, 2000, 5000}},
+		{name: "low configured minimum includes tenth amount", min: "0.1", want: []float64{0.1, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000}},
+		{name: "tenth-only range", min: "0.1", max: "0.1", want: []float64{0.1}},
 		{name: "inclusive range", min: "20", max: "200", want: []float64{20, 50, 100, 200}},
 		{name: "fractional range", min: "20.01", max: "199.99", want: []float64{50, 100}},
 		{name: "no presets", min: "21", max: "49", want: []float64{}},

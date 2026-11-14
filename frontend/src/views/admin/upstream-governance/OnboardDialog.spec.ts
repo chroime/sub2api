@@ -78,6 +78,39 @@ describe('native onboarding continuation', () => {
     expect(api.connect).toHaveBeenLastCalledWith(8, expect.objectContaining({ password: 'correct-password' }))
     expect(wrapper.emitted('completed')?.[0]).toEqual([{ ...site, has_credential: true }, snapshot])
   })
+  it('saves entered login details with the site before a failed authorization', async () => {
+    vi.mocked(api.connect).mockRejectedValueOnce({ reason: 'operation_failed' })
+    const wrapper = mountDialog()
+    await fill(wrapper)
+    await submit(wrapper)
+    expect(api.create).toHaveBeenCalledWith(expect.objectContaining({
+      login_credentials: { username: 'fixture-user', password: 'fixture-password' },
+    }))
+    expect(vi.mocked(api.create).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(api.connect).mock.invocationCallOrder[0]!)
+    expect(wrapper.emitted('created')?.[0]).toEqual([site])
+    expect(wrapper.emitted('completed')).toBeUndefined()
+  })
+  it('saves login details even when detection pauses authorization for CAPTCHA', async () => {
+    vi.mocked(api.detect).mockResolvedValue({ platform: 'newapi', base_url: site.base_url, name: 'Detected', captcha_required: true, captcha_provider: 'turnstile' })
+    const wrapper = mountDialog()
+    await fill(wrapper)
+    await submit(wrapper)
+    expect(api.create).toHaveBeenCalledWith(expect.objectContaining({
+      login_credentials: { username: 'fixture-user', password: 'fixture-password' },
+    }))
+    expect(api.connect).not.toHaveBeenCalled()
+  })
+  it('keeps session credentials out of site creation', async () => {
+    const wrapper = mountDialog()
+    await wrapper.get('#governance-onboard-url').setValue(site.base_url)
+    await setSession(wrapper)
+    await submit(wrapper)
+    expect(api.create).toHaveBeenCalledTimes(1)
+    const input = vi.mocked(api.create).mock.calls[0]![0]
+    expect(input).not.toHaveProperty('login_credentials')
+    expect(JSON.stringify(input)).not.toContain('fixture-access')
+    expect(JSON.stringify(input)).not.toContain('fixture-refresh')
+  })
   it.each(['turnstile', 'tencent', 'aliyun', 'unknown'] as const)('avoids password login when detection explicitly requires %s verification', async provider => {
     vi.mocked(api.detect).mockResolvedValue({ platform: 'sub2api', base_url: site.base_url, name: 'Detected', captcha_required: true, captcha_provider: provider })
     const wrapper = mountDialog()

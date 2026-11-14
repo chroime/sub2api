@@ -18,6 +18,7 @@ const {
   copyToClipboard,
   isCurrentStep,
   nextStep,
+  listGroupMonitors,
 } = vi.hoisted(() => ({
   listKeys: vi.fn(),
   updateKey: vi.fn(),
@@ -30,7 +31,10 @@ const {
   copyToClipboard: vi.fn(),
   isCurrentStep: vi.fn(),
   nextStep: vi.fn(),
+  listGroupMonitors: vi.fn(),
 }))
+
+vi.mock('@/api/channelMonitor', () => ({ list: listGroupMonitors }))
 
 const messages: Record<string, string> = {
   'common.actions': 'Actions',
@@ -305,6 +309,7 @@ describe('user KeysView column settings', () => {
     getDashboardApiKeysUsage.mockReset()
     getAvailableGroups.mockReset()
     getUserGroupRates.mockReset()
+    listGroupMonitors.mockReset().mockResolvedValue({ items: [] })
     showError.mockReset()
     showSuccess.mockReset()
     copyToClipboard.mockReset()
@@ -323,6 +328,67 @@ describe('user KeysView column settings', () => {
     getAvailableGroups.mockResolvedValue([])
     getUserGroupRates.mockResolvedValue({})
     isCurrentStep.mockReturnValue(false)
+  })
+
+  it('adds two ID-linked monitor columns without selecting a group when details are clicked', async () => {
+    const stamp = new Date().toISOString()
+    getAvailableGroups.mockResolvedValue([{ id: 1, name: 'Renamed OpenAI', platform: 'openai', rate_multiplier: 0.1, subscription_type: 'standard' }])
+    listGroupMonitors.mockResolvedValue({ items: [{ id: 3, group_id: 1, provider: 'openai', primary_model: 'gpt-6.1-sol',
+      timeline: [{ status: 'operational', checked_at: stamp, latency_ms: 1234, ping_latency_ms: null }],
+      probe_valid_until: new Date(Date.now() + 120000).toISOString(),
+    }] })
+    const wrapper = await mountView({ GroupOptionItem: false })
+    await wrapper.get('[data-key-group-trigger]').trigger('click')
+    await flushPromises()
+    expect(listGroupMonitors).toHaveBeenCalledTimes(1)
+    const row = wrapper.get('[data-key-group-option="1"]')
+    expect(row.findAll('[data-monitor-kind]')).toHaveLength(2)
+    expect(row.get('[data-monitor-kind="availability"]').attributes('data-monitor-state')).toBe('ready')
+    expect(row.get('[data-monitor-kind="intelligence"]').attributes('data-monitor-state')).toBe('unconfigured')
+    await row.get('[data-monitor-kind="availability"]').trigger('click')
+    expect(updateKey).not.toHaveBeenCalled()
+    expect(wrapper.find('[data-key-group-picker]').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('clears the inline group search, restores the list and focuses the input', async () => {
+    getAvailableGroups.mockResolvedValue([
+      { id: 1, name: 'OpenAI', platform: 'openai', rate_multiplier: 0.1 },
+      { id: 2, name: 'Claude', platform: 'anthropic', rate_multiplier: 0.2 },
+    ])
+    const wrapper = await mountView()
+    await wrapper.get('[data-key-group-trigger]').trigger('click')
+    const input = wrapper.get<HTMLInputElement>('[data-key-group-search]')
+    await input.setValue('Claude')
+    expect(wrapper.findAll('[data-key-group-option]')).toHaveLength(1)
+    const focus = vi.spyOn(HTMLInputElement.prototype, 'focus')
+    await wrapper.get('[data-clear-group-search]').trigger('click')
+    expect(wrapper.get<HTMLInputElement>('[data-key-group-search]').element.value).toBe('')
+    expect(wrapper.findAll('[data-key-group-option]')).toHaveLength(2)
+    expect(focus).toHaveBeenCalled()
+    expect(updateKey).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('shows the same monitoring columns inside the create-key group selector', async () => {
+    getAvailableGroups.mockResolvedValue([
+      { id: 1, name: 'OpenAI', platform: 'openai', rate_multiplier: 0.1 },
+    ])
+    const stamp = new Date().toISOString()
+    listGroupMonitors.mockResolvedValue({ items: [{ id: 3, group_id: 1, provider: 'openai', primary_model: 'gpt-6.1-sol',
+      timeline: [{ status: 'operational', checked_at: stamp, latency_ms: 1234, ping_latency_ms: null }],
+      probe_valid_until: new Date(Date.now() + 120000).toISOString(),
+    }] })
+    const wrapper = await mountView({ Select: false, GroupOptionItem: false })
+    await wrapper.get('[data-tour="keys-create-btn"]').trigger('click')
+    const groupTrigger = wrapper.get('[data-tour="key-form-group"] .select-trigger')
+    await groupTrigger.trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-group-monitor-header]').exists()).toBe(true)
+    const row = wrapper.get('.select-option')
+    expect(row.findAll('[data-monitor-kind]')).toHaveLength(2)
+    expect(row.get('[data-monitor-kind="availability"]').attributes('data-monitor-state')).toBe('ready')
+    wrapper.unmount()
   })
 
   it.each([

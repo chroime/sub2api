@@ -1,17 +1,11 @@
 <template>
   <section class="space-y-5" data-testid="user-token-ranking">
-    <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-      <div>
-        <p class="text-lg font-semibold text-gray-900 dark:text-gray-100">{{ t('usage.ranking.title') }}</p>
-        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ t('usage.ranking.subtitle') }}</p>
-      </div>
-      <div class="rounded-xl border border-primary-100 bg-primary-50 px-4 py-3 text-left dark:border-primary-900/40 dark:bg-primary-950/30 sm:text-right">
-        <p class="text-xs font-medium uppercase tracking-wide text-primary-600 dark:text-primary-300">{{ t('usage.ranking.total') }}</p>
-        <p class="mt-1 text-xl font-bold tabular-nums text-primary-700 dark:text-primary-200">{{ formatTokens(totalTokens) }}</p>
-      </div>
+    <div>
+      <p class="text-lg font-semibold text-gray-900 dark:text-gray-100">{{ t('usage.ranking.title') }}</p>
+      <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ t('usage.ranking.subtitle') }}</p>
     </div>
 
-    <div class="flex flex-wrap gap-2" role="tablist" :aria-label="t('usage.ranking.periodLabel')">
+    <div class="grid grid-cols-4 gap-1.5 sm:flex sm:flex-wrap sm:gap-2" role="tablist" :aria-label="t('usage.ranking.periodLabel')">
       <button
         v-for="option in periodOptions"
         :key="option.value"
@@ -19,7 +13,7 @@
         :data-period="option.value"
         role="tab"
         :aria-selected="period === option.value"
-        class="rounded-lg border px-3 py-2 text-sm font-medium transition-colors"
+        class="whitespace-nowrap rounded-lg border px-1.5 py-2 text-xs font-medium transition-colors sm:px-3 sm:text-sm"
         :class="period === option.value
           ? 'border-primary-500 bg-primary-500 text-white shadow-sm'
           : 'border-gray-200 bg-white text-gray-600 hover:border-primary-300 hover:text-primary-600 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-300 dark:hover:border-primary-700 dark:hover:text-primary-300'"
@@ -43,50 +37,56 @@
       </p>
 
       <div v-else class="space-y-4">
-        <div class="grid grid-cols-1 gap-3 md:grid-cols-3">
+        <div class="grid min-w-0 grid-cols-1 gap-2.5 md:grid-cols-3 md:gap-3">
           <article
             v-for="item in podium"
             :key="item.user_id"
-            class="rounded-2xl border p-4 shadow-sm transition-transform hover:-translate-y-0.5"
+            class="grid min-w-0 grid-cols-[2.5rem_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0.5 rounded-2xl border p-3.5 shadow-sm transition-transform hover:-translate-y-0.5 md:grid-cols-[minmax(0,1fr)_auto] md:gap-x-2 md:gap-y-0 md:p-5"
             :class="podiumClasses[item.rank - 1]"
           >
-            <div class="flex items-center justify-between gap-3">
-              <span
-                class="inline-flex h-10 w-10 items-center justify-center rounded-full text-xl shadow-inner"
-                :class="[medalClasses[item.rank - 1], `rank-${rankNames[item.rank - 1]}`]"
-                :data-rank="item.rank"
-              >
-                {{ medals[item.rank - 1] }}
-              </span>
-              <span class="text-xs font-semibold uppercase tracking-wider opacity-70">
-                {{ t('usage.ranking.rank', { rank: item.rank }) }}
-              </span>
+            <span
+              class="col-start-1 row-span-2 row-start-1 inline-flex h-10 w-10 items-center justify-center rounded-full text-xl shadow-inner md:row-span-1"
+              :class="[medalClasses[item.rank - 1], `rank-${rankNames[item.rank - 1]}`]"
+              :data-rank="item.rank"
+            >
+              {{ medals[item.rank - 1] }}
+            </span>
+            <span class="col-start-2 row-start-1 text-[11px] font-semibold uppercase tracking-wider opacity-70 md:text-right md:text-xs">
+              {{ t('usage.ranking.rank', { rank: item.rank }) }}
+            </span>
+            <p class="col-start-2 row-start-2 min-w-0 truncate text-sm font-semibold md:col-span-2 md:col-start-1 md:mt-4" :title="item.email">{{ item.email || `User #${item.user_id}` }}</p>
+            <div class="col-start-3 row-span-2 row-start-1 min-w-0 text-right md:col-span-2 md:col-start-1 md:row-span-1 md:row-start-3 md:mt-2 md:text-left">
+              <p class="whitespace-nowrap text-lg font-bold tabular-nums md:text-2xl">{{ formatTokens(item.total_tokens) }}</p>
+              <p class="text-[10px] opacity-60 md:mt-0.5">{{ t('usage.ranking.tokens') }}</p>
             </div>
-            <p class="mt-4 truncate text-sm font-semibold" :title="item.email">{{ item.email || `User #${item.user_id}` }}</p>
-            <p class="mt-2 text-2xl font-bold tabular-nums">{{ formatTokens(item.total_tokens) }}</p>
-            <p class="mt-1 text-xs opacity-70">{{ t('usage.ranking.requests', { count: item.requests.toLocaleString() }) }}</p>
           </article>
         </div>
 
-        <div class="overflow-hidden rounded-2xl border border-gray-200 dark:border-dark-700">
-          <div class="grid grid-cols-[3rem_minmax(0,1fr)_7rem_7rem] gap-3 bg-gray-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:bg-dark-800 dark:text-gray-400 sm:grid-cols-[4rem_minmax(0,1fr)_8rem_8rem]">
-            <span>{{ t('usage.ranking.rankLabel') }}</span>
-            <span>{{ t('usage.ranking.user') }}</span>
-            <span class="text-right">{{ t('usage.ranking.requestsLabel') }}</span>
-            <span class="text-right">{{ t('usage.ranking.total') }}</span>
-          </div>
-          <div class="divide-y divide-gray-100 dark:divide-dark-700">
-            <div
-              v-for="item in restItems"
-              :key="item.user_id"
-              class="grid grid-cols-[3rem_minmax(0,1fr)_7rem_7rem] items-center gap-3 px-4 py-3 text-sm sm:grid-cols-[4rem_minmax(0,1fr)_8rem_8rem]"
-            >
-              <span class="tabular-nums text-gray-400">{{ item.rank }}</span>
-              <span class="truncate font-medium text-gray-700 dark:text-gray-200" :title="item.email">{{ item.email || `User #${item.user_id}` }}</span>
-              <span class="text-right tabular-nums text-gray-500 dark:text-gray-400">{{ item.requests.toLocaleString() }}</span>
-              <span class="text-right font-semibold tabular-nums text-gray-900 dark:text-gray-100">{{ formatTokens(item.total_tokens) }}</span>
-            </div>
-          </div>
+        <div v-if="restItems.length" class="min-w-0 overflow-hidden rounded-2xl border border-gray-200 dark:border-dark-700">
+          <table class="w-full table-fixed text-left text-sm" data-testid="ranking-table">
+            <caption class="sr-only">{{ t('usage.ranking.title') }}</caption>
+            <colgroup>
+              <col class="w-10 sm:w-16" />
+              <col />
+              <col class="w-24 sm:w-32" />
+            </colgroup>
+            <thead class="bg-gray-50 text-xs font-semibold text-gray-500 dark:bg-dark-800 dark:text-gray-400">
+              <tr>
+                <th scope="col" class="py-3 pl-3 pr-1 sm:pl-4">{{ t('usage.ranking.rankLabel') }}</th>
+                <th scope="col" class="px-2 py-3">{{ t('usage.ranking.user') }}</th>
+                <th scope="col" class="py-3 pl-1 pr-3 text-right sm:pr-4">{{ t('usage.ranking.tokens') }}</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100 dark:divide-dark-700">
+              <tr v-for="item in restItems" :key="item.user_id" class="transition-colors hover:bg-gray-50/70 dark:hover:bg-dark-800/50">
+                <td class="py-3.5 pl-3 pr-1 tabular-nums text-gray-400 sm:pl-4">{{ item.rank }}</td>
+                <td class="px-2 py-3.5">
+                  <span class="block truncate font-medium text-gray-700 dark:text-gray-200" :title="item.email">{{ item.email || `User #${item.user_id}` }}</span>
+                </td>
+                <td class="whitespace-nowrap py-3.5 pl-1 pr-3 text-right font-semibold tabular-nums text-gray-900 dark:text-gray-100 sm:pr-4">{{ formatTokens(item.total_tokens) }}</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </template>
@@ -125,7 +125,6 @@ const podiumClasses = [
 
 const period = ref<TokenRankingPeriod>('today')
 const items = ref<TokenRankingItem[]>([])
-const totalTokens = ref(0)
 const loading = ref(false)
 const error = ref(false)
 let requestSequence = 0
@@ -142,11 +141,9 @@ const load = async () => {
     const response = await usageAPI.getTokenRanking(period.value)
     if (sequence !== requestSequence) return
     items.value = response.ranking.map((item, index) => ({ ...item, rank: item.rank || index + 1 }))
-    totalTokens.value = response.total_tokens
   } catch {
     if (sequence !== requestSequence) return
     items.value = []
-    totalTokens.value = 0
     error.value = true
   } finally {
     if (sequence === requestSequence) loading.value = false

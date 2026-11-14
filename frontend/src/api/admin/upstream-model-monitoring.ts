@@ -141,7 +141,16 @@ export interface ModelRun {
   started_at: string | null
   finished_at: string | null
 }
-export interface ModelRunPage { items: ModelRun[]; total: number; page: number; page_size: number; counts?: Record<string, number> }
+export interface ModelRunFilters {
+  q?: string
+  status?: string
+  template?: ModelTestTemplate
+  effort?: ModelEffort | 'default'
+  review?: ModelReview
+  created_from?: string
+  created_to?: string
+}
+export interface ModelRunPage { items: ModelRun[]; total: number; scope_total?: number; page: number; page_size: number; counts?: Record<string, number> }
 export interface ModelStatsGroup {
   model: string
   api_mode: ModelAPIMode
@@ -179,7 +188,7 @@ const api = {
   async deletePolicy(id: number, policyId: number, version: number) { await apiClient.delete(`${site(id)}/model-policies/${policyId}`, { params: { version } }) },
   async startBatch(id: number, input: ModelBatchInput) { return (await apiClient.post<ModelBatch>(`${site(id)}/model-batches`, input)).data },
   async cancelBatch(id: number, batchId: string) { await apiClient.post(`${site(id)}/model-batches/${encodeURIComponent(batchId)}/cancel`, {}) },
-  async runs(id: number, page = 1, batchId = '') { return (await apiClient.get<ModelRunPage>(`${site(id)}/model-runs`, { params: { page, page_size: 20, ...(batchId ? { batch_id: batchId } : {}) } })).data },
+  async runs(id: number, page = 1, batchId = '', filters: ModelRunFilters = {}) { return (await apiClient.get<ModelRunPage>(`${site(id)}/model-runs`, { params: { page, page_size: 20, ...(batchId ? { batch_id: batchId } : {}), ...filters } })).data },
   async run(id: number, runId: string) { return (await apiClient.get<ModelRun>(`${site(id)}/model-runs/${encodeURIComponent(runId)}`)).data },
   async hideRun(id: number, runId: string) { await apiClient.post(`${site(id)}/model-runs/${encodeURIComponent(runId)}/hide`, {}) },
   async deleteRun(id: number, runId: string) { await apiClient.delete(`${site(id)}/model-runs/${encodeURIComponent(runId)}`) },

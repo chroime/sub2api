@@ -19,7 +19,7 @@ vi.mock('@/views/admin/upstream-governance/model-preview', () => ({
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string, params?: Record<string, unknown>) => params ? `${key}:${JSON.stringify(params)}` : key }) }))
 
 describe('IQDetectionView', () => {
-  it('renders only the pelican timeline and isolated preview', async () => {
+  it('shows the persistent work gallery without the duplicate hero or timeline', async () => {
     getIQDetection.mockResolvedValueOnce({
       window_hours: 24,
       generated_at: '2026-10-02T12:00:00Z',
@@ -29,7 +29,10 @@ describe('IQDetectionView', () => {
     const wrapper = mount(IQDetectionView, { global: { stubs: { Icon: true } } })
     await flushPromises()
     expect(wrapper.find('[data-test="candy-result-card"]').exists()).toBe(false)
-    expect(wrapper.find('[data-test="iq-timeline"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="iq-timeline"]').exists()).toBe(false)
+    expect(wrapper.find('h1').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('iqDetection.description')
+    expect(wrapper.get('[data-test="iq-refresh"]').exists()).toBe(true)
     expect(wrapper.findAll('[data-test="pelican-work-card"]')).toHaveLength(1)
     expect(wrapper.find('[data-test="iq-detection-page"]').classes()).toContain('max-w-screen-2xl')
     expect(wrapper.find('[data-test="pelican-work-grid"]').classes()).toEqual(expect.arrayContaining(['grid-cols-1', 'md:grid-cols-2', 'lg:grid-cols-4']))
@@ -164,7 +167,7 @@ describe('IQDetectionView', () => {
     expect(wrapper.get('[data-test="pelican-work-status"]').classes()).toContain('bg-rose-50')
   })
 
-  it('shows every non-failed timeline slot as green and hides the empty state copy', async () => {
+  it('omits the old timeline even when the API includes timeline data', async () => {
     getIQDetection.mockResolvedValueOnce({
       window_hours: 24,
       generated_at: '2026-10-02T12:00:00Z',
@@ -180,13 +183,10 @@ describe('IQDetectionView', () => {
     await flushPromises()
 
     const points = wrapper.findAll('[data-test="iq-timeline-point"]')
-    expect(points).toHaveLength(3)
-    expect(points[0].classes()).toContain('bg-emerald-500')
-    expect(points[1].classes()).toContain('bg-rose-500')
-    expect(points[2].classes()).toContain('bg-emerald-500')
+    expect(points).toHaveLength(0)
     expect(wrapper.text()).not.toContain('iqDetection.eyebrow')
     expect(wrapper.text()).not.toContain('iqDetection.timelineHint')
     expect(wrapper.text()).not.toContain('iqDetection.timelineDisclaimer')
-    expect(wrapper.get('[data-test="iq-timeline"]').text()).not.toContain('iqDetection.empty')
+    expect(wrapper.text()).toContain('iqDetection.emptyPelican')
   })
 })

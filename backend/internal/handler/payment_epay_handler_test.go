@@ -85,6 +85,8 @@ func TestBuiltinEasyPayExistingClientInteroperability(t *testing.T) {
 		schema := strings.ReplaceAll(string(migration), "BIGSERIAL PRIMARY KEY", "INTEGER PRIMARY KEY AUTOINCREMENT")
 		schema = strings.ReplaceAll(schema, "TIMESTAMPTZ", "DATETIME")
 		schema = strings.ReplaceAll(schema, "NOW()", "CURRENT_TIMESTAMP")
+		// Mirror migration 290's no-cooldown constraint in the SQLite fixture.
+		schema = strings.ReplaceAll(schema, "reuse_after > expires_at", "reuse_after >= expires_at")
 		if name == "282_payment_bill_receipts.sql" {
 			// SQLite cannot drop NOT NULL later; create the final nullable target.
 			schema = strings.ReplaceAll(schema, "order_id BIGINT NOT NULL UNIQUE", "order_id BIGINT UNIQUE")

@@ -76,6 +76,9 @@ func validateLoginInput(input LoginInput) error {
 	if input.SessionToken == "" && (input.RefreshToken != "" || input.ExpiresIn != 0) {
 		return ErrInvalid
 	}
+	if input.SessionID != "" && (input.SessionToken == "" || !validNewAPISessionID(input.SessionID)) {
+		return ErrInvalid
+	}
 	if input.RefreshToken != "" && input.ExpiresIn == 0 {
 		return ErrInvalid
 	}
@@ -109,6 +112,9 @@ func (c *platformConnector) VerifySession(ctx context.Context, site Site, sessio
 
 // The caller must durably save this new pair before making another request.
 func (c *platformConnector) Refresh(ctx context.Context, site Site, session Session) (Session, error) {
+	if site.Platform == "newapi" {
+		return c.refreshNewAPISession(ctx, site, session)
+	}
 	if site.Platform != "sub2api" {
 		return Session{}, ErrUnsupported
 	}

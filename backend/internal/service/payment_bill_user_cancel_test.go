@@ -64,7 +64,7 @@ func TestBillUserCancelImmediatelyReleasesWithoutStatementSync(t *testing.T) {
 	require.Equal(t, next.ID, target.LocalID)
 }
 
-func TestBillUserCancelDoesNotChangeAdminOrExpiryLocks(t *testing.T) {
+func TestBillEndedOrdersReleaseWithoutStatementSync(t *testing.T) {
 	for _, status := range []string{OrderStatusCancelled, OrderStatusExpired} {
 		t.Run(status, func(t *testing.T) {
 			s, id := newBillReceiptTestService(t)
@@ -74,8 +74,7 @@ func TestBillUserCancelDoesNotChangeAdminOrExpiryLocks(t *testing.T) {
 			_, err := s.entClient.PaymentOrder.UpdateOneID(o.ID).SetStatus(status).Save(ctx)
 			require.NoError(t, err)
 			err = billAmountReservationCheckAt(t, s, time.Now().UTC())
-			require.Error(t, err)
-			require.Contains(t, []string{"ALIPAY_BILL_AMOUNT_BUSY", "ALIPAY_BILL_CANCELLED_AMOUNT_WAIT"}, infraerrors.Reason(err))
+			require.NoError(t, err)
 		})
 	}
 }

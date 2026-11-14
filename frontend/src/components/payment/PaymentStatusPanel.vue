@@ -65,23 +65,18 @@
       </div>
     </template>
 
-    <!-- Payment window ended: fixed codes may still be awaiting a bill. -->
+    <!-- Show expiry immediately while delayed bills are checked silently. -->
     <template v-else-if="outcome === 'expired' || billAwaiting">
       <div class="card p-6">
         <div class="flex flex-col items-center space-y-4 py-4">
           <div class="flex h-16 w-16 items-center justify-center rounded-full bg-orange-100 dark:bg-orange-900/30">
-            <div v-if="billAwaiting" class="h-8 w-8 animate-spin rounded-full border-4 border-orange-500 border-t-transparent"></div>
-            <svg v-else class="h-8 w-8 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <svg class="h-8 w-8 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
-          <p class="text-lg font-bold text-gray-900 dark:text-white">{{ t(billAmountMatching ? (billAwaiting ? 'payment.qr.billReconcilingTitle' : 'payment.qr.billUnconfirmedTitle') : 'payment.qr.expired') }}</p>
-          <p v-if="billAmountMatching" class="text-center text-sm text-gray-500 dark:text-gray-400">{{ t(billAwaiting ? 'payment.qr.billReconciling' : 'payment.qr.billExpiredDesc') }}</p>
+          <p class="text-lg font-bold text-gray-900 dark:text-white">{{ t(billAmountMatching ? 'payment.qr.billUnconfirmedTitle' : 'payment.qr.expired') }}</p>
+          <p v-if="billAmountMatching" class="text-center text-sm text-gray-500 dark:text-gray-400">{{ t('payment.qr.billExpiredDesc') }}</p>
           <p v-else class="text-sm text-gray-500 dark:text-gray-400">{{ t('payment.qr.expiredDesc') }}</p>
-          <div v-if="billAwaiting" data-test="bill-reconciliation-countdown" class="space-y-1 text-center" role="timer" :aria-label="t('payment.qr.billReconciliationRemaining')">
-            <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('payment.qr.billReconciliationRemaining') }}</p>
-            <p class="text-2xl font-semibold tabular-nums text-orange-600 dark:text-orange-400">{{ billCountdownDisplay }}</p>
-          </div>
           <a v-if="billAmountMatching" class="btn btn-secondary" href="/orders">{{ t('payment.result.viewOrders') }}</a>
           <button class="btn btn-primary" @click="handleDone">{{ t('payment.result.backToRecharge') }}</button>
         </div>
@@ -202,14 +197,14 @@
           </div>
           <p v-if="scanHint" class="text-center text-sm text-gray-500 dark:text-gray-400">{{ scanHint }}</p>
           <button v-if="payUrl" class="btn btn-secondary text-sm" @click="reopenPopup">
-            {{ t('payment.qr.openPayWindow') }}
+            {{ t(isAlipay ? 'payment.qr.reopenAlipay' : 'payment.qr.openPayWindow') }}
           </button>
         </div>
       </div>
       <div class="card p-4 text-center">
         <p class="text-sm text-gray-500 dark:text-gray-400">{{ t('payment.qr.expiresIn') }}</p>
         <p class="mt-1 text-2xl font-bold tabular-nums text-gray-900 dark:text-white">{{ countdownDisplay }}</p>
-        <p class="mt-1 text-xs text-gray-400 dark:text-gray-500">{{ t(billAmountMatching ? 'payment.qr.billPaymentHint' : 'payment.qr.waitingPayment') }}</p>
+        <p class="mt-1" :class="billAmountMatching ? 'text-base font-semibold leading-relaxed text-amber-700 dark:text-amber-300' : 'text-xs text-gray-400 dark:text-gray-500'">{{ t(billAmountMatching ? 'payment.qr.billPaymentHint' : 'payment.qr.waitingPayment') }}</p>
       </div>
       <button class="btn btn-secondary w-full" :disabled="cancelling" @click="handleCancel">
         {{ cancelling ? t('common.processing') : t('payment.qr.cancelOrder') }}
@@ -245,6 +240,7 @@ import { usePaymentStore } from '@/stores/payment'
 import { useAppStore } from '@/stores'
 import { paymentAPI } from '@/api/payment'
 import { extractI18nErrorMessage } from '@/utils/apiError'
+import { isMobileDevice } from '@/utils/device'
 import { getPaymentPopupFeatures, isBuiltInAlipayMethod, isBuiltInWxpayMethod } from '@/components/payment/providerConfig'
 import { currencySymbol, formatPaymentAmount, normalizePaymentCurrency } from '@/components/payment/currency'
 import type { PaymentOrder } from '@/types/payment'
@@ -253,9 +249,10 @@ import QRCode from 'qrcode'
 import alipayIcon from '@/assets/icons/alipay.svg'
 import wxpayIcon from '@/assets/icons/wxpay.svg'
 import paymentIcon from '@/assets/icons/payment.svg'
-import { billReconciliationSecondsRemaining } from './billPaymentWindow'
+import { canWaitForBill } from './billPaymentWindow'
 import { usePaymentFulfillmentWait } from './usePaymentFulfillmentWait'
 import {
+  buildAlipayDeepLink,
   createAlipayDeepLinkLauncher,
   type AlipayDeepLinkLauncher,
   type AlipayDeepLinkState,
@@ -307,8 +304,6 @@ const localeCode = computed(() => {
 // Terminal outcome: null = still active, 'success' | 'cancelled' | 'expired'
 const outcome = ref<PaymentOutcome | null>(null)
 const billAwaiting = ref(false)
-const billWaitingSeconds = ref(0)
-const billCountdownDisplay = computed(() => `${Math.floor(billWaitingSeconds.value / 60).toString().padStart(2, '0')}:${(billWaitingSeconds.value % 60).toString().padStart(2, '0')}`)
 const { waiting: fulfillmentPending, timedOut: fulfillmentTimedOut, start: waitForFulfillment, stop: stopFulfillmentWait } = usePaymentFulfillmentWait(cleanup)
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
@@ -374,6 +369,12 @@ function isSuccessStatus(status: string | null | undefined): boolean {
 
 function reopenPopup() {
   if (props.payUrl && !outcome.value && !billAwaiting.value && !fulfillmentPending.value && remainingSeconds.value > 0) {
+    if (isAlipay.value && qrUrl.value && isMobileDevice()) {
+      // A successful mobile app handoff may return a closed/null popup handle.
+      // Navigate once so the popup fallback cannot launch Alipay a second time.
+      window.location.assign(buildAlipayDeepLink(qrUrl.value))
+      return
+    }
     const win = window.open(props.payUrl, 'paymentPopup', getPaymentPopupFeatures())
     if (!win || win.closed) {
       window.location.href = props.payUrl
@@ -495,8 +496,7 @@ function startCountdown(seconds: number) {
 
 function expirePayment() {
   if (fulfillmentPending.value) return
-  billWaitingSeconds.value = billReconciliationSecondsRemaining(props.expiresAt)
-  if (props.billAmountMatching === true && billWaitingSeconds.value > 0) {
+  if (canWaitForBill(props.billAmountMatching === true, props.expiresAt)) {
     billAwaiting.value = true
     alipayLauncher?.dispose()
     alipayLauncher = null

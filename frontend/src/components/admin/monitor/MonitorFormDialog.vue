@@ -122,7 +122,6 @@
             {{ t('admin.channelMonitor.form.useMyKey') }}
           </button>
         </div>
-        <p v-if="editing && editing.api_key_masked" class="mt-1 text-xs text-gray-400">{{ editing.api_key_masked }}</p>
       </div>
 
       <div v-if="usesProbePart">
@@ -148,9 +147,21 @@
         />
       </div>
 
-      <div>
-        <label class="input-label">{{ t('admin.channelMonitor.form.groupName') }}</label>
-        <input v-model="form.group_name" type="text" class="input" :placeholder="t('admin.channelMonitor.form.groupNamePlaceholder')" />
+      <div data-testid="monitor-bound-group">
+        <label class="input-label">{{ t('admin.channelMonitor.form.boundGroup') }}</label>
+        <div v-if="followsLocalKey" class="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm dark:border-dark-600 dark:bg-dark-900">
+          <span class="font-medium">{{ form.group_name || t('admin.channelMonitor.form.groupBindingNoGroup') }}</span>
+          <span v-if="form.group_id" class="ml-1 text-xs text-gray-500">#{{ form.group_id }}</span>
+        </div>
+        <Select
+          v-else
+          v-model="groupSelectValue"
+          :options="groupOptions"
+          :loading="groupsLoading"
+          :placeholder="t('admin.channelMonitor.form.groupSelectPlaceholder')"
+        />
+        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t(followsLocalKey ? 'admin.channelMonitor.form.groupFollowsKey' : 'admin.channelMonitor.form.groupAutoHint') }}</p>
+        <p v-if="bindingWarning" role="alert" class="mt-1 text-xs text-amber-600 dark:text-amber-400">{{ bindingWarning }}</p>
       </div>
 
       <div>
@@ -250,7 +261,7 @@ import type {
   UpdateParams,
 } from '@/api/admin/channelMonitor'
 import type { ChannelMonitorTemplate } from '@/api/admin/channelMonitorTemplate'
-import type { ApiKey } from '@/types'
+import type { AdminGroup, ApiKey } from '@/types'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import Toggle from '@/components/common/Toggle.vue'
 import Select from '@/components/common/Select.vue'
@@ -329,6 +340,9 @@ interface MonitorForm {
   primary_model: string
   extra_models: string[]
   group_name: string
+  group_id: number | null
+  local_api_key_id: number | null
+  group_binding_status: string
   interval_seconds: number
   jitter_seconds: number
   enabled: boolean
@@ -350,6 +364,9 @@ const form = reactive<MonitorForm>({
   primary_model: '',
   extra_models: [],
   group_name: '',
+  group_id: null,
+  local_api_key_id: null,
+  group_binding_status: 'none',
   interval_seconds: systemDefaultInterval.value,
   jitter_seconds: 0,
   enabled: true,
@@ -367,6 +384,54 @@ const usesProbePart = computed(() => form.check_mode !== CHECK_MODE_QUOTA)
 const maxJitterSeconds = computed<number>(() => Math.max(0, (form.interval_seconds || 0) - 15))
 
 let suppressFormWatchers = false
+
+const bindingGroups = ref<AdminGroup[]>([])
+const groupsLoading = ref(false)
+const followsLocalKey = computed(() => usesProbePart.value && form.local_api_key_id != null)
+const groupOptions = computed(() => {
+  const options = bindingGroups.value.filter(g => g.platform === form.provider).map(g => ({
+    value: String(g.id), label: `${g.name} (#${g.id})`,
+  }))
+  if (form.group_id != null && !options.some(o => o.value === String(form.group_id))) {
+    options.unshift({ value: String(form.group_id), label: `${form.group_name || '—'} (#${form.group_id})` })
+  }
+  return [{ value: '', label: t('admin.channelMonitor.form.groupUnbound') }, ...options]
+})
+const groupSelectValue = computed({
+  get: () => form.group_id == null ? '' : String(form.group_id),
+  set: (raw: string) => {
+    form.group_id = raw ? Number(raw) : null
+    form.group_name = bindingGroups.value.find(g => g.id === form.group_id)?.name || ''
+    form.group_binding_status = raw ? 'manual' : 'none'
+  },
+})
+const bindingWarning = computed(() => {
+  const labels: Record<string, string> = {
+    key_missing: 'groupBindingKeyMissing', no_group: 'groupBindingNoGroup',
+    group_missing: 'groupBindingMissing', group_inactive: 'groupBindingInactive',
+    platform_mismatch: 'groupBindingPlatformMismatch',
+  }
+  const label = labels[form.group_binding_status]
+  return label ? t(`admin.channelMonitor.form.${label}`) : ''
+})
+async function loadBindingGroups() {
+  groupsLoading.value = true
+  try {
+    bindingGroups.value = await adminAPI.groups.getAll()
+  } catch {
+    bindingGroups.value = []
+  } finally {
+    groupsLoading.value = false
+  }
+}
+
+watch(() => form.api_key, () => {
+  if (suppressFormWatchers) return
+  form.local_api_key_id = null
+  form.group_id = null
+  form.group_name = ''
+  form.group_binding_status = 'none'
+}, { flush: 'sync' })
 
 // 可用模板列表（进入 dialog 时一次性拉取 cache；按 provider / api mode 过滤）。
 const templatesCache = ref<ChannelMonitorTemplate[]>([])
@@ -710,6 +775,10 @@ function selectProvider(provider: Provider) {
 watch(() => form.provider, () => {
   if (suppressFormWatchers) return
   form.api_key = ''
+  form.local_api_key_id = null
+  form.group_id = null
+  form.group_name = ''
+  form.group_binding_status = 'none'
   if (form.provider !== PROVIDER_OPENAI) {
     form.api_mode = API_MODE_CHAT_COMPLETIONS
   }
@@ -737,6 +806,9 @@ function resetForm() {
   form.primary_model = ''
   form.extra_models = []
   form.group_name = ''
+  form.group_id = null
+  form.local_api_key_id = null
+  form.group_binding_status = 'none'
   form.interval_seconds = systemDefaultInterval.value
   form.jitter_seconds = 0
   form.enabled = true
@@ -759,6 +831,9 @@ function loadFromMonitor(m: ChannelMonitor) {
   form.primary_model = m.primary_model
   form.extra_models = [...(m.extra_models || [])]
   form.group_name = m.group_name || ''
+  form.group_id = m.group_id ?? null
+  form.local_api_key_id = m.group_binding_mode === 'key' ? m.local_api_key_id ?? null : null
+  form.group_binding_status = m.group_binding_status || 'none'
   form.interval_seconds = m.interval_seconds || systemDefaultInterval.value
   form.jitter_seconds = m.jitter_seconds || 0
   form.enabled = m.enabled
@@ -776,6 +851,7 @@ watch(
   ([show, m]) => {
     if (!show) return
     void loadTemplates()
+    void loadBindingGroups()
     if (m) loadFromMonitor(m)
     else resetForm()
   },
@@ -812,6 +888,10 @@ async function openMyKeyPicker() {
 
 function pickMyKey(k: ApiKey) {
   form.api_key = k.key
+  form.local_api_key_id = k.id
+  form.group_id = k.group_id ?? k.group?.id ?? null
+  form.group_name = k.group?.name || ''
+  form.group_binding_status = form.group_id == null ? 'no_group' : 'key'
   showKeyPicker.value = false
 }
 
@@ -826,7 +906,7 @@ function buildPayload(): CreateParams {
     api_key: usesProbePart.value ? form.api_key.trim() : '',
     primary_model: usesProbePart.value ? form.primary_model.trim() : 'quota',
     extra_models: usesProbePart.value ? form.extra_models : [],
-    group_name: form.group_name.trim(),
+    group_id: form.group_id ?? 0,
     enabled: form.enabled,
     interval_seconds: form.interval_seconds,
     jitter_seconds: form.jitter_seconds || 0,

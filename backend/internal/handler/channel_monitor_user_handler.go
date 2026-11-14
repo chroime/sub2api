@@ -7,6 +7,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/handler/admin"
 	"github.com/Wei-Shaw/sub2api/internal/handler/dto"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
+	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
 	"github.com/gin-gonic/gin"
@@ -52,17 +53,22 @@ func (h *ChannelMonitorUserHandler) quotaVisible(c *gin.Context) bool {
 // --- Response ---
 
 type channelMonitorUserListItem struct {
-	ID                   int64                                `json:"id"`
-	Name                 string                               `json:"name"`
-	Provider             string                               `json:"provider"`
-	GroupName            string                               `json:"group_name"`
-	PrimaryModel         string                               `json:"primary_model"`
-	PrimaryStatus        string                               `json:"primary_status"`
-	PrimaryLatencyMs     *int                                 `json:"primary_latency_ms"`
-	PrimaryPingLatencyMs *int                                 `json:"primary_ping_latency_ms"`
-	Availability7d       float64                              `json:"availability_7d"`
-	ExtraModels          []dto.ChannelMonitorExtraModelStatus `json:"extra_models"`
-	Timeline             []channelMonitorUserTimelinePoint    `json:"timeline"`
+	ID                   int64                                 `json:"id"`
+	Name                 string                                `json:"name"`
+	Provider             string                                `json:"provider"`
+	GroupName            string                                `json:"group_name"`
+	GroupID              *int64                                `json:"group_id"`
+	PrimaryModel         string                                `json:"primary_model"`
+	PrimaryStatus        string                                `json:"primary_status"`
+	PrimaryLatencyMs     *int                                  `json:"primary_latency_ms"`
+	PrimaryPingLatencyMs *int                                  `json:"primary_ping_latency_ms"`
+	ProbeValidUntil      *time.Time                            `json:"probe_valid_until,omitempty"`
+	Availability7d       float64                               `json:"availability_7d"`
+	ExtraModels          []dto.ChannelMonitorExtraModelStatus  `json:"extra_models"`
+	Timeline             []channelMonitorUserTimelinePoint     `json:"timeline"`
+	Intelligence         *service.MonitorIntelligence          `json:"intelligence,omitempty"`
+	UsageMetrics         map[string]service.MonitorUsageMetric `json:"usage_metrics,omitempty"`
+	UserRateMultiplier   *float64                              `json:"user_rate_multiplier,omitempty"`
 	// LatestQuota 主模型最近配额快照；channel_monitor_show_quota=false 时
 	// 由 userMonitorViewToItem 的调用方传入 false 剥离（服务端脱敏，非仅前端隐藏）。
 	LatestQuota *domain.MonitorQuotaSnapshot `json:"latest_quota,omitempty"`
@@ -82,6 +88,7 @@ type channelMonitorUserDetailResponse struct {
 	Name      string                        `json:"name"`
 	Provider  string                        `json:"provider"`
 	GroupName string                        `json:"group_name"`
+	GroupID   *int64                        `json:"group_id"`
 	Models    []channelMonitorUserModelStat `json:"models"`
 }
 
@@ -118,13 +125,18 @@ func userMonitorViewToItem(v *service.UserMonitorView, includeQuota bool) channe
 		Name:                 v.Name,
 		Provider:             v.Provider,
 		GroupName:            v.GroupName,
+		GroupID:              v.GroupID,
 		PrimaryModel:         v.PrimaryModel,
 		PrimaryStatus:        v.PrimaryStatus,
 		PrimaryLatencyMs:     v.PrimaryLatencyMs,
 		PrimaryPingLatencyMs: v.PrimaryPingLatencyMs,
+		ProbeValidUntil:      v.ProbeValidUntil,
 		Availability7d:       v.Availability7d,
 		ExtraModels:          extras,
 		Timeline:             timeline,
+		Intelligence:         v.Intelligence,
+		UsageMetrics:         v.UsageMetrics,
+		UserRateMultiplier:   v.UserRateMultiplier,
 	}
 	if includeQuota {
 		item.LatestQuota = v.LatestQuota
@@ -150,6 +162,7 @@ func userMonitorDetailToResponse(d *service.UserMonitorDetail) *channelMonitorUs
 		Name:      d.Name,
 		Provider:  d.Provider,
 		GroupName: d.GroupName,
+		GroupID:   d.GroupID,
 		Models:    models,
 	}
 }
@@ -162,7 +175,8 @@ func (h *ChannelMonitorUserHandler) List(c *gin.Context) {
 		response.Success(c, gin.H{"items": []channelMonitorUserListItem{}})
 		return
 	}
-	views, err := h.monitorService.ListUserView(c.Request.Context())
+	subject, _ := middleware.GetAuthSubjectFromContext(c)
+	views, err := h.monitorService.ListUserViewForUser(c.Request.Context(), subject.UserID)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return

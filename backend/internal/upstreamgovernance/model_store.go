@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -128,9 +129,20 @@ func (m *modelStore) deleteRun(ctx context.Context, siteID int64, id string) err
 	}
 	return ErrNotFound
 }
-func (m *modelStore) listRuns(ctx context.Context, siteID int64, page, size int, batchID string) (*ModelRunPage, error) {
+func (m *modelStore) listRuns(ctx context.Context, siteID int64, page, size int, batchID string, filters ...ModelRunFilters) (*ModelRunPage, error) {
+	f := ModelRunFilters{}
+	if len(filters) > 1 {
+		return nil, ErrInvalid
+	}
+	if len(filters) == 1 {
+		f = filters[0]
+	}
+	if err := f.Validate(); err != nil {
+		return nil, err
+	}
+	where, args := modelRunWhere(siteID, batchID, f)
 	p := &ModelRunPage{Items: []ModelRun{}, Page: page, PageSize: size, Counts: map[string]int64{}}
-	if err := m.db.QueryRowContext(ctx, `SELECT count(*) FROM upstream_governance_model_runs WHERE site_id=$1 AND ($2='' OR batch_id=$2)`, siteID, batchID).Scan(&p.Total); err != nil {
+	if err := m.db.QueryRowContext(ctx, `SELECT count(*) FROM upstream_governance_model_runs WHERE `+where, args...).Scan(&p.Total); err != nil {
 		return nil, err
 	}
 	counts, err := m.db.QueryContext(ctx, `SELECT status,count(*) FROM upstream_governance_model_runs WHERE site_id=$1 AND ($2='' OR batch_id=$2) GROUP BY status`, siteID, batchID)
@@ -145,13 +157,16 @@ func (m *modelStore) listRuns(ctx context.Context, siteID int64, page, size int,
 			return nil, err
 		}
 		p.Counts[status] = n
+		p.ScopeTotal += n
 	}
 	if err = counts.Err(); err != nil {
 		counts.Close()
 		return nil, err
 	}
 	counts.Close()
-	rows, err := m.db.QueryContext(ctx, `SELECT `+modelRunSummaryColumns+` FROM upstream_governance_model_runs WHERE site_id=$1 AND ($2='' OR batch_id=$2) ORDER BY created_at DESC,batch_id,sequence LIMIT $3 OFFSET $4`, siteID, batchID, size, (page-1)*size)
+	limitOffset := fmt.Sprintf(` LIMIT $%d OFFSET $%d`, len(args)+1, len(args)+2)
+	args = append(args, size, (page-1)*size)
+	rows, err := m.db.QueryContext(ctx, `SELECT `+modelRunSummaryColumns+` FROM upstream_governance_model_runs WHERE `+where+` ORDER BY created_at DESC,batch_id,sequence`+limitOffset, args...)
 	if err != nil {
 		return nil, err
 	}

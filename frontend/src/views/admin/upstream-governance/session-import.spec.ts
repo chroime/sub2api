@@ -16,6 +16,57 @@ function rejects(raw: string, code: string) {
 }
 
 describe('one-time login response import', () => {
+  it('imports a NewAPI success envelope and keeps the access deadline separate from the login session', () => {
+    expect(parseSessionImport(JSON.stringify({ success: true, message: '', data: {
+      access_token: 'fixture-newapi-access', access_expires_at: now / 1000 + 900, token_type: 'Bearer',
+      user: { id: 42, username: 'ignored-user', quota: 5000000 },
+      session: { sid: 'fixture-session', user_agent: 'Fixture Browser/2', expires_at: now / 1000 + 30 * 86400 },
+    } }), now)).toEqual({
+      sessionToken: 'fixture-newapi-access', refreshToken: '', userAgent: 'Fixture Browser/2',
+      userId: 42, sessionId: 'fixture-session', expiresIn: 900, sessionExpiresAt: now + 900_000,
+    })
+  })
+
+  it('caps a NewAPI access deadline using an earlier JWT expiry', () => {
+    const result = parseSessionImport(JSON.stringify({ success: true, data: {
+      access_token: jwt({ exp: now / 1000 + 60 }), access_expires_at: now / 1000 + 900,
+    } }), now)
+    expect(result.expiresIn).toBe(60)
+  })
+
+  it('does not use a long NewAPI session expiry as the access-token lifetime', () => {
+    const result = parseSessionImport(JSON.stringify({ success: true, data: {
+      access_token: 'opaque-access', session: { sid: 'fixture-session', expires_at: now / 1000 + 30 * 86400 },
+    } }), now)
+    expect(result.expiresIn).toBeUndefined()
+    expect(result.sessionExpiresAt).toBeUndefined()
+  })
+
+  it.each([
+    { success: 'true', data: { access_token: 'fixture-secret' } },
+    { success: true, data: null },
+    { success: true, data: { require_verification: true, access_token: 'fixture-secret' } },
+    { success: true, data: { require_2fa: true, access_token: 'fixture-secret' } },
+  ])('rejects malformed or incomplete NewAPI success responses', raw => rejects(JSON.stringify(raw), 'unsuccessful_response'))
+
+  it.each([null, '900', 0, now / 1000 - 1])('validates NewAPI access_expires_at %s', access_expires_at => {
+    rejects(JSON.stringify({ success: true, data: { access_token: 'fixture-access', access_expires_at } }),
+      access_expires_at === now / 1000 - 1 ? 'expired' : 'invalid_expiry')
+  })
+
+  it.each([
+    { user: { id: '42' } }, { user: { id: -1 } },
+    { session: { sid: 'fixture\r\nsecret' } }, { session: { sid: 42 } },
+  ])('rejects invalid imported NewAPI identity metadata', metadata => {
+    rejects(JSON.stringify({ success: true, data: { access_token: 'fixture-access', ...metadata } }), 'invalid_identity')
+  })
+
+  it('validates a NewAPI nested session User-Agent', () => {
+    rejects(JSON.stringify({ success: true, data: {
+      access_token: 'fixture-access', session: { sid: 'fixture-session', user_agent: 'fixture-secret\n' },
+    } }), 'invalid_user_agent')
+  })
+
   it('extracts only session fields from a successful Sub2API login response', () => {
     expect(parseSessionImport(response({
       access_token: 'fixture-access', refresh_token: 'fixture-refresh', expires_in: 3600,

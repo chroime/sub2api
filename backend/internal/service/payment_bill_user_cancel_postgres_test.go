@@ -245,7 +245,7 @@ func TestBillPostgresUserCancelledManualClaimDoesNotReopenAmount(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestBillPostgresAdminCancelAndTimeoutDoNotImmediatelyRelease(t *testing.T) {
+func TestBillPostgresAdminCancelAndTimeoutReleaseImmediately(t *testing.T) {
 	for _, kind := range []string{"admin", "timeout"} {
 		t.Run(kind, func(t *testing.T) {
 			s, id := newBillAmountPostgresService(t)
@@ -257,7 +257,6 @@ func TestBillPostgresAdminCancelAndTimeoutDoNotImmediatelyRelease(t *testing.T) 
 			}
 			order := matchingBillLocalOrder(t, s, id, "PG_NONUSER_CANCEL_"+kind, start)
 			wantStatus := OrderStatusCancelled
-			wantReason := "ALIPAY_BILL_CANCELLED_AMOUNT_WAIT"
 			if kind == "admin" {
 				_, err := s.AdminCancelOrder(ctx, order.ID)
 				require.NoError(t, err)
@@ -266,13 +265,12 @@ func TestBillPostgresAdminCancelAndTimeoutDoNotImmediatelyRelease(t *testing.T) 
 				require.NoError(t, err)
 				require.Equal(t, 1, n)
 				wantStatus = OrderStatusExpired
-				wantReason = "ALIPAY_BILL_AMOUNT_BUSY"
 			}
 			updated, err := s.entClient.PaymentOrder.Get(ctx, order.ID)
 			require.NoError(t, err)
 			require.Equal(t, wantStatus, updated.Status)
 			require.False(t, userCancelledAtPostgresFixture(t, s, order.ID).Valid)
-			require.Equal(t, wantReason, infraerrors.Reason(billAmountReservationCheckAt(t, s, time.Now().UTC())))
+			require.NoError(t, billAmountReservationCheckAt(t, s, time.Now().UTC()))
 		})
 	}
 }

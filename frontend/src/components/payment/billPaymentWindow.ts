@@ -1,6 +1,6 @@
-// Give unconfirmed fixed-code orders a short statement visibility grace period.
+// Silently check delayed bills after showing unconfirmed fixed-code orders as expired.
 // Confirmed-payment fulfillment has a separate deadline and is not shortened.
-// This never extends the deadline for making a payment.
+// This never extends payment or amount reservation deadlines or blocks navigation.
 export const BILL_RECONCILIATION_WAIT_MS = 30_000
 
 export function billReconciliationSecondsRemaining(expiresAt: string, now = Date.now()): number {

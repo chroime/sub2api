@@ -14,6 +14,7 @@ export default {
     create: '创建',
     apply: '应用',
     clear: '清除',
+    clearSearch: '清除搜索',
     creating: '创建中...',
     required: '必填',
     sending: '发送中...',

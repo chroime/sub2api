@@ -64,6 +64,10 @@ func createChannelMonitorWithClient(ctx context.Context, client *dbent.Client, m
 		SetPrimaryModel(m.PrimaryModel).
 		SetExtraModels(emptySliceIfNil(m.ExtraModels)).
 		SetGroupName(m.GroupName).
+		SetGroupBindingMode(defaultMonitorBindingMode(m.GroupBindingMode)).
+		SetNillableLocalAPIKeyID(m.LocalAPIKeyID).
+		SetNillableGroupID(m.GroupID).
+		SetNillableGroupBindingChangedAt(m.GroupBindingChangedAt).
 		SetEnabled(m.Enabled).
 		SetSortOrder(sortOrder).
 		SetIntervalSeconds(m.IntervalSeconds).
@@ -138,12 +142,31 @@ func (r *channelMonitorRepository) Update(ctx context.Context, m *service.Channe
 		SetPrimaryModel(m.PrimaryModel).
 		SetExtraModels(emptySliceIfNil(m.ExtraModels)).
 		SetGroupName(m.GroupName).
+		SetGroupBindingMode(defaultMonitorBindingMode(m.GroupBindingMode)).
 		SetEnabled(m.Enabled).
 		SetIntervalSeconds(m.IntervalSeconds).
 		SetJitterSeconds(m.JitterSeconds).
 		SetExtraHeaders(channelMonitorHeadersForPersistence(m)).
 		SetBodyOverrideMode(defaultBodyModeRepo(m.BodyOverrideMode)).
 		SetCheckMode(defaultCheckModeRepo(m.CheckMode))
+	if m.LocalAPIKeyID != nil {
+		updater.SetLocalAPIKeyID(*m.LocalAPIKeyID)
+	} else {
+		updater.ClearLocalAPIKeyID()
+	}
+	if m.GroupID != nil {
+		updater.SetGroupID(*m.GroupID)
+	} else {
+		updater.ClearGroupID()
+	}
+	if m.GroupBindingChangedAt != nil {
+		updater.SetGroupBindingChangedAt(*m.GroupBindingChangedAt)
+	} else {
+		updater.ClearGroupBindingChangedAt()
+	}
+	if m.LastCheckedAt == nil {
+		updater.ClearLastCheckedAt()
+	}
 	if m.TemplateID != nil {
 		updater = updater.SetTemplateID(*m.TemplateID)
 	} else {
@@ -289,7 +312,7 @@ func (r *channelMonitorRepository) DeleteHistoryBefore(ctx context.Context, befo
 // model 为空时不过滤；非空时只返回该模型的记录。
 func (r *channelMonitorRepository) ListHistory(ctx context.Context, monitorID int64, model string, limit int) ([]*service.ChannelMonitorHistoryEntry, error) {
 	q := r.client.ChannelMonitorHistory.Query().
-		Where(channelmonitorhistory.MonitorIDEQ(monitorID))
+		Where(channelmonitorhistory.MonitorIDEQ(monitorID), monitorHistoryBindingPredicate)
 	if strings.TrimSpace(model) != "" {
 		q = q.Where(channelmonitorhistory.ModelEQ(model))
 	}
@@ -325,8 +348,9 @@ func (r *channelMonitorRepository) ListLatestPerModel(ctx context.Context, monit
 	const q = `
 		SELECT DISTINCT ON (model)
 		    model, status, latency_ms, ping_latency_ms, checked_at
-		FROM channel_monitor_histories
+		FROM channel_monitor_histories h
 		WHERE monitor_id = $1
+	` + monitorHistoryBindingScope + `
 		ORDER BY model, checked_at DESC
 	`
 	rows, err := r.db.QueryContext(ctx, q, monitorID)
@@ -390,9 +414,10 @@ func (r *channelMonitorRepository) ComputeAvailability(ctx context.Context, moni
 		       CASE WHEN COUNT(latency_ms) > 0
 		            THEN SUM(latency_ms) FILTER (WHERE latency_ms IS NOT NULL)::float8 / COUNT(latency_ms)
 		            ELSE NULL END                                                   AS avg_latency_ms
-		FROM channel_monitor_histories
+		FROM channel_monitor_histories h
 		WHERE monitor_id = $1
 		  AND checked_at >= NOW() - ($2::int || ' days')::interval
+	` + monitorHistoryBindingScope + `
 		GROUP BY model
 	`
 	rows, err := r.db.QueryContext(ctx, q, monitorID, windowDays)
@@ -446,8 +471,9 @@ func (r *channelMonitorRepository) ListLatestForMonitorIDs(ctx context.Context, 
 	const q = `
 		SELECT DISTINCT ON (monitor_id, model)
 		    monitor_id, model, status, latency_ms, ping_latency_ms, checked_at, quota
-		FROM channel_monitor_histories
+		FROM channel_monitor_histories h
 		WHERE monitor_id = ANY($1)
+	` + monitorHistoryBindingScope + `
 		ORDER BY monitor_id, model, checked_at DESC
 	`
 	rows, err := r.db.QueryContext(ctx, q, pq.Array(ids))
@@ -510,6 +536,7 @@ func (r *channelMonitorRepository) ListRecentHistoryForMonitors(
 		    FROM channel_monitor_histories h
 		    JOIN targets t
 		      ON t.monitor_id = h.monitor_id AND t.model = h.model
+		    WHERE TRUE ` + monitorHistoryBindingScope + `
 		)
 		SELECT monitor_id, status, latency_ms, ping_latency_ms, checked_at
 		FROM ranked
@@ -594,9 +621,10 @@ func (r *channelMonitorRepository) ComputeAvailabilityForMonitors(ctx context.Co
 		       CASE WHEN COUNT(latency_ms) > 0
 		            THEN SUM(latency_ms) FILTER (WHERE latency_ms IS NOT NULL)::float8 / COUNT(latency_ms)
 		            ELSE NULL END                                                   AS avg_latency_ms
-		FROM channel_monitor_histories
+		FROM channel_monitor_histories h
 		WHERE monitor_id = ANY($1)
 		  AND checked_at >= NOW() - ($2::int || ' days')::interval
+	` + monitorHistoryBindingScope + `
 		GROUP BY monitor_id, model
 	`
 	rows, err := r.db.QueryContext(ctx, q, pq.Array(ids), windowDays)
@@ -669,6 +697,7 @@ func (r *channelMonitorRepository) ComputeAvailabilityForMonitorsSince(
 		JOIN targets t ON t.monitor_id = h.monitor_id AND t.model = h.model
 		WHERE h.checked_at >= NOW() - ($4::int || ' days')::interval
 		  AND h.checked_at >= t.reset_at
+	` + monitorHistoryBindingScope + `
 		GROUP BY h.monitor_id, h.model
 	`
 	rows, err := r.db.QueryContext(ctx, q, pq.Array(validIDs), pq.Array(validModels), pq.Array(resetTimes), windowDays)
@@ -863,29 +892,33 @@ func entToServiceMonitor(row *dbent.ChannelMonitor) *service.ChannelMonitor {
 	}
 	delete(headers, service.ChannelMonitorAvailabilityResetMetadataKey)
 	out := &service.ChannelMonitor{
-		ID:                   row.ID,
-		Name:                 row.Name,
-		Provider:             string(row.Provider),
-		APIMode:              defaultAPIModeRepo(row.APIMode),
-		Endpoint:             row.Endpoint,
-		APIKey:               row.APIKeyEncrypted, // 仍为密文，service 层负责解密
-		PrimaryModel:         row.PrimaryModel,
-		ExtraModels:          extras,
-		GroupName:            row.GroupName,
-		Enabled:              row.Enabled,
-		SortOrder:            row.SortOrder,
-		IntervalSeconds:      row.IntervalSeconds,
-		JitterSeconds:        row.JitterSeconds,
-		LastCheckedAt:        row.LastCheckedAt,
-		CreatedBy:            row.CreatedBy,
-		CreatedAt:            row.CreatedAt,
-		UpdatedAt:            row.UpdatedAt,
-		ExtraHeaders:         headers,
-		BodyOverrideMode:     row.BodyOverrideMode,
-		BodyOverride:         row.BodyOverride,
-		CheckMode:            defaultCheckModeRepo(row.CheckMode),
-		DuplicateOperationID: duplicateOperationID,
-		AvailabilityReset:    availabilityReset,
+		ID:                    row.ID,
+		Name:                  row.Name,
+		Provider:              string(row.Provider),
+		APIMode:               defaultAPIModeRepo(row.APIMode),
+		Endpoint:              row.Endpoint,
+		APIKey:                row.APIKeyEncrypted, // 仍为密文，service 层负责解密
+		PrimaryModel:          row.PrimaryModel,
+		ExtraModels:           extras,
+		GroupName:             row.GroupName,
+		LocalAPIKeyID:         row.LocalAPIKeyID,
+		GroupID:               row.GroupID,
+		GroupBindingMode:      row.GroupBindingMode,
+		GroupBindingChangedAt: row.GroupBindingChangedAt,
+		Enabled:               row.Enabled,
+		SortOrder:             row.SortOrder,
+		IntervalSeconds:       row.IntervalSeconds,
+		JitterSeconds:         row.JitterSeconds,
+		LastCheckedAt:         row.LastCheckedAt,
+		CreatedBy:             row.CreatedBy,
+		CreatedAt:             row.CreatedAt,
+		UpdatedAt:             row.UpdatedAt,
+		ExtraHeaders:          headers,
+		BodyOverrideMode:      row.BodyOverrideMode,
+		BodyOverride:          row.BodyOverride,
+		CheckMode:             defaultCheckModeRepo(row.CheckMode),
+		DuplicateOperationID:  duplicateOperationID,
+		AvailabilityReset:     availabilityReset,
 	}
 	if row.TemplateID != nil {
 		id := *row.TemplateID
@@ -948,6 +981,13 @@ func defaultCheckModeRepo(checkMode string) string {
 		return "probe"
 	}
 	return checkMode
+}
+
+func defaultMonitorBindingMode(mode string) string {
+	if mode == "" {
+		return service.MonitorGroupBindingLegacy
+	}
+	return mode
 }
 
 func emptySliceIfNil(in []string) []string {

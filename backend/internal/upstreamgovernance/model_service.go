@@ -480,9 +480,17 @@ func (s *Service) StartModelBatch(ctx context.Context, siteID int64, in ModelBat
 	}
 	return b, err
 }
-func (s *Service) ListModelRuns(ctx context.Context, siteID int64, page, size int, batchID string) (*ModelRunPage, error) {
+func (s *Service) ListModelRuns(ctx context.Context, siteID int64, page, size int, batchID string, filters ...ModelRunFilters) (*ModelRunPage, error) {
 	if siteID <= 0 || page < 1 || size < 1 || size > 100 || page > 1000000 || len(batchID) > 100 {
 		return nil, ErrInvalid
+	}
+	if len(filters) > 1 {
+		return nil, ErrInvalid
+	}
+	if len(filters) == 1 {
+		if err := filters[0].Validate(); err != nil {
+			return nil, err
+		}
 	}
 	if _, err := s.store.GetSite(ctx, siteID); err != nil {
 		return nil, err
@@ -491,7 +499,7 @@ func (s *Service) ListModelRuns(ctx context.Context, siteID int64, page, size in
 	if err != nil {
 		return nil, err
 	}
-	return m.listRuns(ctx, siteID, page, size, batchID)
+	return m.listRuns(ctx, siteID, page, size, batchID, filters...)
 }
 func (s *Service) GetModelRun(ctx context.Context, siteID int64, id string) (*ModelRun, error) {
 	m, err := s.models()

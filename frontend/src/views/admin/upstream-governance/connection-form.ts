@@ -17,6 +17,7 @@ export interface ConnectionForm {
   sessionExpiresAt?: number
   userAgent: string
   userId?: number
+  sessionId?: string
 }
 
 export function newConnectionForm(): ConnectionForm {
@@ -36,6 +37,7 @@ export function connectionInput(form: ConnectionForm): LoginInput {
     return {
       session_token: form.sessionToken,
       user_id: form.userId,
+      ...(form.sessionId ? { session_id: form.sessionId } : {}),
       ...(form.refreshToken ? { refresh_token: form.refreshToken } : {}),
       ...(typeof expiresIn === 'number' && expiresIn > 0 ? { expires_in: expiresIn } : {}),
       ...(form.userAgent ? { user_agent: form.userAgent } : {}),
@@ -69,6 +71,7 @@ export function clearConnectionSecrets(form: ConnectionForm) {
   form.sessionExpiresAt = undefined
   form.userAgent = ''
   form.userId = undefined
+  form.sessionId = undefined
 }
 
 export function continueChallenge(form: ConnectionForm, challenge: LoginChallenge) {

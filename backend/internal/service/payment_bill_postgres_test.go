@@ -57,6 +57,10 @@ func TestBillPostgresConcurrentClaimsAndConfigHistory(t *testing.T) {
 	require.NoError(t, err)
 	_, err = db.Exec(string(userCancelMigration))
 	require.NoError(t, err)
+	deadlineMigration, err := os.ReadFile(filepath.Join("..", "..", "migrations", "290_payment_bill_amount_no_cooldown.sql"))
+	require.NoError(t, err)
+	_, err = db.Exec(string(deadlineMigration))
+	require.NoError(t, err)
 	svc := &PaymentService{entClient: client, configService: NewPaymentConfigService(client, nil, nil)}
 	inst, err := client.PaymentProviderInstance.Create().SetProviderKey("alipay_bill").SetName("Isolated fixture").SetConfig(`{"receiverId":"2088000000000001"}`).Save(ctx)
 	require.NoError(t, err)

@@ -30,6 +30,7 @@ func registerUpstreamGovernanceRoutes(admin *gin.RouterGroup, h *handler.Handler
 	g.POST("/sites/detect", api.Detect)
 	g.PUT("/sites/:id", api.Update)
 	g.GET("/sites/:id/login-credentials", api.LoginCredentials)
+	g.GET("/sites/:id/icon", api.SiteIcon)
 	g.GET("/sites/:id/auth-status", api.AuthorizationStatus)
 	g.GET("/sites/:id/readiness", api.Readiness)
 	g.POST("/sites/:id/browser-auth", api.StartBrowserAuthorization)

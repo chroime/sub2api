@@ -903,7 +903,7 @@ export default {
     groups: {
       identity: {
         title: '身份标识', optional: '可选', presets: '常用身份',
-        none: '不显示', self: '自营', official: '官方', thirdParty: '第三方',
+        none: '不显示', self: '自营', official: '官方', thirdParty: '三方',
         placeholder: '选择预设或填写自定义标识',
         labelHint: '显示在分组名称前', invalid: '最多 12 个字符，不支持换行或控制字符',
         color: '标识颜色', customColor: '自定义颜色', preview: '效果预览', previewName: '分组名称',

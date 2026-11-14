@@ -1,8 +1,8 @@
-# AstrBot / NapCat QQ group selection
+# AstrBot / snowluma QQ group selection
 
 The global governance settings page reads the QQ groups currently joined by
-NapCat through AstrBot's existing OneBot reverse WebSocket connection. It does
-not use historical sessions or require a public NapCat HTTP port.
+snowluma through AstrBot's existing OneBot reverse WebSocket connection. It does
+not use historical sessions or require a public snowluma HTTP port.
 
 ## AstrBot endpoint
 
@@ -14,7 +14,7 @@ git -C /path/to/AstrBot apply --check /path/to/im-groups.patch
 git -C /path/to/AstrBot apply /path/to/im-groups.patch
 ```
 
-Keep the existing AstrBot data volume and NapCat configuration. The extension
+Keep the existing AstrBot data volume and snowluma configuration. The extension
 uses the existing `im` API scope and queries `get_group_list` over the live
 OneBot connection. Each AstrBot OneBot adapter must have one connected bot so
 its UMO also identifies an unambiguous proactive-message destination.
@@ -29,10 +29,10 @@ Success returns current group names and sendable UMOs:
     "complete": true,
     "groups": [
       {
-        "bot_id": "napcat-main",
+        "bot_id": "snowluma-main",
         "group_id": "123456789",
         "group_name": "Example group",
-        "umo": "napcat-main:GroupMessage:123456789"
+        "umo": "snowluma-main:GroupMessage:123456789"
       }
     ]
   }

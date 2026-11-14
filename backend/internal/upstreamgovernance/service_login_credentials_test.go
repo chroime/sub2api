@@ -22,7 +22,7 @@ func TestGovernanceLoginCredentialsEditRoundtripCASAndClear(t *testing.T) {
 	require.NoError(t, err)
 	require.EqualValues(t, 2, saved.Version)
 	require.Equal(t, sessionBefore, saved.SessionCipher, "saving credentials must not reconnect")
-	require.NotContains(t, saved.LoginCipher, "password-canary")
+	require.Contains(t, saved.LoginCipher, `"password":"  password-canary  "`)
 	revealed, err := svc.LoginCredentials(t.Context(), 1)
 	require.NoError(t, err)
 	require.Equal(t, "administrator-canary@example.test", revealed.Username)
@@ -77,7 +77,7 @@ func TestGovernanceLoginCredentialsOriginResetAndReplacement(t *testing.T) {
 	}
 }
 
-func TestGovernanceLoginCredentialsRejectInvalidAndUnavailableEncryption(t *testing.T) {
+func TestGovernanceLoginCredentialsRejectInvalidAndKeepLegacyCompatibility(t *testing.T) {
 	svc, store, _, _ := setupEngine(t)
 	before := store.site
 	for _, login := range []LoginCredentials{{Username: "only-user"}, {Password: "only-password"}, {Username: "bad\nuser", Password: "password"}, {Username: "user", Password: "bad\x00password"}} {
@@ -89,9 +89,17 @@ func TestGovernanceLoginCredentialsRejectInvalidAndUnavailableEncryption(t *test
 	_, err := svc.LoginCredentials(t.Context(), 1)
 	require.NoError(t, err, "legacy empty credentials need no decryption")
 	_, err = svc.UpdateSiteWithLogin(t.Context(), 1, store.site, &LoginCredentials{Username: "user", Password: "password"})
-	require.ErrorIs(t, err, ErrEncryption)
-	require.Equal(t, before, store.site)
+	require.NoError(t, err, "plaintext login details do not require an encryption key")
+	read, err := svc.LoginCredentials(t.Context(), 1)
+	require.NoError(t, err)
+	require.Equal(t, "password", read.Password)
 	svc.durableKey = true
+	legacy, err := svc.cipher.Encrypt(`{"username":"legacy-user","password":"legacy-password","owner_user_id":5}`)
+	require.NoError(t, err)
+	store.site.LoginCipher = legacy
+	read, err = svc.LoginCredentials(t.Context(), 1)
+	require.NoError(t, err)
+	require.Equal(t, "legacy-password", read.Password, "older encrypted records remain readable")
 	store.site.LoginCipher = "invalid ciphertext"
 	_, err = svc.LoginCredentials(t.Context(), 1)
 	require.ErrorIs(t, err, ErrEncryption)
@@ -200,6 +208,31 @@ func TestGovernanceConnectSavesVerifiedPasswordAndPreservesSameOwner(t *testing.
 	read, err = svc.LoginCredentials(t.Context(), 1)
 	require.NoError(t, err)
 	require.Equal(t, LoginCredentials{}, read.LoginCredentials, "another dashboard identity must not retain old credentials")
+}
+
+func TestGovernanceFailedInitialConnectionKeepsLoginDraft(t *testing.T) {
+	for _, captcha := range []bool{false, true} {
+		t.Run(map[bool]string{false: "network failure", true: "captcha pending"}[captcha], func(t *testing.T) {
+			svc, store, connector, _ := setupEngine(t)
+			store.site.SessionCipher = ""
+			store.site.HasCredential = false
+			store.site.Status = "disconnected"
+			if captcha {
+				connector.challenge = &Challenge{Kind: "captcha", Provider: CaptchaTurnstile}
+			} else {
+				connector.err = errConnectorRemote
+			}
+			_, _ = svc.Connect(t.Context(), 1, LoginInput{Username: "draft-user", Password: "draft-password"})
+			read, err := svc.LoginCredentials(t.Context(), 1)
+			require.NoError(t, err)
+			require.Equal(t, LoginCredentials{Username: "draft-user", Password: "draft-password"}, read.LoginCredentials)
+			require.Empty(t, store.site.SessionCipher)
+			require.EqualValues(t, 1, store.site.Version)
+			stored, err := svc.storedLogin(store.site)
+			require.NoError(t, err)
+			require.Zero(t, stored.OwnerUserID, "saving a draft does not claim that login succeeded")
+		})
+	}
 }
 
 func TestGovernanceTOTPRemembersOnlyChallengeBoundPassword(t *testing.T) {

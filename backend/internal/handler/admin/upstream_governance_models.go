@@ -3,6 +3,7 @@ package admin
 import (
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
@@ -242,10 +243,28 @@ func (h *UpstreamGovernanceHandler) ModelRuns(c *gin.Context) {
 			return
 		}
 	}
+	filters := gov.ModelRunFilters{Query: strings.TrimSpace(c.Query("q")), Status: c.Query("status"), Template: c.Query("template"), Effort: c.Query("effort"), Review: c.Query("review")}
+	for _, field := range []struct {
+		name   string
+		target **time.Time
+	}{{"created_from", &filters.CreatedFrom}, {"created_to", &filters.CreatedTo}} {
+		if value := c.Query(field.name); value != "" {
+			at, err := time.Parse(time.RFC3339Nano, value)
+			if err != nil {
+				governanceError(c, gov.ErrInvalid)
+				return
+			}
+			*field.target = &at
+		}
+	}
+	if err := filters.Validate(); err != nil {
+		governanceError(c, err)
+		return
+	}
 	if !h.authorizeModelSite(c, id) {
 		return
 	}
-	value, err := h.svc.ListModelRuns(c.Request.Context(), id, page, size, batch)
+	value, err := h.svc.ListModelRuns(c.Request.Context(), id, page, size, batch, filters)
 	if !governanceError(c, err) {
 		response.Success(c, value)
 	}

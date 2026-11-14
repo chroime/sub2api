@@ -74,6 +74,7 @@ const groupsView = ref<'import' | 'accounts'>('import')
 const settingsView = ref<'settings' | 'templates'>('settings')
 const recordsChannel = computed<'email' | 'astrbot' | 'users'>(() => route.query.channel === 'astrbot' || route.query.channel === 'users' ? route.query.channel : 'email')
 const recordsTrigger = computed(() => route.query.trigger_type === 'manual_batch' || route.query.trigger_type === 'automatic' ? route.query.trigger_type : undefined)
+const deliveryRefreshKey = ref(0)
 function chooseRecordsChannel(channel: 'email' | 'astrbot' | 'users') {
   void router.replace({ path: '/admin/upstream-governance/records', query: { ...route.query, channel } })
 }
@@ -270,6 +271,7 @@ async function run(action: () => Promise<void>, writes = false, options: { scope
   }
 }
 async function load() {
+  if (tab.value === 'records') deliveryRefreshKey.value++
   const request = generation
   await run(async () => {
     const data = await api.list()
@@ -277,7 +279,9 @@ async function load() {
     sites.value = data
     if (active.value)
       active.value = data.find((s) => s.id === active.value?.id) || null
-    if (sitesLoaded) restoreLocation()
+    // Global tabs have no active site to restore. Re-entering restoreLocation
+    // would invalidate this read's generation and leave its busy flag set.
+    if (sitesLoaded && !siteIndependent.value) restoreLocation()
   })
 }
 async function loadLocalWorkspace() {
@@ -637,13 +641,13 @@ onUnmounted(() => {
         <div class="min-w-0">
           <h2 class="text-2xl font-semibold tracking-tight">{{ t('governance.smartOperations.title') }}</h2>
         </div>
-        <div v-if="tab !== 'records'" class="flex flex-wrap gap-2">
-          <button class="btn btn-secondary" :disabled="working || navigationLocked" @click="load"><Icon name="refresh" size="sm" class="mr-2" />{{ t('common.refresh') }}</button>
+        <div class="flex flex-wrap gap-2">
+          <button data-test="governance-refresh" class="btn btn-secondary" :disabled="working || navigationLocked" @click="load"><Icon name="refresh" size="sm" class="mr-2" />{{ t('common.refresh') }}</button>
           <button id="governance-add-site" class="btn btn-primary" :disabled="working || navigationLocked" @click="onboarding = true"><Icon name="plus" size="sm" class="mr-2" />{{ t('governance.add') }}</button>
         </div>
       </header>
-      <div class="grid min-w-0 items-start gap-5" :class="tab !== 'records' ? 'xl:grid-cols-[17.5rem_minmax(0,1fr)]' : ''" data-test="smart-operations-workspace">
-      <aside v-if="tab !== 'records'" class="min-w-0 space-y-3 xl:sticky xl:top-24" data-test="smart-operations-site-rail" :aria-label="t('governance.upstreamSites')">
+      <div class="grid min-w-0 items-start gap-5 xl:grid-cols-[17.5rem_minmax(0,1fr)]" data-test="smart-operations-workspace">
+      <aside class="min-w-0 space-y-3 xl:sticky xl:top-24" data-test="smart-operations-site-rail" :aria-label="t('governance.upstreamSites')">
         <button id="governance-all-sites" class="flex min-h-11 w-full items-center gap-2 rounded-xl border px-4 py-3 text-left text-sm font-medium transition-colors disabled:opacity-50" :class="showOverview && tab === 'overview' ? 'border-primary-200 bg-primary-50 text-primary-800 dark:border-primary-800 dark:bg-primary-900/20 dark:text-primary-200' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-200'" type="button" :disabled="navigationLocked" :aria-current="showOverview && tab === 'overview' ? 'page' : undefined" @click="showAllSiteTasks"><Icon name="globe" size="sm" />{{ t('governance.workbench.allSitesEntry') }}</button>
         <GovernanceSitesOverview compact :sites="sites" :selected-site-id="showOverview ? null : active?.id" :disabled="navigationLocked" @select="chooseSite" />
       </aside>
@@ -661,7 +665,7 @@ onUnmounted(() => {
         <GlobalSettingsView v-if="settingsView === 'settings'" />
         <ImportTemplatesView v-else-if="settingsView === 'templates'" @busy="templatesBusy = $event" />
       </template>
-      <DeliveryRecords v-else-if="tab === 'records'" :initial-channel="recordsChannel" :initial-trigger="recordsTrigger" @update:channel="chooseRecordsChannel" />
+      <DeliveryRecords v-else-if="tab === 'records'" :initial-channel="recordsChannel" :initial-trigger="recordsTrigger" :refresh-key="deliveryRefreshKey" @update:channel="chooseRecordsChannel" />
       <AccountQualityView v-else-if="tab === 'account-quality'" @busy="qualityBusy = $event" />
       <GovernanceWorkbench v-else-if="tab === 'overview' && !siteNotFound && (showOverview || active)" :site-id="showOverview ? undefined : active?.id" :disabled="navigationLocked" @navigate="navigateFromWorkbench" />
       <div v-if="tab === 'models'" class="flex flex-wrap items-center gap-3">

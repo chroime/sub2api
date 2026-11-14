@@ -1444,7 +1444,7 @@ var notificationEmailOfficialTemplates = map[string]map[string]notificationEmail
 			HTML:    adminRechargeEmailTemplate(notificationEmailDefaultLocale),
 		},
 		notificationEmailLocaleChinese: {
-			Subject: "[{{site_name}}] 收款到账通知 - 金额 {{pay_amount_display}}",
+			Subject: "[{{site_name}}] 收款到账通知 - 金额 {{pay_amount_display}} 元",
 			HTML:    adminRechargeEmailTemplate(notificationEmailLocaleChinese),
 		},
 	},

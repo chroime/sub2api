@@ -11,7 +11,7 @@ import (
 )
 
 // OwnerUserID associates saved details with the authenticated dashboard identity.
-// Pending details never leave this encrypted record and are only promoted after
+// Pending details never leave this administrator-only record and are only promoted after
 // the matching challenge succeeds and existing resource ownership is checked.
 type storedLoginCredentials struct {
 	LoginCredentials
@@ -38,35 +38,37 @@ func (s *Service) storedLogin(site Site) (storedLoginCredentials, error) {
 	if site.LoginCipher == "" {
 		return value, nil
 	}
-	if !s.durableKey || s.cipher == nil {
-		return value, ErrEncryption
+	// login_cipher is the historical column name. New login records use plain
+	// JSON; older encrypted records remain readable without rewriting sessions.
+	raw := site.LoginCipher
+	if !json.Valid([]byte(raw)) {
+		if !s.durableKey || s.cipher == nil {
+			return value, ErrEncryption
+		}
+		var err error
+		raw, err = s.cipher.Decrypt(raw)
+		if err != nil {
+			return value, ErrEncryption
+		}
 	}
-	raw, err := s.cipher.Decrypt(site.LoginCipher)
-	if err != nil || json.Unmarshal([]byte(raw), &value) != nil {
+	if json.Unmarshal([]byte(raw), &value) != nil {
 		return storedLoginCredentials{}, ErrEncryption
 	}
-	if _, err = normalizeLoginCredentials(value.LoginCredentials); err != nil || value.OwnerUserID < 0 {
+	if _, err := normalizeLoginCredentials(value.LoginCredentials); err != nil || value.OwnerUserID < 0 {
 		return storedLoginCredentials{}, ErrEncryption
 	}
 	return value, nil
 }
 
-func (s *Service) encryptLogin(value storedLoginCredentials) (string, error) {
+func (s *Service) encodeLogin(value storedLoginCredentials) (string, error) {
 	if value.Username == "" && value.Password == "" && value.Pending == nil {
 		return "", nil
-	}
-	if !s.durableKey || s.cipher == nil {
-		return "", ErrEncryption
 	}
 	raw, err := json.Marshal(value)
 	if err != nil {
 		return "", ErrEncryption
 	}
-	encrypted, err := s.cipher.Encrypt(string(raw))
-	if err != nil {
-		return "", ErrEncryption
-	}
-	return encrypted, nil
+	return string(raw), nil
 }
 
 func (s *Service) LoginCredentials(ctx context.Context, siteID int64) (*LoginCredentialsResult, error) {
@@ -99,6 +101,29 @@ func passwordLoginCredentials(input LoginInput) (*LoginCredentials, error) {
 	return &value, nil
 }
 
+func (s *Service) saveInitialLoginDraft(ctx context.Context, site *Site, input LoginInput) error {
+	if site.SessionCipher != "" {
+		return nil
+	}
+	credentials, err := passwordLoginCredentials(input)
+	if err != nil || credentials == nil {
+		return err
+	}
+	previous, err := s.storedLogin(*site)
+	if err != nil || previous.OwnerUserID > 0 {
+		return err
+	}
+	record, err := s.encodeLogin(storedLoginCredentials{LoginCredentials: *credentials})
+	if err != nil || record == site.LoginCipher {
+		return err
+	}
+	if err := s.store.StageLoginChallenge(ctx, site.ID, site.Version, record); err != nil {
+		return err
+	}
+	site.LoginCipher = record
+	return nil
+}
+
 func (s *Service) stageLoginChallenge(ctx context.Context, site Site, input LoginInput, challenge *Challenge) error {
 	if challenge == nil || challenge.Kind != "totp" || challenge.Token == "" {
 		return nil
@@ -112,13 +137,13 @@ func (s *Service) stageLoginChallenge(ctx context.Context, site Site, input Logi
 		return err
 	}
 	value.Pending = &pendingLoginChallenge{LoginCredentials: *credentials, TokenHash: loginChallengeHash(challenge.Token), ExpiresAt: s.now().Add(15 * time.Minute)}
-	encrypted, err := s.encryptLogin(value)
+	record, err := s.encodeLogin(value)
 	if err != nil {
 		return err
 	}
 	// Staging is runtime state. It must not stale an open site editor when the
 	// administrator cancels TOTP; the advisory lock and CAS still protect writes.
-	return s.store.StageLoginChallenge(ctx, site.ID, site.Version, encrypted)
+	return s.store.StageLoginChallenge(ctx, site.ID, site.Version, record)
 }
 
 func (s *Service) loginAfterConnect(site Site, input LoginInput, session Session) (string, error) {
@@ -127,14 +152,14 @@ func (s *Service) loginAfterConnect(site Site, input LoginInput, session Session
 		return "", err
 	}
 	if credentials != nil {
-		return s.encryptLogin(storedLoginCredentials{LoginCredentials: *credentials, OwnerUserID: session.UserID})
+		return s.encodeLogin(storedLoginCredentials{LoginCredentials: *credentials, OwnerUserID: session.UserID})
 	}
 	value, err := s.storedLogin(site)
 	if err != nil {
 		return "", err
 	}
 	if input.SessionToken == "" && input.ChallengeToken != "" && value.Pending != nil && value.Pending.TokenHash == loginChallengeHash(input.ChallengeToken) && s.now().Before(value.Pending.ExpiresAt) {
-		return s.encryptLogin(storedLoginCredentials{LoginCredentials: value.Pending.LoginCredentials, OwnerUserID: session.UserID})
+		return s.encodeLogin(storedLoginCredentials{LoginCredentials: value.Pending.LoginCredentials, OwnerUserID: session.UserID})
 	}
 	owner := value.OwnerUserID
 	if owner == 0 {
@@ -147,5 +172,5 @@ func (s *Service) loginAfterConnect(site Site, input LoginInput, session Session
 		value.OwnerUserID = 0
 	}
 	value.Pending = nil
-	return s.encryptLogin(value)
+	return s.encodeLogin(value)
 }

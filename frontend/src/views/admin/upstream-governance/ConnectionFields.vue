@@ -35,7 +35,7 @@ function resetImportState() {
   importJson.value = ''; importError.value = ''; importReady.value = false
 }
 function clearSessionFields() {
-  Object.assign(form.value, { sessionToken: '', refreshToken: '', userAgent: '', expiresIn: undefined, sessionExpiresAt: undefined, userId: undefined })
+  Object.assign(form.value, { sessionToken: '', refreshToken: '', userAgent: '', expiresIn: undefined, sessionExpiresAt: undefined, userId: undefined, sessionId: undefined })
 }
 watch(() => form.value.mode, () => {
   clearConnectionSecrets(form.value)
@@ -70,7 +70,7 @@ function applySessionImport() {
     const parsed = parseSessionImport(importJson.value)
     Object.assign(form.value, {
       sessionToken: parsed.sessionToken, refreshToken: parsed.refreshToken, userAgent: parsed.userAgent,
-      expiresIn: parsed.expiresIn, sessionExpiresAt: parsed.sessionExpiresAt, userId: undefined,
+      expiresIn: parsed.expiresIn, sessionExpiresAt: parsed.sessionExpiresAt, userId: parsed.userId, sessionId: parsed.sessionId,
     })
     importReady.value = true
   } catch (error) {
@@ -81,6 +81,9 @@ function clearSessionImport() {
   if (props.disabled) return
   resetImportState()
   clearSessionFields()
+}
+function editNewAPIRefreshCookie(event: Event) {
+  if (!props.disabled) form.value.refreshToken = (event.target as HTMLInputElement).value
 }
 function editSessionText(field: 'sessionToken' | 'refreshToken' | 'userAgent', event: Event) {
   if (props.disabled) return
@@ -146,6 +149,11 @@ function editSessionNumber(field: 'expiresIn' | 'userId', event: Event) {
       </div>
       <p v-if="importError" :id="idPrefix + '-session-import-error'" role="alert" class="text-sm text-red-600">{{ t(`governance.sessionImport.errors.${importError}`) }}</p>
       <p v-if="importReady" role="status" class="text-sm text-emerald-700 dark:text-emerald-300">{{ t('governance.sessionImport.ready') }}</p>
+      <label v-if="platform === 'newapi'" :for="idPrefix + '-newapi-refresh-cookie'" class="block text-sm">
+        {{ t('governance.sessionImport.newapiRefreshCookie') }}
+        <input :id="idPrefix + '-newapi-refresh-cookie'" :value="form.refreshToken" class="input mt-1 w-full font-mono text-xs" type="password" autocomplete="off" :spellcheck="false" :placeholder="t('governance.sessionImport.newapiRefreshCookiePlaceholder')" :aria-describedby="idPrefix + '-newapi-refresh-cookie-hint'" @input="editNewAPIRefreshCookie" />
+        <span :id="idPrefix + '-newapi-refresh-cookie-hint'" class="mt-1 block text-xs leading-relaxed text-gray-500 dark:text-dark-300">{{ t('governance.sessionImport.newapiRefreshCookieHint') }}</span>
+      </label>
       <details class="text-xs text-gray-500 dark:text-dark-300">
         <summary class="cursor-pointer">{{ t('governance.sessionRenewal') }}</summary>
         <p class="mt-2 leading-relaxed">{{ t('governance.sessionImport.sessionNotes') }}</p>
@@ -181,7 +189,7 @@ function editSessionNumber(field: 'expiresIn' | 'userId', event: Event) {
           {{ t('governance.userId') }}
           <input :id="idPrefix + '-user-id'" :value="form.userId" class="input w-full" type="number" min="1" @input="editSessionNumber('userId', $event)" />
         </label>
-        <label :for="idPrefix + '-refresh-token'" class="block">
+        <label v-if="platform !== 'newapi'" :for="idPrefix + '-refresh-token'" class="block">
           {{ t('governance.sessionRefreshToken') }}
           <input :id="idPrefix + '-refresh-token'" :value="form.refreshToken" class="input w-full" type="text" autocomplete="off" @input="editSessionText('refreshToken', $event)" />
         </label>

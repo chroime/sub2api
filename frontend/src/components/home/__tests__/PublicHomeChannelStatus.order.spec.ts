@@ -50,7 +50,7 @@ describe('PublicHomeChannelStatus monitor order', () => {
       },
       global: { stubs: { MonitorCard: false } },
     })
-    const renderedNames = () => wrapper.findAllComponents(MonitorCard).map(card => card.get('.text-base').text())
+    const renderedNames = () => wrapper.findAllComponents(MonitorCard).map(card => card.get('[data-testid="monitor-name"]').text())
 
     try {
       await home.load()

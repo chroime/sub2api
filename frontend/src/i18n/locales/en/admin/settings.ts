@@ -1010,7 +1010,7 @@ export default {
         billSaveDraft: 'Save disabled draft',
         billRulesTitle: 'Fixed-amount QR codes',
         billRulesHint: 'Bind each code to the exact final CNY payment amount, including fees and discounts. Only orders with that exact amount use the code.',
-        billAmountLockHint: 'Orders allow 1 minute to pay. Exact amounts are reserved across all orders for a receiving account, with no offsets. User cancellation releases the amount immediately. Confirmed payments release it after subsequent bill reconciliation; timed-out orders retain their reconciliation and isolation rules.',
+        billAmountLockHint: 'The payment deadline follows Order timeout. Each exact amount is reserved for one payable order per receiving account, with no offsets. Payment confirmation, cancellation, or expiry releases it immediately, with no extra wait.',
         billAddRule: 'Add QR code',
         billRuleAmount: 'Payable amount (CNY)',
         billRuleUrl: 'Alipay QR link',

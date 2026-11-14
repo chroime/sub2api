@@ -13,19 +13,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestBillPostgresShortGraceHasOneNextOwnerAndRetainsLateReceipt(t *testing.T) {
+func TestBillPostgresExpiredAmountHasOneNextOwnerAndRetainsLateReceipt(t *testing.T) {
 	s, id := newBillAmountPostgresService(t)
 	ctx := context.Background()
 	_, cfg, err := s.billProviderConfig(ctx, id)
 	require.NoError(t, err)
-	// This helper deliberately stores the historical two-minute reuse policy.
-	// The current policy must safely shorten its allocation wait without edits.
+	// The historical two-minute reuse policy must not delay a new owner.
 	now := time.Now().UTC().Truncate(time.Second)
-	start := now.Add(-95 * time.Second)
+	start := now.Add(-time.Minute)
 	old := matchingBillLocalOrder(t, s, id, "PG_SHORT_GRACE_OLD", start)
 	_, err = s.entClient.PaymentOrder.UpdateOneID(old.ID).SetStatus(OrderStatusExpired).Save(ctx)
 	require.NoError(t, err)
-	billAmountSuccessfulSyncFixture(t, s, old.ExpiresAt.Add(30*time.Second))
 	a, err := s.entClient.User.Create().SetEmail("short-grace-a@test.invalid").SetUsername("short-grace-a").SetPasswordHash("fixture").Save(ctx)
 	require.NoError(t, err)
 	b, err := s.entClient.User.Create().SetEmail("short-grace-b@test.invalid").SetUsername("short-grace-b").SetPasswordHash("fixture").Save(ctx)
@@ -58,9 +56,9 @@ func TestBillPostgresShortGraceHasOneNextOwnerAndRetainsLateReceipt(t *testing.T
 	}
 	require.NotNil(t, next)
 	require.Equal(t, 1, busy)
-	require.True(t, next.CreatedAt.Before(old.ExpiresAt.Add(2*time.Minute)), "next owner must not wait for the old recorded 120-second policy")
+	require.True(t, next.CreatedAt.Before(old.ExpiresAt.Add(30*time.Second)), "next owner must not wait beyond the original deadline")
 	// A delayed old-window statement must still identify that historical order,
-	// never the new user who obtained the same amount after thirty seconds.
+	// never the new user who obtained the amount immediately after expiry.
 	receipt, _, err := s.storeBillReceipt(ctx, id, "2088000000000001", provider.AlipayBillEntry{AccountLogID: "PG_SHORT_GRACE_OLD_LOG", AlipayOrderNo: "PG_SHORT_GRACE_OLD_TRADE", Amount: "100.00", Direction: "收入", TransAt: start.Add(20 * time.Second)})
 	require.NoError(t, err)
 	target, reason, err := findBillAmountReceiptTarget(ctx, s.entClient, receipt)
@@ -74,7 +72,7 @@ func TestBillPostgresShortGraceHasOneNextOwnerAndRetainsLateReceipt(t *testing.T
 	require.Empty(t, next.PaymentTradeNo)
 }
 
-func TestBillPostgresShortGraceRetainsAmbiguousPaymentReview(t *testing.T) {
+func TestBillPostgresExpiredAmountRetainsAmbiguousPaymentReview(t *testing.T) {
 	s, id := newBillAmountPostgresService(t)
 	ctx := context.Background()
 	start := time.Now().UTC().Truncate(time.Second).Add(-95 * time.Second)
@@ -89,5 +87,5 @@ func TestBillPostgresShortGraceRetainsAmbiguousPaymentReview(t *testing.T) {
 		require.NoError(t, err)
 	}
 	billAmountSuccessfulSyncFixture(t, s, time.Now().UTC())
-	require.Equal(t, "ALIPAY_BILL_PAYMENT_REVIEW", infraerrors.Reason(billAmountReservationCheckAt(t, s, time.Now().UTC())))
+	require.NoError(t, billAmountReservationCheckAt(t, s, time.Now().UTC()), "ambiguous old receipts remain in review without reserving a new payment amount")
 }

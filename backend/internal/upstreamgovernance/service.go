@@ -431,6 +431,21 @@ func validateSite(site *Site) error {
 }
 
 func (s *Service) CreateSite(ctx context.Context, input Site) (*Site, error) {
+	return s.CreateSiteWithLogin(ctx, input, nil)
+}
+
+func (s *Service) CreateSiteWithLogin(ctx context.Context, input Site, login *LoginCredentials) (*Site, error) {
+	var savedLogin string
+	if login != nil {
+		normalized, err := normalizeLoginCredentials(*login)
+		if err != nil {
+			return nil, err
+		}
+		savedLogin, err = s.encodeLogin(storedLoginCredentials{LoginCredentials: normalized})
+		if err != nil {
+			return nil, err
+		}
+	}
 	s.applyGlobalCadenceDefaults(ctx, &input)
 	if e := validateSite(&input); e != nil {
 		return nil, e
@@ -439,7 +454,7 @@ func (s *Service) CreateSite(ctx context.Context, input Site) (*Site, error) {
 	input.Version = 0
 	input.HasCredential = false
 	input.SessionCipher = ""
-	input.LoginCipher = ""
+	input.LoginCipher = savedLogin
 	input.Status = "disconnected"
 	input.LastError = ""
 	input.LastSyncAt = nil
@@ -569,7 +584,7 @@ func (s *Service) UpdateSiteWithLogin(ctx context.Context, id int64, input Site,
 			return nil, err
 		}
 		stored.Pending = nil
-		site.LoginCipher, err = s.encryptLogin(stored)
+		site.LoginCipher, err = s.encodeLogin(stored)
 		if err != nil {
 			return nil, err
 		}
@@ -579,7 +594,7 @@ func (s *Service) UpdateSiteWithLogin(ctx context.Context, id int64, input Site,
 		if previous, err := s.session(*site); err == nil {
 			value.OwnerUserID = previous.UserID
 		}
-		site.LoginCipher, e = s.encryptLogin(value)
+		site.LoginCipher, e = s.encodeLogin(value)
 		if e != nil {
 			return nil, e
 		}
@@ -715,6 +730,9 @@ func (s *Service) Connect(ctx context.Context, id int64, input LoginInput) (*Con
 			return nil, ErrConflict
 		}
 	}
+	if e := s.saveInitialLoginDraft(ctx, site, input); e != nil {
+		return nil, e
+	}
 	session, challenge, e := s.connector.Login(ctx, *site, input)
 	if challenge != nil && (e == nil || errors.Is(e, ErrUnsupported)) {
 		if e = s.stageLoginChallenge(ctx, *site, input, challenge); e != nil {
@@ -767,7 +785,7 @@ func (s *Service) connectSessionLocked(ctx context.Context, site *Site, input Lo
 	}
 	loginCipher, e := s.loginAfterConnect(*site, input, session)
 	if verifiedLogin != nil {
-		loginCipher, e = s.encryptLogin(storedLoginCredentials{LoginCredentials: *verifiedLogin, OwnerUserID: session.UserID})
+		loginCipher, e = s.encodeLogin(storedLoginCredentials{LoginCredentials: *verifiedLogin, OwnerUserID: session.UserID})
 	}
 	if e != nil {
 		return nil, e

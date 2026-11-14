@@ -168,6 +168,24 @@ func (h *AccountQualityHandler) RunNow(c *gin.Context) {
 		response.Success(c, v)
 	}
 }
+func (h *AccountQualityHandler) Unbind(c *gin.Context) {
+	actor := qualityActor(c)
+	if actor == 0 {
+		return
+	}
+	id := qualityID(c)
+	if id == 0 {
+		return
+	}
+	version, err := strconv.ParseInt(c.Query("version"), 10, 64)
+	if err != nil || version <= 0 {
+		qualityError(c, aq.ErrInvalid)
+		return
+	}
+	if !qualityError(c, h.svc.Unbind(c.Request.Context(), id, version, actor)) {
+		response.Success(c, map[string]bool{"unbound": true})
+	}
+}
 func (h *AccountQualityHandler) Control(c *gin.Context) {
 	actor := qualityActor(c)
 	id := qualityID(c)

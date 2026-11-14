@@ -158,6 +158,9 @@
             <div class="group/dropdown relative">
               <button
                 :ref="(el) => setGroupButtonRef(row.id, el)"
+                data-key-group-trigger
+                :aria-expanded="groupSelectorKeyId === row.id"
+                aria-haspopup="listbox"
                 @click="openGroupSelector(row)"
                 class="-mx-2 -my-1 flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1 transition-all duration-200 hover:bg-gray-100 dark:hover:bg-dark-700"
                 :title="t('keys.clickToChangeGroup')"
@@ -565,8 +568,12 @@
             :empty-text="t('common.noGroupsAvailable')"
             :searchable="true"
             :search-placeholder="t('keys.searchGroup')"
+            :dropdown-width="600"
+            interactive-options
+            @open-change="formGroupPickerOpen = $event"
             data-tour="key-form-group"
           >
+            <template #options-header><GroupMonitorHeader /></template>
             <template #selected="{ option }">
               <GroupBadge
                 v-if="option"
@@ -597,6 +604,7 @@
                 :peak-rate-multiplier="(option as unknown as GroupOption).peakRateMultiplier"
                 :description="(option as unknown as GroupOption).description"
                 :selected="selected"
+                :monitoring="groupMonitorStates.get((option as unknown as GroupOption).value)"
               />
             </template>
           </Select>
@@ -1183,37 +1191,57 @@
       <div
         v-if="groupSelectorKeyId !== null && dropdownPosition"
         ref="dropdownRef"
-        class="animate-in fade-in slide-in-from-top-2 fixed z-[100000020] w-max max-w-[calc(100vw-16px)] overflow-hidden rounded-xl bg-white shadow-lg ring-1 ring-black/5 duration-200 sm:min-w-[380px] dark:bg-dark-800 dark:ring-white/10"
+        data-key-group-picker
+        class="animate-in fade-in slide-in-from-top-2 fixed z-[100000020] flex max-w-[calc(100vw-16px)] flex-col overflow-hidden rounded-xl bg-white shadow-lg ring-1 ring-black/5 duration-200 dark:bg-dark-800 dark:ring-white/10"
         style="pointer-events: auto !important;"
         :style="{
           top: dropdownPosition.top !== undefined ? dropdownPosition.top + 'px' : undefined,
           bottom: dropdownPosition.bottom !== undefined ? dropdownPosition.bottom + 'px' : undefined,
-          left: dropdownPosition.left + 'px'
+          left: dropdownPosition.left + 'px',
+          width: dropdownPosition.width + 'px',
+          maxHeight: dropdownPosition.maxHeight + 'px'
         }"
+        @keydown="onGroupPickerKeyDown"
+        @focusout="onGroupPickerFocusOut"
       >
         <!-- Search box -->
-        <div class="border-b border-gray-100 p-2 dark:border-dark-700">
+        <div class="shrink-0 border-b border-gray-100 p-2 dark:border-dark-700">
           <div class="relative">
             <svg class="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
             <input
+              ref="groupSearchInput"
+              data-key-group-search
               v-model="groupSearchQuery"
               type="text"
-              class="w-full rounded-lg border border-gray-200 bg-gray-50 py-1.5 pl-8 pr-3 text-sm text-gray-900 placeholder-gray-400 outline-none focus:border-primary-300 focus:ring-1 focus:ring-primary-300 dark:border-dark-600 dark:bg-dark-700 dark:text-white dark:placeholder-gray-500 dark:focus:border-primary-600 dark:focus:ring-primary-600"
+              class="w-full rounded-lg border border-gray-200 bg-gray-50 py-1.5 pl-8 pr-9 text-sm text-gray-900 placeholder-gray-400 outline-none focus:border-primary-300 focus:ring-1 focus:ring-primary-300 dark:border-dark-600 dark:bg-dark-700 dark:text-white dark:placeholder-gray-500 dark:focus:border-primary-600 dark:focus:ring-primary-600"
               :placeholder="t('keys.searchGroup')"
+              :aria-label="t('keys.searchGroup')"
               @click.stop
             />
+            <button v-if="groupSearchQuery" type="button" data-clear-group-search
+              class="absolute right-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-gray-400 hover:bg-gray-200 hover:text-gray-700 dark:hover:bg-dark-600 dark:hover:text-gray-200"
+              :aria-label="t('common.clearSearch')" @mousedown.prevent @click.stop="clearGroupSearch">
+              <Icon name="x" size="sm" />
+            </button>
           </div>
         </div>
         <!-- Group list -->
-        <div class="max-h-80 overflow-y-auto p-1.5">
-          <button
+        <div role="listbox" :aria-label="t('keys.selectGroup')" class="min-h-0 max-h-80 overflow-y-auto p-1.5">
+          <GroupMonitorHeader class="sticky top-0 z-10 bg-white dark:bg-dark-800" />
+          <div
             v-for="option in filteredGroupOptions"
             :key="option.value ?? 'null'"
+            :data-key-group-option="option.value"
+            role="option"
+            tabindex="0"
+            :aria-selected="selectedKeyForGroup?.group_id === option.value"
             @click="changeGroup(selectedKeyForGroup!, option.value)"
+            @keydown.enter.self.prevent="changeGroup(selectedKeyForGroup!, option.value)"
+            @keydown.space.self.prevent="changeGroup(selectedKeyForGroup!, option.value)"
             :class="[
-              'flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-sm transition-colors',
+              'flex w-full cursor-pointer items-center justify-between rounded-lg px-2.5 py-2.5 text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-400',
               'border-b border-gray-100 last:border-0 dark:border-dark-700',
               selectedKeyForGroup?.group_id === option.value ||
               (!selectedKeyForGroup?.group_id && option.value === null)
@@ -1234,12 +1262,13 @@
               :peak-end="option.peakEnd"
               :peak-rate-multiplier="option.peakRateMultiplier"
               :description="option.description"
+              :monitoring="groupMonitorStates.get(option.value)"
               :selected="
                 selectedKeyForGroup?.group_id === option.value ||
                 (!selectedKeyForGroup?.group_id && option.value === null)
               "
             />
-          </button>
+          </div>
           <!-- Empty state when search has no results -->
           <div v-if="filteredGroupOptions.length === 0" class="py-4 text-center text-sm text-gray-400 dark:text-gray-500">
             {{ t('keys.noGroupFound') }}
@@ -1251,7 +1280,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch, onMounted, onUnmounted, h, type Component, type ComponentPublicInstance } from 'vue'
+import { ref, reactive, computed, watch, onMounted, onUnmounted, nextTick, h, type Component, type ComponentPublicInstance } from 'vue'
 	import { useI18n } from 'vue-i18n'
 	import { useAppStore } from '@/stores/app'
 	import { useOnboardingStore } from '@/stores/onboarding'
@@ -1263,6 +1292,8 @@ import { keysAPI, authAPI, usageAPI, userGroupsAPI } from '@/api'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import TablePageLayout from '@/components/layout/TablePageLayout.vue'
 import BulkEditKeysModal from '@/components/keys/BulkEditKeysModal.vue'
+import GroupMonitorHeader from '@/components/keys/GroupMonitorHeader.vue'
+import { useGroupMonitorStatus } from '@/composables/useGroupMonitorStatus'
 	import DataTable from '@/components/common/DataTable.vue'
 	import Pagination from '@/components/common/Pagination.vue'
 	import BaseDialog from '@/components/common/BaseDialog.vue'
@@ -1476,13 +1507,21 @@ const quickSetupDropdownPosition = ref<{ top?: number; bottom?: number; left: nu
 const selectedKey = ref<ApiKey | null>(null)
 const copiedKeyId = ref<number | null>(null)
 const groupSelectorKeyId = ref<number | null>(null)
+const formGroupPickerOpen = ref(false)
+const groupSearchInput = ref<HTMLInputElement | null>(null)
 const publicSettings = ref<PublicSettings | null>(null)
 const dropdownRef = ref<HTMLElement | null>(null)
 const columnDropdownRef = ref<HTMLElement | null>(null)
-const dropdownPosition = ref<{ top?: number; bottom?: number; left: number } | null>(null)
+const dropdownPosition = ref<{ top?: number; bottom?: number; left: number; width: number; maxHeight: number } | null>(null)
 const groupButtonRefs = ref<Map<number, HTMLElement>>(new Map())
 const quickSetupButtonRefs = ref<Map<number, HTMLElement>>(new Map())
 let abortController: AbortController | null = null
+
+const { statuses: groupMonitorStates } = useGroupMonitorStatus(
+  () => groupSelectorKeyId.value !== null || formGroupPickerOpen.value,
+  groups,
+  () => publicSettings.value?.channel_monitor_enabled !== false && publicSettings.value?.channel_monitor_mode !== 'v2'
+)
 
 // Get the currently selected key for group change
 const selectedKeyForGroup = computed(() => {
@@ -1618,6 +1657,7 @@ const groupOptions = computed(() =>
 )
 
 const createProvider = ref<KeyGroupProvider>('anthropic')
+watch([showCreateModal, showEditModal, createProvider], () => { formGroupPickerOpen.value = false })
 const createProviderOptions = computed(() => KEY_GROUP_PROVIDERS.map((value) => ({
   value,
   label: t(`keys.providers.${value}`),
@@ -1944,43 +1984,85 @@ const toggleKeyStatus = async (key: ApiKey) => {
   }
 }
 
-const openGroupSelector = (key: ApiKey) => {
-  if (groupSelectorKeyId.value === key.id) {
-    groupSelectorKeyId.value = null
-    dropdownPosition.value = null
-  } else {
-    const buttonEl = groupButtonRefs.value.get(key.id)
-    if (buttonEl) {
-      const rect = buttonEl.getBoundingClientRect()
-      const dropdownEstHeight = 400 // estimated max dropdown height
-      const dropdownEstWidth = Math.min(380, window.innerWidth - 16)
-      const spaceBelow = window.innerHeight - rect.bottom
-      const spaceAbove = rect.top
-      // 夹取 left，避免窄屏下浮层超出视口右缘
-      const left = Math.max(8, Math.min(rect.left, window.innerWidth - dropdownEstWidth - 8))
+function hideGroupSelector(restoreFocus = false) {
+  const trigger = groupSelectorKeyId.value === null ? null : groupButtonRefs.value.get(groupSelectorKeyId.value)
+  groupSelectorKeyId.value = null
+  dropdownPosition.value = null
+  if (restoreFocus) trigger?.focus()
+}
 
-      if (spaceBelow < dropdownEstHeight && spaceAbove > spaceBelow) {
-        // Not enough space below, pop upward
-        dropdownPosition.value = {
-          bottom: window.innerHeight - rect.top + 4,
-          left
-        }
-      } else {
-        // Default: pop downward
-        dropdownPosition.value = {
-          top: rect.bottom + 4,
-          left
-        }
-      }
-    }
-    groupSelectorKeyId.value = key.id
-    groupSearchQuery.value = ''
+function positionGroupSelector(event?: Event) {
+  // Scrolling the options must not move the popup or disturb its focus.
+  if (event?.target instanceof Node && dropdownRef.value?.contains(event.target)) return
+  if (groupSelectorKeyId.value === null) return
+  const button = groupButtonRefs.value.get(groupSelectorKeyId.value)
+  if (!button) { hideGroupSelector(); return }
+  const rect = button.getBoundingClientRect()
+  if (rect.bottom < 0 || rect.top > window.innerHeight) {
+    hideGroupSelector()
+    return
+  }
+  const width = Math.max(0, Math.min(600, window.innerWidth - 16))
+  const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8))
+  const below = window.innerHeight - rect.bottom - 12
+  const above = rect.top - 12
+  const upward = below < 390 && above > below
+  dropdownPosition.value = {
+    left, width, maxHeight: Math.max(0, Math.min(390, upward ? above : below)),
+    ...(upward ? { bottom: window.innerHeight - rect.top + 4 } : { top: rect.bottom + 4 })
   }
 }
 
+const openGroupSelector = (key: ApiKey) => {
+  if (groupSelectorKeyId.value === key.id) { hideGroupSelector(); return }
+  groupSelectorKeyId.value = key.id
+  groupSearchQuery.value = ''
+  positionGroupSelector()
+  void nextTick(() => groupSearchInput.value?.focus())
+}
+
+watch(groupSelectorKeyId, (keyId, _previous, cleanup) => {
+  if (keyId === null) return
+  window.addEventListener('scroll', positionGroupSelector, { capture: true, passive: true })
+  window.addEventListener('resize', positionGroupSelector)
+  cleanup(() => {
+    window.removeEventListener('scroll', positionGroupSelector, true)
+    window.removeEventListener('resize', positionGroupSelector)
+  })
+})
+
+function clearGroupSearch() {
+  groupSearchQuery.value = ''
+  void nextTick(() => groupSearchInput.value?.focus())
+}
+
+function onGroupPickerKeyDown(event: KeyboardEvent) {
+  if (event.isComposing) return
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    event.stopPropagation()
+    hideGroupSelector(true)
+    return
+  }
+  if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+  const rows = Array.from(dropdownRef.value?.querySelectorAll<HTMLElement>('[data-key-group-option]') || [])
+  if (!rows.length) return
+  event.preventDefault()
+  const current = (event.target as HTMLElement).closest('[data-key-group-option]')
+  const index = rows.indexOf(current as HTMLElement)
+  const next = index < 0 ? (event.key === 'ArrowDown' ? 0 : rows.length - 1)
+    : (index + (event.key === 'ArrowDown' ? 1 : -1) + rows.length) % rows.length
+  rows[next]?.focus()
+}
+
+function onGroupPickerFocusOut(event: FocusEvent) {
+  const next = event.relatedTarget
+  if (next instanceof HTMLElement && (dropdownRef.value?.contains(next) || next.closest('[data-group-monitor-detail]'))) return
+  hideGroupSelector()
+}
+
 const changeGroup = async (key: ApiKey, newGroupId: number | null) => {
-  groupSelectorKeyId.value = null
-  dropdownPosition.value = null
+  hideGroupSelector(true)
   if (key.group_id === newGroupId) return
 
   try {
@@ -1995,9 +2077,8 @@ const changeGroup = async (key: ApiKey, newGroupId: number | null) => {
 const closeGroupSelector = (event: MouseEvent) => {
   const target = event.target as HTMLElement
   // Check if click is inside the dropdown or the trigger button
-  if (!target.closest('.group\\/dropdown') && !dropdownRef.value?.contains(target)) {
-    groupSelectorKeyId.value = null
-    dropdownPosition.value = null
+  if (!target.closest('.group\\/dropdown') && !target.closest('[data-group-monitor-detail]') && !dropdownRef.value?.contains(target)) {
+    hideGroupSelector()
   }
   if (!target.closest('.quick-setup-dropdown') && !quickSetupDropdownRef.value?.contains(target)) {
     closeQuickSetupMenu()

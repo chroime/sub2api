@@ -4,8 +4,7 @@ import { useI18n } from 'vue-i18n'
 import Icon from '@/components/icons/Icon.vue'
 import Select from '@/components/common/Select.vue'
 import type { Site, SiteBalance } from '@/api/admin/upstream-governance'
-import sub2apiLogo from '@/assets/governance/sub2api.svg'
-import newapiLogo from '@/assets/governance/newapi.png'
+import SiteIdentityIcon from './SiteIdentityIcon.vue'
 import { formatGovernanceTime } from './format'
 import { siteStateKeys } from './feedback'
 import { cadenceText } from './cadence'
@@ -36,7 +35,8 @@ const filters = computed<{ id: SiteFilter; count: number }[]>(() => [
 ])
 
 const platformName = (site: Site) => site.platform === 'sub2api' ? 'Sub2API' : 'New API'
-const platformLogo = (site: Site) => site.platform === 'sub2api' ? sub2apiLogo : newapiLogo
+const selectedSite = computed(() => props.sites.find(site => site.id === props.selectedSiteId))
+const siteForOption = (option?: { value?: unknown } | null) => props.sites.find(site => site.id === option?.value)
 
 const usd = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const compactNumber = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 })
@@ -108,7 +108,15 @@ function pick(value: string | number | boolean | null) {
       <span data-test="site-count" class="shrink-0 rounded-md bg-gray-100 px-2 py-0.5 text-xs tabular-nums text-gray-500 dark:bg-dark-700">{{ sites.length }}</span>
     </header>
     <!-- Narrow layouts stack the rail above the workspace, so a picker replaces the list there. -->
-    <Select class="mt-2 xl:hidden" data-test="site-picker" :model-value="selectedSiteId" :options="pickerOptions" :disabled="disabled || !sites.length" :placeholder="t('governance.siteRail.choose')" :aria-label="t('governance.siteRail.choose')" @update:model-value="pick" />
+    <Select class="mt-2 xl:hidden" data-test="site-picker" :model-value="selectedSiteId" :options="pickerOptions" :disabled="disabled || !sites.length" :placeholder="t('governance.siteRail.choose')" :aria-label="t('governance.siteRail.choose')" @update:model-value="pick">
+      <template #selected="{ option }">
+        <span v-if="option && selectedSite" class="flex min-w-0 items-center gap-2"><SiteIdentityIcon :site="selectedSite" /><span class="truncate">{{ option.label }}</span></span>
+        <span v-else>{{ t('governance.siteRail.choose') }}</span>
+      </template>
+      <template #option="{ option, selected }">
+        <SiteIdentityIcon :site="siteForOption(option)" /><span class="select-option-label truncate">{{ option.label }}</span><Icon v-if="selected" name="check" size="sm" class="shrink-0 text-primary-500" />
+      </template>
+    </Select>
     <div class="hidden xl:block">
       <div class="mt-2 space-y-2">
         <div class="relative min-w-0">
@@ -123,11 +131,11 @@ function pick(value: string | number | boolean | null) {
         <button v-for="site in visible" :id="'governance-site-' + site.id" :key="site.id" type="button" class="site-row block w-full min-w-0 border-b border-l-2 border-b-gray-100 px-3 py-2 text-left transition-colors last:border-b-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-b-dark-700" :class="selectedSiteId === site.id ? 'site-row--selected border-l-primary-500 bg-primary-50 dark:bg-primary-900/20' : 'border-l-transparent hover:bg-gray-50 dark:hover:bg-dark-700'" :aria-current="selectedSiteId === site.id ? 'true' : undefined" :title="siteTooltip(site)" :disabled="disabled" @click="emit('select', site)">
           <span class="flex min-w-0 items-center gap-1.5">
             <span data-test="site-status-dot" class="h-2 w-2 shrink-0 rounded-full" :class="statusDot(site)" aria-hidden="true" />
-            <img data-test="site-platform-logo" :src="platformLogo(site)" :alt="platformName(site)" class="h-4 w-4 shrink-0 rounded" width="16" height="16" />
+            <SiteIdentityIcon :site="site" />
             <span class="min-w-0 flex-1 truncate text-sm font-medium">{{ site.name }}</span>
             <span v-if="site.balance" data-test="site-balance" class="shrink-0 text-xs font-semibold tabular-nums" :class="balanceClass(site)">{{ balanceText(site.balance) }}</span>
           </span>
-          <span class="mt-0.5 flex min-w-0 items-center gap-1.5 pl-[1.625rem] text-xs">
+          <span class="mt-0.5 flex min-w-0 items-center gap-1.5 pl-[3rem] text-xs">
             <StatusIndicator v-for="issue in issues(site)" :key="issue.key" :data-test="issue.test" :label="issue.text" :tone="issue.severe ? 'danger' : 'warning'" tabindex="-1" />
             <span class="min-w-0 flex-1 truncate text-gray-500 dark:text-dark-300">{{ collection(site) }}</span>
             <time class="shrink-0 text-[11px] tabular-nums text-gray-400" :datetime="site.last_sync_at || undefined">{{ lastSync(site.last_sync_at) }}</time>
@@ -142,8 +150,8 @@ function pick(value: string | number | boolean | null) {
     <div class="flex flex-wrap items-center gap-3"><div class="relative min-w-0 basis-full sm:max-w-sm sm:flex-1"><Icon name="search" size="sm" class="absolute left-3 top-3 text-gray-400" /><input v-model="query" data-test="site-search" class="input w-full pl-9 text-sm" :placeholder="t('governance.searchSites')" :aria-label="t('governance.searchSites')" /></div><div class="flex flex-wrap gap-1 rounded-lg bg-gray-100 p-1 dark:bg-dark-800"><button v-for="option in (['all', 'attention', 'paused'] as const)" :key="option" type="button" class="min-h-9 rounded-md px-3 text-sm transition-colors" :class="filter === option ? 'bg-white font-medium text-gray-900 shadow-sm dark:bg-dark-600 dark:text-gray-100' : 'text-gray-500'" :aria-pressed="filter === option" @click="filter = option">{{ t(`governance.siteFilter_${option}`) }}</button></div></div>
     <nav :aria-label="t('governance.upstreamSites')" class="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-dark-600 dark:bg-dark-800">
       <button v-for="site in visible" :id="'governance-site-' + site.id" :key="site.id" type="button" class="grid w-full min-w-0 gap-3 border-b border-gray-100 p-4 text-left transition-colors last:border-b-0 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-500 disabled:opacity-60 dark:border-dark-700 dark:hover:bg-dark-700 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-center sm:p-5" :disabled="disabled" @click="emit('select', site)">
-        <div class="flex min-w-0 items-center gap-3"><span class="rounded-lg bg-primary-50 p-2 text-primary-700 dark:bg-primary-900/20 dark:text-primary-300"><Icon name="server" size="md" /></span><div class="min-w-0"><p class="truncate font-semibold">{{ site.name }}</p><p class="mt-1 truncate text-xs text-gray-500">{{ site.base_url }}</p></div></div>
-        <div class="flex min-w-0 flex-wrap items-center gap-2 text-xs"><span class="rounded-full px-2.5 py-1 font-medium" :class="needsAttention(site) ? 'bg-amber-50 text-amber-800 dark:bg-amber-900/20 dark:text-amber-300' : 'bg-primary-50 text-primary-700 dark:bg-primary-900/20 dark:text-primary-300'">{{ t('governance.' + (siteStateKeys[site.status] || 'unknown')) }}</span><span v-if="site.balance_monitor_status?.state === 'low'" class="text-amber-700 dark:text-amber-400">{{ t('governance.balanceState_low') }}</span><span class="uppercase text-gray-500">{{ site.platform }}</span><p class="basis-full text-gray-500">{{ t(site.enabled ? 'governance.autoOn' : 'governance.autoOff') }}<span v-if="site.enabled"> · {{ site.interval_minutes }} {{ t('governance.minutes') }}</span></p></div>
+        <div class="flex min-w-0 items-center gap-3"><SiteIdentityIcon :site="site" /><div class="min-w-0"><p class="truncate font-semibold">{{ site.name }}</p><p class="mt-1 truncate text-xs text-gray-500">{{ site.base_url }}</p></div></div>
+        <div class="flex min-w-0 flex-wrap items-center gap-2 text-xs"><span class="rounded-full px-2.5 py-1 font-medium" :class="needsAttention(site) ? 'bg-amber-50 text-amber-800 dark:bg-amber-900/20 dark:text-amber-300' : 'bg-primary-50 text-primary-700 dark:bg-primary-900/20 dark:text-primary-300'">{{ t('governance.' + (siteStateKeys[site.status] || 'unknown')) }}</span><span v-if="site.balance_monitor_status?.state === 'low'" class="text-amber-700 dark:text-amber-400">{{ t('governance.balanceState_low') }}</span><p class="basis-full text-gray-500">{{ t(site.enabled ? 'governance.autoOn' : 'governance.autoOff') }}<span v-if="site.enabled"> · {{ site.interval_minutes }} {{ t('governance.minutes') }}</span></p></div>
         <div class="flex min-w-0 items-center justify-between gap-4 sm:justify-end"><time class="text-xs tabular-nums text-gray-500">{{ formatGovernanceTime(site.last_sync_at) }}</time><Icon name="arrowRight" size="sm" class="shrink-0 text-gray-400" /></div>
       </button><p v-if="!visible.length" class="p-8 text-center text-sm text-gray-500">{{ t('governance.noMatchingSites') }}</p>
     </nav>

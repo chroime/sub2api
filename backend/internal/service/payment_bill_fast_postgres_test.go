@@ -60,9 +60,9 @@ func TestBillPostgresFastClaimClosesLocalAndExternalWindows(t *testing.T) {
 				require.Equal(t, "pending", o.NotifyStatus, "callback delivery is independent of amount release")
 				require.True(t, expires.Equal(o.ExpiresAt))
 			}
-			require.Equal(t, "ALIPAY_BILL_AMOUNT_BUSY", infraerrors.Reason(billAmountReservationCheckAt(t, s, closed.Add(-time.Nanosecond))))
+			require.NoError(t, billAmountReservationCheckAt(t, s, time.Now().UTC()))
 			billAmountSuccessfulSyncFixture(t, s, closed.Add(-time.Second))
-			require.Equal(t, "ALIPAY_BILL_SYNC_REQUIRED", infraerrors.Reason(billAmountReservationCheckAt(t, s, closed)))
+			require.NoError(t, billAmountReservationCheckAt(t, s, closed))
 			billAmountSuccessfulSyncFixture(t, s, closed)
 			require.NoError(t, billAmountReservationCheckAt(t, s, closed), "confirmed amount can be reused without the old two-minute cooling delay")
 			require.NoError(t, claim(closed))

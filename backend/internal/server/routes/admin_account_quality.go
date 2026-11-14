@@ -17,6 +17,7 @@ func registerAccountQualityRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	q.PUT("/policies/:id", v.SavePolicy)
 	q.DELETE("/policies/:id", v.DeletePolicy)
 	q.POST("/bindings", v.Bind)
+	q.DELETE("/bindings/:id", v.Unbind)
 	q.POST("/bindings/:id/run", v.RunNow)
 	q.POST("/bindings/:id/control", v.Control)
 	q.POST("/accounts/summaries", v.Summaries)

@@ -7,7 +7,7 @@ import type { AccountListItem } from '@/types'
 import QualityAssignmentDialog from './QualityAssignmentDialog.vue'
 import { newPolicy } from './quality'
 
-vi.mock('@/api/admin/account-quality', () => ({ default: { assign: vi.fn() } }))
+vi.mock('@/api/admin/account-quality', () => ({ default: { assign: vi.fn(), account: vi.fn(), unbind: vi.fn() } }))
 vi.mock('@/api/admin/accounts', () => ({ default: { list: vi.fn(), getById: vi.fn() } }))
 vi.mock('@/api/admin/groups', () => ({ default: { getAll: vi.fn() } }))
 enableAutoUnmount(afterEach)
@@ -44,6 +44,7 @@ beforeEach(() => {
   vi.resetAllMocks()
   vi.mocked(groupsAPI.getAll).mockResolvedValue([])
   vi.mocked(api.assign).mockResolvedValue([])
+  vi.mocked(api.account).mockResolvedValue({ bindings: [], runs: [], actions: [] })
   vi.mocked(accountsAPI.list).mockImplementation(async (_page, _size, filters) => page(accounts.filter(account => (!filters?.platform || account.platform === filters.platform) && (!filters?.search || account.name.toLowerCase().includes(filters.search.toLowerCase())))))
 })
 

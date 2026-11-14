@@ -55,7 +55,7 @@ describe('channel monitor refresh interval', () => {
 
     wrapper = mountView()
     await flushPromises()
-    const renderedNames = () => wrapper.findAllComponents(MonitorCard).map(card => card.get('.text-base').text())
+    const renderedNames = () => wrapper.findAllComponents(MonitorCard).map(card => card.get('[data-testid="monitor-name"]').text())
     expect(renderedNames()).toEqual(['Zulu gateway', 'Alpha gateway', 'Omega gateway', 'Beta gateway'])
 
     if (refreshMode === 'manual') {

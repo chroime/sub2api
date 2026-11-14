@@ -1005,7 +1005,7 @@ export default {
         billSaveDraft: '保存停用草稿',
         billRulesTitle: '定额收款码',
         billRulesHint: '每个码绑定准确的实付人民币金额（含手续费和折扣）。只有金额完全相同的订单才会使用该码。',
-        billAmountLockHint: '付款时限 1 分钟，同一收款账户的同一金额共用独占，不添加尾差。用户主动取消后立即释放金额；已确认收款后完成后续账单核对即可复用；超时订单保留原核对及隔离规则。',
+        billAmountLockHint: '付款期限使用“订单超时时间”。付款期间，同一收款账户的同一金额仅供一笔订单使用，不添加尾差；付款确认、取消或超时后立即释放，无额外等待。',
         billAddRule: '添加收款码',
         billRuleAmount: '实付金额（CNY）',
         billRuleUrl: '支付宝二维码链接',

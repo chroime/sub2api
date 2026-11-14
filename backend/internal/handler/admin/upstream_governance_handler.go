@@ -110,11 +110,14 @@ func (h *UpstreamGovernanceHandler) List(c *gin.Context) {
 	response.Success(c, v)
 }
 func (h *UpstreamGovernanceHandler) Create(c *gin.Context) {
-	var in governanceSiteInput
+	var in struct {
+		governanceSiteInput
+		LoginCredentials *gov.LoginCredentials `json:"login_credentials"`
+	}
 	if !governanceBody(c, &in) {
 		return
 	}
-	v, e := h.svc.CreateSite(c.Request.Context(), in.site())
+	v, e := h.svc.CreateSiteWithLogin(c.Request.Context(), in.site(), in.LoginCredentials)
 	if !governanceError(c, e) {
 		response.Created(c, v)
 	}
@@ -147,6 +150,17 @@ func (h *UpstreamGovernanceHandler) LoginCredentials(c *gin.Context) {
 	v, e := h.svc.LoginCredentials(c.Request.Context(), id)
 	if !governanceError(c, e) {
 		response.Success(c, v)
+	}
+}
+
+func (h *UpstreamGovernanceHandler) SiteIcon(c *gin.Context) {
+	id, ok := governanceID(c, "id")
+	if !ok {
+		return
+	}
+	icon, err := h.svc.SiteIcon(c.Request.Context(), id)
+	if !governanceError(c, err) {
+		response.Success(c, gin.H{"data_url": icon})
 	}
 }
 func (h *UpstreamGovernanceHandler) Delete(c *gin.Context) {

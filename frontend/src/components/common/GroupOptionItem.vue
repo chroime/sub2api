@@ -1,5 +1,5 @@
 <template>
-  <div class="flex min-w-0 flex-1 items-start justify-between gap-3">
+  <div :class="monitoring ? 'key-group-monitor-grid groupOptionItemCompact' : 'flex min-w-0 flex-1 items-start justify-between gap-3'">
     <!-- Left: name + description -->
     <div
       class="flex min-w-0 flex-1 flex-col items-start"
@@ -16,18 +16,27 @@
       />
       <!-- Row 2: description with top spacing -->
       <span
-        v-if="description"
-        class="mt-1.5 w-full whitespace-pre-line [overflow-wrap:anywhere] text-left text-xs leading-relaxed text-gray-500 dark:text-gray-400 line-clamp-3"
+        v-if="description || monitoring"
+        class="w-full text-left text-gray-500 dark:text-gray-400"
+        :class="monitoring ? 'mt-1 h-4 truncate whitespace-nowrap text-[11px] leading-4' : 'mt-1.5 whitespace-pre-line [overflow-wrap:anywhere] text-xs leading-relaxed line-clamp-3'"
       >
         {{ description }}
       </span>
     </div>
 
+    <template v-if="monitoring">
+      <MiniMonitorBars :column="monitoring.availability" kind="availability" :group-name="name" />
+      <MiniMonitorBars :column="monitoring.intelligence" kind="intelligence" :group-name="name" />
+    </template>
     <!-- Right: rate pill + checkmark (vertically centered to first row) -->
-    <div class="flex shrink-0 items-center gap-2 pt-0.5">
+    <div class="flex shrink-0 items-center gap-2" :class="monitoring ? 'justify-end gap-1 sm:gap-2' : 'pt-0.5'">
       <div class="flex shrink-0 flex-col items-end gap-1">
+        <span v-if="monitoring && rateMultiplier !== undefined" class="text-[10px] font-semibold tabular-nums text-gray-600 sm:text-xs dark:text-gray-300"
+          :title="`${rateMultiplier}x${hasCustomRate ? ` → ${userRateMultiplier}x` : ''}${hasPeakRate ? ` · ${peakRateTitle}` : ''}`">
+          {{ hasCustomRate ? userRateMultiplier : rateMultiplier }}x
+        </span>
         <!-- Rate pill (platform color) -->
-        <span v-if="rateMultiplier !== undefined" :class="['inline-flex items-center whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold', ratePillClass]">
+        <span v-else-if="rateMultiplier !== undefined" :class="['inline-flex items-center whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold', ratePillClass]">
           <template v-if="hasCustomRate">
             <span class="mr-1 line-through opacity-50">{{ rateMultiplier }}x</span>
             <span class="font-bold">{{ userRateMultiplier }}x</span>
@@ -37,7 +46,7 @@
           </template>
         </span>
         <span
-          v-if="hasPeakRate"
+          v-if="hasPeakRate && !monitoring"
           class="inline-flex items-center whitespace-nowrap rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700 dark:bg-amber-900/20 dark:text-amber-300"
           :title="peakRateTitle"
         >
@@ -45,16 +54,19 @@
         </span>
       </div>
       <!-- Checkmark -->
-      <svg
-        v-if="showCheckmark && selected"
-        class="h-4 w-4 shrink-0 text-primary-600 dark:text-primary-400"
-        fill="none"
-        stroke="currentColor"
-        viewBox="0 0 24 24"
-        stroke-width="2"
-      >
-        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
-      </svg>
+      <span v-if="showCheckmark" :class="monitoring ? 'h-3 w-3 shrink-0 sm:h-4 sm:w-4' : 'contents'">
+        <svg
+          v-if="selected"
+          class="shrink-0 text-primary-600 dark:text-primary-400"
+          :class="monitoring ? 'h-full w-full' : 'h-4 w-4'"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          stroke-width="2"
+        >
+          <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+        </svg>
+      </span>
     </div>
   </div>
 </template>
@@ -66,6 +78,9 @@ import GroupBadge from './GroupBadge.vue'
 import type { SubscriptionType, GroupPlatform, GroupIdentity } from '@/types'
 import { useAppStore } from '@/stores/app'
 import { formatPeakRateWindow, serverTimezoneLabel } from '@/utils/peak-rate'
+import MiniMonitorBars from '@/components/keys/MiniMonitorBars.vue'
+import type { GroupMonitorState } from '@/utils/groupMonitor'
+import '@/components/keys/group-monitor.css'
 
 const { t } = useI18n()
 
@@ -83,6 +98,7 @@ interface Props {
   description?: string | null
   selected?: boolean
   showCheckmark?: boolean
+  monitoring?: GroupMonitorState
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -144,5 +160,11 @@ const ratePillClass = computed(() => {
 /* Bold the group name inside GroupBadge when used in dropdown option */
 .groupOptionItemBadge :deep(span.truncate) {
   font-weight: 600;
+}
+.groupOptionItemCompact .groupOptionItemBadge { max-width: 100%; gap: 4px; padding: 0; background: transparent; }
+@media (max-width: 639px) {
+  .groupOptionItemCompact .groupOptionItemBadge { font-size: 11px; }
+  .groupOptionItemCompact :deep([data-group-identity]) { padding: 1px 3px; }
+  .groupOptionItemCompact :deep([data-group-identity] > span) { display: none; }
 }
 </style>

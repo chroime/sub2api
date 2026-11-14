@@ -466,7 +466,7 @@
     <AccountStatsModal :show="showStats" :account="statsAcc" @close="closeStatsModal" />
     <AccountQualityDetail v-if="qualityAccountId" :account-id="qualityAccountId" :initial-binding-id="qualityInitialBindingId" :initial-action="qualityInitialAction" @close="qualityAccountId = 0" @changed="refreshQualitySummaries" />
     <AccountQualityRunDetail v-if="qualityEvidenceId" :run-id="qualityEvidenceId" @close="qualityEvidenceId = ''" @changed="refreshQualitySummaries" />
-    <QualityAssignmentDialog v-if="showQualityAssignment" :policies="qualityPolicies" :account-ids="qualityAssignmentIds" @close="showQualityAssignment = false" @saved="qualityAssigned" />
+    <QualityAssignmentDialog v-if="showQualityAssignment" :policies="qualityPolicies" :account-ids="qualityAssignmentIds" @close="showQualityAssignment = false" @saved="qualityAssigned" @changed="refreshQualitySummaries" />
     <ScheduledTestsPanel :show="showSchedulePanel" :account-id="scheduleAcc?.id ?? null" :model-options="scheduleModelOptions" @close="closeSchedulePanel" />
     <AccountActionMenu :show="menu.show" :account="menu.acc" :anchor-rect="menu.anchorRect" @close="menu.show = false" @test="handleTest" @stats="handleViewStats" @schedule="handleSchedule" @duplicate="handleDuplicateAccount" @reauth="handleReAuth" @refresh-token="handleRefresh" @recover-state="handleRecoverState" @reset-quota="handleResetQuota" @set-privacy="handleSetPrivacy" @create-spark-shadow="handleCreateSparkShadow" @quality="openAccountQualityDetails($event.id)" @assign-quality="openAccountQualityAssignment" />
     <SyncFromCrsModal :show="showSync" @close="showSync = false" @synced="reload" />

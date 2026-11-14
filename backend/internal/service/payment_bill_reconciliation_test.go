@@ -126,6 +126,8 @@ func newBillReceiptTestService(t *testing.T) (*PaymentService, int64) {
 	amountSQL := strings.ReplaceAll(string(amountSchema), "BIGSERIAL PRIMARY KEY", "INTEGER PRIMARY KEY AUTOINCREMENT")
 	amountSQL = strings.ReplaceAll(amountSQL, "TIMESTAMPTZ", "DATETIME")
 	amountSQL = strings.ReplaceAll(amountSQL, "NOW()", "CURRENT_TIMESTAMP")
+	// Apply migration 290's deadline constraint to the SQLite fixture.
+	amountSQL = strings.ReplaceAll(amountSQL, "reuse_after > expires_at", "reuse_after >= expires_at")
 	_, err = client.ExecContext(context.Background(), amountSQL)
 	require.NoError(t, err)
 	closureSchema, err := os.ReadFile(filepath.Join("..", "..", "migrations", "285_payment_bill_amount_closure.sql"))

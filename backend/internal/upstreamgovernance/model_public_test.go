@@ -63,7 +63,7 @@ func TestPublicIQDashboardOnlyReturnsVisibleLocalPelicanWorks(t *testing.T) {
 			AddRow(now.Truncate(30*time.Minute), 2).
 			AddRow(now.Add(-12*time.Hour).Truncate(30*time.Minute), 1))
 	mock.ExpectQuery("SELECT r.id,r.created_at,s.name,r.status,[\\s\\S]*target_type.*local_group").
-		WithArgs(since, 3, 0).
+		WithArgs(3, 0).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at", "name", "status", "group_name", "managed_key_id", "model", "effort", "html", "response_text", "duration_ms"}).
 			AddRow("pelican-1", now.Add(-3*time.Minute), "site", "succeeded", "GPT Lite", "", "gpt-6", "medium", "<svg />", "", "30").
 			AddRow("candy-1", now.Add(-4*time.Minute), "site", "succeeded", "Candy", "", "gpt-6", "medium", "", "", "30").
@@ -95,12 +95,34 @@ func TestPublicIQDashboardPrefersLocalGroupNameProjection(t *testing.T) {
 	require.NotContains(t, iqPublicGroupJoins, "remote_group.group_name")
 	pelicanQuery := "string_agg.*upstream_governance_bindings"
 	mock.ExpectQuery(pelicanQuery).
-		WithArgs(since, 2, 0).
+		WithArgs(2, 0).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at", "name", "status", "group_name", "managed_key_id", "model", "effort", "html", "response_text", "duration_ms"}))
 
 	dashboard, err := svc.PublicIQDashboard(t.Context(), 24, 1)
 	require.NoError(t, err)
 	require.Empty(t, dashboard.PelicanWorks)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestPublicIQDashboardKeepsHistoricalWorksAcrossServiceRestarts(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+	now := time.Date(2026, 11, 14, 12, 0, 0, 0, time.UTC)
+	created := now.AddDate(0, -1, 0)
+	for range 2 {
+		// Construct a fresh service to model a restart over durable storage.
+		svc := NewService(NewSQLStore(db), nil, nil, nil, false)
+		svc.now = func() time.Time { return now }
+		mock.ExpectQuery(regexp.QuoteMeta(iqTimelineQuery)).WithArgs(now.Add(-24*time.Hour), now).WillReturnRows(sqlmock.NewRows([]string{"bucket_at", "quality_status"}))
+		mock.ExpectQuery(`(?s)SELECT r.id,r.created_at,s.name,r.status,.*WHERE r.public_visible AND r.status='succeeded'\s+AND r.request->>'template'='pelican'.*LIMIT \$1 OFFSET \$2`).
+			WithArgs(9, 0).WillReturnRows(sqlmock.NewRows([]string{"id", "created_at", "name", "status", "group_name", "managed_key_id", "model", "effort", "html", "response_text", "duration_ms"}).AddRow("historical-work", created, "fixture", "succeeded", "Group", "", "gpt-fixture", "high", "<svg />", "", "1000"))
+		page, err := svc.PublicIQDashboardPage(t.Context(), 24, 8, 1, 8)
+		require.NoError(t, err)
+		require.Len(t, page.PelicanWorks, 1)
+		require.Equal(t, created, page.PelicanWorks[0].CreatedAt)
+		require.Equal(t, "historical-work", page.PelicanWorks[0].ID)
+	}
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -118,7 +140,7 @@ func TestPublicIQDashboardPaginatesPelicanWorks(t *testing.T) {
 		WithArgs(since, now).
 		WillReturnRows(sqlmock.NewRows([]string{"bucket_at", "quality_status"}))
 	mock.ExpectQuery("SELECT r.id,r.created_at,s.name,r.status,[\\s\\S]*r.request->>'template'='pelican'").
-		WithArgs(since, 3, 2).
+		WithArgs(3, 2).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at", "name", "status", "group_name", "managed_key_id", "model", "effort", "html", "response_text", "duration_ms"}).
 			AddRow("pelican-3", now.Add(-time.Minute), "site", "succeeded", "Group", "", "gpt-6", "low", "<svg />", "", "30").
 			AddRow("pelican-4", now.Add(-2*time.Minute), "site", "succeeded", "Group", "", "gpt-6", "low", "<svg />", "", "30").
@@ -149,7 +171,7 @@ func TestPublicIQDashboardHasMoreUsesRowsWhenArtifactsAreSkipped(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"bucket_at", "quality_status"}))
 	valid := "<svg><path/></svg>"
 	mock.ExpectQuery("SELECT r.id,r.created_at,s.name,r.status,[\\s\\S]*r.request->>'template'='pelican'").
-		WithArgs(since, 3, 0).
+		WithArgs(3, 0).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at", "name", "status", "group_name", "managed_key_id", "model", "effort", "html", "response_text", "duration_ms"}).
 			AddRow("pelican-invalid", now.Add(-time.Minute), "site", "succeeded", "Group", "", "gpt-6", "low", "prose only", "", "30").
 			AddRow("pelican-valid-1", now.Add(-2*time.Minute), "site", "succeeded", "Group", "", "gpt-6", "low", valid, "", "30").
@@ -201,7 +223,7 @@ func TestPublicIQDashboardEnforcesTotalHTMLBudgetAndSafeProjection(t *testing.T)
 	for i := 0; i < 6; i++ {
 		rows.AddRow(fmt.Sprint(i), now, "site", "succeeded", "GPT Lite", "4", "gpt-model", "low", html, "", "10")
 	}
-	mock.ExpectQuery("SELECT r.id,r.created_at,s.name,r.status,[\\s\\S]*octet_length[\\s\\S]*r.request->>'template'='pelican'[\\s\\S]*target_type[\\s\\S]*LIMIT \\$2").WithArgs(since, 9, 0).WillReturnRows(rows)
+	mock.ExpectQuery("SELECT r.id,r.created_at,s.name,r.status,[\\s\\S]*octet_length[\\s\\S]*r.request->>'template'='pelican'[\\s\\S]*target_type[\\s\\S]*LIMIT \\$1").WithArgs(9, 0).WillReturnRows(rows)
 	dashboard, err := svc.PublicIQDashboard(t.Context(), 1, 8)
 	require.NoError(t, err)
 	require.Len(t, dashboard.PelicanWorks, 4)

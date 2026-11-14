@@ -23,7 +23,7 @@ func (c *autoLoginConnector) Login(ctx context.Context, site Site, input LoginIn
 func saveAutoLoginFixture(t *testing.T, s *Service, site *Site, owner int64) {
 	t.Helper()
 	var err error
-	site.LoginCipher, err = s.encryptLogin(storedLoginCredentials{
+	site.LoginCipher, err = s.encodeLogin(storedLoginCredentials{
 		LoginCredentials: LoginCredentials{Username: "saved-user", Password: "saved-password"},
 		OwnerUserID:      owner,
 	})

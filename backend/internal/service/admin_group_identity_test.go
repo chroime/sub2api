@@ -3,6 +3,7 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -95,8 +96,14 @@ func TestGroupIdentityDuplicateAndPublicProjections(t *testing.T) {
 	require.Equal(t, want, readGroupIdentity(t, channels[0].Groups[0]))
 }
 
+type groupIdentityServiceRepoStub struct{ groupRepoStubForAdmin }
+
+func (*groupIdentityServiceRepoStub) ExistsByName(context.Context, string) (bool, error) {
+	return false, nil
+}
+
 func TestGroupServiceIdentityCreateUpdateAndValidate(t *testing.T) {
-	repo := &groupRepoStubForAdmin{}
+	repo := &groupIdentityServiceRepoStub{}
 	svc := NewGroupService(repo, nil)
 	var create CreateGroupRequest
 	require.NoError(t, json.Unmarshal([]byte(`{"name":"basic","rate_multiplier":1,"identity":{"label":" 自营 ","color":"teal"}}`), &create))

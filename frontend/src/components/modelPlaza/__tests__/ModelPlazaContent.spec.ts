@@ -11,7 +11,10 @@ import type { ModelPlazaGroup, PlazaModel } from '@/api/modelPlaza'
 const { auth } = vi.hoisted(() => ({ auth: vi.fn() }))
 vi.mock('@/stores/auth', () => ({ useAuthStore: auth }))
 vi.mock('@/stores/app', () => ({ useAppStore: () => ({ cachedPublicSettings: null }) }))
-vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
+vi.mock('vue-i18n', async importOriginal => ({
+  ...await importOriginal<typeof import('vue-i18n')>(),
+  useI18n: () => ({ t: (key: string) => key })
+}))
 
 function group(overrides: Partial<ModelPlazaGroup>): ModelPlazaGroup {
   return {

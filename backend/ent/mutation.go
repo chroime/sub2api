@@ -14601,48 +14601,54 @@ func (m *BatchImageJobMutation) ResetEdge(name string) error {
 // ChannelMonitorMutation represents an operation that mutates the ChannelMonitor nodes in the graph.
 type ChannelMonitorMutation struct {
 	config
-	op                      Op
-	typ                     string
-	id                      *int64
-	created_at              *time.Time
-	updated_at              *time.Time
-	name                    *string
-	provider                *channelmonitor.Provider
-	check_mode              *string
-	account_id              *int64
-	addaccount_id           *int64
-	api_mode                *string
-	endpoint                *string
-	api_key_encrypted       *string
-	primary_model           *string
-	extra_models            *[]string
-	appendextra_models      []string
-	group_name              *string
-	enabled                 *bool
-	sort_order              *int
-	addsort_order           *int
-	interval_seconds        *int
-	addinterval_seconds     *int
-	jitter_seconds          *int
-	addjitter_seconds       *int
-	last_checked_at         *time.Time
-	created_by              *int64
-	addcreated_by           *int64
-	extra_headers           *map[string]string
-	body_override_mode      *string
-	body_override           *map[string]interface{}
-	clearedFields           map[string]struct{}
-	history                 map[int64]struct{}
-	removedhistory          map[int64]struct{}
-	clearedhistory          bool
-	daily_rollups           map[int64]struct{}
-	removeddaily_rollups    map[int64]struct{}
-	cleareddaily_rollups    bool
-	request_template        *int64
-	clearedrequest_template bool
-	done                    bool
-	oldValue                func(context.Context) (*ChannelMonitor, error)
-	predicates              []predicate.ChannelMonitor
+	op                       Op
+	typ                      string
+	id                       *int64
+	created_at               *time.Time
+	updated_at               *time.Time
+	name                     *string
+	provider                 *channelmonitor.Provider
+	check_mode               *string
+	account_id               *int64
+	addaccount_id            *int64
+	api_mode                 *string
+	endpoint                 *string
+	api_key_encrypted        *string
+	primary_model            *string
+	extra_models             *[]string
+	appendextra_models       []string
+	group_name               *string
+	local_api_key_id         *int64
+	addlocal_api_key_id      *int64
+	group_id                 *int64
+	addgroup_id              *int64
+	group_binding_mode       *string
+	group_binding_changed_at *time.Time
+	enabled                  *bool
+	sort_order               *int
+	addsort_order            *int
+	interval_seconds         *int
+	addinterval_seconds      *int
+	jitter_seconds           *int
+	addjitter_seconds        *int
+	last_checked_at          *time.Time
+	created_by               *int64
+	addcreated_by            *int64
+	extra_headers            *map[string]string
+	body_override_mode       *string
+	body_override            *map[string]interface{}
+	clearedFields            map[string]struct{}
+	history                  map[int64]struct{}
+	removedhistory           map[int64]struct{}
+	clearedhistory           bool
+	daily_rollups            map[int64]struct{}
+	removeddaily_rollups     map[int64]struct{}
+	cleareddaily_rollups     bool
+	request_template         *int64
+	clearedrequest_template  bool
+	done                     bool
+	oldValue                 func(context.Context) (*ChannelMonitor, error)
+	predicates               []predicate.ChannelMonitor
 }
 
 var _ ent.Mutation = (*ChannelMonitorMutation)(nil)
@@ -15235,6 +15241,231 @@ func (m *ChannelMonitorMutation) GroupNameCleared() bool {
 func (m *ChannelMonitorMutation) ResetGroupName() {
 	m.group_name = nil
 	delete(m.clearedFields, channelmonitor.FieldGroupName)
+}
+
+// SetLocalAPIKeyID sets the "local_api_key_id" field.
+func (m *ChannelMonitorMutation) SetLocalAPIKeyID(i int64) {
+	m.local_api_key_id = &i
+	m.addlocal_api_key_id = nil
+}
+
+// LocalAPIKeyID returns the value of the "local_api_key_id" field in the mutation.
+func (m *ChannelMonitorMutation) LocalAPIKeyID() (r int64, exists bool) {
+	v := m.local_api_key_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLocalAPIKeyID returns the old "local_api_key_id" field's value of the ChannelMonitor entity.
+// If the ChannelMonitor object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ChannelMonitorMutation) OldLocalAPIKeyID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLocalAPIKeyID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLocalAPIKeyID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLocalAPIKeyID: %w", err)
+	}
+	return oldValue.LocalAPIKeyID, nil
+}
+
+// AddLocalAPIKeyID adds i to the "local_api_key_id" field.
+func (m *ChannelMonitorMutation) AddLocalAPIKeyID(i int64) {
+	if m.addlocal_api_key_id != nil {
+		*m.addlocal_api_key_id += i
+	} else {
+		m.addlocal_api_key_id = &i
+	}
+}
+
+// AddedLocalAPIKeyID returns the value that was added to the "local_api_key_id" field in this mutation.
+func (m *ChannelMonitorMutation) AddedLocalAPIKeyID() (r int64, exists bool) {
+	v := m.addlocal_api_key_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearLocalAPIKeyID clears the value of the "local_api_key_id" field.
+func (m *ChannelMonitorMutation) ClearLocalAPIKeyID() {
+	m.local_api_key_id = nil
+	m.addlocal_api_key_id = nil
+	m.clearedFields[channelmonitor.FieldLocalAPIKeyID] = struct{}{}
+}
+
+// LocalAPIKeyIDCleared returns if the "local_api_key_id" field was cleared in this mutation.
+func (m *ChannelMonitorMutation) LocalAPIKeyIDCleared() bool {
+	_, ok := m.clearedFields[channelmonitor.FieldLocalAPIKeyID]
+	return ok
+}
+
+// ResetLocalAPIKeyID resets all changes to the "local_api_key_id" field.
+func (m *ChannelMonitorMutation) ResetLocalAPIKeyID() {
+	m.local_api_key_id = nil
+	m.addlocal_api_key_id = nil
+	delete(m.clearedFields, channelmonitor.FieldLocalAPIKeyID)
+}
+
+// SetGroupID sets the "group_id" field.
+func (m *ChannelMonitorMutation) SetGroupID(i int64) {
+	m.group_id = &i
+	m.addgroup_id = nil
+}
+
+// GroupID returns the value of the "group_id" field in the mutation.
+func (m *ChannelMonitorMutation) GroupID() (r int64, exists bool) {
+	v := m.group_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGroupID returns the old "group_id" field's value of the ChannelMonitor entity.
+// If the ChannelMonitor object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ChannelMonitorMutation) OldGroupID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGroupID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGroupID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGroupID: %w", err)
+	}
+	return oldValue.GroupID, nil
+}
+
+// AddGroupID adds i to the "group_id" field.
+func (m *ChannelMonitorMutation) AddGroupID(i int64) {
+	if m.addgroup_id != nil {
+		*m.addgroup_id += i
+	} else {
+		m.addgroup_id = &i
+	}
+}
+
+// AddedGroupID returns the value that was added to the "group_id" field in this mutation.
+func (m *ChannelMonitorMutation) AddedGroupID() (r int64, exists bool) {
+	v := m.addgroup_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearGroupID clears the value of the "group_id" field.
+func (m *ChannelMonitorMutation) ClearGroupID() {
+	m.group_id = nil
+	m.addgroup_id = nil
+	m.clearedFields[channelmonitor.FieldGroupID] = struct{}{}
+}
+
+// GroupIDCleared returns if the "group_id" field was cleared in this mutation.
+func (m *ChannelMonitorMutation) GroupIDCleared() bool {
+	_, ok := m.clearedFields[channelmonitor.FieldGroupID]
+	return ok
+}
+
+// ResetGroupID resets all changes to the "group_id" field.
+func (m *ChannelMonitorMutation) ResetGroupID() {
+	m.group_id = nil
+	m.addgroup_id = nil
+	delete(m.clearedFields, channelmonitor.FieldGroupID)
+}
+
+// SetGroupBindingMode sets the "group_binding_mode" field.
+func (m *ChannelMonitorMutation) SetGroupBindingMode(s string) {
+	m.group_binding_mode = &s
+}
+
+// GroupBindingMode returns the value of the "group_binding_mode" field in the mutation.
+func (m *ChannelMonitorMutation) GroupBindingMode() (r string, exists bool) {
+	v := m.group_binding_mode
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGroupBindingMode returns the old "group_binding_mode" field's value of the ChannelMonitor entity.
+// If the ChannelMonitor object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ChannelMonitorMutation) OldGroupBindingMode(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGroupBindingMode is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGroupBindingMode requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGroupBindingMode: %w", err)
+	}
+	return oldValue.GroupBindingMode, nil
+}
+
+// ResetGroupBindingMode resets all changes to the "group_binding_mode" field.
+func (m *ChannelMonitorMutation) ResetGroupBindingMode() {
+	m.group_binding_mode = nil
+}
+
+// SetGroupBindingChangedAt sets the "group_binding_changed_at" field.
+func (m *ChannelMonitorMutation) SetGroupBindingChangedAt(t time.Time) {
+	m.group_binding_changed_at = &t
+}
+
+// GroupBindingChangedAt returns the value of the "group_binding_changed_at" field in the mutation.
+func (m *ChannelMonitorMutation) GroupBindingChangedAt() (r time.Time, exists bool) {
+	v := m.group_binding_changed_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGroupBindingChangedAt returns the old "group_binding_changed_at" field's value of the ChannelMonitor entity.
+// If the ChannelMonitor object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ChannelMonitorMutation) OldGroupBindingChangedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGroupBindingChangedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGroupBindingChangedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGroupBindingChangedAt: %w", err)
+	}
+	return oldValue.GroupBindingChangedAt, nil
+}
+
+// ClearGroupBindingChangedAt clears the value of the "group_binding_changed_at" field.
+func (m *ChannelMonitorMutation) ClearGroupBindingChangedAt() {
+	m.group_binding_changed_at = nil
+	m.clearedFields[channelmonitor.FieldGroupBindingChangedAt] = struct{}{}
+}
+
+// GroupBindingChangedAtCleared returns if the "group_binding_changed_at" field was cleared in this mutation.
+func (m *ChannelMonitorMutation) GroupBindingChangedAtCleared() bool {
+	_, ok := m.clearedFields[channelmonitor.FieldGroupBindingChangedAt]
+	return ok
+}
+
+// ResetGroupBindingChangedAt resets all changes to the "group_binding_changed_at" field.
+func (m *ChannelMonitorMutation) ResetGroupBindingChangedAt() {
+	m.group_binding_changed_at = nil
+	delete(m.clearedFields, channelmonitor.FieldGroupBindingChangedAt)
 }
 
 // SetEnabled sets the "enabled" field.
@@ -15898,7 +16129,7 @@ func (m *ChannelMonitorMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ChannelMonitorMutation) Fields() []string {
-	fields := make([]string, 0, 22)
+	fields := make([]string, 0, 26)
 	if m.created_at != nil {
 		fields = append(fields, channelmonitor.FieldCreatedAt)
 	}
@@ -15934,6 +16165,18 @@ func (m *ChannelMonitorMutation) Fields() []string {
 	}
 	if m.group_name != nil {
 		fields = append(fields, channelmonitor.FieldGroupName)
+	}
+	if m.local_api_key_id != nil {
+		fields = append(fields, channelmonitor.FieldLocalAPIKeyID)
+	}
+	if m.group_id != nil {
+		fields = append(fields, channelmonitor.FieldGroupID)
+	}
+	if m.group_binding_mode != nil {
+		fields = append(fields, channelmonitor.FieldGroupBindingMode)
+	}
+	if m.group_binding_changed_at != nil {
+		fields = append(fields, channelmonitor.FieldGroupBindingChangedAt)
 	}
 	if m.enabled != nil {
 		fields = append(fields, channelmonitor.FieldEnabled)
@@ -15997,6 +16240,14 @@ func (m *ChannelMonitorMutation) Field(name string) (ent.Value, bool) {
 		return m.ExtraModels()
 	case channelmonitor.FieldGroupName:
 		return m.GroupName()
+	case channelmonitor.FieldLocalAPIKeyID:
+		return m.LocalAPIKeyID()
+	case channelmonitor.FieldGroupID:
+		return m.GroupID()
+	case channelmonitor.FieldGroupBindingMode:
+		return m.GroupBindingMode()
+	case channelmonitor.FieldGroupBindingChangedAt:
+		return m.GroupBindingChangedAt()
 	case channelmonitor.FieldEnabled:
 		return m.Enabled()
 	case channelmonitor.FieldSortOrder:
@@ -16050,6 +16301,14 @@ func (m *ChannelMonitorMutation) OldField(ctx context.Context, name string) (ent
 		return m.OldExtraModels(ctx)
 	case channelmonitor.FieldGroupName:
 		return m.OldGroupName(ctx)
+	case channelmonitor.FieldLocalAPIKeyID:
+		return m.OldLocalAPIKeyID(ctx)
+	case channelmonitor.FieldGroupID:
+		return m.OldGroupID(ctx)
+	case channelmonitor.FieldGroupBindingMode:
+		return m.OldGroupBindingMode(ctx)
+	case channelmonitor.FieldGroupBindingChangedAt:
+		return m.OldGroupBindingChangedAt(ctx)
 	case channelmonitor.FieldEnabled:
 		return m.OldEnabled(ctx)
 	case channelmonitor.FieldSortOrder:
@@ -16163,6 +16422,34 @@ func (m *ChannelMonitorMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetGroupName(v)
 		return nil
+	case channelmonitor.FieldLocalAPIKeyID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLocalAPIKeyID(v)
+		return nil
+	case channelmonitor.FieldGroupID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGroupID(v)
+		return nil
+	case channelmonitor.FieldGroupBindingMode:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGroupBindingMode(v)
+		return nil
+	case channelmonitor.FieldGroupBindingChangedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGroupBindingChangedAt(v)
+		return nil
 	case channelmonitor.FieldEnabled:
 		v, ok := value.(bool)
 		if !ok {
@@ -16244,6 +16531,12 @@ func (m *ChannelMonitorMutation) AddedFields() []string {
 	if m.addaccount_id != nil {
 		fields = append(fields, channelmonitor.FieldAccountID)
 	}
+	if m.addlocal_api_key_id != nil {
+		fields = append(fields, channelmonitor.FieldLocalAPIKeyID)
+	}
+	if m.addgroup_id != nil {
+		fields = append(fields, channelmonitor.FieldGroupID)
+	}
 	if m.addsort_order != nil {
 		fields = append(fields, channelmonitor.FieldSortOrder)
 	}
@@ -16266,6 +16559,10 @@ func (m *ChannelMonitorMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
 	case channelmonitor.FieldAccountID:
 		return m.AddedAccountID()
+	case channelmonitor.FieldLocalAPIKeyID:
+		return m.AddedLocalAPIKeyID()
+	case channelmonitor.FieldGroupID:
+		return m.AddedGroupID()
 	case channelmonitor.FieldSortOrder:
 		return m.AddedSortOrder()
 	case channelmonitor.FieldIntervalSeconds:
@@ -16289,6 +16586,20 @@ func (m *ChannelMonitorMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddAccountID(v)
+		return nil
+	case channelmonitor.FieldLocalAPIKeyID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddLocalAPIKeyID(v)
+		return nil
+	case channelmonitor.FieldGroupID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddGroupID(v)
 		return nil
 	case channelmonitor.FieldSortOrder:
 		v, ok := value.(int)
@@ -16332,6 +16643,15 @@ func (m *ChannelMonitorMutation) ClearedFields() []string {
 	if m.FieldCleared(channelmonitor.FieldGroupName) {
 		fields = append(fields, channelmonitor.FieldGroupName)
 	}
+	if m.FieldCleared(channelmonitor.FieldLocalAPIKeyID) {
+		fields = append(fields, channelmonitor.FieldLocalAPIKeyID)
+	}
+	if m.FieldCleared(channelmonitor.FieldGroupID) {
+		fields = append(fields, channelmonitor.FieldGroupID)
+	}
+	if m.FieldCleared(channelmonitor.FieldGroupBindingChangedAt) {
+		fields = append(fields, channelmonitor.FieldGroupBindingChangedAt)
+	}
 	if m.FieldCleared(channelmonitor.FieldLastCheckedAt) {
 		fields = append(fields, channelmonitor.FieldLastCheckedAt)
 	}
@@ -16360,6 +16680,15 @@ func (m *ChannelMonitorMutation) ClearField(name string) error {
 		return nil
 	case channelmonitor.FieldGroupName:
 		m.ClearGroupName()
+		return nil
+	case channelmonitor.FieldLocalAPIKeyID:
+		m.ClearLocalAPIKeyID()
+		return nil
+	case channelmonitor.FieldGroupID:
+		m.ClearGroupID()
+		return nil
+	case channelmonitor.FieldGroupBindingChangedAt:
+		m.ClearGroupBindingChangedAt()
 		return nil
 	case channelmonitor.FieldLastCheckedAt:
 		m.ClearLastCheckedAt()
@@ -16413,6 +16742,18 @@ func (m *ChannelMonitorMutation) ResetField(name string) error {
 		return nil
 	case channelmonitor.FieldGroupName:
 		m.ResetGroupName()
+		return nil
+	case channelmonitor.FieldLocalAPIKeyID:
+		m.ResetLocalAPIKeyID()
+		return nil
+	case channelmonitor.FieldGroupID:
+		m.ResetGroupID()
+		return nil
+	case channelmonitor.FieldGroupBindingMode:
+		m.ResetGroupBindingMode()
+		return nil
+	case channelmonitor.FieldGroupBindingChangedAt:
+		m.ResetGroupBindingChangedAt()
 		return nil
 	case channelmonitor.FieldEnabled:
 		m.ResetEnabled()

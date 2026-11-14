@@ -10,7 +10,7 @@ import Icon from '@/components/icons/Icon.vue'
 import { formatGovernanceTime } from './format'
 
 const { t } = useI18n()
-const props = defineProps<{ initialTrigger?: BalanceNotificationTrigger }>()
+const props = defineProps<{ initialTrigger?: BalanceNotificationTrigger; refreshKey?: number }>()
 const tr = (key: string, params?: Record<string, string | number>) => t(`governance.balanceNotifications.${key}`, params || {})
 const filters = reactive({ status: '', trigger_type: props.initialTrigger ?? '', event_type: '', user_id: '', user_email: '', recipient: '', from: '', to: '' })
 const result = ref<BalanceNotificationPage | null>(null)
@@ -96,6 +96,7 @@ watch(() => props.initialTrigger, value => {
   applied = { ...applied, trigger_type: value }
   void load(1)
 })
+watch(() => props.refreshKey, () => { void load() })
 const preview = computed(() => {
   if (!detail.value?.body) return ''
   const clean = DOMPurify.sanitize(detail.value.body, { WHOLE_DOCUMENT: true, ADD_TAGS: ['style'], FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'form', 'input', 'button', 'base', 'meta', 'link', 'svg', 'math', 'video', 'audio', 'source'], FORBID_ATTR: ['href', 'src', 'srcset', 'action', 'formaction', 'poster', 'xlink:href'] })

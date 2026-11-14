@@ -5,7 +5,7 @@ const MAX_LIFETIME_SECONDS = 366 * 24 * 60 * 60
 export type SessionImportErrorCode =
   | 'invalid_json' | 'too_large' | 'unsuccessful_response' | 'access_token_required'
   | 'api_key_not_session' | 'invalid_token' | 'invalid_expiry' | 'expired'
-  | 'refresh_expiry_required' | 'invalid_user_agent'
+  | 'refresh_expiry_required' | 'invalid_user_agent' | 'invalid_identity'
 
 export class SessionImportError extends Error {
   readonly reason: string
@@ -22,6 +22,8 @@ export interface ImportedSession {
   sessionToken: string
   refreshToken: string
   userAgent: string
+  userId?: number
+  sessionId?: string
   expiresIn?: number
   /** Absolute milliseconds, retained until submission to avoid resetting a copied lifetime. */
   sessionExpiresAt?: number
@@ -73,7 +75,8 @@ function absoluteExpiry(value: unknown): number {
 
 function incomplete(value: Record<string, unknown>): boolean {
   return value.success === false || value.requires_2fa === true || value.requires_totp === true ||
-    !!value.challenge_token || !!value.challenge
+    value.require_2fa === true || value.require_verification === true || value.requires_verification === true ||
+    !!value.challenge_token || !!value.challenge || !!value.flow_token
 }
 
 export function parseSessionImport(raw: string, nowMs = Date.now()): ImportedSession {
@@ -85,8 +88,12 @@ export function parseSessionImport(raw: string, nowMs = Date.now()): ImportedSes
   if (!object(parsed)) throw new SessionImportError('invalid_json')
   let data = parsed
   if (incomplete(parsed)) throw new SessionImportError('unsuccessful_response')
+  if (hasOwn(parsed, 'success') && parsed.success !== true) throw new SessionImportError('unsuccessful_response')
   if (hasOwn(parsed, 'code')) {
     if (parsed.code !== 0 || !object(parsed.data)) throw new SessionImportError('unsuccessful_response')
+    data = parsed.data
+  } else if (parsed.success === true) {
+    if (!object(parsed.data)) throw new SessionImportError('unsuccessful_response')
     data = parsed.data
   }
   if (incomplete(data)) throw new SessionImportError('unsuccessful_response')
@@ -94,7 +101,22 @@ export function parseSessionImport(raw: string, nowMs = Date.now()): ImportedSes
   const sessionToken = token(data.access_token, true)
   if (/^sk-/i.test(sessionToken)) throw new SessionImportError('api_key_not_session')
   const refreshToken = token(data.refresh_token)
-  const userAgent = data.user_agent === undefined ? '' : data.user_agent
+  const isNewAPI = parsed.success === true || hasOwn(data, 'access_expires_at')
+  let userId: number | undefined, sessionId: string | undefined
+  if (isNewAPI && object(data.user) && hasOwn(data.user, 'id')) {
+    if (!Number.isSafeInteger(data.user.id) || (data.user.id as number) <= 0) throw new SessionImportError('invalid_identity')
+    userId = data.user.id as number
+  }
+  if (isNewAPI && hasOwn(data, 'session') && !object(data.session)) throw new SessionImportError('invalid_identity')
+  const browserSession = isNewAPI && object(data.session) ? data.session : undefined
+  if (browserSession && hasOwn(browserSession, 'sid')) {
+    if (typeof browserSession.sid !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(browserSession.sid)) {
+      throw new SessionImportError('invalid_identity')
+    }
+    sessionId = browserSession.sid
+  }
+  const userAgent = data.user_agent !== undefined ? data.user_agent :
+    browserSession?.user_agent !== undefined ? browserSession.user_agent : ''
   if (typeof userAgent !== 'string' || userAgent.length > 1024 || /[^\x20-\x7e]/.test(userAgent)) {
     throw new SessionImportError('invalid_user_agent')
   }
@@ -107,6 +129,7 @@ export function parseSessionImport(raw: string, nowMs = Date.now()): ImportedSes
     deadlines.push(nowMs + (data.expires_in as number) * 1000)
   }
   if (hasOwn(data, 'expires_at')) deadlines.push(absoluteExpiry(data.expires_at))
+  if (hasOwn(data, 'access_expires_at')) deadlines.push(absoluteExpiry(data.access_expires_at))
   const jwtExpiresAt = jwtExpiry(sessionToken)
   if (jwtExpiresAt !== undefined) deadlines.push(jwtExpiresAt)
   if (deadlines.some(deadline => !Number.isSafeInteger(deadline) || deadline - nowMs > MAX_LIFETIME_SECONDS * 1000)) {
@@ -119,6 +142,8 @@ export function parseSessionImport(raw: string, nowMs = Date.now()): ImportedSes
 
   return {
     sessionToken, refreshToken, userAgent,
+    ...(userId !== undefined ? { userId } : {}),
+    ...(sessionId !== undefined ? { sessionId } : {}),
     ...(sessionExpiresAt !== undefined ? { sessionExpiresAt, expiresIn } : {}),
   }
 }

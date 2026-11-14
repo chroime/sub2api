@@ -62,3 +62,17 @@ func TestAccountQualitySettingsDefaultsHaveNoExternalDelivery(t *testing.T) {
 	require.Empty(t, settings.Notifications.EmailRecipients)
 	require.Empty(t, settings.Notifications.QQTargets)
 }
+
+func TestAccountQualityUnbindRequiresIdentityAndVersion(t *testing.T) {
+	handler := NewAccountQualityHandler(nil)
+	ctx, recorder := qualityTestContext("", false)
+	handler.Unbind(ctx)
+	require.Equal(t, 401, recorder.Code)
+	for _, version := range []string{"", "0", "-1", "bad"} {
+		ctx, recorder = qualityTestContext("", true)
+		ctx.Request = httptest.NewRequest("DELETE", "/api/v1/admin/account-quality/bindings/11?version="+version, nil)
+		ctx.Params = gin.Params{{Key: "id", Value: "11"}}
+		handler.Unbind(ctx)
+		require.Equal(t, 400, recorder.Code)
+	}
+}

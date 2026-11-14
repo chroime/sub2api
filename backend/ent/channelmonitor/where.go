@@ -105,6 +105,26 @@ func GroupName(v string) predicate.ChannelMonitor {
 	return predicate.ChannelMonitor(sql.FieldEQ(FieldGroupName, v))
 }
 
+// LocalAPIKeyID applies equality check predicate on the "local_api_key_id" field. It's identical to LocalAPIKeyIDEQ.
+func LocalAPIKeyID(v int64) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldEQ(FieldLocalAPIKeyID, v))
+}
+
+// GroupID applies equality check predicate on the "group_id" field. It's identical to GroupIDEQ.
+func GroupID(v int64) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldEQ(FieldGroupID, v))
+}
+
+// GroupBindingMode applies equality check predicate on the "group_binding_mode" field. It's identical to GroupBindingModeEQ.
+func GroupBindingMode(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldEQ(FieldGroupBindingMode, v))
+}
+
+// GroupBindingChangedAt applies equality check predicate on the "group_binding_changed_at" field. It's identical to GroupBindingChangedAtEQ.
+func GroupBindingChangedAt(v time.Time) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldEQ(FieldGroupBindingChangedAt, v))
+}
+
 // Enabled applies equality check predicate on the "enabled" field. It's identical to EnabledEQ.
 func Enabled(v bool) predicate.ChannelMonitor {
 	return predicate.ChannelMonitor(sql.FieldEQ(FieldEnabled, v))
@@ -758,6 +778,221 @@ func GroupNameEqualFold(v string) predicate.ChannelMonitor {
 // GroupNameContainsFold applies the ContainsFold predicate on the "group_name" field.
 func GroupNameContainsFold(v string) predicate.ChannelMonitor {
 	return predicate.ChannelMonitor(sql.FieldContainsFold(FieldGroupName, v))
+}
+
+// LocalAPIKeyIDEQ applies the EQ predicate on the "local_api_key_id" field.
+func LocalAPIKeyIDEQ(v int64) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldEQ(FieldLocalAPIKeyID, v))
+}
+
+// LocalAPIKeyIDNEQ applies the NEQ predicate on the "local_api_key_id" field.
+func LocalAPIKeyIDNEQ(v int64) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldNEQ(FieldLocalAPIKeyID, v))
+}
+
+// LocalAPIKeyIDIn applies the In predicate on the "local_api_key_id" field.
+func LocalAPIKeyIDIn(vs ...int64) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldIn(FieldLocalAPIKeyID, vs...))
+}
+
+// LocalAPIKeyIDNotIn applies the NotIn predicate on the "local_api_key_id" field.
+func LocalAPIKeyIDNotIn(vs ...int64) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldNotIn(FieldLocalAPIKeyID, vs...))
+}
+
+// LocalAPIKeyIDGT applies the GT predicate on the "local_api_key_id" field.
+func LocalAPIKeyIDGT(v int64) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldGT(FieldLocalAPIKeyID, v))
+}
+
+// LocalAPIKeyIDGTE applies the GTE predicate on the "local_api_key_id" field.
+func LocalAPIKeyIDGTE(v int64) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldGTE(FieldLocalAPIKeyID, v))
+}
+
+// LocalAPIKeyIDLT applies the LT predicate on the "local_api_key_id" field.
+func LocalAPIKeyIDLT(v int64) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldLT(FieldLocalAPIKeyID, v))
+}
+
+// LocalAPIKeyIDLTE applies the LTE predicate on the "local_api_key_id" field.
+func LocalAPIKeyIDLTE(v int64) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldLTE(FieldLocalAPIKeyID, v))
+}
+
+// LocalAPIKeyIDIsNil applies the IsNil predicate on the "local_api_key_id" field.
+func LocalAPIKeyIDIsNil() predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldIsNull(FieldLocalAPIKeyID))
+}
+
+// LocalAPIKeyIDNotNil applies the NotNil predicate on the "local_api_key_id" field.
+func LocalAPIKeyIDNotNil() predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldNotNull(FieldLocalAPIKeyID))
+}
+
+// GroupIDEQ applies the EQ predicate on the "group_id" field.
+func GroupIDEQ(v int64) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldEQ(FieldGroupID, v))
+}
+
+// GroupIDNEQ applies the NEQ predicate on the "group_id" field.
+func GroupIDNEQ(v int64) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldNEQ(FieldGroupID, v))
+}
+
+// GroupIDIn applies the In predicate on the "group_id" field.
+func GroupIDIn(vs ...int64) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldIn(FieldGroupID, vs...))
+}
+
+// GroupIDNotIn applies the NotIn predicate on the "group_id" field.
+func GroupIDNotIn(vs ...int64) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldNotIn(FieldGroupID, vs...))
+}
+
+// GroupIDGT applies the GT predicate on the "group_id" field.
+func GroupIDGT(v int64) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldGT(FieldGroupID, v))
+}
+
+// GroupIDGTE applies the GTE predicate on the "group_id" field.
+func GroupIDGTE(v int64) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldGTE(FieldGroupID, v))
+}
+
+// GroupIDLT applies the LT predicate on the "group_id" field.
+func GroupIDLT(v int64) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldLT(FieldGroupID, v))
+}
+
+// GroupIDLTE applies the LTE predicate on the "group_id" field.
+func GroupIDLTE(v int64) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldLTE(FieldGroupID, v))
+}
+
+// GroupIDIsNil applies the IsNil predicate on the "group_id" field.
+func GroupIDIsNil() predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldIsNull(FieldGroupID))
+}
+
+// GroupIDNotNil applies the NotNil predicate on the "group_id" field.
+func GroupIDNotNil() predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldNotNull(FieldGroupID))
+}
+
+// GroupBindingModeEQ applies the EQ predicate on the "group_binding_mode" field.
+func GroupBindingModeEQ(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldEQ(FieldGroupBindingMode, v))
+}
+
+// GroupBindingModeNEQ applies the NEQ predicate on the "group_binding_mode" field.
+func GroupBindingModeNEQ(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldNEQ(FieldGroupBindingMode, v))
+}
+
+// GroupBindingModeIn applies the In predicate on the "group_binding_mode" field.
+func GroupBindingModeIn(vs ...string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldIn(FieldGroupBindingMode, vs...))
+}
+
+// GroupBindingModeNotIn applies the NotIn predicate on the "group_binding_mode" field.
+func GroupBindingModeNotIn(vs ...string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldNotIn(FieldGroupBindingMode, vs...))
+}
+
+// GroupBindingModeGT applies the GT predicate on the "group_binding_mode" field.
+func GroupBindingModeGT(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldGT(FieldGroupBindingMode, v))
+}
+
+// GroupBindingModeGTE applies the GTE predicate on the "group_binding_mode" field.
+func GroupBindingModeGTE(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldGTE(FieldGroupBindingMode, v))
+}
+
+// GroupBindingModeLT applies the LT predicate on the "group_binding_mode" field.
+func GroupBindingModeLT(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldLT(FieldGroupBindingMode, v))
+}
+
+// GroupBindingModeLTE applies the LTE predicate on the "group_binding_mode" field.
+func GroupBindingModeLTE(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldLTE(FieldGroupBindingMode, v))
+}
+
+// GroupBindingModeContains applies the Contains predicate on the "group_binding_mode" field.
+func GroupBindingModeContains(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldContains(FieldGroupBindingMode, v))
+}
+
+// GroupBindingModeHasPrefix applies the HasPrefix predicate on the "group_binding_mode" field.
+func GroupBindingModeHasPrefix(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldHasPrefix(FieldGroupBindingMode, v))
+}
+
+// GroupBindingModeHasSuffix applies the HasSuffix predicate on the "group_binding_mode" field.
+func GroupBindingModeHasSuffix(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldHasSuffix(FieldGroupBindingMode, v))
+}
+
+// GroupBindingModeEqualFold applies the EqualFold predicate on the "group_binding_mode" field.
+func GroupBindingModeEqualFold(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldEqualFold(FieldGroupBindingMode, v))
+}
+
+// GroupBindingModeContainsFold applies the ContainsFold predicate on the "group_binding_mode" field.
+func GroupBindingModeContainsFold(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldContainsFold(FieldGroupBindingMode, v))
+}
+
+// GroupBindingChangedAtEQ applies the EQ predicate on the "group_binding_changed_at" field.
+func GroupBindingChangedAtEQ(v time.Time) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldEQ(FieldGroupBindingChangedAt, v))
+}
+
+// GroupBindingChangedAtNEQ applies the NEQ predicate on the "group_binding_changed_at" field.
+func GroupBindingChangedAtNEQ(v time.Time) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldNEQ(FieldGroupBindingChangedAt, v))
+}
+
+// GroupBindingChangedAtIn applies the In predicate on the "group_binding_changed_at" field.
+func GroupBindingChangedAtIn(vs ...time.Time) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldIn(FieldGroupBindingChangedAt, vs...))
+}
+
+// GroupBindingChangedAtNotIn applies the NotIn predicate on the "group_binding_changed_at" field.
+func GroupBindingChangedAtNotIn(vs ...time.Time) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldNotIn(FieldGroupBindingChangedAt, vs...))
+}
+
+// GroupBindingChangedAtGT applies the GT predicate on the "group_binding_changed_at" field.
+func GroupBindingChangedAtGT(v time.Time) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldGT(FieldGroupBindingChangedAt, v))
+}
+
+// GroupBindingChangedAtGTE applies the GTE predicate on the "group_binding_changed_at" field.
+func GroupBindingChangedAtGTE(v time.Time) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldGTE(FieldGroupBindingChangedAt, v))
+}
+
+// GroupBindingChangedAtLT applies the LT predicate on the "group_binding_changed_at" field.
+func GroupBindingChangedAtLT(v time.Time) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldLT(FieldGroupBindingChangedAt, v))
+}
+
+// GroupBindingChangedAtLTE applies the LTE predicate on the "group_binding_changed_at" field.
+func GroupBindingChangedAtLTE(v time.Time) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldLTE(FieldGroupBindingChangedAt, v))
+}
+
+// GroupBindingChangedAtIsNil applies the IsNil predicate on the "group_binding_changed_at" field.
+func GroupBindingChangedAtIsNil() predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldIsNull(FieldGroupBindingChangedAt))
+}
+
+// GroupBindingChangedAtNotNil applies the NotNil predicate on the "group_binding_changed_at" field.
+func GroupBindingChangedAtNotNil() predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldNotNull(FieldGroupBindingChangedAt))
 }
 
 // EnabledEQ applies the EQ predicate on the "enabled" field.

@@ -17,7 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestBillAmountCreationMinuteExpiryAndExclusiveAmount(t *testing.T) {
+func TestBillAmountCreationConfiguredExpiryAndExclusiveAmount(t *testing.T) {
 	s, id, _ := newBuiltinEasyPayServiceFixture(t, "https://merchant.example")
 	ctx := context.Background()
 	params := builtinEasyPayTestParams(id, "https://merchant.example")
@@ -25,7 +25,7 @@ func TestBillAmountCreationMinuteExpiryAndExclusiveAmount(t *testing.T) {
 	require.NoError(t, err)
 	order, err := findBuiltinEasyPayOrder(ctx, s.entClient, id, params["out_trade_no"], "")
 	require.NoError(t, err)
-	require.Equal(t, time.Minute, order.ExpiresAt.Sub(order.CreatedAt), "fixed QR checkout must close after exactly one minute")
+	require.Equal(t, 30*time.Minute, order.ExpiresAt.Sub(order.CreatedAt), "fixed QR checkout must use the configured timeout")
 	require.Zero(t, order.CreatedAt.Nanosecond())
 	require.Zero(t, order.ExpiresAt.Nanosecond())
 	params["out_trade_no"] = "COMPETING_ORDER"
@@ -34,14 +34,14 @@ func TestBillAmountCreationMinuteExpiryAndExclusiveAmount(t *testing.T) {
 	require.Equal(t, "ALIPAY_BILL_AMOUNT_BUSY", infraerrors.Reason(err), "another order must not share the same receiving amount")
 }
 
-func TestBillAmountLocalCreationOwnsMinuteWindow(t *testing.T) {
+func TestBillAmountLocalCreationOwnsConfiguredWindow(t *testing.T) {
 	s, id, cfg := newBuiltinEasyPayServiceFixture(t, "https://merchant.example")
 	ctx := context.Background()
 	user, err := s.entClient.User.Create().SetEmail("amount-local@test.invalid").SetPasswordHash("fixture").SetUsername("amount-local").Save(ctx)
 	require.NoError(t, err)
 	order, err := createBillAmountLocalFixture(ctx, s, id, cfg, user, 100)
 	require.NoError(t, err)
-	require.Equal(t, time.Minute, order.ExpiresAt.Sub(order.CreatedAt))
+	require.Equal(t, 30*time.Minute, order.ExpiresAt.Sub(order.CreatedAt))
 	require.Zero(t, order.CreatedAt.Nanosecond())
 	require.Zero(t, order.ExpiresAt.Nanosecond())
 	require.Equal(t, true, order.ProviderSnapshot["bill_amount_matching"])
@@ -51,7 +51,7 @@ func TestBillAmountLocalCreationOwnsMinuteWindow(t *testing.T) {
 	_, err = s.entClient.PaymentOrder.UpdateOneID(order.ID).SetStatus(OrderStatusCancelled).Save(ctx)
 	require.NoError(t, err)
 	_, err = s.CreateBuiltinEasyPayOrder(ctx, params)
-	require.Equal(t, "ALIPAY_BILL_CANCELLED_AMOUNT_WAIT", infraerrors.Reason(err), "cancellation must preserve the original payment window")
+	require.NoError(t, err, "a cancelled order must release its amount immediately")
 }
 
 func billAmountReservationCheckAt(t *testing.T, s *PaymentService, at time.Time) error {
@@ -68,7 +68,7 @@ func billAmountSuccessfulSyncFixture(t *testing.T, s *PaymentService, through ti
 	require.NoError(t, err)
 }
 
-func TestBillAmountCancelledLocalReleasesAfterOriginalWindowAndHealthySync(t *testing.T) {
+func TestBillAmountCancelledLocalReleasesWithoutStatementSync(t *testing.T) {
 	s, id := newBillReceiptTestService(t)
 	ctx := context.Background()
 	start := time.Now().UTC().Truncate(time.Second)
@@ -76,11 +76,10 @@ func TestBillAmountCancelledLocalReleasesAfterOriginalWindowAndHealthySync(t *te
 	_, err := s.entClient.PaymentOrder.UpdateOneID(o.ID).SetStatus(OrderStatusCancelled).Save(ctx)
 	require.NoError(t, err)
 	err = billAmountReservationCheckAt(t, s, start.Add(30*time.Second))
-	require.Equal(t, "ALIPAY_BILL_CANCELLED_AMOUNT_WAIT", infraerrors.Reason(err))
-	require.Equal(t, "30", infraerrors.FromError(err).Metadata["retry_after_seconds"])
-	require.Equal(t, "ALIPAY_BILL_SYNC_REQUIRED", infraerrors.Reason(billAmountReservationCheckAt(t, s, o.ExpiresAt)))
+	require.NoError(t, err)
+	require.NoError(t, billAmountReservationCheckAt(t, s, o.ExpiresAt))
 	billAmountSuccessfulSyncFixture(t, s, o.ExpiresAt.Add(-time.Second))
-	require.Equal(t, "ALIPAY_BILL_SYNC_REQUIRED", infraerrors.Reason(billAmountReservationCheckAt(t, s, o.ExpiresAt)))
+	require.NoError(t, billAmountReservationCheckAt(t, s, o.ExpiresAt))
 	billAmountSuccessfulSyncFixture(t, s, o.ExpiresAt)
 	require.NoError(t, billAmountReservationCheckAt(t, s, o.ExpiresAt), "cancelled unpaid local order should not require another two minutes")
 	rows, err := s.entClient.QueryContext(ctx, `SELECT created_at,expires_at,reuse_after FROM payment_bill_amount_reservations WHERE order_id=$1`, o.ID)
@@ -94,7 +93,7 @@ func TestBillAmountCancelledLocalReleasesAfterOriginalWindowAndHealthySync(t *te
 	require.True(t, reuse.Equal(o.ExpiresAt.Add(2*time.Minute)), "recorded original policy/history must remain unchanged")
 }
 
-func TestBillAmountCancelledReceiptMustBeReviewedBeforeReuse(t *testing.T) {
+func TestBillAmountCancelledReceiptStaysInReviewWithoutBlockingReuse(t *testing.T) {
 	s, id := newBillReceiptTestService(t)
 	ctx := context.Background()
 	start := time.Now().UTC().Truncate(time.Second).Add(-2 * time.Minute)
@@ -105,7 +104,7 @@ func TestBillAmountCancelledReceiptMustBeReviewedBeforeReuse(t *testing.T) {
 	require.NoError(t, err)
 	now := time.Now().UTC().Truncate(time.Second)
 	billAmountSuccessfulSyncFixture(t, s, now)
-	require.Equal(t, "ALIPAY_BILL_CANCELLED_PAYMENT_REVIEW", infraerrors.Reason(billAmountReservationCheckAt(t, s, now)))
+	require.NoError(t, billAmountReservationCheckAt(t, s, now))
 	matched, err := s.reconcileBillReceiptThrough(ctx, receipt, now)
 	require.NoError(t, err)
 	require.False(t, matched, "cancelled payment must not auto-credit a replacement order")
@@ -125,9 +124,9 @@ func TestBillAmountCancelledExceptionDoesNotHideOtherReservation(t *testing.T) {
 	cancelled := matchingBillLocalOrder(t, s, id, "NEWER_CANCELLED", start.Add(10*time.Second))
 	_, err := s.entClient.PaymentOrder.UpdateOneID(cancelled.ID).SetStatus(OrderStatusCancelled).Save(ctx)
 	require.NoError(t, err)
-	err = billAmountReservationCheckAt(t, s, start.Add(80*time.Second))
+	err = billAmountReservationCheckAt(t, s, start.Add(50*time.Second))
 	require.Equal(t, "ALIPAY_BILL_AMOUNT_BUSY", infraerrors.Reason(err))
-	require.Equal(t, "10", infraerrors.FromError(err).Metadata["retry_after_seconds"], "maximum effective blocker must include older non-cancelled history")
+	require.Equal(t, "10", infraerrors.FromError(err).Metadata["retry_after_seconds"], "the remaining active order must retain its own deadline")
 }
 
 func createBillAmountLocalFixture(ctx context.Context, s *PaymentService, id int64, cfg map[string]string, user *dbent.User, amount float64) (*dbent.PaymentOrder, error) {
@@ -137,7 +136,7 @@ func createBillAmountLocalFixture(ctx context.Context, s *PaymentService, id int
 		&payment.InstanceSelection{InstanceID: strconv.FormatInt(id, 10), ProviderKey: payment.TypeAlipayBill, Config: cfg, PaymentMode: "qrcode"})
 }
 
-func TestBillAmountReuseRequiresCooldownAndSuccessfulRecentSync(t *testing.T) {
+func TestBillAmountReuseAtExpiryIgnoresStatementLatency(t *testing.T) {
 	s, id, _ := newBuiltinEasyPayServiceFixture(t, "https://merchant.example")
 	ctx := context.Background()
 	_, err := s.CreateBuiltinEasyPayOrder(ctx, builtinEasyPayTestParams(id, "https://merchant.example"))
@@ -150,26 +149,13 @@ func TestBillAmountReuseRequiresCooldownAndSuccessfulRecentSync(t *testing.T) {
 		defer tx.Rollback()
 		return s.lockBillAmountReservation(ctx, tx, order.ReceiverID, order.AmountMinor, at)
 	}
-	endCooling := order.ExpiresAt.Add(30 * time.Second)
-	require.Equal(t, "ALIPAY_BILL_AMOUNT_BUSY", infraerrors.Reason(check(endCooling.Add(-time.Second))))
-	require.Equal(t, "ALIPAY_BILL_SYNC_REQUIRED", infraerrors.Reason(check(endCooling)))
-	_, err = s.entClient.ExecContext(ctx, `INSERT INTO payment_bill_sync_state(receiver_id,cursor_at,lease_until,lease_owner,error_code,updated_at) VALUES($1,$2,$3,'fixture','sync_failed',$4)`, order.ReceiverID, endCooling, time.Unix(0, 0).UTC(), endCooling)
+	err = check(order.ExpiresAt.Add(-time.Second))
+	require.Equal(t, "ALIPAY_BILL_AMOUNT_BUSY", infraerrors.Reason(err))
+	require.Equal(t, "1", infraerrors.FromError(err).Metadata["retry_after_seconds"])
+	require.NoError(t, check(order.ExpiresAt))
+	_, err = s.entClient.ExecContext(ctx, `INSERT INTO payment_bill_sync_state(receiver_id,cursor_at,lease_until,lease_owner,error_code,updated_at) VALUES($1,$2,$3,'fixture','sync_failed',$2)`, order.ReceiverID, order.ExpiresAt.Add(-3*time.Minute), time.Unix(0, 0).UTC())
 	require.NoError(t, err)
-	require.Equal(t, "ALIPAY_BILL_SYNC_REQUIRED", infraerrors.Reason(check(endCooling)))
-	_, err = s.entClient.ExecContext(ctx, `UPDATE payment_bill_sync_state SET error_code='',cursor_at=$1 WHERE receiver_id=$2`, order.ExpiresAt.Add(-time.Second), order.ReceiverID)
-	require.NoError(t, err)
-	require.Equal(t, "ALIPAY_BILL_SYNC_REQUIRED", infraerrors.Reason(check(endCooling)))
-	_, err = s.entClient.ExecContext(ctx, `UPDATE payment_bill_sync_state SET cursor_at=$1,updated_at=$2 WHERE receiver_id=$3`, endCooling, endCooling.Add(-3*time.Minute), order.ReceiverID)
-	require.NoError(t, err)
-	require.Equal(t, "ALIPAY_BILL_SYNC_REQUIRED", infraerrors.Reason(check(endCooling)))
-	_, err = s.entClient.ExecContext(ctx, `UPDATE payment_bill_sync_state SET updated_at=$1 WHERE receiver_id=$2`, endCooling, order.ReceiverID)
-	require.NoError(t, err)
-	require.NoError(t, check(endCooling))
-	// Starting a new sync updates updated_at before querying upstream. It must
-	// not renew a stale successful cursor and release an amount by itself.
-	_, err = s.entClient.ExecContext(ctx, `UPDATE payment_bill_sync_state SET updated_at=$1 WHERE receiver_id=$2`, endCooling.Add(5*time.Minute), order.ReceiverID)
-	require.NoError(t, err)
-	require.Equal(t, "ALIPAY_BILL_SYNC_REQUIRED", infraerrors.Reason(check(endCooling.Add(5*time.Minute))))
+	require.NoError(t, check(order.ExpiresAt.Add(time.Second)), "failed or stale statement sync must not keep an expired amount locked")
 }
 
 func TestBillAmountLegacyOrderPreventsOverlappingNewCheckout(t *testing.T) {
@@ -235,5 +221,5 @@ func TestBillAmountCompletedPaymentKeepsReservationAndResponseDeadline(t *testin
 	params["out_trade_no"] = "NEXT_PAYMENT"
 	params["sign"] = epay.Sign(params, builtinEasyPayTestKey)
 	_, err = s.CreateBuiltinEasyPayOrder(ctx, params)
-	require.Equal(t, "ALIPAY_BILL_AMOUNT_BUSY", infraerrors.Reason(err), "payment success must not release a saved static code's cooling window")
+	require.NoError(t, err, "a confirmed payment must release the amount without another sync")
 }

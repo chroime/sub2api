@@ -150,6 +150,7 @@ const api = {
   },
   async deletePolicy(id: number, version: number) { await apiClient.delete(`${base}/policies/${id}`, { params: { version } }) },
   async assign(input: Assignment) { return (await apiClient.post<Binding[]>(`${base}/bindings`, { ...input, auto_isolate: false })).data },
+  async unbind(id: number, version: number) { await apiClient.delete(`${base}/bindings/${id}`, { params: { version } }) },
   async run(id: number, input: { request_id: string; version: number }) { return (await apiClient.post<Run>(`${base}/bindings/${id}/run`, input)).data },
   async control(id: number, input: ControlInput) { return (await apiClient.post<Binding>(`${base}/bindings/${id}/control`, input)).data },
   async summaries(accountIds: number[]) { return (await apiClient.post<Record<string, Binding[]>>(`${base}/accounts/summaries`, { account_ids: accountIds })).data },

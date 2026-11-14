@@ -348,6 +348,7 @@ export interface LoginInput {
   tencent_captcha_ticket?: string
   tencent_captcha_randstr?: string
   session_token?: string
+  session_id?: string
   refresh_token?: string
   expires_in?: number
   user_agent?: string
@@ -683,7 +684,7 @@ const api = {
   async detect(input: { base_url: string; proxy_id: number | null }) {
     return (await apiClient.post<DetectedSite>(`${base}/detect`, input)).data
   },
-  async create(input: SiteInput) {
+  async create(input: SiteInput & { login_credentials?: LoginCredentials }) {
     return (await apiClient.post<Site>(base, input)).data
   },
   async update(id: number, input: SiteInput & { version: number; login_credentials?: LoginCredentials }) {
@@ -691,6 +692,9 @@ const api = {
   },
   async loginCredentials(id: number) {
     return (await apiClient.get<SavedLoginCredentials>(`${site(id)}/login-credentials`)).data
+  },
+  async siteIcon(id: number) {
+    return (await apiClient.get<{ data_url: string }>(`${site(id)}/icon`, { timeout: 20000 })).data
   },
   async authStatus(id: number) {
     return (await apiClient.get<AuthorizationStatus>(`${site(id)}/auth-status`)).data

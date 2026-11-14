@@ -177,11 +177,12 @@ type ModelRun struct {
 }
 
 type ModelRunPage struct {
-	Items    []ModelRun       `json:"items"`
-	Total    int64            `json:"total"`
-	Page     int              `json:"page"`
-	PageSize int              `json:"page_size"`
-	Counts   map[string]int64 `json:"counts"`
+	Items      []ModelRun       `json:"items"`
+	Total      int64            `json:"total"`
+	ScopeTotal int64            `json:"scope_total"`
+	Page       int              `json:"page"`
+	PageSize   int              `json:"page_size"`
+	Counts     map[string]int64 `json:"counts"`
 }
 
 type ModelRunner interface {

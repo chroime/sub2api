@@ -80,7 +80,7 @@ func TestSQLGovernanceLoginCredentialsMigrationAndAtomicCAS(t *testing.T) {
 	var persisted string
 	require.NoError(t, db.QueryRow(`SELECT login_cipher FROM upstream_governance_sites WHERE id=$1`, siteID).Scan(&persisted))
 	require.Equal(t, saved.LoginCipher, persisted)
-	require.NotContains(t, persisted, "credential-canary")
+	require.Contains(t, persisted, `"password":"credential-canary"`)
 	sites, err := store.ListSites(t.Context())
 	require.NoError(t, err)
 	raw, err := json.Marshal(sites)

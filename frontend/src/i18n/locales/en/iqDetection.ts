@@ -1,5 +1,6 @@
 export default {
   iqDetection: {
+    pageCount: '{count} works on this page',
     title: 'IQ Monitoring',
     description: 'View Pelican works produced by local group model monitoring.',
     recentCount: 'Last {count}',

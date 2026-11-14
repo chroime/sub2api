@@ -3127,7 +3127,7 @@ func TestHandleGrokAccountUpstreamErrorTempUnschedulesNonRateLimitStates(t *test
 		{
 			name:            "upstream temporary error",
 			status:          http.StatusInternalServerError,
-			wantReason:      "grok upstream temporary error",
+			wantReason:      "grok upstream temporary error (consecutive 5xx)",
 			wantMinCooldown: 2*time.Minute - time.Second,
 			wantMaxCooldown: 2*time.Minute + time.Second,
 		},
@@ -3138,7 +3138,16 @@ func TestHandleGrokAccountUpstreamErrorTempUnschedulesNonRateLimitStates(t *test
 			account := &Account{ID: 61, Platform: PlatformGrok, Type: AccountTypeOAuth}
 			repo := &grokQuotaAccountRepo{}
 			svc := &OpenAIGatewayService{accountRepo: repo}
+			resetGrokServerErrorStreak(account.ID)
+			t.Cleanup(func() { resetGrokServerErrorStreak(account.ID) })
 			before := time.Now()
+			if tt.status >= 500 {
+				for range grokServerErrorStreakThreshold - 1 {
+					svc.handleGrokAccountUpstreamError(context.Background(), account, tt.status, tt.headers, []byte(tt.body))
+					require.False(t, svc.isOpenAIAccountRuntimeBlocked(account))
+					require.Zero(t, repo.tempUnschedCalls)
+				}
+			}
 
 			svc.handleGrokAccountUpstreamError(context.Background(), account, tt.status, tt.headers, []byte(tt.body))
 
@@ -3191,18 +3200,25 @@ func TestHandleGrokAccountUpstreamError5xxRespectsPoolMode(t *testing.T) {
 		require.Empty(t, account.TempUnschedulableReason)
 	})
 
-	t.Run("non-pool mode keeps two minute cooldown", func(t *testing.T) {
+	t.Run("non-pool mode cools after three consecutive errors", func(t *testing.T) {
 		account := &Account{ID: 612, Platform: PlatformGrok, Type: AccountTypeAPIKey}
 		repo := &grokQuotaAccountRepo{}
 		svc := &OpenAIGatewayService{accountRepo: repo}
+		resetGrokServerErrorStreak(account.ID)
+		t.Cleanup(func() { resetGrokServerErrorStreak(account.ID) })
 		before := time.Now()
+		for range grokServerErrorStreakThreshold - 1 {
+			svc.handleGrokAccountUpstreamError(context.Background(), account, http.StatusBadGateway, nil, nil)
+			require.False(t, svc.isOpenAIAccountRuntimeBlocked(account))
+			require.Zero(t, repo.tempUnschedCalls)
+		}
 
 		svc.handleGrokAccountUpstreamError(context.Background(), account, http.StatusBadGateway, nil, nil)
 
 		require.True(t, svc.isOpenAIAccountRuntimeBlocked(account))
 		require.Equal(t, 1, repo.tempUnschedCalls)
 		require.Equal(t, account.ID, repo.lastTempUnschedID)
-		require.Equal(t, "grok upstream temporary error", repo.lastTempUnschedReason)
+		require.Equal(t, "grok upstream temporary error (consecutive 5xx)", repo.lastTempUnschedReason)
 		require.WithinDuration(t, before.Add(2*time.Minute), repo.lastTempUnschedUntil, time.Second)
 	})
 }

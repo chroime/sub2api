@@ -86,6 +86,7 @@ type ChannelMonitorService struct {
 	// 之后构造，构造参数注入会破坏既有依赖顺序）。nil 时 fail-closed：
 	// 配额模式的检测产出「未配置」错误快照，Create/Update 关联账号直接报错。
 	quotaFetcher *ChannelMonitorQuotaFetcher
+	usageMetrics monitorUsageMetricsCache
 }
 
 // SetAvailabilityReset writes the temporary primary-model availability
@@ -100,6 +101,9 @@ func (s *ChannelMonitorService) SetAvailabilityReset(ctx context.Context, id, ac
 	}
 	existing, err := s.repo.GetByID(ctx, id)
 	if err != nil {
+		return nil, err
+	}
+	if err := s.refreshMonitorBindings(ctx, []*ChannelMonitor{existing}); err != nil {
 		return nil, err
 	}
 	if strings.TrimSpace(existing.PrimaryModel) == "" {
@@ -137,6 +141,9 @@ func (s *ChannelMonitorService) SetAvailabilityReset(ctx context.Context, id, ac
 func (s *ChannelMonitorService) ClearAvailabilityReset(ctx context.Context, id int64) (*ChannelMonitor, error) {
 	existing, err := s.repo.GetByID(ctx, id)
 	if err != nil {
+		return nil, err
+	}
+	if err := s.refreshMonitorBindings(ctx, []*ChannelMonitor{existing}); err != nil {
 		return nil, err
 	}
 	existing.AvailabilityReset = nil
@@ -240,6 +247,9 @@ func (s *ChannelMonitorService) List(ctx context.Context, params ChannelMonitorL
 	if err != nil {
 		return nil, 0, fmt.Errorf("list channel monitors: %w", err)
 	}
+	if err := s.refreshMonitorBindings(ctx, items); err != nil {
+		return nil, 0, err
+	}
 	for _, it := range items {
 		s.decryptInPlace(it)
 	}
@@ -250,6 +260,9 @@ func (s *ChannelMonitorService) List(ctx context.Context, params ChannelMonitorL
 func (s *ChannelMonitorService) Get(ctx context.Context, id int64) (*ChannelMonitor, error) {
 	m, err := s.repo.GetByID(ctx, id)
 	if err != nil {
+		return nil, err
+	}
+	if err := s.refreshMonitorBindings(ctx, []*ChannelMonitor{m}); err != nil {
 		return nil, err
 	}
 	s.decryptInPlace(m)
@@ -295,6 +308,9 @@ func (s *ChannelMonitorService) Create(ctx context.Context, p ChannelMonitorCrea
 		CheckMode:        checkMode,
 		AccountID:        cloneInt64Pointer(p.AccountID),
 	}
+	if err := s.initializeMonitorBinding(ctx, m, p.APIKey, p.GroupID, false); err != nil {
+		return nil, err
+	}
 	if err := s.repo.Create(ctx, m); err != nil {
 		return nil, fmt.Errorf("create channel monitor: %w", err)
 	}
@@ -328,6 +344,9 @@ func (s *ChannelMonitorService) Duplicate(
 	if err != nil {
 		return nil, err
 	}
+	if err := s.refreshMonitorBindings(ctx, []*ChannelMonitor{source}); err != nil {
+		return nil, err
+	}
 
 	plainAPIKey, err := s.decryptAPIKeyForDuplicate(source)
 	if err != nil {
@@ -351,6 +370,10 @@ func (s *ChannelMonitorService) Duplicate(
 		PrimaryModel:         source.PrimaryModel,
 		ExtraModels:          append([]string{}, source.ExtraModels...),
 		GroupName:            source.GroupName,
+		GroupID:              cloneInt64Pointer(source.GroupID),
+		LocalAPIKeyID:        cloneInt64Pointer(source.LocalAPIKeyID),
+		GroupBindingMode:     source.GroupBindingMode,
+		GroupBindingStatus:   source.GroupBindingStatus,
 		Enabled:              false,
 		IntervalSeconds:      source.IntervalSeconds,
 		JitterSeconds:        source.JitterSeconds,
@@ -392,6 +415,9 @@ func (s *ChannelMonitorService) RecoverDuplicate(
 	}
 	if monitor == nil {
 		return nil, nil
+	}
+	if err := s.refreshMonitorBindings(ctx, []*ChannelMonitor{monitor}); err != nil {
+		return nil, err
 	}
 	s.decryptInPlace(monitor)
 	return monitor, nil
@@ -545,6 +571,10 @@ func (s *ChannelMonitorService) Update(ctx context.Context, id int64, p ChannelM
 	if err != nil {
 		return nil, err
 	}
+	if err := s.refreshMonitorBindings(ctx, []*ChannelMonitor{existing}); err != nil {
+		return nil, err
+	}
+	previousCheckMode := defaultCheckMode(existing.CheckMode)
 	if err := applyMonitorUpdate(existing, p); err != nil {
 		return nil, err
 	}
@@ -552,6 +582,28 @@ func (s *ChannelMonitorService) Update(ctx context.Context, id int64, p ChannelM
 	newPlainAPIKey, apiKeyUpdated, err := s.applyAPIKeyUpdate(existing, p.APIKey)
 	if err != nil {
 		return nil, err
+	}
+	if apiKeyUpdated || existing.GroupBindingMode == MonitorGroupBindingLegacy ||
+		(p.GroupID != nil && existing.GroupBindingMode != MonitorGroupBindingKey) ||
+		(p.CheckMode != nil && defaultCheckMode(existing.CheckMode) != previousCheckMode) {
+		plain := newPlainAPIKey
+		if !apiKeyUpdated && s.encryptor != nil {
+			plain, _ = s.encryptor.Decrypt(existing.APIKey)
+		}
+		if err := s.initializeMonitorBinding(ctx, existing, plain, p.GroupID, false); err != nil {
+			return nil, err
+		}
+	}
+	if p.Provider != nil && existing.GroupID != nil {
+		if store, ok := s.repo.(monitorGroupBindingStore); ok {
+			g, err := store.FindMonitorBindingGroup(ctx, *existing.GroupID)
+			if err != nil {
+				return nil, err
+			}
+			if g == nil || g.Platform != existing.Provider {
+				return nil, ErrChannelMonitorGroupBinding
+			}
+		}
 	}
 	if err := s.validateProbeAPIKey(existing, newPlainAPIKey); err != nil {
 		return nil, err
@@ -690,7 +742,7 @@ func (s *ChannelMonitorService) Delete(ctx context.Context, id int64) error {
 // ListHistory 列出某个监控最近的检测历史。
 // model 为空表示返回所有模型；limit <= 0 时使用默认值，超过上限会被截断。
 func (s *ChannelMonitorService) ListHistory(ctx context.Context, id int64, model string, limit int) ([]*ChannelMonitorHistoryEntry, error) {
-	if _, err := s.repo.GetByID(ctx, id); err != nil {
+	if _, err := s.Get(ctx, id); err != nil {
 		return nil, err
 	}
 	if limit <= 0 {
@@ -730,6 +782,9 @@ func (s *ChannelMonitorService) RunCheck(ctx context.Context, id int64) ([]*Chec
 	checkMode := defaultCheckMode(m.CheckMode)
 	if checkMode != MonitorCheckModeQuota && m.APIKeyDecryptFailed {
 		return nil, ErrChannelMonitorAPIKeyDecryptFailed
+	}
+	if m.GroupBindingMode == MonitorGroupBindingKey && m.GroupBindingStatus != MonitorGroupBindingKey {
+		return nil, ErrChannelMonitorGroupBinding
 	}
 
 	var results []*CheckResult
@@ -783,6 +838,21 @@ func attachQuotaSnapshot(results []*CheckResult, snapshot *domain.MonitorQuotaSn
 // persistCheckResults 写入本次检测的历史记录并更新 last_checked_at。
 // 任一写库失败都只记日志，不影响调用方拿到 results（与 MVP 期望一致：宁可漏记历史也要先返回结果）。
 func (s *ChannelMonitorService) persistCheckResults(ctx context.Context, m *ChannelMonitor, results []*CheckResult) {
+	if _, ok := s.repo.(monitorGroupBindingStore); ok {
+		current, err := s.repo.GetByID(ctx, m.ID)
+		if err != nil {
+			return
+		}
+		if err := s.refreshMonitorBindings(ctx, []*ChannelMonitor{current}); err != nil {
+			return
+		}
+		if monitorBindingChanged(current, monitorBindingIdentity(m)) ||
+			(current.GroupBindingChangedAt != nil && (m.GroupBindingChangedAt == nil || !current.GroupBindingChangedAt.Equal(*m.GroupBindingChangedAt))) {
+			// The key/group moved while the request was in flight. Its result
+			// cannot describe the new association; the next probe will do so.
+			return
+		}
+	}
 	rows := make([]*ChannelMonitorHistoryRow, 0, len(results))
 	for _, r := range results {
 		rows = append(rows, &ChannelMonitorHistoryRow{
@@ -860,6 +930,9 @@ func (s *ChannelMonitorService) SetQuotaFetcher(fetcher *ChannelMonitorQuotaFetc
 func (s *ChannelMonitorService) ListEnabledMonitors(ctx context.Context) ([]*ChannelMonitor, error) {
 	all, err := s.repo.ListEnabled(ctx)
 	if err != nil {
+		return nil, err
+	}
+	if err := s.refreshMonitorBindings(ctx, all); err != nil {
 		return nil, err
 	}
 	for _, m := range all {

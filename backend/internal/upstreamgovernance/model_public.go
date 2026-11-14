@@ -99,8 +99,8 @@ func (s *Service) PublicIQDashboard(ctx context.Context, hours, limit int) (*IQD
 	return s.PublicIQDashboardPage(ctx, hours, limit, 1, limit)
 }
 
-// PublicIQDashboardPage pages the potentially large Pelican artifact list. One extra row is fetched
-// to determine whether the next page exists without a second COUNT query.
+// PublicIQDashboardPage pages all retained Pelican artifacts independently of
+// the timeline window. One extra row determines whether the next page exists.
 func (s *Service) PublicIQDashboardPage(ctx context.Context, hours, limit, pelicanPage, pelicanPageSize int) (*IQDashboard, error) {
 	if hours <= 0 || hours > 168 || limit <= 0 || limit > 20 || pelicanPage <= 0 || pelicanPage > 1000000 || pelicanPageSize <= 0 || pelicanPageSize > 20 {
 		return nil, ErrInvalid
@@ -150,10 +150,10 @@ JOIN upstream_governance_sites s ON s.id=r.site_id
 LEFT JOIN upstream_governance_keys managed_key
   ON managed_key.id = CASE WHEN r.request->'config'->>'managed_key_id' ~ '^[0-9]+$' THEN (r.request->'config'->>'managed_key_id')::bigint END
 `+iqPublicGroupJoins+`
-WHERE r.public_visible AND r.status='succeeded' AND r.created_at >= $1
+WHERE r.public_visible AND r.status='succeeded'
   AND r.request->>'template'='pelican'
   AND r.request->'config'->>'target_type'='local_group'
-ORDER BY r.created_at DESC,r.id DESC LIMIT $2 OFFSET $3`, maxIQHTMLBytes, maxIQHTMLBytes), since, pelicanPageSize+1, (pelicanPage-1)*pelicanPageSize)
+ORDER BY r.created_at DESC,r.id DESC LIMIT $1 OFFSET $2`, maxIQHTMLBytes, maxIQHTMLBytes), pelicanPageSize+1, (pelicanPage-1)*pelicanPageSize)
 	if err != nil {
 		return nil, err
 	}

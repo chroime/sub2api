@@ -119,6 +119,24 @@ describe('provider-specific authorization fields', () => {
 })
 
 describe('one-time session response import', () => {
+  it('imports NewAPI identity and offers the refresh cookie without advanced authorization', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(2_000_000_000_000)
+    const form = sessionForm()
+    const wrapper = mount(ConnectionFields, { props: { modelValue: form, idPrefix: 'fixture', platform: 'newapi' } })
+    await wrapper.get('#fixture-session-import-json').setValue(JSON.stringify({ success: true, data: {
+      access_token: 'fixture-newapi-access', access_expires_at: 2_000_000_900,
+      user: { id: 42 }, session: { sid: 'fixture-session', user_agent: 'Fixture Browser/2' },
+    } }))
+    await wrapper.get('#fixture-session-import-apply').trigger('click')
+    expect(form).toMatchObject({ sessionToken: 'fixture-newapi-access', userId: 42, sessionId: 'fixture-session',
+      userAgent: 'Fixture Browser/2', expiresIn: 900 })
+    await wrapper.get('#fixture-newapi-refresh-cookie').setValue('fixture-session.fixture-secret')
+    expect(form.refreshToken).toBe('fixture-session.fixture-secret')
+    expect(wrapper.find('#fixture-refresh-token').exists()).toBe(false)
+    await wrapper.setProps({ siteUrl: 'https://another.example' })
+    expect(form).toMatchObject({ sessionToken: '', refreshToken: '', sessionId: undefined, userId: undefined })
+  })
+
   it('shows three steps and an explicit upstream link with query and fragment removed', () => {
     const wrapper = mount(ConnectionFields, { props: { modelValue: sessionForm(), idPrefix: 'fixture', siteUrl: 'https://upstream.example/dashboard?access_token=never-link#secret', platform: 'sub2api' } })
     expect(wrapper.findAll('ol li')).toHaveLength(3)

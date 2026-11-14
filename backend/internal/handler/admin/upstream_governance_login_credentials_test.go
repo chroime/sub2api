@@ -28,6 +28,11 @@ func (s *governanceLoginHandlerStore) GetSite(_ context.Context, id int64) (*gov
 func (s *governanceLoginHandlerStore) ListSites(context.Context) ([]gov.Site, error) {
 	return []gov.Site{s.site}, nil
 }
+func (s *governanceLoginHandlerStore) CreateSite(_ context.Context, site *gov.Site) error {
+	site.ID, site.Version = 1, 1
+	s.site = *site
+	return nil
+}
 func (s *governanceLoginHandlerStore) LockSite(context.Context, int64) (func(), bool, error) {
 	return func() {}, true, nil
 }
@@ -84,4 +89,47 @@ func TestGovernanceLoginCredentialsHandlerReadEditAndNoStore(t *testing.T) {
 	failed := request("GET", "/sites/1/login-credentials", "")
 	require.Equal(t, 503, failed.Code)
 	require.Equal(t, "no-store", failed.Header().Get("Cache-Control"))
+}
+
+func TestGovernanceCreateSavesLoginDraftWithoutAuthorization(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, test := range []struct {
+		name        string
+		credentials string
+		durable     bool
+		status      int
+	}{
+		{"saved before connecting", `{"username":" draft-canary ","password":"  password-canary  "}`, true, 201},
+		{"incomplete rejected atomically", `{"username":"draft-canary"}`, true, 400},
+		{"plain draft needs no encryption key", `{"username":" draft-canary ","password":"  password-canary  "}`, false, 201},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			encryptor, err := repository.NewAESEncryptor(&config.Config{Totp: config.TotpConfig{EncryptionKey: strings.Repeat("42", 32)}})
+			require.NoError(t, err)
+			store := &governanceLoginHandlerStore{}
+			svc := gov.NewService(store, nil, nil, encryptor, test.durable)
+			h := NewUpstreamGovernanceHandler(svc)
+			router := gin.New()
+			router.POST("/sites", h.Create)
+			w := httptest.NewRecorder()
+			body := `{"name":"Fixture","platform":"newapi","base_url":"https://fixture.example","interval_minutes":15,"login_credentials":` + test.credentials + `}`
+			router.ServeHTTP(w, httptest.NewRequest("POST", "/sites", strings.NewReader(body)))
+			require.Equal(t, test.status, w.Code)
+			require.NotContains(t, w.Body.String(), "canary")
+			if test.status != 201 {
+				require.Zero(t, store.site.ID, "invalid or unsavable credentials must not create a partial site")
+				return
+			}
+			require.Empty(t, store.site.SessionCipher)
+			require.False(t, store.site.HasCredential)
+			require.Equal(t, "disconnected", store.site.Status)
+			require.NotEmpty(t, store.site.LoginCipher)
+			require.Contains(t, store.site.LoginCipher, `"username":"draft-canary"`)
+			require.Contains(t, store.site.LoginCipher, `"password":"  password-canary  "`)
+			login, err := svc.LoginCredentials(t.Context(), 1)
+			require.NoError(t, err)
+			require.Equal(t, "draft-canary", login.Username)
+			require.Equal(t, "  password-canary  ", login.Password)
+		})
+	}
 }

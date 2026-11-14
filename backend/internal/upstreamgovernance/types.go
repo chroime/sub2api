@@ -30,17 +30,18 @@ type Site struct {
 	// FastIntervalSeconds and FullIntervalSeconds are the persisted cadence
 	// values. IntervalMinutes remains the wire-compatible alias for legacy
 	// callers and is derived from FullIntervalSeconds when possible.
-	FastIntervalSeconds  int64                `json:"fast_interval_seconds,omitempty"`
-	FullIntervalSeconds  int64                `json:"full_interval_seconds,omitempty"`
-	FastObserveEnabled   bool                 `json:"fast_observe_enabled,omitempty"`
-	NextFastObserveAt    time.Time            `json:"next_fast_observe_at,omitempty"`
-	LastFastObserveAt    *time.Time           `json:"last_fast_observe_at,omitempty"`
-	FastObserveStatus    string               `json:"fast_observe_status,omitempty"`
-	FastObserveError     string               `json:"fast_observe_error,omitempty"`
-	FastObserveRevision  int64                `json:"fast_observe_revision,omitempty"`
-	Version              int64                `json:"version"`
-	HasCredential        bool                 `json:"has_credential"`
-	SessionCipher        string               `json:"-"`
+	FastIntervalSeconds int64      `json:"fast_interval_seconds,omitempty"`
+	FullIntervalSeconds int64      `json:"full_interval_seconds,omitempty"`
+	FastObserveEnabled  bool       `json:"fast_observe_enabled,omitempty"`
+	NextFastObserveAt   time.Time  `json:"next_fast_observe_at,omitempty"`
+	LastFastObserveAt   *time.Time `json:"last_fast_observe_at,omitempty"`
+	FastObserveStatus   string     `json:"fast_observe_status,omitempty"`
+	FastObserveError    string     `json:"fast_observe_error,omitempty"`
+	FastObserveRevision int64      `json:"fast_observe_revision,omitempty"`
+	Version             int64      `json:"version"`
+	HasCredential       bool       `json:"has_credential"`
+	SessionCipher       string     `json:"-"`
+	// LoginCipher retains its legacy column name; new login records are plain JSON.
 	LoginCipher          string               `json:"-"`
 	Status               string               `json:"status"`
 	LastError            string               `json:"last_error"`
@@ -77,6 +78,7 @@ type LoginInput struct {
 	TencentCaptchaTicket  string `json:"tencent_captcha_ticket"`
 	TencentCaptchaRandstr string `json:"tencent_captcha_randstr"`
 	SessionToken          string `json:"session_token"`
+	SessionID             string `json:"session_id"`
 	RefreshToken          string `json:"refresh_token"`
 	ExpiresIn             int64  `json:"expires_in"`
 	UserAgent             string `json:"user_agent"`
@@ -93,6 +95,7 @@ type LoginCredentialsResult struct {
 type Session struct {
 	AccessToken                       string            `json:"access_token,omitempty"`
 	RefreshToken                      string            `json:"refresh_token,omitempty"`
+	SessionID                         string            `json:"session_id,omitempty"`
 	ExpiresAt                         *time.Time        `json:"expires_at,omitempty"`
 	IssuedAt                          *time.Time        `json:"issued_at,omitempty"`
 	UserAgent                         string            `json:"user_agent,omitempty"`

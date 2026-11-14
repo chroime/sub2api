@@ -6,6 +6,9 @@ const cancelOrder = vi.hoisted(() => vi.fn())
 const verifyOrder = vi.hoisted(() => vi.fn())
 const showError = vi.hoisted(() => vi.fn())
 const toCanvas = vi.hoisted(() => vi.fn())
+const isMobileDevice = vi.hoisted(() => vi.fn(() => false))
+
+vi.mock('@/utils/device', () => ({ isMobileDevice }))
 
 vi.mock('vue-i18n', async () => {
   const actual = await vi.importActual<typeof import('vue-i18n')>('vue-i18n')
@@ -67,6 +70,7 @@ describe('PaymentStatusPanel', () => {
     verifyOrder.mockReset()
     showError.mockReset()
     toCanvas.mockReset().mockResolvedValue(undefined)
+    isMobileDevice.mockReset().mockReturnValue(false)
   })
 
   afterEach(() => {
@@ -193,7 +197,7 @@ describe('PaymentStatusPanel', () => {
     })
 
     await flushPromises()
-    expect(wrapper.text()).toContain('payment.qr.openPayWindow')
+    expect(wrapper.text()).toContain('payment.qr.reopenAlipay')
 
     await wrapper.get('button.btn.btn-secondary.text-sm').trigger('click')
     expect(openSpy).toHaveBeenCalledWith(
@@ -203,6 +207,75 @@ describe('PaymentStatusPanel', () => {
     )
 
     openSpy.mockRestore()
+  })
+
+  it.each(['alipay', 'alipay_direct'])('opens %s once on mobile without a popup and a second navigation', async (paymentType) => {
+    const originalLocation = window.location
+    const assign = vi.fn()
+    const href = vi.fn()
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { assign, set href(value: string) { href(value) } },
+    })
+    // An app handoff can return no popup handle even when it succeeds.
+    const open = vi.spyOn(window, 'open').mockReturnValue(null)
+    isMobileDevice.mockReturnValue(true)
+    const qrCode = 'https://qr.alipay.com/fixed-order-42?amount=88.00'
+    const wrapper = mount(PaymentStatusPanel, {
+      props: {
+        orderId: 42,
+        qrCode,
+        payUrl: qrCode,
+        expiresAt: '2099-01-01T12:30:00Z',
+        paymentType,
+        billAmountMatching: true,
+      },
+      global: { stubs: { Icon: true } },
+    })
+    try {
+      await flushPromises()
+      expect(assign).not.toHaveBeenCalled()
+      await wrapper.get('button.btn.btn-secondary.text-sm').trigger('click')
+      expect(open).not.toHaveBeenCalled()
+      expect(assign).toHaveBeenCalledTimes(1)
+      expect(assign).toHaveBeenCalledWith(
+        `alipays://platformapi/startapp?saId=10000007&qrcode=${encodeURIComponent(qrCode)}`,
+      )
+      await vi.advanceTimersByTimeAsync(2200)
+      expect(assign).toHaveBeenCalledTimes(1)
+      expect(href).not.toHaveBeenCalled()
+    } finally {
+      wrapper.unmount()
+      open.mockRestore()
+      Object.defineProperty(window, 'location', { configurable: true, value: originalLocation })
+    }
+  })
+
+  it('keeps the generic payment-page action for WeChat QR payments', async () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue({ closed: false } as Window)
+    const wrapper = mount(PaymentStatusPanel, {
+      props: {
+        orderId: 42,
+        qrCode: 'weixin://wxpay/order/42',
+        payUrl: 'https://pay.example.com/wechat/42',
+        expiresAt: '2099-01-01T12:30:00Z',
+        paymentType: 'wxpay',
+      },
+      global: { stubs: { Icon: true } },
+    })
+    try {
+      await flushPromises()
+      expect(wrapper.text()).toContain('payment.qr.openPayWindow')
+      expect(wrapper.text()).not.toContain('payment.qr.reopenAlipay')
+      await wrapper.get('button.btn.btn-secondary.text-sm').trigger('click')
+      expect(open).toHaveBeenCalledTimes(1)
+      expect(open).toHaveBeenCalledWith(
+        'https://pay.example.com/wechat/42', 'paymentPopup', expect.any(String),
+      )
+    } finally {
+      wrapper.unmount()
+      open.mockRestore()
+    }
   })
 
   it('uses generic QR copy for custom methods that contain built-in names', async () => {

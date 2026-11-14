@@ -1,7 +1,7 @@
 <template>
   <AppLayout>
     <div class="mx-auto max-w-7xl space-y-6">
-      <div class="card p-6">
+      <div class="card min-w-0 p-4 sm:p-6">
         <UserTokenRanking />
       </div>
     </div>

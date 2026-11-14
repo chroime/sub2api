@@ -195,6 +195,94 @@ func (_u *ChannelMonitorUpdate) ClearGroupName() *ChannelMonitorUpdate {
 	return _u
 }
 
+// SetLocalAPIKeyID sets the "local_api_key_id" field.
+func (_u *ChannelMonitorUpdate) SetLocalAPIKeyID(v int64) *ChannelMonitorUpdate {
+	_u.mutation.ResetLocalAPIKeyID()
+	_u.mutation.SetLocalAPIKeyID(v)
+	return _u
+}
+
+// SetNillableLocalAPIKeyID sets the "local_api_key_id" field if the given value is not nil.
+func (_u *ChannelMonitorUpdate) SetNillableLocalAPIKeyID(v *int64) *ChannelMonitorUpdate {
+	if v != nil {
+		_u.SetLocalAPIKeyID(*v)
+	}
+	return _u
+}
+
+// AddLocalAPIKeyID adds value to the "local_api_key_id" field.
+func (_u *ChannelMonitorUpdate) AddLocalAPIKeyID(v int64) *ChannelMonitorUpdate {
+	_u.mutation.AddLocalAPIKeyID(v)
+	return _u
+}
+
+// ClearLocalAPIKeyID clears the value of the "local_api_key_id" field.
+func (_u *ChannelMonitorUpdate) ClearLocalAPIKeyID() *ChannelMonitorUpdate {
+	_u.mutation.ClearLocalAPIKeyID()
+	return _u
+}
+
+// SetGroupID sets the "group_id" field.
+func (_u *ChannelMonitorUpdate) SetGroupID(v int64) *ChannelMonitorUpdate {
+	_u.mutation.ResetGroupID()
+	_u.mutation.SetGroupID(v)
+	return _u
+}
+
+// SetNillableGroupID sets the "group_id" field if the given value is not nil.
+func (_u *ChannelMonitorUpdate) SetNillableGroupID(v *int64) *ChannelMonitorUpdate {
+	if v != nil {
+		_u.SetGroupID(*v)
+	}
+	return _u
+}
+
+// AddGroupID adds value to the "group_id" field.
+func (_u *ChannelMonitorUpdate) AddGroupID(v int64) *ChannelMonitorUpdate {
+	_u.mutation.AddGroupID(v)
+	return _u
+}
+
+// ClearGroupID clears the value of the "group_id" field.
+func (_u *ChannelMonitorUpdate) ClearGroupID() *ChannelMonitorUpdate {
+	_u.mutation.ClearGroupID()
+	return _u
+}
+
+// SetGroupBindingMode sets the "group_binding_mode" field.
+func (_u *ChannelMonitorUpdate) SetGroupBindingMode(v string) *ChannelMonitorUpdate {
+	_u.mutation.SetGroupBindingMode(v)
+	return _u
+}
+
+// SetNillableGroupBindingMode sets the "group_binding_mode" field if the given value is not nil.
+func (_u *ChannelMonitorUpdate) SetNillableGroupBindingMode(v *string) *ChannelMonitorUpdate {
+	if v != nil {
+		_u.SetGroupBindingMode(*v)
+	}
+	return _u
+}
+
+// SetGroupBindingChangedAt sets the "group_binding_changed_at" field.
+func (_u *ChannelMonitorUpdate) SetGroupBindingChangedAt(v time.Time) *ChannelMonitorUpdate {
+	_u.mutation.SetGroupBindingChangedAt(v)
+	return _u
+}
+
+// SetNillableGroupBindingChangedAt sets the "group_binding_changed_at" field if the given value is not nil.
+func (_u *ChannelMonitorUpdate) SetNillableGroupBindingChangedAt(v *time.Time) *ChannelMonitorUpdate {
+	if v != nil {
+		_u.SetGroupBindingChangedAt(*v)
+	}
+	return _u
+}
+
+// ClearGroupBindingChangedAt clears the value of the "group_binding_changed_at" field.
+func (_u *ChannelMonitorUpdate) ClearGroupBindingChangedAt() *ChannelMonitorUpdate {
+	_u.mutation.ClearGroupBindingChangedAt()
+	return _u
+}
+
 // SetEnabled sets the "enabled" field.
 func (_u *ChannelMonitorUpdate) SetEnabled(v bool) *ChannelMonitorUpdate {
 	_u.mutation.SetEnabled(v)
@@ -545,6 +633,11 @@ func (_u *ChannelMonitorUpdate) check() error {
 			return &ValidationError{Name: "group_name", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitor.group_name": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.GroupBindingMode(); ok {
+		if err := channelmonitor.GroupBindingModeValidator(v); err != nil {
+			return &ValidationError{Name: "group_binding_mode", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitor.group_binding_mode": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.SortOrder(); ok {
 		if err := channelmonitor.SortOrderValidator(v); err != nil {
 			return &ValidationError{Name: "sort_order", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitor.sort_order": %w`, err)}
@@ -626,6 +719,33 @@ func (_u *ChannelMonitorUpdate) sqlSave(ctx context.Context) (_node int, err err
 	}
 	if _u.mutation.GroupNameCleared() {
 		_spec.ClearField(channelmonitor.FieldGroupName, field.TypeString)
+	}
+	if value, ok := _u.mutation.LocalAPIKeyID(); ok {
+		_spec.SetField(channelmonitor.FieldLocalAPIKeyID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedLocalAPIKeyID(); ok {
+		_spec.AddField(channelmonitor.FieldLocalAPIKeyID, field.TypeInt64, value)
+	}
+	if _u.mutation.LocalAPIKeyIDCleared() {
+		_spec.ClearField(channelmonitor.FieldLocalAPIKeyID, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.GroupID(); ok {
+		_spec.SetField(channelmonitor.FieldGroupID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedGroupID(); ok {
+		_spec.AddField(channelmonitor.FieldGroupID, field.TypeInt64, value)
+	}
+	if _u.mutation.GroupIDCleared() {
+		_spec.ClearField(channelmonitor.FieldGroupID, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.GroupBindingMode(); ok {
+		_spec.SetField(channelmonitor.FieldGroupBindingMode, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.GroupBindingChangedAt(); ok {
+		_spec.SetField(channelmonitor.FieldGroupBindingChangedAt, field.TypeTime, value)
+	}
+	if _u.mutation.GroupBindingChangedAtCleared() {
+		_spec.ClearField(channelmonitor.FieldGroupBindingChangedAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.Enabled(); ok {
 		_spec.SetField(channelmonitor.FieldEnabled, field.TypeBool, value)
@@ -971,6 +1091,94 @@ func (_u *ChannelMonitorUpdateOne) SetNillableGroupName(v *string) *ChannelMonit
 // ClearGroupName clears the value of the "group_name" field.
 func (_u *ChannelMonitorUpdateOne) ClearGroupName() *ChannelMonitorUpdateOne {
 	_u.mutation.ClearGroupName()
+	return _u
+}
+
+// SetLocalAPIKeyID sets the "local_api_key_id" field.
+func (_u *ChannelMonitorUpdateOne) SetLocalAPIKeyID(v int64) *ChannelMonitorUpdateOne {
+	_u.mutation.ResetLocalAPIKeyID()
+	_u.mutation.SetLocalAPIKeyID(v)
+	return _u
+}
+
+// SetNillableLocalAPIKeyID sets the "local_api_key_id" field if the given value is not nil.
+func (_u *ChannelMonitorUpdateOne) SetNillableLocalAPIKeyID(v *int64) *ChannelMonitorUpdateOne {
+	if v != nil {
+		_u.SetLocalAPIKeyID(*v)
+	}
+	return _u
+}
+
+// AddLocalAPIKeyID adds value to the "local_api_key_id" field.
+func (_u *ChannelMonitorUpdateOne) AddLocalAPIKeyID(v int64) *ChannelMonitorUpdateOne {
+	_u.mutation.AddLocalAPIKeyID(v)
+	return _u
+}
+
+// ClearLocalAPIKeyID clears the value of the "local_api_key_id" field.
+func (_u *ChannelMonitorUpdateOne) ClearLocalAPIKeyID() *ChannelMonitorUpdateOne {
+	_u.mutation.ClearLocalAPIKeyID()
+	return _u
+}
+
+// SetGroupID sets the "group_id" field.
+func (_u *ChannelMonitorUpdateOne) SetGroupID(v int64) *ChannelMonitorUpdateOne {
+	_u.mutation.ResetGroupID()
+	_u.mutation.SetGroupID(v)
+	return _u
+}
+
+// SetNillableGroupID sets the "group_id" field if the given value is not nil.
+func (_u *ChannelMonitorUpdateOne) SetNillableGroupID(v *int64) *ChannelMonitorUpdateOne {
+	if v != nil {
+		_u.SetGroupID(*v)
+	}
+	return _u
+}
+
+// AddGroupID adds value to the "group_id" field.
+func (_u *ChannelMonitorUpdateOne) AddGroupID(v int64) *ChannelMonitorUpdateOne {
+	_u.mutation.AddGroupID(v)
+	return _u
+}
+
+// ClearGroupID clears the value of the "group_id" field.
+func (_u *ChannelMonitorUpdateOne) ClearGroupID() *ChannelMonitorUpdateOne {
+	_u.mutation.ClearGroupID()
+	return _u
+}
+
+// SetGroupBindingMode sets the "group_binding_mode" field.
+func (_u *ChannelMonitorUpdateOne) SetGroupBindingMode(v string) *ChannelMonitorUpdateOne {
+	_u.mutation.SetGroupBindingMode(v)
+	return _u
+}
+
+// SetNillableGroupBindingMode sets the "group_binding_mode" field if the given value is not nil.
+func (_u *ChannelMonitorUpdateOne) SetNillableGroupBindingMode(v *string) *ChannelMonitorUpdateOne {
+	if v != nil {
+		_u.SetGroupBindingMode(*v)
+	}
+	return _u
+}
+
+// SetGroupBindingChangedAt sets the "group_binding_changed_at" field.
+func (_u *ChannelMonitorUpdateOne) SetGroupBindingChangedAt(v time.Time) *ChannelMonitorUpdateOne {
+	_u.mutation.SetGroupBindingChangedAt(v)
+	return _u
+}
+
+// SetNillableGroupBindingChangedAt sets the "group_binding_changed_at" field if the given value is not nil.
+func (_u *ChannelMonitorUpdateOne) SetNillableGroupBindingChangedAt(v *time.Time) *ChannelMonitorUpdateOne {
+	if v != nil {
+		_u.SetGroupBindingChangedAt(*v)
+	}
+	return _u
+}
+
+// ClearGroupBindingChangedAt clears the value of the "group_binding_changed_at" field.
+func (_u *ChannelMonitorUpdateOne) ClearGroupBindingChangedAt() *ChannelMonitorUpdateOne {
+	_u.mutation.ClearGroupBindingChangedAt()
 	return _u
 }
 
@@ -1337,6 +1545,11 @@ func (_u *ChannelMonitorUpdateOne) check() error {
 			return &ValidationError{Name: "group_name", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitor.group_name": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.GroupBindingMode(); ok {
+		if err := channelmonitor.GroupBindingModeValidator(v); err != nil {
+			return &ValidationError{Name: "group_binding_mode", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitor.group_binding_mode": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.SortOrder(); ok {
 		if err := channelmonitor.SortOrderValidator(v); err != nil {
 			return &ValidationError{Name: "sort_order", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitor.sort_order": %w`, err)}
@@ -1435,6 +1648,33 @@ func (_u *ChannelMonitorUpdateOne) sqlSave(ctx context.Context) (_node *ChannelM
 	}
 	if _u.mutation.GroupNameCleared() {
 		_spec.ClearField(channelmonitor.FieldGroupName, field.TypeString)
+	}
+	if value, ok := _u.mutation.LocalAPIKeyID(); ok {
+		_spec.SetField(channelmonitor.FieldLocalAPIKeyID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedLocalAPIKeyID(); ok {
+		_spec.AddField(channelmonitor.FieldLocalAPIKeyID, field.TypeInt64, value)
+	}
+	if _u.mutation.LocalAPIKeyIDCleared() {
+		_spec.ClearField(channelmonitor.FieldLocalAPIKeyID, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.GroupID(); ok {
+		_spec.SetField(channelmonitor.FieldGroupID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedGroupID(); ok {
+		_spec.AddField(channelmonitor.FieldGroupID, field.TypeInt64, value)
+	}
+	if _u.mutation.GroupIDCleared() {
+		_spec.ClearField(channelmonitor.FieldGroupID, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.GroupBindingMode(); ok {
+		_spec.SetField(channelmonitor.FieldGroupBindingMode, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.GroupBindingChangedAt(); ok {
+		_spec.SetField(channelmonitor.FieldGroupBindingChangedAt, field.TypeTime, value)
+	}
+	if _u.mutation.GroupBindingChangedAtCleared() {
+		_spec.ClearField(channelmonitor.FieldGroupBindingChangedAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.Enabled(); ok {
 		_spec.SetField(channelmonitor.FieldEnabled, field.TypeBool, value)

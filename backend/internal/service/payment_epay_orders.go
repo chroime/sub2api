@@ -201,7 +201,18 @@ func (s *PaymentService) CreateBuiltinEasyPayOrder(ctx context.Context, params m
 	}
 	// Read global settings outside the provider transaction, which serializes
 	// against credential/identity changes and new-order disablement.
-	globalEnabled := s.configService.settingRepo != nil && s.configService.IsPaymentEnabled(ctx)
+	globalEnabled := false
+	orderTimeoutMin := defaultOrderTimeoutMin
+	if s.configService.settingRepo != nil {
+		globalConfig, err := s.configService.GetPaymentConfig(ctx)
+		if err != nil {
+			return nil, err
+		}
+		globalEnabled = globalConfig.Enabled
+		if globalConfig.OrderTimeoutMin > 0 {
+			orderTimeoutMin = globalConfig.OrderTimeoutMin
+		}
+	}
 	tx, err := s.entClient.Tx(ctx)
 	if err != nil {
 		return nil, err
@@ -305,9 +316,10 @@ func (s *PaymentService) CreateBuiltinEasyPayOrder(ctx context.Context, params m
 	}
 	// Align the order window with official bill timestamp precision.
 	now := time.Now().UTC().Truncate(time.Second)
+	expiresAt := now.Add(time.Duration(orderTimeoutMin) * time.Minute)
 	tradeNo := "epay_" + strings.ReplaceAll(uuid.NewString(), "-", "")
 	rows, err := tx.Client().QueryContext(ctx, `INSERT INTO payment_epay_orders(provider_instance_id,out_trade_no,trade_no,amount_minor,receiver_id,app_id,qr_rule_id,qr_url,name,param,notify_url,return_url,callback_key_encrypted,status,created_at,expires_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'PENDING',$14,$15,$14) RETURNING `+builtinEasyPayOrderColumns,
-		providerID, params["out_trade_no"], tradeNo, cents, receiver, strings.TrimSpace(cfg["appId"]), created.QRRuleID, created.QRCode, params["name"], params["param"], notifyURL, returnURL, secret, now, now.Add(billAmountOrderTTL))
+		providerID, params["out_trade_no"], tradeNo, cents, receiver, strings.TrimSpace(cfg["appId"]), created.QRRuleID, created.QRCode, params["name"], params["param"], notifyURL, returnURL, secret, now, expiresAt)
 	if err != nil {
 		return nil, err
 	}
@@ -324,7 +336,7 @@ func (s *PaymentService) CreateBuiltinEasyPayOrder(ctx context.Context, params m
 	if err != nil {
 		return nil, err
 	}
-	if err := s.insertBillAmountReservation(ctx, tx, providerID, receiver, cents, 0, o.ID, now, now.Add(billAmountOrderTTL)); err != nil {
+	if err := s.insertBillAmountReservation(ctx, tx, providerID, receiver, cents, 0, o.ID, now, expiresAt); err != nil {
 		return nil, err
 	}
 	if err = tx.Commit(); err != nil {

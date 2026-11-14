@@ -14,6 +14,7 @@ export default {
     create: 'Create',
     apply: 'Apply',
     clear: 'Clear',
+    clearSearch: 'Clear search',
     creating: 'Creating...',
     required: 'Required',
     sending: 'Sending...',

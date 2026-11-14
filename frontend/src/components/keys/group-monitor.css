@@ -1,0 +1,14 @@
+.key-group-monitor-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 88px 88px 70px;
+  column-gap: 12px;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+}
+@media (max-width: 639px) {
+  .key-group-monitor-grid {
+    grid-template-columns: minmax(0, 1fr) 48px 48px 47px;
+    column-gap: 6px;
+  }
+}

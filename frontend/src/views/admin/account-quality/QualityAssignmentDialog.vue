@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import Select, { type SelectOption } from '@/components/common/Select.vue'
 import QualityAccountSelector from './QualityAccountSelector.vue'
-import api, { type BindingOverrides, type Policy } from '@/api/admin/account-quality'
+import api, { type Binding, type BindingOverrides, type Policy } from '@/api/admin/account-quality'
 import accountsAPI from '@/api/admin/accounts'
 import groupsAPI from '@/api/admin/groups'
 import { CONCRETE_PLATFORM_OPTIONS } from '@/constants/platforms'
@@ -12,7 +12,7 @@ import type { AdminGroup } from '@/types'
 import { qualityError } from './quality'
 
 const props = defineProps<{ policies: Policy[]; accountIds?: number[]; policyId?: number }>()
-const emit = defineEmits<{ close: []; saved: [number]; busy: [boolean] }>()
+const emit = defineEmits<{ close: []; saved: [number]; busy: [boolean]; changed: [] }>()
 const { t } = useI18n()
 const normalizeIds = (values: number[]) => [...new Set(values.filter(id => Number.isSafeInteger(id) && id > 0))]
 const chosenIds = ref(normalizeIds(props.accountIds || []))
@@ -33,6 +33,34 @@ const scopeOptions = computed<SelectOption[]>(() => [
   { value: 'account', label: t('accountQuality.scope_account') }
 ])
 const directSelection = computed(() => mode.value === 'single' || mode.value === 'selected')
+const boundAccountId = computed(() => mode.value === 'single' && chosenIds.value.length === 1 ? chosenIds.value[0]! : 0)
+const bindings = ref<Binding[]>([]), bindingsLoading = ref(false), bindingsError = ref(''), notice = ref(''), unbindingId = ref(0)
+let bindingsGeneration = 0
+async function loadBindings() {
+  const generation = ++bindingsGeneration, accountId = boundAccountId.value
+  bindings.value = []; bindingsError.value = ''; notice.value = ''
+  bindingsLoading.value = Boolean(accountId)
+  if (!accountId) return
+  try {
+    const detail = await api.account(accountId)
+    if (generation === bindingsGeneration) bindings.value = (detail.bindings || []).filter(binding => binding.account_id === accountId)
+  } catch (cause) {
+    if (generation === bindingsGeneration) bindingsError.value = qualityError(cause) || t('accountQuality.loadFailed')
+  } finally { if (generation === bindingsGeneration) bindingsLoading.value = false }
+}
+async function unbind(binding: Binding) {
+  if (saving.value || bindingsLoading.value || binding.account_id !== boundAccountId.value) return
+  saving.value = true; unbindingId.value = binding.id; error.value = ''; notice.value = ''; emit('busy', true)
+  try {
+    await api.unbind(binding.id, binding.version)
+    bindings.value = bindings.value.filter(item => item.id !== binding.id)
+    notice.value = t('accountQuality.unboundSuccess', { policy: binding.policy_name })
+    emit('changed')
+  } catch (cause) { error.value = qualityError(cause) || t('accountQuality.saveFailed') }
+  finally { saving.value = false; unbindingId.value = 0; emit('busy', false) }
+}
+watch(boundAccountId, loadBindings, { immediate: true })
+onUnmounted(() => { bindingsGeneration++ })
 const selection = ref({ valid: false, pending: false, platform: '', accountIds: [] as number[] })
 const selectionReady = computed(() => selection.value.valid && !selection.value.pending && selection.value.platform === selectedPolicy.value?.platform && selection.value.accountIds.join(',') === chosenIds.value.join(',') && (mode.value !== 'single' || chosenIds.value.length === 1))
 const platformOptions = computed(() => CONCRETE_PLATFORM_OPTIONS.filter(item => item.value === selectedPolicy.value?.platform))
@@ -82,10 +110,26 @@ async function save() {
 </script>
 
 <template>
-  <BaseDialog :show="true" :title="t('accountQuality.assignment')" width="normal" :close-on-escape="!saving" :show-close-button="!saving" @close="emit('close')">
+  <BaseDialog :show="true" :title="t(boundAccountId ? 'accountQuality.assignPolicy' : 'accountQuality.assignment')" width="normal" :close-on-escape="!saving" :show-close-button="!saving" @close="emit('close')">
     <form id="quality-assignment-form" class="space-y-4" @submit.prevent="save">
-      <p class="text-sm leading-relaxed text-gray-500">{{ t('accountQuality.assignmentHint') }}</p>
       <p v-if="error" role="alert" class="text-sm text-red-600">{{ error }}</p>
+      <p v-if="notice" role="status" class="text-sm text-emerald-600 dark:text-emerald-400">{{ notice }}</p>
+      <section v-if="boundAccountId" data-test="quality-bound-policies" class="space-y-2">
+        <div class="flex items-center justify-between gap-3">
+          <h4 class="text-sm font-medium">{{ t('accountQuality.boundPolicies') }}</h4>
+          <button type="button" class="text-xs text-primary-600 hover:underline disabled:opacity-50 dark:text-primary-400" :disabled="saving || bindingsLoading" @click="loadBindings">{{ t('accountQuality.refresh') }}</button>
+        </div>
+        <p v-if="bindingsLoading" role="status" class="text-sm text-gray-500">{{ t('accountQuality.loading') }}</p>
+        <p v-else-if="bindingsError" role="alert" class="text-sm text-red-600">{{ bindingsError }}</p>
+        <div v-else-if="bindings.length" class="divide-y divide-gray-100 rounded-lg border border-gray-200 dark:divide-dark-600 dark:border-dark-600">
+          <div v-for="binding in bindings" :key="binding.id" class="flex items-center justify-between gap-3 px-3 py-2.5">
+            <div class="min-w-0 text-sm"><p class="truncate font-medium" :title="binding.policy_name">{{ binding.policy_name }}</p><p class="truncate text-xs text-gray-500" :title="binding.model">{{ binding.model }}</p></div>
+            <button type="button" :data-test="`quality-unbind-${binding.id}`" class="shrink-0 rounded-lg px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-900/20" :aria-label="t('accountQuality.unbindPolicy', { policy: binding.policy_name })" :disabled="saving || bindingsLoading" @click="unbind(binding)">{{ t(unbindingId === binding.id ? 'accountQuality.unbinding' : 'accountQuality.unbind') }}</button>
+          </div>
+        </div>
+        <p v-else class="text-sm text-gray-500">{{ t('accountQuality.noBoundPolicies') }}</p>
+      </section>
+      <p class="text-sm leading-relaxed text-gray-500">{{ t('accountQuality.assignmentHint') }}</p>
       <div class="text-sm"><label for="quality-assignment-policy" class="mb-1 block">{{ t('accountQuality.policy') }}</label><Select id="quality-assignment-policy" data-test="quality-assignment-policy" :model-value="policyId || null" :options="policyOptions" searchable :disabled="saving || !policies.length" :aria-label="t('accountQuality.policy')" :placeholder="t('accountQuality.choosePolicy')" :search-placeholder="t('accountQuality.searchPolicy')" @update:model-value="policyId = typeof $event === 'number' ? $event : 0" /></div>
       <p class="text-xs text-gray-500">{{ t('accountQuality.assignmentPlatformHint') }}</p>
       <label class="block text-sm"><span class="mb-1 block">{{ t('accountQuality.assignmentMode') }}</span><Select v-model="mode" data-test="quality-assignment-mode" :options="modeOptions" :searchable="false" :disabled="saving" /></label>

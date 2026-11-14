@@ -155,7 +155,7 @@ func TestScopedAdminBasicGroupReadDoesNotReturnModels(t *testing.T) {
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest("GET", "/api/v1/admin/groups/1", nil))
 	require.Equal(t, 200, w.Code, w.Body.String())
-	require.JSONEq(t, `{"code":0,"message":"success","data":{"id":1,"name":"基本组","platform":"openai","status":"active"}}`, w.Body.String())
+	require.JSONEq(t, `{"code":0,"message":"success","data":{"id":1,"name":"基本组","identity":{},"platform":"openai","status":"active"}}`, w.Body.String())
 }
 
 func TestScopedAdminPermissionRefreshRejectsMissingGlobalGrant(t *testing.T) {

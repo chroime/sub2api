@@ -2,6 +2,16 @@ import { describe, expect, it, vi } from 'vitest'
 import { clearConnectionSecrets, connectionBlocked, connectionInput, continueChallenge, newConnectionForm } from './connection-form'
 
 describe('typed authorization inputs', () => {
+  it('submits the pinned NewAPI session identity and clears it with the refresh credential', () => {
+    const form = newConnectionForm()
+    Object.assign(form, { mode: 'session', sessionToken: 'fixture-access', refreshToken: 'fixture-session.fixture-secret',
+      expiresIn: 900, sessionId: 'fixture-session', userId: 42 })
+    expect(connectionInput(form)).toMatchObject({ session_token: 'fixture-access', refresh_token: 'fixture-session.fixture-secret',
+      session_id: 'fixture-session', user_id: 42, expires_in: 900 })
+    clearConnectionSecrets(form)
+    expect(form).toMatchObject({ sessionToken: '', refreshToken: '', sessionId: undefined, userId: undefined })
+  })
+
   it.each([undefined, 'turnstile', 'tencent'] as const)('blocks manual CAPTCHA continuation without the %s single-use proof', provider => {
     const form = newConnectionForm()
     continueChallenge(form, { kind: 'captcha', provider })
