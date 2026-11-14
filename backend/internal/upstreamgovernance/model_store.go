@@ -107,7 +107,7 @@ func (m *modelStore) hideRunFromPublic(ctx context.Context, siteID int64, id str
 // the queue so workers cannot lose their lease or settle a partially executed
 // request after an administrator clicks delete.
 func (m *modelStore) deleteRun(ctx context.Context, siteID int64, id string) error {
-	result, err := m.db.ExecContext(ctx, `DELETE FROM upstream_governance_model_runs WHERE site_id=$1 AND id=$2 AND request->>'template'='pelican' AND request->'config'->>'target_type'='local_group' AND status NOT IN ('queued','running')`, siteID, id)
+	result, err := m.db.ExecContext(ctx, `DELETE FROM upstream_governance_model_runs WHERE site_id=$1 AND id=$2 AND request->'config'->>'target_type'='local_group' AND status NOT IN ('queued','running')`, siteID, id)
 	if err != nil {
 		return err
 	}

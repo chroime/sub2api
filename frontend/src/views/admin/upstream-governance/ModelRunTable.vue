@@ -1,19 +1,30 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import PlatformIcon from '@/components/common/PlatformIcon.vue'
 import Icon from '@/components/icons/Icon.vue'
 import type { ModelRun, ModelTestConfig } from '@/api/admin/upstream-model-monitoring'
 import StatusIndicator from './StatusIndicator.vue'
 import { formatGovernanceTime } from './format'
+import { canDeleteModelRun } from './model-run-selection'
 
-defineProps<{
+const props = defineProps<{
   items: ModelRun[]
   loading: boolean
   disabled: boolean
   filtered: boolean
   batchId: string
   targetLabel: (config: ModelTestConfig) => string
+  selectable?: boolean
 }>()
+const selectedIds = defineModel<string[]>('selectedIds', { default: () => [] })
+const selectableRuns = computed(() => props.items.filter(canDeleteModelRun))
+const allSelected = computed(() => selectableRuns.value.length > 0 && selectableRuns.value.every(run => selectedIds.value.includes(run.id)))
+const someSelected = computed(() => !allSelected.value && selectableRuns.value.some(run => selectedIds.value.includes(run.id)))
+function selectPage(checked: boolean) {
+  if (props.disabled || props.loading) return
+  selectedIds.value = checked ? selectableRuns.value.map(run => run.id) : []
+}
 const hideId = defineModel<string | null>('hideId', { default: null })
 const deleteId = defineModel<string | null>('deleteId', { default: null })
 const emit = defineEmits<{ detail: [id: string]; compare: [run: ModelRun]; batch: [id: string]; hide: [run: ModelRun]; remove: [run: ModelRun] }>()
@@ -31,6 +42,7 @@ const canHide = (run: ModelRun) => run.request.template === 'pelican' && run.req
       <table data-test="model-run-table" class="w-full min-w-[960px] border-collapse text-left text-xs" :aria-busy="loading">
         <thead class="whitespace-nowrap border-b border-gray-200 bg-gray-50 text-gray-500 dark:border-dark-600 dark:bg-dark-900 dark:text-gray-400">
           <tr>
+            <th v-if="selectable" scope="col" class="w-10 px-3 py-3"><input data-test="model-runs-select-page" type="checkbox" class="governance-checkbox" :checked="allSelected" :indeterminate="someSelected" :disabled="disabled || loading || !selectableRuns.length" :aria-label="mt('selectPageRuns')" @change="selectPage(($event.target as HTMLInputElement).checked)" /></th>
             <th scope="col" class="px-4 py-3 font-medium">{{ mt('modelAndTarget') }}</th>
             <th scope="col" class="px-3 py-3 font-medium">{{ mt('templates') }} / {{ mt('efforts') }}</th>
             <th scope="col" class="px-3 py-3 font-medium">{{ mt('runState') }}</th>
@@ -41,10 +53,11 @@ const canHide = (run: ModelRun) => run.request.template === 'pelican' && run.req
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-100 dark:divide-dark-700">
-          <tr v-if="loading"><td colspan="7" role="status" class="p-8 text-center text-gray-500">{{ t('common.loading') }}</td></tr>
-          <tr v-else-if="!items.length"><td colspan="7" class="p-8 text-center text-gray-500">{{ mt(filtered ? 'noMatchingRuns' : 'noRuns') }}</td></tr>
+          <tr v-if="loading"><td :colspan="selectable ? 8 : 7" role="status" class="p-8 text-center text-gray-500">{{ t('common.loading') }}</td></tr>
+          <tr v-else-if="!items.length"><td :colspan="selectable ? 8 : 7" class="p-8 text-center text-gray-500">{{ mt(filtered ? 'noMatchingRuns' : 'noRuns') }}</td></tr>
           <template v-for="run in loading ? [] : items" :key="run.id">
-            <tr class="transition-colors hover:bg-gray-50/80 dark:hover:bg-dark-700/40" :data-test="`model-run-row-${run.id}`">
+            <tr class="transition-colors hover:bg-gray-50/80 dark:hover:bg-dark-700/40" :class="selectable && selectedIds.includes(run.id) ? 'bg-primary-50/60 dark:bg-primary-900/10' : ''" :data-test="`model-run-row-${run.id}`">
+              <td v-if="selectable" class="px-3 py-3 align-middle"><input v-model="selectedIds" :value="run.id" :data-test="`model-run-select-${run.id}`" type="checkbox" class="governance-checkbox" :disabled="disabled || !canDeleteModelRun(run)" :aria-label="t('governance.modelMonitoring.selectRun', { model: run.request.config.model, effort: run.request.effort, sample: run.request.sample })" :title="canDeleteModelRun(run) ? undefined : mt('activeRunNotSelectable')" /></td>
               <td class="px-4 py-3 align-middle">
                 <div class="flex items-center gap-2"><PlatformIcon :platform="run.request.config.platform" size="md" /><span class="max-w-48 truncate font-semibold text-gray-900 dark:text-gray-100" :title="run.request.config.model">{{ run.request.config.model }}</span></div>
                 <p class="mt-1 max-w-60 truncate text-gray-500" :title="targetLabel(run.request.config)">{{ targetLabel(run.request.config) }}</p>
@@ -60,12 +73,12 @@ const canHide = (run: ModelRun) => run.request.template === 'pelican' && run.req
                   <button type="button" class="run-action" :data-test="`model-compare-${run.id}`" :aria-label="mt('compare')" :title="mt('compare')" @click="emit('compare', run)"><Icon name="chart" size="sm" aria-hidden="true" /><span class="run-action-label">{{ mt('compare') }}</span></button>
                   <button v-if="!batchId" type="button" class="run-action" :disabled="disabled" :data-test="`model-run-batch-${run.id}`" :aria-label="mt('viewBatch')" :title="mt('viewBatch')" @click="emit('batch', run.batch_id)"><Icon name="grid" size="sm" aria-hidden="true" /><span class="run-action-label">{{ mt('viewBatch') }}</span></button>
                   <button v-if="canHide(run)" type="button" class="run-action" :disabled="disabled" :data-test="`model-run-hide-${run.id}`" :aria-label="mt('hideRun')" :title="mt('hideRun')" @click="hideId = run.id; deleteId = null"><Icon name="eyeOff" size="sm" aria-hidden="true" /></button>
-                  <button type="button" class="run-action hover:!text-red-600" :disabled="disabled" :data-test="`model-run-delete-${run.id}`" :aria-label="mt('deleteRun')" :title="mt('deleteRun')" @click="deleteId = run.id; hideId = null"><Icon name="trash" size="sm" aria-hidden="true" /></button>
+                  <button type="button" class="run-action hover:!text-red-600" :disabled="disabled || ['queued', 'running'].includes(run.status)" :data-test="`model-run-delete-${run.id}`" :aria-label="mt('deleteRun')" :title="mt('deleteRun')" @click="deleteId = run.id; hideId = null"><Icon name="trash" size="sm" aria-hidden="true" /></button>
                 </div>
               </td>
             </tr>
             <tr v-if="hideId === run.id || deleteId === run.id">
-              <td colspan="7" class="px-4 py-3" :class="hideId === run.id ? 'bg-amber-50 dark:bg-amber-900/20' : 'bg-red-50 dark:bg-red-900/20'">
+              <td :colspan="selectable ? 8 : 7" class="px-4 py-3" :class="hideId === run.id ? 'bg-amber-50 dark:bg-amber-900/20' : 'bg-red-50 dark:bg-red-900/20'">
                 <div class="flex flex-wrap items-center gap-3"><span class="mr-auto">{{ mt(hideId === run.id ? 'hideRunHint' : 'deleteRunHint') }}</span>
                   <button v-if="hideId === run.id" type="button" class="btn btn-primary text-xs" :disabled="disabled" :data-test="`model-run-hide-confirm-${run.id}`" @click="emit('hide', run)">{{ mt('hideRun') }}</button>
                   <button v-else type="button" class="btn btn-danger text-xs" :disabled="disabled" :data-test="`model-run-delete-confirm-${run.id}`" @click="emit('remove', run)">{{ t('common.delete') }}</button>

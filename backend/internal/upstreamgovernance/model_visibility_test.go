@@ -53,7 +53,7 @@ func TestDeleteModelRunRemovesFinishedRecord(t *testing.T) {
 	defer db.Close()
 
 	svc := NewService(NewSQLStore(db), nil, nil, nil, false)
-	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM upstream_governance_model_runs WHERE site_id=$1 AND id=$2 AND request->>'template'='pelican' AND request->'config'->>'target_type'='local_group' AND status NOT IN ('queued','running')`)).
+	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM upstream_governance_model_runs WHERE site_id=$1 AND id=$2 AND request->'config'->>'target_type'='local_group' AND status NOT IN ('queued','running')`)).
 		WithArgs(int64(7), "finished").
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	require.NoError(t, svc.DeleteModelRun(t.Context(), 7, "finished"))
@@ -66,7 +66,7 @@ func TestDeleteModelRunProtectsActiveAndReportsMissingRecords(t *testing.T) {
 	defer db.Close()
 
 	svc := NewService(NewSQLStore(db), nil, nil, nil, false)
-	deleteSQL := regexp.QuoteMeta(`DELETE FROM upstream_governance_model_runs WHERE site_id=$1 AND id=$2 AND request->>'template'='pelican' AND request->'config'->>'target_type'='local_group' AND status NOT IN ('queued','running')`)
+	deleteSQL := regexp.QuoteMeta(`DELETE FROM upstream_governance_model_runs WHERE site_id=$1 AND id=$2 AND request->'config'->>'target_type'='local_group' AND status NOT IN ('queued','running')`)
 	mock.ExpectExec(deleteSQL).WithArgs(int64(7), "active").WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT status FROM upstream_governance_model_runs WHERE site_id=$1 AND id=$2`)).
 		WithArgs(int64(7), "active").WillReturnRows(sqlmock.NewRows([]string{"status"}).AddRow("running"))

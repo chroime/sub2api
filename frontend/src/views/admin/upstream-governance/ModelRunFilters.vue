@@ -5,8 +5,8 @@ import Select from '@/components/common/Select.vue'
 import Icon from '@/components/icons/Icon.vue'
 import type { ModelEffort, ModelReview, ModelRunFilters, ModelTestTemplate } from '@/api/admin/upstream-model-monitoring'
 
-defineProps<{ disabled?: boolean; loading?: boolean }>()
-const emit = defineEmits<{ apply: [filters: ModelRunFilters] }>()
+defineProps<{ disabled?: boolean; loading?: boolean; bulkDelete?: boolean; selectionCount?: number }>()
+const emit = defineEmits<{ apply: [filters: ModelRunFilters]; deleteSelected: [] }>()
 const { t } = useI18n()
 const mt = (key: string) => t(`governance.modelMonitoring.${key}`)
 const emptyDraft = () => ({ q: '', status: '', template: '' as ModelTestTemplate | '', effort: '' as ModelEffort | 'default' | '', review: '' as ModelReview | '' })
@@ -76,6 +76,7 @@ function reset() {
       <p v-if="error" role="alert" class="mr-auto text-xs text-red-600 dark:text-red-400">{{ error }}</p>
       <button type="button" data-test="model-run-reset" class="btn btn-secondary text-xs" :disabled="disabled || loading" @click="reset"><Icon name="refresh" size="sm" aria-hidden="true" />{{ t('common.reset') }}</button>
       <button type="submit" data-test="model-run-search" class="btn btn-primary text-xs" :disabled="disabled || loading"><Icon name="search" size="sm" aria-hidden="true" />{{ t('common.search') }}</button>
+      <button v-if="bulkDelete" type="button" data-test="model-runs-bulk-delete" class="btn btn-danger text-xs" :disabled="disabled || loading || !selectionCount" @click="emit('deleteSelected')"><Icon name="trash" size="sm" aria-hidden="true" />{{ mt('bulkDeleteRuns') }}<span v-if="selectionCount" class="tabular-nums">({{ selectionCount }})</span></button>
     </div>
   </form>
 </template>

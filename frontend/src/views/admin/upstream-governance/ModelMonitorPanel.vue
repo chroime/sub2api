@@ -17,6 +17,7 @@ import { errorKey } from './feedback'
 import { formatGovernanceTime } from './format'
 import { intervalValidationKey } from './interval'
 import { isOpenAITextModel } from './import-config'
+import { canDeleteModelRun } from './model-run-selection'
 
 const props = defineProps<{
   siteId: number
@@ -44,6 +45,9 @@ const loading = ref(false), busy = ref(false), error = ref(''), notice = ref('')
 const localTargetsLoading = ref(false), localTargetsError = ref('')
 const page = ref(1), batchId = ref(''), detailId = ref(''), deleteId = ref<number | null>(null), deleteRunId = ref<string | null>(null), hideRunId = ref<string | null>(null)
 const runFilters = ref<RunFilters>({})
+const selectedRunIds = ref<string[]>([]), deleteRunIds = ref<string[] | null>(null)
+const selectedRuns = computed(() => (runs.value?.items || []).filter(run => selectedRunIds.value.includes(run.id) && canDeleteModelRun(run)))
+function clearRunSelection() { selectedRunIds.value = []; deleteRunIds.value = null }
 const hasRunFilters = computed(() => Object.keys(runFilters.value).length > 0)
 const comparison = ref<{ batchId: string; template: ModelTestTemplate; sample: number } | null>(null)
 const stats = ref<ModelStats | null>(null), statsError = ref(''), statsDays = ref(7), statsExpanded = ref(false)
@@ -207,6 +211,8 @@ async function refresh(silent = false) {
   else error.value = failure(results[0].reason)
   if (results[1].status === 'fulfilled') {
     runs.value = results[1].value
+    const visibleIds = new Set((runs.value?.items || []).filter(canDeleteModelRun).map(run => run.id))
+    selectedRunIds.value = selectedRunIds.value.filter(id => visibleIds.has(id))
     if (page.value > pages.value) { page.value = pages.value; void refresh(silent); return }
   }
   else error.value = failure(results[1].reason)
@@ -275,6 +281,7 @@ watch(() => props.siteId, () => {
   generation++; refreshGeneration++; ++localTargetsGeneration; ++localTargetsRequest; clearTimer(); pendingStart = null
   policies.value = []; runs.value = null; loading.value = false; busy.value = false; error.value = ''; notice.value = ''
   page.value = 1; batchId.value = ''; detailId.value = ''; deleteId.value = null; deleteRunId.value = null; hideRunId.value = null; editorOpen.value = false
+  clearRunSelection()
   runFilters.value = {}
   comparison.value = null; statsGeneration++; stats.value = null; statsError.value = ''; statsExpanded.value = false
   editingPolicy.value = null; localSelectionTouched = false; localModelTouched = false; localModeTouched = false; config.value = initialConfig()
@@ -284,6 +291,7 @@ watch(() => props.siteId, () => {
   void refresh()
 }, { immediate: true })
 watch(() => props.localOnly, () => {
+  clearRunSelection()
   ++localTargetsGeneration
   ++localTargetsRequest
   localSelectionTouched = false; localModelTouched = false; localModeTouched = false
@@ -324,7 +332,7 @@ async function start() {
   await mutate(async () => {
     const batch = await api.startBatch(id, input)
     if (request !== generation) return
-    pendingStart = null; batchId.value = batch.id; page.value = 1; notice.value = mt('batchStarted')
+    pendingStart = null; batchId.value = batch.id; page.value = 1; clearRunSelection(); notice.value = mt('batchStarted')
     runs.value = { items: [], total: batch.total, page: 1, page_size: 20, counts: { queued: batch.total } }
   })
 }
@@ -339,7 +347,7 @@ async function runPolicy(policy: ModelPolicy) {
   await mutate(async () => {
     const batch = await api.startBatch(id, input)
     if (request !== generation) return
-    pendingStart = null; batchId.value = batch.id; page.value = 1; notice.value = mt('batchStarted')
+    pendingStart = null; batchId.value = batch.id; page.value = 1; clearRunSelection(); notice.value = mt('batchStarted')
     runs.value = { items: [], total: batch.total, page: 1, page_size: 20, counts: { queued: batch.total } }
   })
 }
@@ -407,8 +415,40 @@ async function removeRun(run: ModelRun) {
     await api.deleteRun(id, run.id)
     if (request === generation) {
       deleteRunId.value = null
+      selectedRunIds.value = selectedRunIds.value.filter(value => value !== run.id)
       if (detailId.value === run.id) detailId.value = ''
     }
+  })
+}
+function confirmBulkDelete() {
+  if (locked.value || loading.value || !props.localOnly || !selectedRuns.value.length) return
+  deleteRunIds.value = selectedRuns.value.map(run => run.id)
+}
+async function removeSelectedRuns() {
+  if (locked.value || !props.localOnly || !deleteRunIds.value?.length) return
+  const request = generation, site = props.siteId, ids = [...deleteRunIds.value]
+  await mutate(async () => {
+    const removed = new Set<string>(), failed: string[] = []
+    let firstError: unknown
+    // Keep requests bounded and record each outcome so a partial failure can be retried.
+    for (let offset = 0; offset < ids.length; offset += 4) {
+      if (request !== generation || !props.localOnly) return
+      const chunk = ids.slice(offset, offset + 4)
+      const results = await Promise.allSettled(chunk.map(id => api.deleteRun(site, id)))
+      for (let index = 0; index < results.length; index++) {
+        const result = results[index]!
+        if (result.status === 'fulfilled') removed.add(chunk[index]!)
+        else { failed.push(chunk[index]!); firstError ??= result.reason }
+      }
+    }
+    if (request !== generation || !props.localOnly) return
+    selectedRunIds.value = failed; deleteRunIds.value = null
+    if (runs.value) runs.value.items = runs.value.items.filter(run => !removed.has(run.id))
+    if (removed.has(detailId.value)) detailId.value = ''
+    if (deleteRunId.value && removed.has(deleteRunId.value)) deleteRunId.value = null
+    if (hideRunId.value && removed.has(hideRunId.value)) hideRunId.value = null
+    if (failed.length) error.value = `${t('governance.modelMonitoring.bulkDeletePartial', { deleted: removed.size, failed: failed.length })} ${failure(firstError)}`
+    else notice.value = t('governance.modelMonitoring.bulkDeleteSuccess', { count: removed.size })
   })
 }
 async function hideRun(run: ModelRun) {
@@ -418,13 +458,14 @@ async function hideRun(run: ModelRun) {
     if (request === generation) hideRunId.value = null
   })
 }
-function showBatch(id: string) { if (locked.value) return; batchId.value = id; page.value = 1; void refresh() }
+function showBatch(id: string) { if (locked.value) return; clearRunSelection(); batchId.value = id; page.value = 1; void refresh() }
 function applyRunFilters(value: RunFilters) {
   if (locked.value) return
+  clearRunSelection()
   runFilters.value = value; page.value = 1; hideRunId.value = null; deleteRunId.value = null
   void refresh()
 }
-function changePage(value: number) { if (locked.value || loading.value) return; page.value = value; void refresh() }
+function changePage(value: number) { if (locked.value || loading.value) return; clearRunSelection(); page.value = value; void refresh() }
 function reviewed(value: ModelRun) { if (runs.value) runs.value.items = runs.value.items.map(run => run.id === value.id ? value : run) }
 function compare(run: ModelRun) { comparison.value = { batchId: run.batch_id, template: run.request.template, sample: run.request.sample } }
 function comparisonDetail(id: string) { comparison.value = null; detailId.value = id }
@@ -488,8 +529,8 @@ function comparisonDetail(id: string) { comparison.value = null; detailId.value 
         <div role="progressbar" :aria-label="mt('batchProgress')" :aria-valuenow="progress" aria-valuemin="0" aria-valuemax="100" class="h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-dark-700"><div class="h-full rounded-full bg-primary-500 transition-[width] motion-reduce:transition-none" :style="{ width: `${progress}%` }" /></div>
         <p class="text-xs text-gray-500">{{ mt('cancelHint') }}</p>
       </div>
-      <ModelRunFilters :key="siteId" :disabled="locked" :loading="loading" @apply="applyRunFilters" />
-      <ModelRunTable :key="`${siteId}:${page}:${batchId}:${JSON.stringify(runFilters)}`" v-model:hide-id="hideRunId" v-model:delete-id="deleteRunId" :items="runs?.items || []" :loading="loading" :disabled="!!locked" :filtered="hasRunFilters" :batch-id="batchId" :target-label="targetLabel" @detail="detailId = $event" @compare="compare" @batch="showBatch" @hide="hideRun" @remove="removeRun" />
+      <ModelRunFilters :key="siteId" :disabled="locked" :loading="loading" :bulk-delete="localOnly" :selection-count="selectedRuns.length" @apply="applyRunFilters" @delete-selected="confirmBulkDelete" />
+      <ModelRunTable :key="`${siteId}:${page}:${batchId}:${JSON.stringify(runFilters)}`" v-model:hide-id="hideRunId" v-model:delete-id="deleteRunId" v-model:selected-ids="selectedRunIds" :selectable="localOnly" :items="runs?.items || []" :loading="loading" :disabled="!!locked" :filtered="hasRunFilters" :batch-id="batchId" :target-label="targetLabel" @detail="detailId = $event" @compare="compare" @batch="showBatch" @hide="hideRun" @remove="removeRun" />
       <div class="flex flex-wrap items-center justify-between gap-3 text-xs text-gray-500">
         <span>{{ t('governance.modelMonitoring.filteredTotal', { count: runs?.total || 0 }) }}</span>
         <div class="flex items-center gap-3">
@@ -499,6 +540,15 @@ function comparisonDetail(id: string) { comparison.value = null; detailId.value 
         </div>
       </div>
     </section>
+    <BaseDialog v-if="deleteRunIds" :show="true" :title="mt('bulkDeleteRuns')" :show-close-button="!locked" :close-on-escape="!locked" @close="!locked && (deleteRunIds = null)">
+      <div data-test="model-runs-bulk-delete-dialog" class="space-y-4">
+        <p class="text-sm leading-relaxed">{{ t('governance.modelMonitoring.bulkDeleteConfirm', { count: deleteRunIds.length }) }}</p>
+        <div class="flex flex-wrap justify-end gap-3">
+          <button type="button" data-test="model-runs-bulk-delete-cancel" class="btn btn-secondary" :disabled="locked" @click="deleteRunIds = null">{{ t('common.cancel') }}</button>
+          <button type="button" data-test="model-runs-bulk-delete-confirm" class="btn btn-danger" :disabled="locked" @click="removeSelectedRuns">{{ busy ? t('common.loading') : t('common.delete') }}</button>
+        </div>
+      </div>
+    </BaseDialog>
     <ModelComparison v-if="comparison" :site-id="siteId" :batch-id="comparison.batchId" :template="comparison.template" :sample="comparison.sample" @close="comparison = null" @detail="comparisonDetail" />
     <ModelRunDetail v-if="detailId" :site-id="siteId" :run-id="detailId" :disabled="disabled" @close="detailId = ''" @reviewed="reviewed" />
   </section>
