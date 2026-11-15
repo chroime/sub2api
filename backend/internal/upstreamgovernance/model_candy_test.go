@@ -20,6 +20,10 @@ func TestModelCandyCompatibleConclusions(t *testing.T) {
 		"答案：二十一颗。",
 		"因此最少取出21颗。\n如果完全盲取，答案为29颗。",
 		"答案是21颗。\n> 引用示例：答案为29颗。",
+		"最少需要取出 **21个糖果**，具体方法是：摸取9个圆形糖果和12个五角星形糖果。",
+		"最少取出21个：选取9个圆形糖果和12个五角星形糖果。",
+		"因此，答案为\n\\[\n\\boxed{21\\text{ 个（圆形 9 个，五角星形 12 个）}}。\n\\]",
+		"最少需要取出21颗。\n9+12=\\boxed{21\\text{颗}}。\n故20颗仍有失败的可能，最少是21颗。",
 	} {
 		t.Run(text, func(t *testing.T) {
 			answer, verdict := modelCandyVerdict(text)
@@ -63,6 +67,8 @@ func TestModelCandyCompatibilityRetainsAmbiguity(t *testing.T) {
 		"21。这个数只是示例，并非结论。",
 		"21。该数字不能作为最终答案。",
 		"> 引用开始\n答案是21颗。",
+		"答案是21颗。\n\\boxed{21.5}",
+		"答案：21个（圆形9个，五角星12个，或者29个）。",
 	} {
 		answer, verdict := modelCandyVerdict(text)
 		require.Nil(t, answer, text)

@@ -13,6 +13,8 @@ var (
 	modelCandyUnit            = `(?:颗糖果|个糖果|颗|个|粒|candies|candy)?`
 	modelCandyNumber          = `[0-9零〇一二两三四五六七八九十百]+`
 	modelCandyValue           = regexp.MustCompile(`(?i)^\s*(` + modelCandyNumber + `)\s*` + modelCandyUnit + `\s*[。.!！:：]?\s*$`)
+	modelCandyExplainedValue  = regexp.MustCompile(`(?i)^\s*(` + modelCandyNumber + `)\s*` + modelCandyUnit + `\s*[，,：:]`)
+	modelCandyShapeNote       = regexp.MustCompile(`（\s*(?:圆形\s*\d+\s*[颗个]|\d+\s*[颗个]\s*圆形)\s*[，,＋+和、]\s*(?:五角星形?\s*\d+\s*[颗个]|\d+\s*[颗个]\s*五角星形?)\s*）`)
 	modelCandyLabel           = regexp.MustCompile(`(?i)(?:(?:最终|最后)?答案\s*(?:(?:应为|是|为)\s*)?[:：]?|(?:最终)?结论\s*(?:(?:是|为)\s*)?[:：]?|最少\s*(?:需要|需|要)?\s*(?:取出|摸出|抽取|取|摸)\s*(?:的)?\s*(?:糖果)?\s*(?:数目|数量|总数)?\s*(?:是|为)?\s*[:：]?|(?:the\s+)?(?:final\s+)?answer\s*(?:is)?\s*[:：])\s*`)
 	modelCandyPrefix          = regexp.MustCompile(`^(?:(?:因此|所以|综上所述|综上|由此可知|故|总之)[，,：:\s]*)+`)
 	modelCandyMarkdown        = regexp.MustCompile(`^(?:#{1,6}\s+|[-*+]\s+)`)
@@ -35,6 +37,7 @@ func normalizeModelCandyLine(line string) string {
 	}, line)
 	line = strings.NewReplacer("**", "", "__", "", "`", "", `\[`, "", `\]`, "", `\(`, "", `\)`, "", "$", "", `\,`, " ", `\!`, "", `\;`, " ", `\quad`, " ").Replace(line)
 	line = modelCandyText.ReplaceAllString(line, "$1")
+	line = modelCandyShapeNote.ReplaceAllString(line, "")
 	return strings.TrimSpace(modelCandyMarkdown.ReplaceAllString(strings.TrimSpace(line), ""))
 }
 
@@ -101,6 +104,9 @@ func modelCandyVerdict(text string) (*int, string) {
 	add := func(value string, explicit bool) {
 		value = strings.TrimSpace(modelCandyBox.ReplaceAllString(value, "$1"))
 		match := modelCandyValue.FindStringSubmatch(value)
+		if len(match) != 2 && explicit {
+			match = modelCandyExplainedValue.FindStringSubmatch(value)
+		}
 		if len(match) != 2 {
 			if explicit {
 				ambiguous = true
@@ -197,8 +203,9 @@ func modelCandyVerdict(text string) (*int, string) {
 				}
 			}
 			if len(labels) == 0 {
-				if modelCandyBox.MatchString(sentence) || (strings.TrimSpace(text) == raw && modelCandyValue.MatchString(line)) {
-					add(sentence, modelCandyBox.MatchString(sentence))
+				boxed := strings.HasPrefix(sentence, `\boxed{`) || strings.HasPrefix(sentence, `\fbox{`)
+				if boxed || (strings.TrimSpace(text) == raw && modelCandyValue.MatchString(line)) {
+					add(sentence, boxed)
 				}
 			}
 		}
