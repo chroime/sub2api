@@ -132,29 +132,30 @@ type ModelSecuritySummary struct {
 }
 
 type ModelRunResult struct {
-	TemplateVersion string               `json:"template_version"`
-	AdapterVersion  string               `json:"adapter_version"`
-	Success         bool                 `json:"success"`
-	ErrorCode       string               `json:"error_code"`
-	HTTPStatus      int                  `json:"http_status"`
-	ResponseModel   string               `json:"response_model"`
-	EffortSupport   string               `json:"effort_support"`
-	SentParameters  map[string]any       `json:"sent_parameters,omitempty"`
-	RequestBody     json.RawMessage      `json:"request_body,omitempty"`
-	InputText       string               `json:"input_text,omitempty"`
-	ResponseText    string               `json:"response_text,omitempty"`
-	HTML            string               `json:"html,omitempty"`
-	FinishReason    string               `json:"finish_reason"`
-	Streamed        bool                 `json:"streamed"`
-	Completed       bool                 `json:"completed"`
-	CandyAnswer     *int                 `json:"candy_answer,omitempty"`
-	TTFTMS          *int64               `json:"ttft_ms"`
-	DurationMS      int64                `json:"duration_ms"`
-	Usage           ModelUsage           `json:"usage"`
-	RawUsage        json.RawMessage      `json:"raw_usage,omitempty"`
-	Tokens          ModelTokenAudit      `json:"tokens"`
-	CandyVerdict    string               `json:"candy_verdict"`
-	Security        ModelSecuritySummary `json:"security"`
+	TemplateVersion   string               `json:"template_version"`
+	AdapterVersion    string               `json:"adapter_version"`
+	Success           bool                 `json:"success"`
+	ErrorCode         string               `json:"error_code"`
+	HTTPStatus        int                  `json:"http_status"`
+	ResponseModel     string               `json:"response_model"`
+	EffortSupport     string               `json:"effort_support"`
+	SentParameters    map[string]any       `json:"sent_parameters,omitempty"`
+	RequestBody       json.RawMessage      `json:"request_body,omitempty"`
+	InputText         string               `json:"input_text,omitempty"`
+	ResponseText      string               `json:"response_text,omitempty"`
+	HTML              string               `json:"html,omitempty"`
+	FinishReason      string               `json:"finish_reason"`
+	Streamed          bool                 `json:"streamed"`
+	Completed         bool                 `json:"completed"`
+	CandyAnswer       *int                 `json:"candy_answer,omitempty"`
+	TTFTMS            *int64               `json:"ttft_ms"`
+	DurationMS        int64                `json:"duration_ms"`
+	Usage             ModelUsage           `json:"usage"`
+	RawUsage          json.RawMessage      `json:"raw_usage,omitempty"`
+	Tokens            ModelTokenAudit      `json:"tokens"`
+	CandyVerdict      string               `json:"candy_verdict"`
+	CandyJudgeVersion string               `json:"candy_judge_version,omitempty"`
+	Security          ModelSecuritySummary `json:"security"`
 }
 
 type ModelRun struct {

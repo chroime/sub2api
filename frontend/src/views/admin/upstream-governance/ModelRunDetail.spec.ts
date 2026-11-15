@@ -16,7 +16,7 @@ describe('model evidence and isolated artifact preview', () => {
     expect(wrapper.get('[data-test=model-ttft]').text()).toBe('governance.modelMonitoring.unknown')
     expect(wrapper.get('[data-test=model-candy-reference]').text()).toContain('governance.modelMonitoring.candyReference')
     expect(wrapper.get('[data-test=model-candy-reference]').text()).toContain('21')
-    expect(wrapper.get('[data-test=model-review]').text()).toContain('governance.modelMonitoring.review_pending')
+    expect(wrapper.get('[data-test=model-review]').text()).toContain('governance.modelMonitoring.review_optional')
     await wrapper.findAll('nav button').find(button => button.text() === 'governance.modelMonitoring.tokens')!.trigger('click')
     expect(wrapper.get('[data-test=declared-input]').text()).toBe('governance.modelMonitoring.unknown')
     expect(wrapper.get('[data-test=declared-output]').text()).toBe('governance.modelMonitoring.unknown')

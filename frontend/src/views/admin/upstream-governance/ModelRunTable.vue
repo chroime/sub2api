@@ -7,6 +7,7 @@ import type { ModelRun, ModelTestConfig } from '@/api/admin/upstream-model-monit
 import StatusIndicator from './StatusIndicator.vue'
 import { formatGovernanceTime } from './format'
 import { canDeleteModelRun } from './model-run-selection'
+import { modelReviewState } from './model-review'
 
 const props = defineProps<{
   items: ModelRun[]
@@ -31,7 +32,7 @@ const emit = defineEmits<{ detail: [id: string]; compare: [run: ModelRun]; batch
 const { t } = useI18n()
 const mt = (key: string) => t(`governance.modelMonitoring.${key}`)
 const runTone = (state: string) => state === 'succeeded' ? 'success' : state === 'failed' ? 'danger' : state === 'indeterminate' ? 'warning' : ['queued', 'running'].includes(state) ? 'info' : 'neutral'
-const reviewTone = (review: ModelRun['review']) => review === 'pass' ? 'success' : review === 'fail' ? 'danger' : 'neutral'
+const reviewTone = (review: string) => ['pass', 'auto_numeric_correct'].includes(review) ? 'success' : ['fail', 'auto_numeric_incorrect'].includes(review) ? 'danger' : 'neutral'
 const timing = (ms: number | null | undefined) => ms == null ? '—' : `${ms.toLocaleString()} ms`
 const canHide = (run: ModelRun) => run.request.template === 'pelican' && run.request.config.target_type === 'local_group'
 </script>
@@ -64,7 +65,7 @@ const canHide = (run: ModelRun) => run.request.template === 'pelican' && run.req
               </td>
               <td class="whitespace-nowrap px-3 py-3 align-middle"><p>{{ mt(`template_${run.request.template}`) }}</p><p class="mt-1 text-gray-500">{{ run.request.effort }} · {{ mt('sample') }} {{ run.request.sample }}</p></td>
               <td class="whitespace-nowrap px-3 py-3 align-middle"><span class="inline-flex items-center gap-1"><StatusIndicator :label="mt(`state_${run.status}`)" :tone="runTone(run.status)" aria-hidden="true" :tabindex="-1" /><span>{{ mt(`state_${run.status}`) }}</span></span></td>
-              <td class="whitespace-nowrap px-3 py-3 align-middle"><span class="inline-flex items-center gap-1"><StatusIndicator :label="mt(`review_${run.review || 'pending'}`)" :tone="reviewTone(run.review)" aria-hidden="true" :tabindex="-1" /><span>{{ mt(`review_${run.review || 'pending'}`) }}</span></span></td>
+              <td class="whitespace-nowrap px-3 py-3 align-middle"><span class="inline-flex items-center gap-1"><StatusIndicator :label="mt(`review_${modelReviewState(run)}`)" :tone="reviewTone(modelReviewState(run))" aria-hidden="true" :tabindex="-1" /><span>{{ mt(`review_${modelReviewState(run)}`) }}</span></span></td>
               <td class="whitespace-nowrap px-3 py-3 align-middle tabular-nums"><p>{{ timing(run.result?.ttft_ms) }}</p><p class="mt-1 text-gray-500">{{ timing(run.result?.duration_ms) }}</p></td>
               <td class="whitespace-nowrap px-3 py-3 align-middle tabular-nums text-gray-500"><time :datetime="run.created_at">{{ formatGovernanceTime(run.created_at) }}</time></td>
               <td class="px-3 py-3 align-middle">

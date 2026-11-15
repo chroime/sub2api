@@ -5,6 +5,7 @@ import BaseDialog from '@/components/common/BaseDialog.vue'
 import Select from '@/components/common/Select.vue'
 import api, { type ModelReview, type ModelRun } from '@/api/admin/upstream-model-monitoring'
 import { formatGovernanceTime } from './format'
+import { modelReviewState } from './model-review'
 import { errorKey } from './feedback'
 import { downloadModelArtifact, modelHTMLArtifacts, modelPreviewCSP, modelPreviewDocument } from './model-preview'
 
@@ -21,7 +22,7 @@ const artifacts = computed(() => modelHTMLArtifacts(result.value?.response_text 
 const artifact = computed(() => artifacts.value[artifactIndex.value])
 const artifactOptions = computed(() => artifacts.value.map((item, value) => ({ value, label: item.source.startsWith('block:') ? `${mt('htmlBlock')} ${item.source.split(':')[1]}` : mt(item.source === 'original' ? 'originalHTML' : 'savedHTML') })))
 const preview = computed(() => artifact.value ? modelPreviewDocument(artifact.value.html) : '')
-const reviewOptions = computed(() => (['pending', 'pass', 'fail'] as const).map(value => ({ value, label: mt(`review_${value}`) })))
+const reviewOptions = computed(() => (['pending', 'pass', 'fail'] as const).map(value => ({ value, label: mt(value === 'pending' && run.value && modelReviewState(run.value).startsWith('auto_') ? 'review_optional' : `review_${value}`) })))
 const unknown = (value: unknown) => value === null || value === undefined || value === '' ? mt('unknown') : String(value)
 const percent = (value: number | null | undefined) => value == null ? mt('unknown') : `${value.toFixed(2)}%`
 const pretty = (value: unknown) => value == null ? mt('unknown') : typeof value === 'string' ? value : JSON.stringify(value, null, 2)

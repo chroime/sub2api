@@ -4,8 +4,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"regexp"
-	"strconv"
 	"strings"
 )
 
@@ -111,72 +109,6 @@ func buildModelContextPrompt(cfg ModelTestConfig, echo bool) (modelPrompt, error
 	b.WriteString("</source_document>\nReturn the requested anchor values from the document.")
 	p.text = b.String()
 	return p, nil
-}
-
-var modelBareCandyAnswer = regexp.MustCompile(`^\s*(\d{1,3})\s*(?:颗|个|颗糖果|个糖果)?\s*[。.!！]?\s*$`)
-var modelCandyConclusion = regexp.MustCompile(`^(?:最终)?(?:答案\s*(?:是|为|[：:])|最少(?:需要)?(?:取出|取))\s*(\d{1,3})\s*(?:颗糖果|个糖果|颗|个)?\s*[。.!！]?\s*$`)
-var modelCandyLabeledNumber = regexp.MustCompile(`(?:答案\s*(?:是|为|[：:])|最少(?:需要)?(?:取出|取))\s*(\d+(?:\.\d+)?)`)
-var modelCandyAlternatives = regexp.MustCompile(`\d+\s*(?:颗糖果|个糖果|颗|个)?\s*(?:或(?:者)?|还是|和|、|/|至|到|[-~～])\s*\d+`)
-
-func modelCandyVerdict(text string) (*int, string) {
-	match := modelBareCandyAnswer.FindStringSubmatch(strings.ReplaceAll(text, "**", ""))
-	if len(match) == 2 {
-		n, _ := strconv.Atoi(match[1])
-		return modelCandyNumericVerdict(n)
-	}
-	var conclusion *int
-	labels := map[int]bool{}
-	ambiguous := false
-	inFence := false
-	for _, raw := range strings.Split(text, "\n") {
-		line := strings.TrimSpace(strings.ReplaceAll(raw, "**", ""))
-		if strings.HasPrefix(line, "```") || strings.HasPrefix(line, "~~~") {
-			inFence = !inFence
-			continue
-		}
-		candidateLine := !inFence && !strings.HasPrefix(line, ">")
-		// A conditional interpretation is not the answer to the actual problem.
-		// Only explicit prefix forms are ignored; uncertain prose stays for review.
-		conditional := false
-		for _, prefix := range []string{"如果", "若", "假如", "假设", "完全盲取时", "盲取时", "在盲取情况下", "在完全盲取情况下", "不能按形状选择时", "不区分形状时"} {
-			if strings.HasPrefix(line, prefix) {
-				conditional = true
-				break
-			}
-		}
-		if conditional {
-			continue
-		}
-		labeledNumbers := modelCandyLabeledNumber.FindAllStringSubmatch(line, -1)
-		if len(labeledNumbers) > 0 && modelCandyAlternatives.MatchString(line) {
-			ambiguous = true
-		}
-		for _, labeled := range labeledNumbers {
-			n, err := strconv.Atoi(labeled[1])
-			if err != nil {
-				ambiguous = true
-				continue
-			}
-			labels[n] = true
-		}
-		if m := modelCandyConclusion.FindStringSubmatch(line); candidateLine && len(m) == 2 {
-			n, _ := strconv.Atoi(m[1])
-			conclusion = &n
-		}
-	}
-	// The numerical conclusion alone is checked. A proof, quoted example,
-	// ambiguous answer, or conflicting conclusion never gets an automatic pass.
-	if conclusion == nil || len(labels) != 1 || ambiguous {
-		return nil, "needs_review"
-	}
-	return modelCandyNumericVerdict(*conclusion)
-}
-
-func modelCandyNumericVerdict(n int) (*int, string) {
-	if n == 21 {
-		return &n, "numeric_correct"
-	}
-	return &n, "numeric_incorrect"
 }
 
 // Only an unambiguous whole HTML answer or a single HTML code block becomes an

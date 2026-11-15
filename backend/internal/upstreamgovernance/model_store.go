@@ -69,7 +69,7 @@ func (m *modelStore) policy(ctx context.Context, siteID, id int64) (*ModelPolicy
 const modelRunColumns = `id,batch_id,site_id,policy_id,sequence,request,status,result,review,review_note,created_at,started_at,finished_at,reviewer_id,reviewed_at,review_version`
 
 // Large prompts and original HTML are loaded only from the run detail endpoint.
-const modelRunSummaryColumns = `id,batch_id,site_id,policy_id,sequence,request,status,result-'request_body'-'input_text'-'response_text'-'html'-'sent_parameters'-'raw_usage',review,review_note,created_at,started_at,finished_at,reviewer_id,reviewed_at,review_version`
+const modelRunSummaryColumns = `id,batch_id,site_id,policy_id,sequence,request,status,(result-'request_body'-'input_text'-'response_text'-'html'-'sent_parameters'-'raw_usage') || CASE WHEN request->>'template'='candy' AND status='succeeded' AND result->>'candy_judge_version' IS DISTINCT FROM '` + modelCandyJudgeVersion + `' AND octet_length(result->>'response_text') <= 131072 THEN jsonb_build_object('candy_rejudge_text',result->>'response_text') ELSE '{}'::jsonb END,review,review_note,created_at,started_at,finished_at,reviewer_id,reviewed_at,review_version`
 
 func scanModelRun(row rowScanner) (*ModelRun, error) {
 	var r ModelRun
@@ -84,6 +84,24 @@ func scanModelRun(row rowScanner) (*ModelRun, error) {
 	if len(result) > 0 && string(result) != "null" {
 		if err = json.Unmarshal(result, &r.Result); err != nil {
 			return nil, err
+		}
+		// Re-evaluate historical numerical conclusions in the read projection.
+		// Stored answers, original verdicts and audited proof reviews stay intact.
+		if r.Request.Template == "candy" && r.Status == "succeeded" && r.Result.Success && r.Result.ErrorCode == "" && r.Result.CandyJudgeVersion != modelCandyJudgeVersion {
+			text := r.Result.ResponseText
+			if text == "" {
+				var legacy struct {
+					Text string `json:"candy_rejudge_text"`
+				}
+				if err = json.Unmarshal(result, &legacy); err != nil {
+					return nil, err
+				}
+				text = legacy.Text
+			}
+			if text != "" && len(text) <= modelCandyHistoryMaxBytes {
+				r.Result.CandyAnswer, r.Result.CandyVerdict = modelCandyVerdict(text)
+				r.Result.CandyJudgeVersion = modelCandyJudgeVersion
+			}
 		}
 		// Populate the credential-free security projection for legacy rows that
 		// predate the field and normalize it whenever a run is read.

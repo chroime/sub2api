@@ -59,6 +59,7 @@ func (c *platformConnector) RunModel(ctx context.Context, site Site, key RemoteK
 		}
 		if request.Template == "candy" {
 			result.CandyAnswer, result.CandyVerdict = modelCandyVerdict(result.ResponseText)
+			result.CandyJudgeVersion = modelCandyJudgeVersion
 		}
 		if request.Template == "pelican" {
 			result.HTML = extractModelHTML(result.ResponseText)
