@@ -22,7 +22,8 @@ var (
 	modelCandyBox             = regexp.MustCompile(`\\(?:boxed|fbox)\s*\{([^{}]*)\}`)
 	modelCandySentences       = regexp.MustCompile(`[。！!；;]`)
 	modelCandyUncertain       = regexp.MustCompile(`可能|也许|大概|不确定|或许|或者|还是|[?？]|(?i:maybe|perhaps|either)`)
-	modelCandyUncertainPrefix = regexp.MustCompile(`^(?:也?可能|也许|大概|不确定|或许|(?i:maybe|perhaps|either))`)
+	modelCandyUncertainPrefix = regexp.MustCompile(`^(?:也?可能|也许|大概|不确定|或许|或者|还是|(?i:maybe|perhaps|either))`)
+	modelCandyAlternatives    = regexp.MustCompile(modelCandyNumber + `\s*` + modelCandyUnit + `\s*(?:或(?:者)?|还是|和|、|/|至|到|[-~～])\s*` + modelCandyNumber)
 	modelCandyNonFinal        = regexp.MustCompile(`先假设|并非.*(?:答案|结论)|不能作为.*(?:答案|结论)|(?:只是|仅为).*示例|撤回.*答案`)
 )
 
@@ -148,9 +149,6 @@ func modelCandyVerdict(text string) (*int, string) {
 		if line == "" {
 			continue
 		}
-		if modelCandyPrefix.MatchString(line) || strings.HasPrefix(line, "最终答案") || strings.HasPrefix(line, "最后答案") {
-			ignoredBlock = false
-		}
 		line = modelCandyPrefix.ReplaceAllString(line, "")
 		if modelCandyNonFinal.MatchString(line) {
 			ambiguous = true
@@ -168,6 +166,9 @@ func modelCandyVerdict(text string) (*int, string) {
 			continue
 		}
 		if modelCandyUncertain.MatchString(line) && (modelCandyLabel.MatchString(line) || modelCandyUncertainPrefix.MatchString(line)) {
+			ambiguous = true
+		}
+		if modelCandyLabel.MatchString(line) && (modelCandyAlternatives.MatchString(line) || (strings.Contains(line, "前提是") && strings.Contains(line, "否则"))) {
 			ambiguous = true
 		}
 		if pending {

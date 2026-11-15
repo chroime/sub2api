@@ -70,6 +70,11 @@ func TestModelCandyCompatibilityRetainsAmbiguity(t *testing.T) {
 		"答案是21颗。\n\\boxed{21.5}",
 		"答案：21个（圆形9个，五角星12个，或者29个）。",
 		"答案：21，29颗。",
+		"答案是21颗，具体数值在21到29之间。",
+		"答案是21颗，前提是可以看到糖果颜色；否则应当取29颗。",
+		"示例：\n最终答案是21颗。",
+		"如果完全盲取：\n因此，答案是21颗。",
+		"答案是21颗。\n或者29颗。",
 	} {
 		answer, verdict := modelCandyVerdict(text)
 		require.Nil(t, answer, text)
