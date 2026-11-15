@@ -159,22 +159,23 @@ type ModelRunResult struct {
 }
 
 type ModelRun struct {
-	ID            string          `json:"id"`
-	BatchID       string          `json:"batch_id"`
-	SiteID        int64           `json:"site_id"`
-	PolicyID      *int64          `json:"policy_id"`
-	Sequence      int             `json:"sequence"`
-	Request       ModelRunRequest `json:"request"`
-	Status        string          `json:"status"`
-	Result        *ModelRunResult `json:"result,omitempty"`
-	Review        string          `json:"review"`
-	ReviewNote    string          `json:"review_note"`
-	ReviewerID    *int64          `json:"reviewer_id"`
-	ReviewedAt    *time.Time      `json:"reviewed_at"`
-	ReviewVersion int64           `json:"review_version"`
-	CreatedAt     time.Time       `json:"created_at"`
-	StartedAt     *time.Time      `json:"started_at"`
-	FinishedAt    *time.Time      `json:"finished_at"`
+	ID              string          `json:"id"`
+	BatchID         string          `json:"batch_id"`
+	SiteID          int64           `json:"site_id"`
+	PolicyID        *int64          `json:"policy_id"`
+	Sequence        int             `json:"sequence"`
+	Request         ModelRunRequest `json:"request"`
+	Status          string          `json:"status"`
+	Result          *ModelRunResult `json:"result,omitempty"`
+	Review          string          `json:"review"`
+	EffectiveReview string          `json:"effective_review"`
+	ReviewNote      string          `json:"review_note"`
+	ReviewerID      *int64          `json:"reviewer_id"`
+	ReviewedAt      *time.Time      `json:"reviewed_at"`
+	ReviewVersion   int64           `json:"review_version"`
+	CreatedAt       time.Time       `json:"created_at"`
+	StartedAt       *time.Time      `json:"started_at"`
+	FinishedAt      *time.Time      `json:"finished_at"`
 }
 
 type ModelRunPage struct {

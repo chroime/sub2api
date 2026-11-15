@@ -71,7 +71,9 @@ func modelRunWhere(siteID int64, batchID string, f ModelRunFilters) (string, []a
 		add(`request->>'effort'=$%d`, f.Effort)
 	}
 	if f.Review != "" {
-		add(`COALESCE(NULLIF(review,''),'pending')=$%d`, f.Review)
+		// Include potential automatic passes, including legacy results awaiting
+		// the current parser. listRuns applies the final projection to this set.
+		add(`(COALESCE(NULLIF(review,''),'pending')=$%d OR (request->>'template'='candy' AND status='succeeded' AND result->>'success'='true' AND COALESCE(result->>'error_code','')='' AND (result->>'candy_verdict'='numeric_correct' OR result->>'candy_judge_version' IS DISTINCT FROM '`+modelCandyJudgeVersion+`')))`, f.Review)
 	}
 	if f.CreatedFrom != nil {
 		add(`created_at>=$%d`, *f.CreatedFrom)

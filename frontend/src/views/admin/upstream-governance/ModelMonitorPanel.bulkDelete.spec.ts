@@ -28,7 +28,7 @@ describe('local model run bulk deletion', () => {
   it('places bulk deletion after search, selects finished rows only, and requires confirmation', async () => {
     const wrapper = setup(); await flushPromises()
     const actions = wrapper.get('[data-test=model-run-filters]').findAll('button[data-test]')
-    expect(actions.map(button => button.attributes('data-test'))).toEqual(['model-run-reset', 'model-run-search', 'model-runs-bulk-delete'])
+    expect(actions.map(button => button.attributes('data-test'))).toEqual(['model-run-reset', 'model-run-search', 'model-runs-bulk-review', 'model-runs-bulk-delete'])
     expect(wrapper.get('[data-test=model-runs-bulk-delete]').attributes('disabled')).toBeDefined()
     expect(wrapper.get('[data-test=model-run-select-running]').attributes('disabled')).toBeDefined()
     expect(wrapper.get('[data-test=model-run-select-queued]').attributes('disabled')).toBeDefined()
@@ -126,9 +126,10 @@ describe('local model run bulk deletion', () => {
     expect(wrapper.get('[data-test=model-runs-bulk-delete]').attributes('disabled')).toBeDefined()
   })
 
-  it('does not show local bulk selection in the upstream panel', async () => {
+  it('allows upstream review selection while keeping bulk deletion local', async () => {
     const wrapper = setup(false); await flushPromises()
     expect(wrapper.find('[data-test=model-runs-bulk-delete]').exists()).toBe(false)
-    expect(wrapper.find('[data-test=model-runs-select-page]').exists()).toBe(false)
+    expect(wrapper.find('[data-test=model-runs-select-page]').exists()).toBe(true)
+    expect(wrapper.find('[data-test=model-runs-bulk-review]').exists()).toBe(true)
   })
 })

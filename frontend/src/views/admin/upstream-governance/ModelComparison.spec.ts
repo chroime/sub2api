@@ -8,6 +8,15 @@ vi.mock('@/api/admin/upstream-model-monitoring', () => ({ default: { runs: vi.fn
 enableAutoUnmount(afterEach)
 describe('same-sample reasoning comparison', () => {
   beforeEach(() => { vi.resetAllMocks() })
+  it('shows the automatic pass consistently in the comparison', async () => {
+    const run = modelRun({ review: 'fail' })
+    vi.mocked(api.runs).mockResolvedValue({ items: [run], total: 1, page: 1, page_size: 20 })
+    vi.mocked(api.run).mockResolvedValue(run)
+    const wrapper = mount(ModelComparison, { props: { siteId: 1, batchId: 'batch-fixture', template: 'candy', sample: 1 }, global: { stubs: { BaseDialog: { template: '<div><slot /></div>' } } } })
+    await flushPromises()
+    expect(wrapper.get('[data-test=model-compare-medium]').text()).toContain('governance.modelMonitoring.review_pass')
+    expect(wrapper.get('[data-test=model-compare-medium]').text()).not.toContain('governance.modelMonitoring.review_fail')
+  })
   it('loads all pages, matches template and sample, and isolates every artwork independently', async () => {
     const low = modelRun({ id: 'low', request: { ...modelRun().request, template: 'pelican', effort: 'low', sample: 2 } })
     const high = modelRun({ id: 'high', request: { ...modelRun().request, template: 'pelican', effort: 'high', sample: 2 } })

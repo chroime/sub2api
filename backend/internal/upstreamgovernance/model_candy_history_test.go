@@ -27,6 +27,7 @@ func TestModelCandyHistoryProjection(t *testing.T) {
 				require.Equal(t, "original review", run.ReviewNote)
 				encoded, err := json.Marshal(run)
 				require.NoError(t, err)
+				require.Contains(t, string(encoded), `"effective_review":"pass"`)
 				require.NotContains(t, string(encoded), "candy_rejudge_text")
 				if field == "candy_rejudge_text" {
 					require.Empty(t, run.Result.ResponseText)
@@ -47,6 +48,9 @@ func TestModelCandyHistoryDoesNotScoreFailedResponses(t *testing.T) {
 	run, err := scanModelRun(db.QueryRow("SELECT"))
 	require.NoError(t, err)
 	require.Equal(t, "needs_review", run.Result.CandyVerdict)
+	encoded, err := json.Marshal(run)
+	require.NoError(t, err)
+	require.Contains(t, string(encoded), `"effective_review":"pending"`)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 

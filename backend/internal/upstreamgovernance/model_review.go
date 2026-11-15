@@ -7,6 +7,18 @@ import (
 	"fmt"
 )
 
+// The numerical rule determines the final run judgment; manual evidence remains
+// separately available in Review/ReviewNote for audit and other templates.
+func modelEffectiveReview(r *ModelRun) string {
+	if r.Request.Template == "candy" && r.Status == "succeeded" && r.Result != nil && r.Result.Success && r.Result.ErrorCode == "" && r.Result.CandyVerdict == "numeric_correct" {
+		return "pass"
+	}
+	if r.Review == "pass" || r.Review == "fail" {
+		return r.Review
+	}
+	return "pending"
+}
+
 // Manual proof/visual verdicts are a separate incident stream from automated
 // availability and token observations. They never rewrite the original answer.
 func (s *Service) recordModelQualityReview(ctx context.Context, tx *sql.Tx, siteID, policyID int64) error {

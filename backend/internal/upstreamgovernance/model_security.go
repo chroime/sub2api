@@ -44,7 +44,7 @@ func summarizeModelSecurity(template string, result ModelRunResult) ModelSecurit
 	case result.CandyVerdict == "numeric_correct":
 		summary.TrustState = "trusted"
 		summary.TrustLabel = "答案正确"
-		summary.Summary = "糖果逻辑题答案通过标准答案校验；证明过程仍可人工复核。"
+		summary.Summary = "糖果逻辑题数值正确，自动判定为符合预期，无需人工复核。"
 	case modelTokenStatesUnverified(result.Tokens):
 		summary.Summary = "当前结果缺少可比的令牌计数，暂时不能完成完整可信度核验。"
 	case template == "pelican" && summary.PelicanHTMLAvailable:

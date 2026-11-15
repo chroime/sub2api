@@ -16,7 +16,8 @@ describe('model evidence and isolated artifact preview', () => {
     expect(wrapper.get('[data-test=model-ttft]').text()).toBe('governance.modelMonitoring.unknown')
     expect(wrapper.get('[data-test=model-candy-reference]').text()).toContain('governance.modelMonitoring.candyReference')
     expect(wrapper.get('[data-test=model-candy-reference]').text()).toContain('21')
-    expect(wrapper.get('[data-test=model-review]').text()).toContain('governance.modelMonitoring.review_optional')
+    expect(wrapper.get('[data-test=model-effective-review]').text()).toContain('governance.modelMonitoring.review_pass')
+    expect(wrapper.find('[data-test=model-review-save]').exists()).toBe(false)
     await wrapper.findAll('nav button').find(button => button.text() === 'governance.modelMonitoring.tokens')!.trigger('click')
     expect(wrapper.get('[data-test=declared-input]').text()).toBe('governance.modelMonitoring.unknown')
     expect(wrapper.get('[data-test=declared-output]').text()).toBe('governance.modelMonitoring.unknown')
@@ -50,6 +51,8 @@ describe('model evidence and isolated artifact preview', () => {
     expect(modelHTMLArtifacts('<script>alert(1)</script>')).toEqual([])
   })
   it('saves explicit human review and does not equate the numerical verdict with proof validation', async () => {
+    const run = modelRun(); run.result!.candy_verdict = 'needs_review'
+    vi.mocked(api.run).mockResolvedValue(run)
     vi.mocked(api.review).mockResolvedValue({ ...modelRun(), review: 'pass', review_note: 'Verified upper and lower bound', reviewer_id: 7, reviewed_at: '2026-09-27T13:00:00Z', review_version: 1 })
     const wrapper = setup(); await flushPromises()
     wrapper.getComponent(Select).vm.$emit('update:modelValue', 'pass')

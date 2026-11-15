@@ -107,6 +107,7 @@ func scanModelRun(row rowScanner) (*ModelRun, error) {
 		// predate the field and normalize it whenever a run is read.
 		r.Result.Security = summarizeModelSecurity(r.Request.Template, *r.Result)
 	}
+	r.EffectiveReview = modelEffectiveReview(&r)
 	return &r, nil
 }
 func (m *modelStore) getRun(ctx context.Context, siteID int64, id string) (*ModelRun, error) {
@@ -160,8 +161,10 @@ func (m *modelStore) listRuns(ctx context.Context, siteID int64, page, size int,
 	}
 	where, args := modelRunWhere(siteID, batchID, f)
 	p := &ModelRunPage{Items: []ModelRun{}, Page: page, PageSize: size, Counts: map[string]int64{}}
-	if err := m.db.QueryRowContext(ctx, `SELECT count(*) FROM upstream_governance_model_runs WHERE `+where, args...).Scan(&p.Total); err != nil {
-		return nil, err
+	if f.Review == "" {
+		if err := m.db.QueryRowContext(ctx, `SELECT count(*) FROM upstream_governance_model_runs WHERE `+where, args...).Scan(&p.Total); err != nil {
+			return nil, err
+		}
 	}
 	counts, err := m.db.QueryContext(ctx, `SELECT status,count(*) FROM upstream_governance_model_runs WHERE site_id=$1 AND ($2='' OR batch_id=$2) GROUP BY status`, siteID, batchID)
 	if err != nil {
@@ -182,8 +185,11 @@ func (m *modelStore) listRuns(ctx context.Context, siteID int64, page, size int,
 		return nil, err
 	}
 	counts.Close()
-	limitOffset := fmt.Sprintf(` LIMIT $%d OFFSET $%d`, len(args)+1, len(args)+2)
-	args = append(args, size, (page-1)*size)
+	limitOffset := ""
+	if f.Review == "" {
+		limitOffset = fmt.Sprintf(` LIMIT $%d OFFSET $%d`, len(args)+1, len(args)+2)
+		args = append(args, size, (page-1)*size)
+	}
 	rows, err := m.db.QueryContext(ctx, `SELECT `+modelRunSummaryColumns+` FROM upstream_governance_model_runs WHERE `+where+` ORDER BY created_at DESC,batch_id,sequence`+limitOffset, args...)
 	if err != nil {
 		return nil, err
@@ -193,6 +199,17 @@ func (m *modelStore) listRuns(ctx context.Context, siteID int64, page, size int,
 		r, e := scanModelRun(rows)
 		if e != nil {
 			return nil, e
+		}
+		if f.Review != "" {
+			// Historical verdicts are rejudged in Go. Apply the identical final
+			// judgment before pagination and count without retaining other pages.
+			if r.EffectiveReview != f.Review {
+				continue
+			}
+			p.Total++
+			if p.Total <= int64((page-1)*size) || len(p.Items) >= size {
+				continue
+			}
 		}
 		p.Items = append(p.Items, *r)
 	}

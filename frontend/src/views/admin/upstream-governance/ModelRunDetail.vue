@@ -5,7 +5,7 @@ import BaseDialog from '@/components/common/BaseDialog.vue'
 import Select from '@/components/common/Select.vue'
 import api, { type ModelReview, type ModelRun } from '@/api/admin/upstream-model-monitoring'
 import { formatGovernanceTime } from './format'
-import { modelReviewState } from './model-review'
+import { isAutomaticModelPass, modelReviewState } from './model-review'
 import { errorKey } from './feedback'
 import { downloadModelArtifact, modelHTMLArtifacts, modelPreviewCSP, modelPreviewDocument } from './model-preview'
 
@@ -73,6 +73,7 @@ function download(kind: 'raw' | 'html') {
       <p v-if="loading" role="status" class="py-8 text-center text-gray-500">{{ t('common.loading') }}</p>
       <button v-if="!loading && !run" type="button" class="btn btn-secondary" @click="load">{{ t('common.refresh') }}</button>
       <template v-if="run">
+        <div data-test="model-effective-review" class="rounded-xl bg-gray-50 p-3 text-sm dark:bg-dark-900"><span class="text-gray-500">{{ mt('finalJudgment') }}：</span><strong>{{ mt(`review_${modelReviewState(run)}`) }}</strong><p v-if="isAutomaticModelPass(run)" class="mt-1 text-xs text-gray-500">{{ mt('automaticPassHint') }}</p></div>
         <div class="flex flex-wrap items-start justify-between gap-3">
           <div class="min-w-0"><p class="break-all font-semibold">{{ run.request.config.model }}</p><p class="mt-1 text-xs text-gray-500">{{ mt(`template_${run.request.template}`) }} · {{ run.request.effort }} · {{ run.request.config.api_mode }}</p><time class="mt-1 block text-xs tabular-nums text-gray-500">{{ formatGovernanceTime(run.created_at) }}</time></div>
           <button type="button" class="btn btn-secondary text-xs" :disabled="loading || saving" @click="load">{{ t('common.refresh') }}</button>
@@ -102,10 +103,11 @@ function download(kind: 'raw' | 'html') {
           <div class="flex flex-wrap items-center justify-between gap-2"><h4 class="font-medium">{{ mt('originalResponse') }}</h4><button v-if="result?.response_text != null" type="button" class="btn btn-secondary text-xs" data-test="model-download-original" @click="download('raw')">{{ mt('downloadOriginal') }}</button></div>
           <pre data-test="model-original-response" class="max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-xl bg-gray-50 p-4 text-sm dark:bg-dark-900">{{ result?.response_text || mt('noResponse') }}</pre>
           <section v-if="result" class="space-y-3 border-t border-gray-100 pt-4 dark:border-dark-700">
-            <h4 class="font-medium">{{ mt('manualReview') }}</h4><p class="text-xs leading-relaxed text-gray-500">{{ run.request.template === 'pelican' ? mt('pelicanReviewHint') : mt('reviewHint') }}</p>
-            <div class="grid gap-3 sm:grid-cols-[180px_1fr]"><Select data-test="model-review" :model-value="review" :options="reviewOptions" :disabled="saving || disabled" :aria-label="mt('manualReview')" @update:model-value="changeReview" /><textarea v-model="note" data-test="model-review-note" class="input min-h-20 w-full text-sm" :aria-label="mt('reviewNote')" :placeholder="mt('reviewNote')" :disabled="saving || disabled" maxlength="2000" /></div>
+            <h4 class="font-medium">{{ mt(isAutomaticModelPass(run) ? 'reviewAudit' : 'manualReview') }}</h4><p class="text-xs leading-relaxed text-gray-500">{{ isAutomaticModelPass(run) ? mt('automaticPassHint') : run.request.template === 'pelican' ? mt('pelicanReviewHint') : mt('reviewHint') }}</p>
+            <div v-if="!isAutomaticModelPass(run)" class="grid gap-3 sm:grid-cols-[180px_1fr]"><Select data-test="model-review" :model-value="review" :options="reviewOptions" :disabled="saving || disabled" :aria-label="mt('manualReview')" @update:model-value="changeReview" /><textarea v-model="note" data-test="model-review-note" class="input min-h-20 w-full text-sm" :aria-label="mt('reviewNote')" :placeholder="mt('reviewNote')" :disabled="saving || disabled" maxlength="2000" /></div>
+            <p v-else-if="run.reviewed_at || run.review_note" class="whitespace-pre-wrap break-words text-sm">{{ mt(`review_${run.review}`) }}<span v-if="run.review_note"> · {{ run.review_note }}</span></p>
             <p v-if="run.reviewed_at" class="text-xs text-gray-500">{{ mt('reviewedAt') }} {{ formatGovernanceTime(run.reviewed_at) }} · {{ mt('reviewer') }} #{{ run.reviewer_id }}</p>
-            <button type="button" data-test="model-review-save" class="btn btn-primary text-sm" :disabled="saving || disabled" @click="saveReview">{{ saving ? t('common.loading') : mt('saveReview') }}</button>
+            <button v-if="!isAutomaticModelPass(run)" type="button" data-test="model-review-save" class="btn btn-primary text-sm" :disabled="saving || disabled" @click="saveReview">{{ saving ? t('common.loading') : mt('saveReview') }}</button>
           </section>
         </section>
         <section v-if="section === 'tokens'" class="min-w-0 space-y-4" data-test="model-token-audit">

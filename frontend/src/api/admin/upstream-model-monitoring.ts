@@ -133,6 +133,7 @@ export interface ModelRun {
   status: string
   result?: ModelRunResult | null
   review: ModelReview
+  effective_review?: ModelReview
   review_note: string
   reviewer_id?: number | null
   reviewed_at?: string | null

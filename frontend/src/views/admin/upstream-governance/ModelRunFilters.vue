@@ -5,8 +5,8 @@ import Select from '@/components/common/Select.vue'
 import Icon from '@/components/icons/Icon.vue'
 import type { ModelEffort, ModelReview, ModelRunFilters, ModelTestTemplate } from '@/api/admin/upstream-model-monitoring'
 
-defineProps<{ disabled?: boolean; loading?: boolean; bulkDelete?: boolean; selectionCount?: number }>()
-const emit = defineEmits<{ apply: [filters: ModelRunFilters]; deleteSelected: [] }>()
+defineProps<{ disabled?: boolean; loading?: boolean; bulkDelete?: boolean; selectionCount?: number; bulkReview?: boolean; reviewCount?: number }>()
+const emit = defineEmits<{ apply: [filters: ModelRunFilters]; deleteSelected: []; reviewSelected: [] }>()
 const { t } = useI18n()
 const mt = (key: string) => t(`governance.modelMonitoring.${key}`)
 const emptyDraft = () => ({ q: '', status: '', template: '' as ModelTestTemplate | '', effort: '' as ModelEffort | 'default' | '', review: '' as ModelReview | '' })
@@ -60,8 +60,8 @@ function reset() {
         <Select v-model="draft.effort" data-test="model-run-effort" class="mt-1" :options="effortOptions" :disabled="disabled" :aria-label="mt('efforts')" />
       </label>
       <label class="min-w-0 text-xs text-gray-500 dark:text-gray-400">
-        {{ mt('manualReview') }}
-        <Select v-model="draft.review" data-test="model-run-review" class="mt-1" :options="reviewOptions" :disabled="disabled" :aria-label="mt('manualReview')" />
+        {{ mt('finalJudgment') }}
+        <Select v-model="draft.review" data-test="model-run-review" class="mt-1" :options="reviewOptions" :disabled="disabled" :aria-label="mt('finalJudgment')" />
       </label>
       <label class="min-w-0 text-xs text-gray-500 dark:text-gray-400">
         {{ mt('createdFrom') }}
@@ -76,6 +76,7 @@ function reset() {
       <p v-if="error" role="alert" class="mr-auto text-xs text-red-600 dark:text-red-400">{{ error }}</p>
       <button type="button" data-test="model-run-reset" class="btn btn-secondary text-xs" :disabled="disabled || loading" @click="reset"><Icon name="refresh" size="sm" aria-hidden="true" />{{ t('common.reset') }}</button>
       <button type="submit" data-test="model-run-search" class="btn btn-primary text-xs" :disabled="disabled || loading"><Icon name="search" size="sm" aria-hidden="true" />{{ t('common.search') }}</button>
+      <button v-if="bulkReview" type="button" data-test="model-runs-bulk-review" class="btn btn-secondary text-xs" :disabled="disabled || loading || !reviewCount" @click="emit('reviewSelected')"><Icon name="check" size="sm" aria-hidden="true" />{{ mt('bulkReviewRuns') }}<span v-if="reviewCount" class="tabular-nums">({{ reviewCount }})</span></button>
       <button v-if="bulkDelete" type="button" data-test="model-runs-bulk-delete" class="btn btn-danger text-xs" :disabled="disabled || loading || !selectionCount" @click="emit('deleteSelected')"><Icon name="trash" size="sm" aria-hidden="true" />{{ mt('bulkDeleteRuns') }}<span v-if="selectionCount" class="tabular-nums">({{ selectionCount }})</span></button>
     </div>
   </form>

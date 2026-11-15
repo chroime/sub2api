@@ -6,7 +6,7 @@ import PlatformIcon from '@/components/common/PlatformIcon.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { getModelsByPlatform } from '@/composables/useModelWhitelist'
 import type { ManagedKey, RemoteGroup, Transport } from '@/api/admin/upstream-governance'
-import api, { type LocalModelTarget, type ModelAPIMode, type ModelBatchInput, type ModelEffort, type ModelPolicy, type ModelRun, type ModelRunFilters as RunFilters, type ModelRunPage, type ModelStats, type ModelTargetType, type ModelTestConfig, type ModelTestTemplate } from '@/api/admin/upstream-model-monitoring'
+import api, { type LocalModelTarget, type ModelAPIMode, type ModelBatchInput, type ModelEffort, type ModelPolicy, type ModelReview, type ModelRun, type ModelRunFilters as RunFilters, type ModelRunPage, type ModelStats, type ModelTargetType, type ModelTestConfig, type ModelTestTemplate } from '@/api/admin/upstream-model-monitoring'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import ModelRunDetail from './ModelRunDetail.vue'
 import ModelComparison from './ModelComparison.vue'
@@ -17,7 +17,8 @@ import { errorKey } from './feedback'
 import { formatGovernanceTime } from './format'
 import { intervalValidationKey } from './interval'
 import { isOpenAITextModel } from './import-config'
-import { canDeleteModelRun } from './model-run-selection'
+import { canDeleteModelRun, canSelectModelRun } from './model-run-selection'
+import { isAutomaticModelPass } from './model-review'
 
 const props = defineProps<{
   siteId: number
@@ -46,8 +47,12 @@ const localTargetsLoading = ref(false), localTargetsError = ref('')
 const page = ref(1), batchId = ref(''), detailId = ref(''), deleteId = ref<number | null>(null), deleteRunId = ref<string | null>(null), hideRunId = ref<string | null>(null)
 const runFilters = ref<RunFilters>({})
 const selectedRunIds = ref<string[]>([]), deleteRunIds = ref<string[] | null>(null)
-const selectedRuns = computed(() => (runs.value?.items || []).filter(run => selectedRunIds.value.includes(run.id) && canDeleteModelRun(run)))
-function clearRunSelection() { selectedRunIds.value = []; deleteRunIds.value = null }
+const selectedRuns = computed(() => (runs.value?.items || []).filter(run => selectedRunIds.value.includes(run.id) && canSelectModelRun(run)))
+const deletableRuns = computed(() => selectedRuns.value.filter(canDeleteModelRun))
+const reviewableRuns = computed(() => selectedRuns.value.filter(run => !isAutomaticModelPass(run)))
+const reviewRunIds = ref<string[] | null>(null), bulkReview = ref<ModelReview>('pass'), bulkReviewNote = ref('')
+const bulkReviewOptions = computed(() => (['pass', 'fail', 'pending'] as const).map(value => ({ value, label: mt(`review_${value}`) })))
+function clearRunSelection() { selectedRunIds.value = []; deleteRunIds.value = null; reviewRunIds.value = null }
 const hasRunFilters = computed(() => Object.keys(runFilters.value).length > 0)
 const comparison = ref<{ batchId: string; template: ModelTestTemplate; sample: number } | null>(null)
 const stats = ref<ModelStats | null>(null), statsError = ref(''), statsDays = ref(7), statsExpanded = ref(false)
@@ -211,7 +216,7 @@ async function refresh(silent = false) {
   else error.value = failure(results[0].reason)
   if (results[1].status === 'fulfilled') {
     runs.value = results[1].value
-    const visibleIds = new Set((runs.value?.items || []).filter(canDeleteModelRun).map(run => run.id))
+    const visibleIds = new Set((runs.value?.items || []).filter(canSelectModelRun).map(run => run.id))
     selectedRunIds.value = selectedRunIds.value.filter(id => visibleIds.has(id))
     if (page.value > pages.value) { page.value = pages.value; void refresh(silent); return }
   }
@@ -421,8 +426,39 @@ async function removeRun(run: ModelRun) {
   })
 }
 function confirmBulkDelete() {
-  if (locked.value || loading.value || !props.localOnly || !selectedRuns.value.length) return
-  deleteRunIds.value = selectedRuns.value.map(run => run.id)
+  if (locked.value || loading.value || !props.localOnly || !deletableRuns.value.length) return
+  deleteRunIds.value = deletableRuns.value.map(run => run.id)
+}
+function confirmBulkReview() {
+  if (locked.value || loading.value || !reviewableRuns.value.length) return
+  reviewRunIds.value = reviewableRuns.value.map(run => run.id)
+  bulkReview.value = 'pass'; bulkReviewNote.value = ''
+}
+function changeBulkReview(value: unknown) {
+  if (!locked.value && (value === 'pass' || value === 'fail' || value === 'pending')) bulkReview.value = value
+}
+async function reviewSelectedRuns() {
+  if (locked.value || !reviewRunIds.value?.length) return
+  const request = generation, site = props.siteId, ids = [...reviewRunIds.value], review = bulkReview.value, note = bulkReviewNote.value.trim()
+  await mutate(async () => {
+    const updated: ModelRun[] = [], failed: string[] = []
+    let firstError: unknown
+    for (let offset = 0; offset < ids.length; offset += 4) {
+      if (request !== generation) return
+      const chunk = ids.slice(offset, offset + 4)
+      const results = await Promise.allSettled(chunk.map(id => api.review(site, id, review, note)))
+      for (let index = 0; index < results.length; index++) {
+        const result = results[index]!
+        if (result.status === 'fulfilled') updated.push(result.value)
+        else { failed.push(chunk[index]!); firstError ??= result.reason }
+      }
+    }
+    if (request !== generation) return
+    if (runs.value) runs.value.items = runs.value.items.map(run => updated.find(value => value.id === run.id) || run)
+    selectedRunIds.value = failed; reviewRunIds.value = null
+    if (failed.length) error.value = `${t('governance.modelMonitoring.bulkReviewPartial', { reviewed: updated.length, failed: failed.length })} ${failure(firstError)}`
+    else notice.value = t('governance.modelMonitoring.bulkReviewSuccess', { count: updated.length })
+  })
 }
 async function removeSelectedRuns() {
   if (locked.value || !props.localOnly || !deleteRunIds.value?.length) return
@@ -529,8 +565,8 @@ function comparisonDetail(id: string) { comparison.value = null; detailId.value 
         <div role="progressbar" :aria-label="mt('batchProgress')" :aria-valuenow="progress" aria-valuemin="0" aria-valuemax="100" class="h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-dark-700"><div class="h-full rounded-full bg-primary-500 transition-[width] motion-reduce:transition-none" :style="{ width: `${progress}%` }" /></div>
         <p class="text-xs text-gray-500">{{ mt('cancelHint') }}</p>
       </div>
-      <ModelRunFilters :key="siteId" :disabled="locked" :loading="loading" :bulk-delete="localOnly" :selection-count="selectedRuns.length" @apply="applyRunFilters" @delete-selected="confirmBulkDelete" />
-      <ModelRunTable :key="`${siteId}:${page}:${batchId}:${JSON.stringify(runFilters)}`" v-model:hide-id="hideRunId" v-model:delete-id="deleteRunId" v-model:selected-ids="selectedRunIds" :selectable="localOnly" :items="runs?.items || []" :loading="loading" :disabled="!!locked" :filtered="hasRunFilters" :batch-id="batchId" :target-label="targetLabel" @detail="detailId = $event" @compare="compare" @batch="showBatch" @hide="hideRun" @remove="removeRun" />
+      <ModelRunFilters :key="siteId" :disabled="locked" :loading="loading" :bulk-delete="localOnly" :bulk-review="true" :selection-count="deletableRuns.length" :review-count="reviewableRuns.length" @apply="applyRunFilters" @delete-selected="confirmBulkDelete" @review-selected="confirmBulkReview" />
+      <ModelRunTable :key="`${siteId}:${page}:${batchId}:${JSON.stringify(runFilters)}`" v-model:hide-id="hideRunId" v-model:delete-id="deleteRunId" v-model:selected-ids="selectedRunIds" :selectable="true" :items="runs?.items || []" :loading="loading" :disabled="!!locked" :filtered="hasRunFilters" :batch-id="batchId" :target-label="targetLabel" @detail="detailId = $event" @compare="compare" @batch="showBatch" @hide="hideRun" @remove="removeRun" />
       <div class="flex flex-wrap items-center justify-between gap-3 text-xs text-gray-500">
         <span>{{ t('governance.modelMonitoring.filteredTotal', { count: runs?.total || 0 }) }}</span>
         <div class="flex items-center gap-3">
@@ -549,8 +585,20 @@ function comparisonDetail(id: string) { comparison.value = null; detailId.value 
         </div>
       </div>
     </BaseDialog>
+    <BaseDialog v-if="reviewRunIds" :show="true" :title="mt('bulkReviewRuns')" :show-close-button="!locked" :close-on-escape="!locked" @close="!locked && (reviewRunIds = null)">
+      <div data-test="model-runs-bulk-review-dialog" class="space-y-4">
+        <p class="text-sm leading-relaxed">{{ t('governance.modelMonitoring.bulkReviewConfirm', { count: reviewRunIds.length }) }}</p>
+        <p class="text-xs leading-relaxed text-gray-500">{{ mt('bulkReviewHint') }}</p>
+        <Select :model-value="bulkReview" :options="bulkReviewOptions" :disabled="locked" :aria-label="mt('finalJudgment')" @update:model-value="changeBulkReview" />
+        <textarea v-model="bulkReviewNote" data-test="model-runs-bulk-review-note" class="input min-h-20 w-full text-sm" maxlength="2000" :aria-label="mt('reviewNote')" :placeholder="mt('reviewNote')" :disabled="locked" />
+        <div class="flex flex-wrap justify-end gap-3">
+          <button type="button" data-test="model-runs-bulk-review-cancel" class="btn btn-secondary" :disabled="locked" @click="reviewRunIds = null">{{ t('common.cancel') }}</button>
+          <button type="button" data-test="model-runs-bulk-review-confirm" class="btn btn-primary" :disabled="locked" @click="reviewSelectedRuns">{{ busy ? t('common.loading') : mt('saveReview') }}</button>
+        </div>
+      </div>
+    </BaseDialog>
     <ModelComparison v-if="comparison" :site-id="siteId" :batch-id="comparison.batchId" :template="comparison.template" :sample="comparison.sample" @close="comparison = null" @detail="comparisonDetail" />
-    <ModelRunDetail v-if="detailId" :site-id="siteId" :run-id="detailId" :disabled="disabled" @close="detailId = ''" @reviewed="reviewed" />
+    <ModelRunDetail v-if="detailId" :site-id="siteId" :run-id="detailId" :disabled="locked" @close="detailId = ''" @reviewed="reviewed" />
   </section>
 </template>
 

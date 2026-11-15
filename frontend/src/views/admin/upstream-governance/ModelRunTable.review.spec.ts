@@ -9,12 +9,12 @@ describe('candy review display', () => {
   it.each(['numeric_correct', 'numeric_incorrect'])('shows an automatic %s without requiring human review', verdict => {
     const run = modelRun(); run.result!.candy_verdict = verdict
     const wrapper = mount(ModelRunTable, { props: { items: [run], loading: false, disabled: false, filtered: false, batchId: '', targetLabel: () => 'Group' } })
-    expect(wrapper.text()).toContain(`governance.modelMonitoring.review_auto_${verdict}`)
+    expect(wrapper.text()).toContain(`governance.modelMonitoring.review_${verdict === 'numeric_correct' ? 'pass' : `auto_${verdict}`}`)
     expect(wrapper.text()).not.toContain('governance.modelMonitoring.review_pending')
   })
-  it('preserves an explicit human failure even when the numerical answer is correct', () => {
+  it('treats numerical correctness as pass even with an earlier human failure', () => {
     const wrapper = mount(ModelRunTable, { props: { items: [modelRun({ review: 'fail' })], loading: false, disabled: false, filtered: false, batchId: '', targetLabel: () => 'Group' } })
-    expect(wrapper.text()).toContain('governance.modelMonitoring.review_fail')
+    expect(wrapper.text()).toContain('governance.modelMonitoring.review_pass')
     expect(wrapper.text()).not.toContain('review_auto_')
   })
   it('keeps ambiguous and incomplete answers pending', () => {
