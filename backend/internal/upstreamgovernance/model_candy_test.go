@@ -69,6 +69,7 @@ func TestModelCandyCompatibilityRetainsAmbiguity(t *testing.T) {
 		"> 引用开始\n答案是21颗。",
 		"答案是21颗。\n\\boxed{21.5}",
 		"答案：21个（圆形9个，五角星12个，或者29个）。",
+		"答案：21，29颗。",
 	} {
 		answer, verdict := modelCandyVerdict(text)
 		require.Nil(t, answer, text)

@@ -13,7 +13,7 @@ var (
 	modelCandyUnit            = `(?:颗糖果|个糖果|颗|个|粒|candies|candy)?`
 	modelCandyNumber          = `[0-9零〇一二两三四五六七八九十百]+`
 	modelCandyValue           = regexp.MustCompile(`(?i)^\s*(` + modelCandyNumber + `)\s*` + modelCandyUnit + `\s*[。.!！:：]?\s*$`)
-	modelCandyExplainedValue  = regexp.MustCompile(`(?i)^\s*(` + modelCandyNumber + `)\s*` + modelCandyUnit + `\s*[，,：:]`)
+	modelCandyExplainedValue  = regexp.MustCompile(`(?i)^\s*(` + modelCandyNumber + `)\s*` + modelCandyUnit + `\s*[，,：:]\s*(?:具体|选取|摸取|取法|其中|即|前提是|因为|这里|理由|证明)`)
 	modelCandyShapeNote       = regexp.MustCompile(`（\s*(?:圆形\s*\d+\s*[颗个]|\d+\s*[颗个]\s*圆形)\s*[，,＋+和、]\s*(?:五角星形?\s*\d+\s*[颗个]|\d+\s*[颗个]\s*五角星形?)\s*）`)
 	modelCandyLabel           = regexp.MustCompile(`(?i)(?:(?:最终|最后)?答案\s*(?:(?:应为|是|为)\s*)?[:：]?|(?:最终)?结论\s*(?:(?:是|为)\s*)?[:：]?|最少\s*(?:需要|需|要)?\s*(?:取出|摸出|抽取|取|摸)\s*(?:的)?\s*(?:糖果)?\s*(?:数目|数量|总数)?\s*(?:是|为)?\s*[:：]?|(?:the\s+)?(?:final\s+)?answer\s*(?:is)?\s*[:：])\s*`)
 	modelCandyPrefix          = regexp.MustCompile(`^(?:(?:因此|所以|综上所述|综上|由此可知|故|总之)[，,：:\s]*)+`)
