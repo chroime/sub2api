@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   normalizeGroupOpenAIFast,
   normalizeGroupOpenAIForcedTiers,
+  setGroupOpenAIForcedTier,
   supportsGroupOpenAIFast,
   supportsGroupOpenAIUltraFast,
 } from "../groupsOpenAIFast";
@@ -23,14 +24,14 @@ describe("groupsOpenAIFast", () => {
     expect(normalizeGroupOpenAIFast("openai", false)).toBe(false);
   });
 
-  it("only enables UltraFast for OpenAI and resolves conflicting forced tiers", () => {
+  it("allows both forced tiers for OpenAI and composite groups", () => {
     expect(supportsGroupOpenAIUltraFast("openai")).toBe(true);
-    expect(supportsGroupOpenAIUltraFast("composite")).toBe(false);
+    expect(supportsGroupOpenAIUltraFast("composite")).toBe(true);
     expect(normalizeGroupOpenAIForcedTiers("openai", true, true)).toEqual({
-      force_openai_fast: false, force_openai_ultrafast: true,
+      force_openai_fast: true, force_openai_ultrafast: true,
     });
     expect(normalizeGroupOpenAIForcedTiers("composite", true, true)).toEqual({
-      force_openai_fast: true, force_openai_ultrafast: false,
+      force_openai_fast: true, force_openai_ultrafast: true,
     });
     expect(normalizeGroupOpenAIForcedTiers("anthropic", true, true)).toEqual({
       force_openai_fast: false, force_openai_ultrafast: false,
@@ -41,6 +42,9 @@ describe("groupsOpenAIFast", () => {
     expect(normalizeGroupOpenAIForcedTiers("openai", null, null)).toEqual({
       force_openai_fast: false, force_openai_ultrafast: false,
     });
+    const form = { force_openai_fast: true, force_openai_ultrafast: true };
+    setGroupOpenAIForcedTier(form, "ultrafast", false);
+    expect(form).toEqual({ force_openai_fast: true, force_openai_ultrafast: false });
   });
 
   it("provides localized switch labels", () => {
@@ -61,8 +65,14 @@ describe("groupsOpenAIFast", () => {
     for (const locale of [zh, en]) {
       expect(locale.groups.openaiUltraFast).toMatchObject({
         force: expect.stringContaining("UltraFast"),
-        hint: expect.stringContaining("service_tier=ultrafast"),
+        hint: expect.stringContaining("Ultra Fast"),
       });
+      expect(locale.groups.openaiFast).toMatchObject({
+        forceUltrafast: expect.stringContaining("ultrafast"),
+        ultrafastHint: expect.stringContaining("service_tier=ultrafast"),
+      });
+      expect(locale.groups.openaiFast.ultrafastHint).toContain("GPT-6 Astra");
+      expect(locale.groups.openaiFast.ultrafastHint).toContain("GPT-6.1 Sol");
     }
   });
 });

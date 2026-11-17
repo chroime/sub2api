@@ -152,6 +152,7 @@ func (s *FrontendServer) serveIndexHTML(c *gin.Context) {
 		// A fresh CSP nonce requires a matching HTML body; a 304 would reuse a
 		// script with the previous nonce and prevent initial branding from loading.
 		if match := c.GetHeader("If-None-Match"); nonce == "" && match == cached.ETag {
+			applyHTMLNoCacheHeaders(c.Writer.Header())
 			c.Status(http.StatusNotModified)
 			c.Abort()
 			return
@@ -161,7 +162,7 @@ func (s *FrontendServer) serveIndexHTML(c *gin.Context) {
 		content := replaceNoncePlaceholder(cached.Content, nonce)
 
 		c.Header("ETag", cached.ETag)
-		c.Header("Cache-Control", "no-cache") // Must revalidate
+		applyHTMLNoCacheHeaders(c.Writer.Header())
 		c.Data(http.StatusOK, "text/html; charset=utf-8", content)
 		c.Abort()
 		return
@@ -174,6 +175,7 @@ func (s *FrontendServer) serveIndexHTML(c *gin.Context) {
 	settings, err := s.settings.GetPublicSettingsForInjection(ctx)
 	if err != nil {
 		// Fallback: serve without injection
+		applyHTMLNoCacheHeaders(c.Writer.Header())
 		c.Data(http.StatusOK, "text/html; charset=utf-8", injectSiteFavicon(s.baseHTML, nil))
 		c.Abort()
 		return
@@ -182,6 +184,7 @@ func (s *FrontendServer) serveIndexHTML(c *gin.Context) {
 	settingsJSON, err := json.Marshal(settings)
 	if err != nil {
 		// Fallback: serve without injection
+		applyHTMLNoCacheHeaders(c.Writer.Header())
 		c.Data(http.StatusOK, "text/html; charset=utf-8", injectSiteFavicon(s.baseHTML, nil))
 		c.Abort()
 		return
@@ -197,7 +200,7 @@ func (s *FrontendServer) serveIndexHTML(c *gin.Context) {
 	if cached != nil {
 		c.Header("ETag", cached.ETag)
 	}
-	c.Header("Cache-Control", "no-cache")
+	applyHTMLNoCacheHeaders(c.Writer.Header())
 	c.Data(http.StatusOK, "text/html; charset=utf-8", content)
 	c.Abort()
 }

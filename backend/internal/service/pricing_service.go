@@ -234,12 +234,17 @@ var (
 
 // LiteLLMModelPricing LiteLLM价格数据结构
 // 只保留我们需要的字段，使用指针来处理可能缺失的值
+type tokenPriceOverrides struct {
+	input, output, cacheRead bool
+}
+
 type LiteLLMModelPricing struct {
 	// Token ceilings are optional catalog metadata, independent of token prices.
 	// LiteLLM max_tokens is ambiguous and must not be used as a context window.
-	MaxInputTokens                      *int64  `json:"max_input_tokens,omitempty"`
-	MaxOutputTokens                     *int64  `json:"max_output_tokens,omitempty"`
-	CacheCreationInputTokenCostExplicit bool    `json:"-"`
+	MaxInputTokens                      *int64 `json:"max_input_tokens,omitempty"`
+	MaxOutputTokens                     *int64 `json:"max_output_tokens,omitempty"`
+	CacheCreationInputTokenCostExplicit bool   `json:"-"`
+	priceOverrides                      tokenPriceOverrides
 	InputCostPerToken                   float64 `json:"input_cost_per_token"`
 	InputCostPerTokenPriority           float64 `json:"input_cost_per_token_priority"`
 	OutputCostPerToken                  float64 `json:"output_cost_per_token"`
@@ -352,7 +357,10 @@ func (s *PricingService) Initialize() error {
 	// 启动定时更新
 	s.startUpdateScheduler()
 
-	logger.LegacyPrintf("service.pricing", "[Pricing] Service initialized with %d models", len(s.pricingData))
+	s.mu.RLock()
+	modelCount := len(s.pricingData)
+	s.mu.RUnlock()
+	logger.LegacyPrintf("service.pricing", "[Pricing] Service initialized with %d models", modelCount)
 	return nil
 }
 
@@ -427,23 +435,11 @@ func (s *PricingService) checkAndUpdatePricing() error {
 
 	// 如果配置了哈希URL，通过远程哈希检查是否有更新
 	if s.cfg.Pricing.HashURL != "" {
-		remoteHash, err := s.fetchRemoteHash()
-		if err != nil {
-			logger.LegacyPrintf("service.pricing", "[Pricing] Failed to fetch remote hash on startup: %v", err)
-			return nil // 已加载本地文件，哈希获取失败不影响启动
-		}
-
-		s.mu.RLock()
-		localHash := s.localHash
-		s.mu.RUnlock()
-
-		if localHash == "" || remoteHash != localHash {
-			logger.LegacyPrintf("service.pricing", "[Pricing] Remote hash differs on startup (local=%s remote=%s), downloading...",
-				localHash[:min(8, len(localHash))], remoteHash[:min(8, len(remoteHash))])
-			if err := s.downloadPricingData(); err != nil {
-				logger.LegacyPrintf("service.pricing", "[Pricing] Download failed, using existing file: %v", err)
-			}
-		}
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			s.checkStartupPricingHash()
+		}()
 		return nil
 	}
 
@@ -464,6 +460,27 @@ func (s *PricingService) checkAndUpdatePricing() error {
 	}
 
 	return nil
+}
+
+func (s *PricingService) checkStartupPricingHash() {
+	remoteHash, err := s.fetchRemoteHash()
+	if err != nil {
+		logger.LegacyPrintf("service.pricing", "[Pricing] Failed to fetch remote hash on startup: %v", err)
+		return // 本地价格表已加载，远端哈希失败不影响启动。
+	}
+
+	s.mu.RLock()
+	localHash := s.localHash
+	s.mu.RUnlock()
+	if localHash != "" && remoteHash == localHash {
+		return
+	}
+
+	logger.LegacyPrintf("service.pricing", "[Pricing] Remote hash differs on startup (local=%s remote=%s), downloading...",
+		localHash[:min(8, len(localHash))], remoteHash[:min(8, len(remoteHash))])
+	if err := s.downloadPricingData(); err != nil {
+		logger.LegacyPrintf("service.pricing", "[Pricing] Download failed, using existing file: %v", err)
+	}
 }
 
 // syncWithRemote 与远程同步（基于哈希校验）
@@ -695,7 +712,7 @@ func (s *PricingService) parsePricingData(body []byte) (map[string]*LiteLLMModel
 	if err := json.Unmarshal(body, &rawData); err != nil {
 		return nil, fmt.Errorf("parse raw JSON: %w", err)
 	}
-	rawData = s.applyPricingOverrides(rawData)
+	rawData, priceOverrides := s.applyPricingOverrides(rawData)
 
 	result := make(map[string]*LiteLLMModelPricing)
 	skipped := 0
@@ -722,6 +739,7 @@ func (s *PricingService) parsePricingData(body []byte) (map[string]*LiteLLMModel
 		pricing := &LiteLLMModelPricing{
 			MaxInputTokens:        parsePricingTokenLimit(entry.MaxInputTokens),
 			MaxOutputTokens:       parsePricingTokenLimit(entry.MaxOutputTokens),
+			priceOverrides:        priceOverrides[modelName],
 			LiteLLMProvider:       entry.LiteLLMProvider,
 			Mode:                  entry.Mode,
 			SupportsPromptCaching: entry.SupportsPromptCaching,
@@ -962,11 +980,12 @@ func warnOrphanCacheTierFields(entries []string) {
 // 文件的解析都经过 parsePricingData，因此 override 是最高优先级的数据源。这里只修补
 // 已存在的条目：目录/回退里都没有的模型由 mergeOverrideOnlyModels 在两层数据合并后
 // 统一并入——若在此处抢先建条目，纯 override 条目会挡住回退文件中同名完整条目的合并。
-func (s *PricingService) applyPricingOverrides(rawData map[string]json.RawMessage) map[string]json.RawMessage {
+func (s *PricingService) applyPricingOverrides(rawData map[string]json.RawMessage) (map[string]json.RawMessage, map[string]tokenPriceOverrides) {
 	overrides := s.loadPricingOverrideEntries()
 	if len(overrides) == 0 {
-		return rawData
+		return rawData, nil
 	}
+	priceOverrides := make(map[string]tokenPriceOverrides, len(overrides))
 	for name, patch := range overrides {
 		base, ok := rawData[name]
 		if !ok {
@@ -978,8 +997,25 @@ func (s *PricingService) applyPricingOverrides(rawData map[string]json.RawMessag
 			continue
 		}
 		rawData[name] = merged
+		priceOverrides[name] = tokenPriceOverridesFromPatch(patch)
 	}
-	return rawData
+	return rawData, priceOverrides
+}
+
+func tokenPriceOverridesFromPatch(patch json.RawMessage) tokenPriceOverrides {
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(patch, &fields) != nil {
+		return tokenPriceOverrides{}
+	}
+	explicitRate := func(field string) bool {
+		var rate *float64
+		return json.Unmarshal(fields[field], &rate) == nil && rate != nil && *rate >= 0
+	}
+	return tokenPriceOverrides{
+		input:     explicitRate("input_cost_per_token"),
+		output:    explicitRate("output_cost_per_token"),
+		cacheRead: explicitRate("cache_read_input_token_cost"),
+	}
 }
 
 // loadPricingOverrideEntries 读取 override 文件的原始条目。未配置返回 nil；
@@ -1431,7 +1467,7 @@ func isAntigravityThinkingTierAlias(model string) bool {
 // the published token rate, so this keeps -high/-low/-medium and -tiered
 // requests on the corresponding base model's price card.
 func normalizeGeminiThinkingTierAlias(model string) string {
-	for _, baseModel := range []string{"gemini-3.6-flash", "gemini-3.7-flash", "gemini-3.8-flash", "gemini-4-argon"} {
+	for _, baseModel := range []string{"gemini-3.6-flash", "gemini-3.7-flash", "gemini-3.8-flash", "gemini-4-argon", "gemini-4-carbon"} {
 		for _, tier := range []string{"-high", "-low", "-medium", "-tiered"} {
 			if model == baseModel+tier {
 				return baseModel

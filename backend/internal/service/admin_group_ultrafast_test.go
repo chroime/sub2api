@@ -9,17 +9,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestAdminServiceCreateGroupUltraFastTakesPrecedenceOverFast(t *testing.T) {
+func TestAdminServiceCreateGroupPreservesBothForcedTiers(t *testing.T) {
 	input := CreateGroupInput{Name: "ultrafast", Platform: PlatformOpenAI, RateMultiplier: 1, ForceOpenAIFast: true, ForceOpenAIUltrafast: true}
 	repo := &groupRepoStubForAdmin{}
 	svc := &adminServiceImpl{groupRepo: repo}
 	group, err := svc.CreateGroup(context.Background(), &input)
 	require.NoError(t, err)
 	require.True(t, group.ForceOpenAIUltrafast)
-	require.False(t, group.ForceOpenAIFast, "creating an UltraFast group must clear Fast even when both flags are supplied")
+	require.True(t, group.ForceOpenAIFast, "the group keeps Fast as fallback for models without UltraFast support")
 }
 
-func TestAdminServiceUpdateGroupUltraFastClearsExistingFast(t *testing.T) {
+func TestAdminServiceUpdateGroupUltraFastKeepsExistingFast(t *testing.T) {
 	existing := &Group{ID: 1, Name: "fast", Platform: PlatformOpenAI, Status: StatusActive, ForceOpenAIFast: true}
 	repo := &groupRepoStubForAdmin{getByID: existing}
 	invalidator := &authCacheInvalidatorStub{}
@@ -29,19 +29,19 @@ func TestAdminServiceUpdateGroupUltraFastClearsExistingFast(t *testing.T) {
 	group, err := svc.UpdateGroup(context.Background(), 1, &input)
 	require.NoError(t, err)
 	require.True(t, group.ForceOpenAIUltrafast)
-	require.False(t, group.ForceOpenAIFast, "enabling UltraFast must clear previously saved Fast")
+	require.True(t, group.ForceOpenAIFast, "Fast remains the fallback for models without UltraFast support")
 	require.Equal(t, []int64{1}, invalidator.groupIDs)
 }
 
-func TestAdminServiceCreateGroupUltraFastOnlySupportsOpenAI(t *testing.T) {
+func TestAdminServiceCreateGroupUltraFastSupportsOpenAIAndComposite(t *testing.T) {
 	for _, tc := range []struct {
 		platform  string
 		wantUltra bool
 		wantFast  bool
 		wantFree  bool
 	}{
-		{PlatformOpenAI, true, false, true},
-		{PlatformComposite, false, true, true},
+		{PlatformOpenAI, true, true, true},
+		{PlatformComposite, true, true, true},
 		{PlatformAnthropic, false, false, false},
 	} {
 		t.Run(tc.platform, func(t *testing.T) {
@@ -69,13 +69,13 @@ func TestAdminServiceUpdateGroupUltraFastTransitions(t *testing.T) {
 		wantFast  bool
 		wantFree  bool
 	}{
-		{"fast alone replaces ultrafast", true, false, UpdateGroupInput{ForceOpenAIFast: &on}, false, true, true},
-		{"both enabled prefer ultrafast", false, false, UpdateGroupInput{ForceOpenAIFast: &on, ForceOpenAIUltrafast: &on}, true, false, true},
+		{"fast fallback can be enabled with ultrafast", true, false, UpdateGroupInput{ForceOpenAIFast: &on}, true, true, true},
+		{"both enabled prefer ultrafast", false, false, UpdateGroupInput{ForceOpenAIFast: &on, ForceOpenAIUltrafast: &on}, true, true, true},
 		{"disabling fast preserves ultrafast", true, false, UpdateGroupInput{ForceOpenAIFast: &off}, true, false, true},
 		{"explicit ultra off preserves fast", false, true, UpdateGroupInput{ForceOpenAIUltrafast: &off}, false, true, true},
 		{"omission preserves ultrafast", true, false, UpdateGroupInput{Name: "renamed"}, true, false, true},
 		{"disable ultrafast", true, false, UpdateGroupInput{ForceOpenAIUltrafast: &off}, false, false, true},
-		{"composite clears ultra but preserves fast", true, true, UpdateGroupInput{Platform: PlatformComposite}, false, true, true},
+		{"composite preserves both supported policies", true, true, UpdateGroupInput{Platform: PlatformComposite}, true, true, true},
 		{"anthropic clears all policies", true, true, UpdateGroupInput{Platform: PlatformAnthropic}, false, false, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

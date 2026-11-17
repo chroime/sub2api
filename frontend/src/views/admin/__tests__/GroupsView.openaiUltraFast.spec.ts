@@ -103,7 +103,7 @@ describe('GroupsView forced UltraFast', () => {
   })
   afterEach(() => vi.restoreAllMocks())
 
-  it('places UltraFast immediately after Fast and creates it with Fast disabled while preserving free Fast', async () => {
+  it('places UltraFast immediately after Fast and creates it alongside forced and free Fast', async () => {
     const wrapper = mountView()
     try {
       await openCreate(wrapper)
@@ -113,40 +113,40 @@ describe('GroupsView forced UltraFast', () => {
       await wrapper.get('[data-testid="create-force-openai-fast"]').trigger('click')
       await wrapper.get('[data-testid="create-free-openai-fast"]').trigger('click')
       await wrapper.get('[data-testid="create-force-openai-ultrafast"]').trigger('click')
-      expect(checked(wrapper, 'create-force-openai-fast')).toBe('false')
+      expect(checked(wrapper, 'create-force-openai-fast')).toBe('true')
       expect(checked(wrapper, 'create-force-openai-ultrafast')).toBe('true')
       expect(checked(wrapper, 'create-free-openai-fast')).toBe('true')
       await wrapper.get('#create-group-form').trigger('submit')
       await flushPromises()
       expect(createGroup).toHaveBeenCalledWith(expect.objectContaining({
-        platform: 'openai', force_openai_fast: false, force_openai_ultrafast: true, free_openai_fast: true
+        platform: 'openai', force_openai_fast: true, force_openai_ultrafast: true, free_openai_fast: true
       }))
       expect(showError).not.toHaveBeenCalled()
     } finally { wrapper.unmount() }
   })
 
-  it('loads saved UltraFast and turns it off when Fast is enabled before updating', async () => {
+  it('keeps saved UltraFast when Fast is enabled before updating', async () => {
     listGroups.mockResolvedValue({ items: [group({ force_openai_ultrafast: true, free_openai_fast: true })], total: 1 })
     const wrapper = mountView()
     try {
       await openEdit(wrapper)
       expect(checked(wrapper, 'edit-force-openai-ultrafast')).toBe('true')
       await wrapper.get('[data-testid="edit-force-openai-fast"]').trigger('click')
-      expect(checked(wrapper, 'edit-force-openai-ultrafast')).toBe('false')
+      expect(checked(wrapper, 'edit-force-openai-ultrafast')).toBe('true')
       await wrapper.get('#edit-group-form').trigger('submit')
       await flushPromises()
       expect(updateGroup).toHaveBeenCalledWith(42, expect.objectContaining({
-        force_openai_fast: true, force_openai_ultrafast: false, free_openai_fast: true
+        force_openai_fast: true, force_openai_ultrafast: true, free_openai_fast: true
       }))
     } finally { wrapper.unmount() }
   })
 
-  it('saves UltraFast from the edit form and normalizes conflicting legacy flags to UltraFast', async () => {
+  it('loads both legacy tier flags and saves the selected tier independently', async () => {
     listGroups.mockResolvedValue({ items: [group({ force_openai_fast: true, force_openai_ultrafast: true })], total: 1 })
     const wrapper = mountView()
     try {
       await openEdit(wrapper)
-      expect(checked(wrapper, 'edit-force-openai-fast')).toBe('false')
+      expect(checked(wrapper, 'edit-force-openai-fast')).toBe('true')
       expect(checked(wrapper, 'edit-force-openai-ultrafast')).toBe('true')
       await wrapper.get('[data-testid="edit-force-openai-ultrafast"]').trigger('click')
       await wrapper.get('[data-testid="edit-force-openai-fast"]').trigger('click')
@@ -159,18 +159,18 @@ describe('GroupsView forced UltraFast', () => {
     } finally { wrapper.unmount() }
   })
 
-  it('clears UltraFast when leaving OpenAI and preserves existing composite Fast support', async () => {
+  it('keeps UltraFast available on composite groups alongside Fast', async () => {
     const wrapper = mountView()
     try {
       await openCreate(wrapper)
       await wrapper.get('[data-testid="create-force-openai-ultrafast"]').trigger('click')
       await setCreatePlatform(wrapper, 'composite')
-      expect(wrapper.find('[data-testid="create-force-openai-ultrafast"]').exists()).toBe(false)
+      expect(wrapper.find('[data-testid="create-force-openai-ultrafast"]').exists()).toBe(true)
       await wrapper.get('[data-testid="create-force-openai-fast"]').trigger('click')
       await wrapper.get('#create-group-form').trigger('submit')
       await flushPromises()
       expect(createGroup).toHaveBeenCalledWith(expect.objectContaining({
-        platform: 'composite', force_openai_fast: true, force_openai_ultrafast: false
+        platform: 'composite', force_openai_fast: true, force_openai_ultrafast: true
       }))
     } finally { wrapper.unmount() }
   })
@@ -212,19 +212,19 @@ describe('GroupsView forced UltraFast', () => {
     } finally { wrapper.unmount() }
   })
 
-  it.each(['composite', 'anthropic'] as const)('clears stale UltraFast on an unsupported %s group update', async platform => {
+  it.each(['composite', 'anthropic'] as const)('normalizes UltraFast for a %s group update', async platform => {
     listGroups.mockResolvedValue({ items: [group({
       platform, force_openai_fast: true, force_openai_ultrafast: true, free_openai_fast: true
     })], total: 1 })
     const wrapper = mountView()
     try {
       await openEdit(wrapper)
-      expect(wrapper.find('[data-testid="edit-force-openai-ultrafast"]').exists()).toBe(false)
+      expect(wrapper.find('[data-testid="edit-force-openai-ultrafast"]').exists()).toBe(platform === 'composite')
       await wrapper.get('#edit-group-form').trigger('submit')
       await flushPromises()
       expect(updateGroup).toHaveBeenCalledWith(42, expect.objectContaining({
         platform, force_openai_fast: platform === 'composite',
-        force_openai_ultrafast: false, free_openai_fast: platform === 'composite'
+        force_openai_ultrafast: platform === 'composite', free_openai_fast: platform === 'composite'
       }))
     } finally { wrapper.unmount() }
   })

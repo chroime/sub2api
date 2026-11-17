@@ -25,6 +25,30 @@ func (r inputRoutingGroupRepo) GetByIDLite(_ context.Context, id int64) (*Group,
 
 type inputRoutingAccountRepo struct{ stubOpenAIAccountRepo }
 
+func (r inputRoutingAccountRepo) ListModelAvailabilityCandidates(_ context.Context, groupID *int64, platforms []string, includeGrouped bool) ([]Account, error) {
+	allowedPlatforms := make(map[string]struct{}, len(platforms))
+	for _, platform := range platforms {
+		allowedPlatforms[platform] = struct{}{}
+	}
+	accounts := make([]Account, 0, len(r.accounts))
+	for _, account := range r.accounts {
+		if account.Status != StatusActive || !account.Schedulable {
+			continue
+		}
+		if _, ok := allowedPlatforms[account.Platform]; !ok {
+			continue
+		}
+		if groupID != nil && !openAIStickyAccountMatchesGroup(&account, groupID) {
+			continue
+		}
+		if groupID == nil && !includeGrouped && (len(account.GroupIDs) > 0 || len(account.AccountGroups) > 0) {
+			continue
+		}
+		accounts = append(accounts, account)
+	}
+	return accounts, nil
+}
+
 func (r inputRoutingAccountRepo) ListSchedulableByGroupIDAndPlatform(ctx context.Context, id int64, platform string) ([]Account, error) {
 	var accounts []Account
 	for _, account := range r.accounts {
@@ -542,6 +566,13 @@ func TestGroupInputRoutingPlatformProbeDoesNotCountOtherPlatform(t *testing.T) {
 }
 
 type inputRoutingFailingGroupAccounts struct{ inputRoutingAccountRepo }
+
+func (r inputRoutingFailingGroupAccounts) ListModelAvailabilityCandidates(ctx context.Context, groupID *int64, platforms []string, includeGrouped bool) ([]Account, error) {
+	if groupID != nil && *groupID == 20 {
+		return nil, errors.New("target group unavailable")
+	}
+	return r.inputRoutingAccountRepo.ListModelAvailabilityCandidates(ctx, groupID, platforms, includeGrouped)
+}
 
 func (r inputRoutingFailingGroupAccounts) ListSchedulableByGroupIDAndPlatform(ctx context.Context, groupID int64, platform string) ([]Account, error) {
 	if groupID == 20 {

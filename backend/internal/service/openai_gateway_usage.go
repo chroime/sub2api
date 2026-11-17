@@ -575,6 +575,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 			account.ID, *apiKey.GroupID, result.UpstreamModel, result.Model,
 			rawTokens, cost.TotalCost, pricingAt,
 			accountStatsLongContextPricingEnabled(longContextBillingGate) && !modelLongContextExempt,
+			1,
 		)
 	}
 	if isZeroTokenZeroCostOpenAIUsage(usageLog) {

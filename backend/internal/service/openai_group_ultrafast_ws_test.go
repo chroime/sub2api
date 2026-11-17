@@ -93,8 +93,8 @@ func TestGroupUltrafastPolicy_WSIngressAndPassthroughEveryTurn(t *testing.T) {
 				require.NoError(t, err)
 				defer client.CloseNow()
 				for i, frame := range []string{
-					`{"type":"response.create","model":"gpt-5.6-sol","input":[]}`,
-					`{"type":"response.create","model":"gpt-5.6-sol","service_tier":"flex","input":[]}`,
+					`{"type":"response.create","model":"gpt-6.1-sol","input":[]}`,
+					`{"type":"response.create","model":"gpt-6.1-sol","service_tier":"flex","input":[]}`,
 				} {
 					require.NoError(t, client.Write(ctx, coderws.MessageText, []byte(frame)))
 					select {
@@ -107,7 +107,7 @@ func TestGroupUltrafastPolicy_WSIngressAndPassthroughEveryTurn(t *testing.T) {
 					case <-ctx.Done():
 						t.Fatal("upstream did not receive response.create")
 					}
-					upstream.Send(fmt.Sprintf(`{"type":"response.completed","response":{"id":"resp_ultrafast_%d","model":"gpt-5.6-sol","usage":{"input_tokens":1,"output_tokens":1}}}`, i+1))
+					upstream.Send(fmt.Sprintf(`{"type":"response.completed","response":{"id":"resp_ultrafast_%d","model":"gpt-6.1-sol","usage":{"input_tokens":1,"output_tokens":1}}}`, i+1))
 					_, event, err := client.Read(ctx)
 					require.NoError(t, err)
 					require.Equal(t, "response.completed", gjson.GetBytes(event, "type").String())

@@ -365,18 +365,12 @@ func groupSupportsOpenAIFast(platform string) bool {
 }
 
 func sanitizeGroupOpenAIFast(group *Group) {
-	if group == nil {
-		return
-	}
-	if group.Platform != PlatformOpenAI {
-		group.ForceOpenAIUltrafast = false
-	}
-	if !groupSupportsOpenAIFast(group.Platform) {
-		group.ForceOpenAIFast = false
-		group.FreeOpenAIFast = false
-	}
-	if group.ForceOpenAIUltrafast {
-		group.ForceOpenAIFast = false
+	if group == nil || !groupSupportsOpenAIFast(group.Platform) {
+		if group != nil {
+			group.ForceOpenAIFast = false
+			group.ForceOpenAIUltrafast = false
+			group.FreeOpenAIFast = false
+		}
 	}
 }
 
@@ -1162,9 +1156,6 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 	}
 	if input.ForceOpenAIFast != nil {
 		group.ForceOpenAIFast = *input.ForceOpenAIFast
-		if *input.ForceOpenAIFast {
-			group.ForceOpenAIUltrafast = false
-		}
 	}
 	if input.ForceOpenAIUltrafast != nil {
 		group.ForceOpenAIUltrafast = *input.ForceOpenAIUltrafast

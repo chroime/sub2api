@@ -350,6 +350,7 @@ func TestAPIContracts(t *testing.T) {
 				"data": [
 					{
 						"id": 10,
+						"identity": {},
 						"name": "Group One",
 						"description": "desc",
 						"platform": "anthropic",
@@ -2056,6 +2057,10 @@ func (s *stubAccountRepo) ClearAntigravityQuotaScopes(ctx context.Context, id in
 }
 
 func (s *stubAccountRepo) ClearModelRateLimits(ctx context.Context, id int64) error {
+	return errors.New("not implemented")
+}
+
+func (s *stubAccountRepo) ClearModelRateLimit(ctx context.Context, id int64, scope string) error {
 	return errors.New("not implemented")
 }
 

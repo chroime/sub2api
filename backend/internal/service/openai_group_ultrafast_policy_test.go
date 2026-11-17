@@ -28,17 +28,17 @@ func TestGroupUltrafastPolicy_OverridesClientTierAndFast(t *testing.T) {
 	svc := newOpenAIGatewayServiceWithSettings(t, DefaultOpenAIFastPolicySettings())
 	account := &Account{Platform: PlatformOpenAI, Type: AccountTypeOAuth}
 	for _, body := range []string{
-		`{"model":"gpt-5.6-sol","input":"hi"}`,
-		`{"model":"gpt-5.6-sol","service_tier":"default"}`,
-		`{"model":"gpt-5.6-sol","service_tier":"flex"}`,
-		`{"model":"gpt-5.6-sol","service_tier":"priority"}`,
-		`{"model":"gpt-5.6-sol","service_tier":"client-unknown"}`,
+		`{"model":"gpt-6.1-sol","input":"hi"}`,
+		`{"model":"gpt-6.1-sol","service_tier":"default"}`,
+		`{"model":"gpt-6.1-sol","service_tier":"flex"}`,
+		`{"model":"gpt-6.1-sol","service_tier":"priority"}`,
+		`{"model":"gpt-6.1-sol","service_tier":"client-unknown"}`,
 	} {
 		t.Run(body, func(t *testing.T) {
-			updated, err := svc.applyOpenAIFastPolicyToBody(groupUltrafastTestContext(), account, "gpt-5.6-sol", []byte(body))
+			updated, err := svc.applyOpenAIFastPolicyToBody(groupUltrafastTestContext(), account, "gpt-6.1-sol", []byte(body))
 			require.NoError(t, err)
 			require.Equal(t, "ultrafast", gjson.GetBytes(updated, "service_tier").String())
-			require.Equal(t, "gpt-5.6-sol", gjson.GetBytes(updated, "model").String())
+			require.Equal(t, "gpt-6.1-sol", gjson.GetBytes(updated, "model").String())
 		})
 	}
 }
@@ -48,7 +48,7 @@ func TestGroupUltrafastPolicy_EnabledWithoutFast(t *testing.T) {
 	ctx := groupUltrafastTestContext()
 	ctx.Value(ctxkey.Group).(*Group).ForceOpenAIFast = false
 	account := &Account{Platform: PlatformOpenAI, Type: AccountTypeAPIKey}
-	updated, err := svc.applyOpenAIFastPolicyToBody(ctx, account, "gpt-5.6-sol", []byte(`{"model":"gpt-5.6-sol"}`))
+	updated, err := svc.applyOpenAIFastPolicyToBody(ctx, account, "gpt-6.1-sol", []byte(`{"model":"gpt-6.1-sol"}`))
 	require.NoError(t, err)
 	require.Equal(t, "ultrafast", gjson.GetBytes(updated, "service_tier").String())
 }
@@ -60,8 +60,8 @@ func TestGroupUltrafastPolicy_GlobalPolicyRemainsAuthoritative(t *testing.T) {
 				ServiceTier: OpenAIFastTierUltrafast, Action: action, Scope: BetaPolicyScopeAll,
 			}}})
 			account := &Account{Platform: PlatformOpenAI, Type: AccountTypeAPIKey}
-			body := []byte(`{"model":"gpt-5.6-sol","service_tier":"flex"}`)
-			updated, err := svc.applyOpenAIFastPolicyToBody(groupUltrafastTestContext(), account, "gpt-5.6-sol", body)
+			body := []byte(`{"model":"gpt-6.1-sol","service_tier":"flex"}`)
+			updated, err := svc.applyOpenAIFastPolicyToBody(groupUltrafastTestContext(), account, "gpt-6.1-sol", body)
 			if action == BetaPolicyActionBlock {
 				var blocked *OpenAIFastBlockedError
 				require.ErrorAs(t, err, &blocked)
@@ -86,15 +86,14 @@ func TestGroupUltrafastPolicy_RequiresTrustedOpenAIContext(t *testing.T) {
 		{name: "no group", platform: PlatformOpenAI},
 		{name: "unhydrated group", platform: PlatformOpenAI, group: &Group{ID: 7, Platform: PlatformOpenAI, Status: StatusActive, ForceOpenAIUltrafast: true}},
 		{name: "other group platform", platform: PlatformOpenAI, group: &Group{ID: 7, Platform: PlatformAnthropic, Status: StatusActive, Hydrated: true, ForceOpenAIUltrafast: true}},
-		{name: "composite group", platform: PlatformOpenAI, group: &Group{ID: 7, Platform: PlatformComposite, Status: StatusActive, Hydrated: true, ForceOpenAIUltrafast: true}},
 		{name: "other account platform", platform: PlatformGrok, group: &Group{ID: 7, Platform: PlatformOpenAI, Status: StatusActive, Hydrated: true, ForceOpenAIUltrafast: true}},
 		{name: "disabled", platform: PlatformOpenAI, group: &Group{ID: 7, Platform: PlatformOpenAI, Status: StatusActive, Hydrated: true}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			svc := newOpenAIGatewayServiceWithSettings(t, DefaultOpenAIFastPolicySettings())
 			ctx := context.WithValue(context.Background(), ctxkey.Group, tt.group)
-			body := []byte(`{"model":"gpt-5.6-sol","service_tier":"flex"}`)
-			updated, err := svc.applyOpenAIFastPolicyToBody(ctx, &Account{Platform: tt.platform}, "gpt-5.6-sol", body)
+			body := []byte(`{"model":"gpt-6.1-sol","service_tier":"flex"}`)
+			updated, err := svc.applyOpenAIFastPolicyToBody(ctx, &Account{Platform: tt.platform}, "gpt-6.1-sol", body)
 			require.NoError(t, err)
 			require.Equal(t, string(body), string(updated))
 		})
@@ -109,10 +108,10 @@ func TestGroupUltrafastPolicy_WSFramesAndGlobalPolicy(t *testing.T) {
 				ServiceTier: OpenAIFastTierUltrafast, Action: action, Scope: BetaPolicyScopeAll,
 			}}})
 			for _, frame := range []string{
-				`{"type":"response.create","model":"gpt-5.6-sol","input":[]}`,
+				`{"type":"response.create","model":"gpt-6.1-sol","input":[]}`,
 				`{"type":"response.create","previous_response_id":"resp_first","service_tier":"flex"}`,
 			} {
-				updated, blocked, err := svc.applyOpenAIFastPolicyToWSResponseCreate(groupUltrafastTestContext(), account, "gpt-5.6-sol", []byte(frame))
+				updated, blocked, err := svc.applyOpenAIFastPolicyToWSResponseCreate(groupUltrafastTestContext(), account, "gpt-6.1-sol", []byte(frame))
 				require.NoError(t, err)
 				if action == BetaPolicyActionBlock {
 					require.NotNil(t, blocked)
@@ -126,7 +125,7 @@ func TestGroupUltrafastPolicy_WSFramesAndGlobalPolicy(t *testing.T) {
 				}
 			}
 			cancel := []byte(`{"type":"response.cancel","service_tier":"flex"}`)
-			updated, blocked, err := svc.applyOpenAIFastPolicyToWSResponseCreate(groupUltrafastTestContext(), account, "gpt-5.6-sol", cancel)
+			updated, blocked, err := svc.applyOpenAIFastPolicyToWSResponseCreate(groupUltrafastTestContext(), account, "gpt-6.1-sol", cancel)
 			require.NoError(t, err)
 			require.Nil(t, blocked)
 			require.Equal(t, string(cancel), string(updated))
@@ -139,10 +138,10 @@ func TestGroupUltrafastPolicy_HTTPForwarding(t *testing.T) {
 	for _, route := range []string{"responses", "passthrough", "chat", "raw-chat", "messages", "messages-raw-chat"} {
 		for _, action := range []string{BetaPolicyActionPass, BetaPolicyActionFilter, BetaPolicyActionBlock} {
 			t.Run(route+"/"+action, func(t *testing.T) {
-				body := []byte(`{"model":"gpt-5.6-sol","stream":false,"input":"hi","service_tier":"flex"}`)
+				body := []byte(`{"model":"gpt-6.1-sol","stream":false,"input":"hi","service_tier":"flex"}`)
 				path := "/v1/responses"
 				if route == "chat" || route == "raw-chat" || strings.HasPrefix(route, "messages") {
-					body = []byte(`{"model":"gpt-5.6-sol","stream":false,"max_tokens":16,"messages":[{"role":"user","content":"hi"}],"service_tier":"flex"}`)
+					body = []byte(`{"model":"gpt-6.1-sol","stream":false,"max_tokens":16,"messages":[{"role":"user","content":"hi"}],"service_tier":"flex"}`)
 					path = "/v1/chat/completions"
 				}
 				if strings.HasPrefix(route, "messages") {
@@ -153,7 +152,7 @@ func TestGroupUltrafastPolicy_HTTPForwarding(t *testing.T) {
 				c.Request.Header.Set("User-Agent", "codex_cli_rs/0.1.0")
 				c.Request.Header.Set("Content-Type", "application/json")
 				c.Request.Header.Set("anthropic-beta", claude.BetaFastMode)
-				responseBody := "data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_ultrafast\",\"model\":\"gpt-5.6-sol\",\"output\":[],\"usage\":{\"input_tokens\":1,\"output_tokens\":1}}}\n\ndata: [DONE]\n\n"
+				responseBody := "data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_ultrafast\",\"model\":\"gpt-6.1-sol\",\"output\":[],\"usage\":{\"input_tokens\":1,\"output_tokens\":1}}}\n\ndata: [DONE]\n\n"
 				contentType := "text/event-stream"
 				account := &Account{
 					ID: 123, Name: "ultrafast-test", Platform: PlatformOpenAI, Type: AccountTypeOAuth, Concurrency: 1,
@@ -165,7 +164,7 @@ func TestGroupUltrafastPolicy_HTTPForwarding(t *testing.T) {
 					account.Type = AccountTypeAPIKey
 					account.Credentials = map[string]any{"api_key": "fixture-key", "api_protocol": APIProtocolChatCompletions}
 					account.Extra["openai_responses_supported"] = false
-					responseBody = `{"id":"chatcmpl_ultrafast","object":"chat.completion","model":"gpt-5.6-sol","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}`
+					responseBody = `{"id":"chatcmpl_ultrafast","object":"chat.completion","model":"gpt-6.1-sol","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}`
 					contentType = "application/json"
 				}
 				upstream := &httpUpstreamRecorder{resp: &http.Response{

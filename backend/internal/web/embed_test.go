@@ -409,6 +409,8 @@ func TestFrontendServer_ServeIndexHTML(t *testing.T) {
 
 		assert.Equal(t, http.StatusNotModified, w2.Code)
 		assert.Empty(t, w2.Body.String())
+		assert.Equal(t, "no-cache, no-store, must-revalidate", w2.Header().Get("Cache-Control"))
+		assert.Equal(t, "no-store", w2.Header().Get("CDN-Cache-Control"))
 	})
 
 	t.Run("refresh_with_csp_nonce_keeps_injected_favicon_executable", func(t *testing.T) {
@@ -435,6 +437,7 @@ func TestFrontendServer_ServeIndexHTML(t *testing.T) {
 		require.Contains(t, refresh.Body.String(), `nonce="second-nonce"`)
 		require.Contains(t, refresh.Body.String(), `href="/custom-tab.svg"`)
 		require.NotContains(t, refresh.Body.String(), `nonce="first-nonce"`)
+		require.Equal(t, "no-cache, no-store, must-revalidate", refresh.Header().Get("Cache-Control"))
 	})
 
 	t.Run("sets_cache_control_header", func(t *testing.T) {
@@ -452,7 +455,7 @@ func TestFrontendServer_ServeIndexHTML(t *testing.T) {
 
 		server.serveIndexHTML(c)
 
-		assert.Equal(t, "no-cache", w.Header().Get("Cache-Control"))
+		assert.Equal(t, "no-cache, no-store, must-revalidate", w.Header().Get("Cache-Control"))
 	})
 
 	t.Run("fallback_on_settings_error", func(t *testing.T) {
@@ -476,6 +479,7 @@ func TestFrontendServer_ServeIndexHTML(t *testing.T) {
 		// Should still return 200 with base HTML
 		assert.Equal(t, http.StatusOK, w.Code)
 		assert.Contains(t, w.Header().Get("Content-Type"), "text/html")
+		assert.Equal(t, "no-store", w.Header().Get("Surrogate-Control"))
 	})
 }
 

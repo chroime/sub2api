@@ -91,6 +91,15 @@ func writeStreamingACKErrorFrame(c *gin.Context, status int, data []byte) {
 	case strings.Contains(path, ":streamGenerateContent"):
 		frame = "data: " + string(data) + "\n\n"
 	default:
+		var envelope map[string]json.RawMessage
+		if json.Unmarshal(data, &envelope) == nil && envelope != nil {
+			if _, exists := envelope["type"]; !exists {
+				envelope["type"] = json.RawMessage([]byte("\"error\""))
+				if normalized, err := json.Marshal(envelope); err == nil {
+					data = normalized
+				}
+			}
+		}
 		frame = "event: error\ndata: " + string(data) + "\n\n"
 	}
 	c.Header("Content-Type", "text/event-stream")

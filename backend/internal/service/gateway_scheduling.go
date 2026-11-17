@@ -1558,13 +1558,14 @@ func (s *GatewayService) filterAccountsBySchedulingThreshold(ctx context.Context
 		return accounts
 	}
 
-	filtered := make([]Account, 0, len(accounts))
+	filtered := accounts[:0]
 	for i := range accounts {
 		if s.isAccountBlockedBySchedulingThreshold(ctx, &accounts[i]) {
 			continue
 		}
 		filtered = append(filtered, accounts[i])
 	}
+	clear(accounts[len(filtered):])
 	return filtered
 }
 
@@ -2687,7 +2688,8 @@ func (s *GatewayService) isModelSupportedByAccount(account *Account, requestedMo
 		return ok
 	}
 	// OpenAI 透传模式：仅替换认证，允许所有模型
-	if account.Platform == PlatformOpenAI && account.IsOpenAIPassthroughEnabled() && !account.usesGovernanceModelPolicy() {
+	if account.Platform == PlatformOpenAI && account.IsOpenAIPassthroughEnabled() &&
+		!account.IsOpenAIPassthroughModelFilterEnabled() && !account.usesGovernanceModelPolicy() {
 		return true
 	}
 	// OAuth/SetupToken 账号使用 Anthropic 标准映射（短ID → 长ID）

@@ -492,9 +492,9 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 	} else if changed {
 		body = cappedBody
 	}
-	if normalizedBody, changed := normalizeCodexPageContext(body); changed {
+	if normalizedBody, changed := normalizeCodexUntrustedContext(body); changed {
 		body = normalizedBody
-		reqLog.Info("openai.codex_page_context_normalized",
+		reqLog.Info("openai.codex_untrusted_context_normalized",
 			zap.String("normalization", "call_output_to_user_message"),
 		)
 	}
@@ -1554,10 +1554,13 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 						)
 						return
 					}
-					if service.OpenAICompactKeepaliveAdjustedWrittenSize(c) != writerSizeBeforeForward {
+					if !openAIForwardMayFailover(c, writerSizeBeforeForward, failoverErr) {
 						h.gatewayService.ObserveOpenAIAccountHealthFailure(c.Request.Context(), account, err)
 						h.handleAnthropicFailoverExhausted(c, failoverErr, true)
 						return
+					}
+					if c.Writer.Written() {
+						streamStarted = true
 					}
 					if failoverErr.ShouldReportAccountScheduleFailure() {
 						h.gatewayService.ReportOpenAIAccountScheduleResult(account, openAIAccountScheduleModel(c, account, currentRoutingModel, false, nil), false, nil, err)
@@ -1724,6 +1727,12 @@ func (h *OpenAIGatewayHandler) handleAnthropicFailoverExhausted(c *gin.Context, 
 		h.anthropicStreamingAwareError(c, status, "api_error", failoverErr.ClientMessage, streamStarted)
 		return
 	}
+	// A failed or error frame that triggered the failover no longer reaches the
+	// client in-band, so its error passthrough rule is applied here instead.
+	if status, errType, msg, ok := service.ApplyOpenAIStreamFailedFrameRule(c, failoverErr); ok {
+		h.anthropicStreamingAwareError(c, status, errType, msg, streamStarted)
+		return
+	}
 	status, errType, errMsg := h.mapUpstreamError(failoverErr.StatusCode)
 	h.anthropicStreamingAwareError(c, status, errType, errMsg, streamStarted)
 }
@@ -1733,13 +1742,12 @@ func (h *OpenAIGatewayHandler) ensureAnthropicErrorResponse(c *gin.Context, stre
 	if c == nil || c.Writer == nil {
 		return false
 	}
-	if service.IsResponseCommitted(c) {
+	if service.IsResponseCommitted(c) &&
+		!service.OpenAISyntheticFirstResponseCommitted(c) &&
+		!gatewayStreamHasOnlyHeartbeats(c) {
 		return false
 	}
 	if c.Writer.Written() {
-		if !service.OpenAISyntheticFirstResponseCommitted(c) && !gatewayStreamHasOnlyHeartbeats(c) {
-			return false
-		}
 		streamStarted = true
 	}
 	h.anthropicStreamingAwareError(c, http.StatusBadGateway, "api_error", "Upstream request failed", streamStarted)
@@ -1797,13 +1805,16 @@ func normalizeCodexAutomationBootstrap(body []byte) ([]byte, bool) {
 }
 
 // mayContainCodexCallOutputCandidate is a necessary condition for a bootstrap
-// candidate, checked before the full uniqueness scan and decode. Its type and
-// tool name are JSON strings, which appear literally unless a \u escape spells
-// their letters; without either, normalization cannot change the body.
+// candidate. Tool declarations carry the same names, so confirm a matching
+// function_call_output in the top-level input before decoding the request.
 func mayContainCodexCallOutputCandidate(body []byte, toolNames ...string) bool {
-	if bytes.Contains(body, []byte(`\u`)) {
-		return true
+	if !service.JSONMayEscapePlainASCII(body) && !containsCodexCallOutputLiterals(body, toolNames) {
+		return false
 	}
+	return service.ResponsesInputHasFunctionCallOutputNamed(body, toolNames...)
+}
+
+func containsCodexCallOutputLiterals(body []byte, toolNames []string) bool {
 	if !bytes.Contains(body, []byte("function_call_output")) {
 		return false
 	}

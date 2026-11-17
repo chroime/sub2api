@@ -10,7 +10,7 @@ export function normalizeGroupOpenAIFast(
 }
 
 export function supportsGroupOpenAIUltraFast(platform: string): boolean {
-  return platform === "openai";
+	return supportsGroupOpenAIFast(platform);
 }
 
 type ForcedOpenAITiers = {
@@ -25,7 +25,7 @@ export function normalizeGroupOpenAIForcedTiers(
 ): ForcedOpenAITiers {
   const forceUltraFast = supportsGroupOpenAIUltraFast(platform) && ultrafast === true;
   return {
-    force_openai_fast: normalizeGroupOpenAIFast(platform, fast === true) && !forceUltraFast,
+	force_openai_fast: normalizeGroupOpenAIFast(platform, fast === true),
     force_openai_ultrafast: forceUltraFast,
   };
 }
@@ -37,9 +37,7 @@ export function setGroupOpenAIForcedTier(
 ): void {
   if (tier === "ultrafast") {
     form.force_openai_ultrafast = enabled;
-    if (enabled) form.force_openai_fast = false;
   } else {
     form.force_openai_fast = enabled;
-    if (enabled) form.force_openai_ultrafast = false;
   }
 }
