@@ -34,7 +34,9 @@ func (s *ChannelMonitorService) intelligenceForMonitors(ctx context.Context, ids
 	if !ok {
 		return nil
 	}
-	result, err := reader.ListIntelligenceForMonitors(ctx, ids, time.Now().UTC())
+	queryCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	result, err := reader.ListIntelligenceForMonitors(queryCtx, ids, time.Now().UTC())
 	if err != nil {
 		slog.Warn("channel_monitor: intelligence summary unavailable", "error", err)
 		return nil

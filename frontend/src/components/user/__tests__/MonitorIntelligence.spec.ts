@@ -27,6 +27,13 @@ describe('local group intelligence history', () => {
     expect(wrapper.text()).toContain('medium')
   })
 
+  it('keeps the IQ status section visible while its asynchronous history is loading', () => {
+    const wrapper = mount(MonitorIntelligenceView, { props: { summary: null, loading: true } })
+    expect(wrapper.find('[data-testid="monitor-intelligence"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="intelligence-loading"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('monitorCommon.intelligence.title')
+  })
+
   it.each([undefined, null, { window_end: end, series: [] }])('hides the entire section without local group monitoring (%s)', value => {
     const wrapper = mount(MonitorIntelligenceView, { props: { summary: value } })
     expect(wrapper.find('[data-testid="monitor-intelligence"]').exists()).toBe(false)

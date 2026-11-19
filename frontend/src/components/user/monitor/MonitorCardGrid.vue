@@ -47,6 +47,7 @@
             :window="window"
             :availability-value="resolveAvailability(item)"
             :countdown-seconds="countdownSeconds"
+            :intelligence-loading="intelligenceLoading"
             @click="emit('cardClick', item)"
           />
         </div>
@@ -69,6 +70,7 @@ const props = defineProps<{
   window: '7d' | '15d' | '30d'
   countdownSeconds: number
   loading: boolean
+  intelligenceLoading?: boolean
   detailCache: Record<number, UserMonitorDetail>
 }>()
 

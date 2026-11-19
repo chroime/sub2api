@@ -1,7 +1,11 @@
 <template>
-  <section v-if="rows.length" data-testid="monitor-intelligence" class="mt-3 w-full min-w-0 border-t border-gray-200/70 pt-3 dark:border-dark-700">
+  <section v-if="rows.length || loading" data-testid="monitor-intelligence" :aria-busy="loading" class="mt-3 w-full min-w-0 border-t border-gray-200/70 pt-3 dark:border-dark-700">
     <div class="flex min-w-0 items-center justify-between gap-2 whitespace-nowrap leading-4">
       <h4 class="text-xs font-semibold text-gray-800 dark:text-gray-100">{{ t('monitorCommon.intelligence.title') }}</h4>
+      <span v-if="loading" data-testid="intelligence-loading" class="inline-flex shrink-0 items-center gap-1 text-[10px] font-medium text-gray-400 dark:text-gray-500">
+        <span class="h-2.5 w-2.5 animate-spin rounded-full border border-current border-r-transparent" aria-hidden="true"></span>
+        {{ t('monitorCommon.intelligence.loading') }}
+      </span>
       <span v-if="rows.length === 1" class="inline-flex items-center gap-1 text-[10px] font-medium" :class="textColors[rows[0].latest?.status || 'unknown']">
         <span class="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true"></span>
         {{ t(`monitorCommon.intelligence.${rows[0].latest?.status || 'unknown'}`) }}
@@ -37,7 +41,7 @@ import { useI18n } from 'vue-i18n'
 import type { MonitorIntelligence, MonitorIntelligenceSeries } from '@/api/channelMonitor'
 import { intelligenceRows, INTELLIGENCE_COLORS, INTELLIGENCE_STATUSES } from '@/utils/monitorBars'
 
-const props = defineProps<{ summary?: MonitorIntelligence | null }>()
+const props = withDefaults(defineProps<{ summary?: MonitorIntelligence | null; loading?: boolean }>(), { loading: false })
 const { t } = useI18n()
 type Point = MonitorIntelligenceSeries['points'][number]
 type Status = Point['status'] | 'unknown'

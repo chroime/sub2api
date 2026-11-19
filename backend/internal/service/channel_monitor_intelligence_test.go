@@ -26,12 +26,19 @@ func TestChannelMonitorIntelligenceBatchEnrichment(t *testing.T) {
 	repo := &intelligenceMonitorRepo{sortChannelMonitorServiceRepo: sortChannelMonitorServiceRepo{monitors: []*ChannelMonitor{{ID: 1, Enabled: true}, {ID: 2, Enabled: true}}}, rows: map[int64]*MonitorIntelligence{
 		1: {WindowEnd: now, Series: []MonitorIntelligenceSeries{{Model: "local-model", Effort: "medium", Points: []MonitorIntelligencePoint{{Status: "pass", CheckedAt: now}}}}},
 	}}
-	views, err := NewChannelMonitorService(repo, nil).ListUserView(context.Background())
+	monitorService := NewChannelMonitorService(repo, nil)
+	views, err := monitorService.ListUserView(context.Background())
+	require.NoError(t, err)
+	require.Zero(t, repo.calls, "the availability list must not wait for the slow intelligence query")
+	require.Nil(t, views[0].Intelligence)
+	require.Nil(t, views[1].Intelligence)
+	analytics, err := monitorService.ListUserAnalytics(context.Background())
 	require.NoError(t, err)
 	require.Equal(t, 1, repo.calls)
-	require.Equal(t, "local-model", views[0].Intelligence.Series[0].Model)
-	require.Equal(t, "pass", views[0].Intelligence.Series[0].Points[0].Status)
-	require.Nil(t, views[1].Intelligence)
+	require.Equal(t, int64(1), analytics[0].ID)
+	require.Equal(t, "local-model", analytics[0].Intelligence.Series[0].Model)
+	require.Equal(t, "pass", analytics[0].Intelligence.Series[0].Points[0].Status)
+	require.Nil(t, analytics[1].Intelligence)
 }
 func TestChannelMonitorIntelligenceFailureKeepsProbeView(t *testing.T) {
 	repo := &intelligenceMonitorRepo{sortChannelMonitorServiceRepo: sortChannelMonitorServiceRepo{monitors: []*ChannelMonitor{{ID: 1, Name: "probe", Enabled: true}}}, err: errors.New("unavailable")}

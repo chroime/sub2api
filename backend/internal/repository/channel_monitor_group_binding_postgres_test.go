@@ -17,12 +17,13 @@ func TestMonitorGroupBindingPostgresUsesCurrentKeyGroupForAllEnrichment(t *testi
 ALTER TABLE groups ADD COLUMN rate_multiplier double precision DEFAULT 0.2;
 CREATE TEMP TABLE user_group_rate_multipliers(group_id bigint,user_id bigint,rate_multiplier double precision);
 CREATE TEMP TABLE usage_logs(group_id bigint,account_id bigint,requested_model text,model text,
- cache_read_tokens bigint,input_tokens bigint,cache_creation_tokens bigint,first_token_ms bigint,created_at timestamptz,actual_cost numeric);
+ cache_read_tokens bigint,input_tokens bigint,cache_creation_tokens bigint,first_token_ms bigint,created_at timestamptz,actual_cost numeric,
+ id bigserial,stream boolean DEFAULT TRUE);
 INSERT INTO user_group_rate_multipliers VALUES (2,42,0.06);
 UPDATE groups SET name='duplicate-name';
 INSERT INTO api_keys VALUES (101,2,NULL);
 UPDATE channel_monitors SET group_binding_mode='key',local_api_key_id=101,group_id=1 WHERE id=1;
-INSERT INTO usage_logs VALUES
+INSERT INTO usage_logs(group_id,account_id,requested_model,model,cache_read_tokens,input_tokens,cache_creation_tokens,first_token_ms,created_at,actual_cost) VALUES
  (1,9,'usage-model','usage-model',20,80,0,1000,'2026-11-14T11:59:00Z',1),
  (2,9,'usage-model','usage-model',80,20,0,2000,'2026-11-14T11:59:00Z',1);`)
 	require.NoError(t, err)

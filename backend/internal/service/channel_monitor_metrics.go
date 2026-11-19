@@ -9,10 +9,11 @@ import (
 	"time"
 )
 
-// MonitorUsageMetric contains aggregate successful usage for the monitor's
-// exact group/platform/primary model. Nil means no measured samples, not zero.
+// MonitorUsageMetric contains means from the latest 24 successful streaming
+// requests for the monitor's exact group/platform/primary model and optional
+// account. Nil means no measured samples, not zero.
 type MonitorUsageMetric struct {
-	CacheRatePct *float64 `json:"cache_rate_pct"` // 0–100, token-weighted
+	CacheRatePct *float64 `json:"cache_rate_pct"` // 0–100, mean per-request cache percentage
 	FirstTokenMs *float64 `json:"first_token_ms"` // mean measured time to first token
 }
 
@@ -52,7 +53,7 @@ func (s *ChannelMonitorService) usageMetricsForMonitors(ctx context.Context, ids
 		fmt.Fprintf(&key, "%d:%q:%q:%q:%d:%d:%d:%d:%s:%s;", m.ID, m.Provider, m.GroupName, m.PrimaryModel, accountID, m.UpdatedAt.UnixNano(), groupID, keyID, m.GroupBindingMode, m.GroupBindingStatus)
 	}
 	// Share only public aggregate statistics, never the user-specific rates.
-	// Serialize cache misses so concurrent viewers cannot repeat a 30-day scan.
+	// Serialize cache misses so concurrent viewers share the bounded sample query.
 	cache := &s.usageMetrics
 	cache.mu.Lock()
 	defer cache.mu.Unlock()

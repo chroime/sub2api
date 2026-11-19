@@ -10,10 +10,11 @@
     />
 
     <MonitorCardGrid
-      :items="items"
+      :items="displayItems"
       :window="currentWindow"
       :countdown-seconds="countdown"
       :loading="loading"
+      :intelligence-loading="analyticsLoading"
       :detail-cache="detailCache"
       @card-click="openDetail"
     />
@@ -34,7 +35,9 @@ import { useAppStore } from '@/stores/app'
 import { extractApiErrorMessage } from '@/utils/apiError'
 import {
   list as listChannelMonitorViews,
+  analytics as fetchChannelMonitorAnalytics,
   status as fetchChannelMonitorDetail,
+  type UserMonitorAnalytics,
   type UserMonitorView,
   type UserMonitorDetail,
 } from '@/api/channelMonitor'
@@ -52,13 +55,17 @@ const appStore = useAppStore()
 
 // ── State ──
 const items = ref<UserMonitorView[]>([])
+const analyticsByID = ref<Record<number, UserMonitorAnalytics>>({})
 const loading = ref(false)
+const analyticsLoading = ref(false)
 const currentWindow = ref<MonitorWindow>('7d')
 const detailCache = reactive<Record<number, UserMonitorDetail>>({})
 const showDetail = ref(false)
 const detailTarget = ref<UserMonitorView | null>(null)
 
 let abortController: AbortController | null = null
+let analyticsAbortController: AbortController | null = null
+let analyticsGeneration = 0
 
 const autoRefresh = useAutoRefresh({
   storageKey: 'channel-status-auto-refresh',
@@ -74,6 +81,14 @@ const countdown = autoRefresh.countdown
 const detailTitle = computed(() => {
   return detailTarget.value?.name || t('channelStatus.detailTitle')
 })
+const displayItems = computed(() => items.value.map(item => {
+  const analytics = analyticsByID.value[item.id]
+  return {
+    ...item,
+    intelligence: analytics?.intelligence ?? item.intelligence ?? null,
+    usage_metrics: analytics?.usage_metrics ?? item.usage_metrics,
+  }
+}))
 
 // ── Loaders ──
 async function reload(silent = false) {
@@ -85,6 +100,7 @@ async function reload(silent = false) {
     const res = await listChannelMonitorViews({ signal: ctrl.signal })
     if (ctrl.signal.aborted || abortController !== ctrl) return
     items.value = res.items || []
+    void reloadAnalytics(items.value.map(item => item.id))
   } catch (err: unknown) {
     const e = err as { name?: string; code?: string }
     if (e?.name === 'AbortError' || e?.code === 'ERR_CANCELED') return
@@ -94,6 +110,37 @@ async function reload(silent = false) {
       if (!silent) loading.value = false
       autoRefresh.resetCountdown()
       abortController = null
+    }
+  }
+}
+
+async function reloadAnalytics(ids: number[]) {
+  analyticsGeneration++
+  const generation = analyticsGeneration
+  if (analyticsAbortController) analyticsAbortController.abort()
+  if (ids.length === 0) {
+    analyticsByID.value = {}
+    analyticsLoading.value = false
+    analyticsAbortController = null
+    return
+  }
+
+  const ctrl = new AbortController()
+  analyticsAbortController = ctrl
+  analyticsLoading.value = true
+  try {
+    const response = await fetchChannelMonitorAnalytics({ signal: ctrl.signal })
+    if (ctrl.signal.aborted || analyticsGeneration !== generation) return
+    const next: Record<number, UserMonitorAnalytics> = {}
+    for (const item of response.items || []) next[item.id] = item
+    analyticsByID.value = next
+  } catch (err: unknown) {
+    const e = err as { name?: string; code?: string }
+    if (e?.name === 'AbortError' || e?.code === 'ERR_CANCELED' || ctrl.signal.aborted) return
+  } finally {
+    if (analyticsAbortController === ctrl) {
+      analyticsAbortController = null
+      analyticsLoading.value = false
     }
   }
 }
@@ -158,5 +205,6 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   if (abortController) abortController.abort()
+  if (analyticsAbortController) analyticsAbortController.abort()
 })
 </script>

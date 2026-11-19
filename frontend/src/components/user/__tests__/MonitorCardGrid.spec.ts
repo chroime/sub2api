@@ -1,4 +1,5 @@
 import { mount } from '@vue/test-utils'
+import { createPinia } from 'pinia'
 import { describe, expect, it, vi } from 'vitest'
 import type { UserMonitorView } from '@/api/channelMonitor'
 import MonitorCardGrid from '../monitor/MonitorCardGrid.vue'
@@ -37,5 +38,17 @@ describe('channel status platform sections', () => {
   it('uses a neutral value until the selected window has detail data', () => {
     const wrapper = open('30d')
     expect(wrapper.findComponent(MonitorCard).props('availabilityValue')).toBeNull()
+  })
+})
+
+describe('monitor metric sample hints', () => {
+  it('keeps the recent-stream hints independent of the availability window', () => {
+    const wrapper = mount(MonitorCard, {
+      props: { item: items[0], window: '30d', availabilityValue: 99, countdownSeconds: 58 },
+      global: { plugins: [createPinia()], stubs: { ProviderIcon: true, MonitorTimeline: true, MonitorIntelligence: true, MonitorQuotaView: true } },
+    })
+    expect(wrapper.get('[data-metric="cache-rate"]').attributes('title')).toContain('monitorCommon.recentStreamCacheHint')
+    expect(wrapper.get('[data-metric="first-token"]').attributes('title')).toContain('monitorCommon.recentStreamFirstTokenHint')
+    expect(wrapper.get('[data-metric="availability"]').attributes('title')).toContain('channelStatus.windowTab.30d')
   })
 })

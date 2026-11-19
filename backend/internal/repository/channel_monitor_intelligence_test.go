@@ -15,10 +15,11 @@ func TestMonitorIntelligenceProjectionPreservesActualChecks(t *testing.T) {
 	db, mock := newSQLMock(t)
 	repo := &channelMonitorRepository{db: db}
 	now := time.Date(2026, 11, 14, 3, 0, 30, 0, time.UTC)
-	mock.ExpectQuery(regexp.QuoteMeta(monitorIntelligenceQuery)).WithArgs(sqlmock.AnyArg(), now).
-		WillReturnRows(sqlmock.NewRows([]string{"monitor_id", "model", "effort", "checked_at", "status", "id"}).
-			AddRow(4, "quality-model", "medium", now, "pass", "check-pass").
-			AddRow(4, "quality-model", "medium", now.Add(-2*time.Minute), "fail", "check-fail"))
+	snapshotEnd := now.Add(time.Second)
+	mock.ExpectQuery(regexp.QuoteMeta(monitorIntelligenceQuery)).WithArgs(sqlmock.AnyArg()).
+		WillReturnRows(sqlmock.NewRows([]string{"monitor_id", "model", "effort", "window_end", "checked_at", "status", "id"}).
+			AddRow(4, "quality-model", "medium", snapshotEnd, now, "pass", "check-pass").
+			AddRow(4, "quality-model", "medium", snapshotEnd, now.Add(-2*time.Minute), "fail", "check-fail"))
 	result, err := repo.ListIntelligenceForMonitors(context.Background(), []int64{4, 9}, now)
 	require.NoError(t, err)
 	require.Len(t, result[4].Series, 1)
@@ -26,7 +27,7 @@ func TestMonitorIntelligenceProjectionPreservesActualChecks(t *testing.T) {
 	require.Nil(t, result[9], "a monitor without diagnostics must remain untested")
 	require.Equal(t, "pass", result[4].Series[0].Points[0].Status)
 	require.Equal(t, "check-pass", result[4].Series[0].Points[0].ID)
-	require.Equal(t, now, result[4].WindowEnd)
+	require.Equal(t, snapshotEnd, result[4].WindowEnd)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 func TestMonitorIntelligenceEmptyListDoesNotQuery(t *testing.T) {
@@ -40,9 +41,9 @@ func TestMonitorIntelligenceEmptyListDoesNotQuery(t *testing.T) {
 func TestMonitorIntelligenceKeepsConfiguredIdentityWithoutRecentRuns(t *testing.T) {
 	db, mock := newSQLMock(t)
 	now := time.Now().UTC()
-	mock.ExpectQuery(regexp.QuoteMeta(monitorIntelligenceQuery)).WithArgs(sqlmock.AnyArg(), now).
-		WillReturnRows(sqlmock.NewRows([]string{"monitor_id", "model", "effort", "checked_at", "status", "id"}).
-			AddRow(4, "claude-opus-5.5", "medium", nil, nil, nil))
+	mock.ExpectQuery(regexp.QuoteMeta(monitorIntelligenceQuery)).WithArgs(sqlmock.AnyArg()).
+		WillReturnRows(sqlmock.NewRows([]string{"monitor_id", "model", "effort", "window_end", "checked_at", "status", "id"}).
+			AddRow(4, "claude-opus-5.5", "medium", now, nil, nil, nil))
 	result, err := (&channelMonitorRepository{db: db}).ListIntelligenceForMonitors(context.Background(), []int64{4, 9}, now)
 	require.NoError(t, err)
 	require.Equal(t, "claude-opus-5.5", result[4].Series[0].Model)
@@ -57,11 +58,11 @@ func TestMonitorIntelligenceKeepsConfiguredIdentityWithoutRecentRuns(t *testing.
 func TestMonitorIntelligenceSeparatesModelAndEffortHistories(t *testing.T) {
 	db, mock := newSQLMock(t)
 	now := time.Now().UTC()
-	mock.ExpectQuery(regexp.QuoteMeta(monitorIntelligenceQuery)).WithArgs(sqlmock.AnyArg(), now).
-		WillReturnRows(sqlmock.NewRows([]string{"monitor_id", "model", "effort", "checked_at", "status", "id"}).
-			AddRow(4, "model-a", "high", now, "pending", "check-pending").
-			AddRow(4, "model-a", "medium", now, "pass", "check-pass").
-			AddRow(4, "model-b", "medium", nil, nil, nil))
+	mock.ExpectQuery(regexp.QuoteMeta(monitorIntelligenceQuery)).WithArgs(sqlmock.AnyArg()).
+		WillReturnRows(sqlmock.NewRows([]string{"monitor_id", "model", "effort", "window_end", "checked_at", "status", "id"}).
+			AddRow(4, "model-a", "high", now, now, "pending", "check-pending").
+			AddRow(4, "model-a", "medium", now, now, "pass", "check-pass").
+			AddRow(4, "model-b", "medium", now, nil, nil, nil))
 	result, err := (&channelMonitorRepository{db: db}).ListIntelligenceForMonitors(context.Background(), []int64{4}, now)
 	require.NoError(t, err)
 	require.Len(t, result[4].Series, 3)

@@ -105,7 +105,7 @@ describe('MonitorCard quota snapshot visibility', () => {
 })
 
 describe('MonitorCard real metric values', () => {
-  it('shows distinct 18-point probe and 60-minute intelligence histories', () => {
+  it('shows distinct 24-point probe and 60-minute intelligence histories', () => {
     isQuotaVisible.mockReturnValue(false)
     const checkedAt = new Date().toISOString()
     const wrapper = mount(MonitorCard, { props: {
@@ -115,9 +115,9 @@ describe('MonitorCard real metric values', () => {
       }),
       window: '7d', availabilityValue: 98, countdownSeconds: 58,
     } })
-    expect(wrapper.findAll('[data-testid="history-bar"]')).toHaveLength(18)
+    expect(wrapper.findAll('[data-testid="history-bar"]')).toHaveLength(24)
     expect(wrapper.findAll('[data-testid="intelligence-bar"]')).toHaveLength(60)
-    expect(wrapper.findAll('[data-testid="history-bar"][data-status="failed"]')).toHaveLength(18)
+    expect(wrapper.findAll('[data-testid="history-bar"][data-status="failed"]')).toHaveLength(24)
     expect(wrapper.findAll('[data-testid="intelligence-bar"][data-status="pass"]')).toHaveLength(1)
   })
   it('keeps missing availability and latency neutral without made-up units', () => {

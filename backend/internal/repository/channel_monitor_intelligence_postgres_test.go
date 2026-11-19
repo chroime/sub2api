@@ -73,6 +73,19 @@ func TestMonitorIntelligencePostgresReadsLocalGroupMonitoring(t *testing.T) {
 	require.Equal(t, "pass", result[1].Series[0].Points[0].Status)
 }
 
+func TestMonitorIntelligencePostgresIncludesChecksCompletedAfterRequestStarted(t *testing.T) {
+	db := monitorIntelligencePostgres(t)
+	requestStarted := time.Now().UTC().Add(-time.Minute)
+	_, err := db.Exec(`UPDATE upstream_governance_model_runs SET finished_at=clock_timestamp()-INTERVAL '1 second'`)
+	require.NoError(t, err)
+
+	result, err := (&channelMonitorRepository{db: db}).ListIntelligenceForMonitors(context.Background(), []int64{1}, requestStarted)
+	require.NoError(t, err)
+	require.Len(t, result[1].Series[0].Points, 1, "a check visible to the query must not be discarded by a request-start timestamp")
+	require.True(t, result[1].WindowEnd.After(requestStarted))
+	require.True(t, result[1].WindowEnd.After(result[1].Series[0].Points[0].CheckedAt) || result[1].WindowEnd.Equal(result[1].Series[0].Points[0].CheckedAt))
+}
+
 func TestMonitorIntelligencePostgresVerdicts(t *testing.T) {
 	tests := []struct {
 		name, template, status, review, result, want string
@@ -138,7 +151,7 @@ func TestMonitorIntelligencePostgresScopeAndCurrentConfiguration(t *testing.T) {
 		{"probe result", `UPDATE upstream_governance_model_runs SET request=jsonb_set(request,'{template}','"probe"')`, true, false},
 		{"removed template", `UPDATE upstream_governance_model_policies SET config=jsonb_set(config,'{templates}','["pelican"]')`, true, false},
 		{"historical checks remain visible", `UPDATE upstream_governance_model_runs SET finished_at='2026-11-12T11:00:59Z'`, true, true},
-		{"future history", `UPDATE upstream_governance_model_runs SET finished_at='2026-11-14T12:00:31Z'`, true, false},
+		{"future history", `UPDATE upstream_governance_model_runs SET finished_at=clock_timestamp()+INTERVAL '1 hour'`, true, false},
 		{"unfinished", `UPDATE upstream_governance_model_runs SET finished_at=NULL`, true, false},
 		{"queued", `UPDATE upstream_governance_model_runs SET status='queued'`, true, false},
 		{"running", `UPDATE upstream_governance_model_runs SET status='running'`, true, false},

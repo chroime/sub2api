@@ -18,7 +18,9 @@ import (
 // an IQ check. Keep the last 60 actual checks per series, including older checks
 // and separate samples completed in the same minute.
 const monitorIntelligenceQuery = `
-WITH configured AS (
+WITH snapshot AS MATERIALIZED (
+ SELECT statement_timestamp() AS window_end
+), configured AS (
  SELECT DISTINCT m.id AS monitor_id,p.id AS policy_id,p.site_id,p.version,p.config,
   p.config->>'model' AS model,e.effort
  FROM channel_monitors m
@@ -39,8 +41,9 @@ WITH configured AS (
 ), targets AS (
  SELECT DISTINCT monitor_id,model,effort FROM configured
 )
-SELECT t.monitor_id,t.model,t.effort,history.finished_at,history.verdict,history.id
+SELECT t.monitor_id,t.model,t.effort,s.window_end,history.finished_at,history.verdict,history.id
 FROM targets t
+CROSS JOIN snapshot s
 LEFT JOIN LATERAL (
  SELECT sample.* FROM configured c
  CROSS JOIN LATERAL (
@@ -63,7 +66,7 @@ LEFT JOIN LATERAL (
   AND r.request->>'template' IN ('candy','pelican')
   AND c.config->'templates' ? (r.request->>'template')
   AND r.public_visible AND r.status IN ('succeeded','failed','indeterminate')
-  AND r.finished_at <= $2::timestamptz
+  AND r.finished_at <= s.window_end
  ORDER BY r.finished_at DESC,r.id DESC LIMIT 60
  ) sample
  WHERE c.monitor_id=t.monitor_id AND c.model=t.model AND c.effort=t.effort
@@ -76,7 +79,7 @@ func (r *channelMonitorRepository) ListIntelligenceForMonitors(ctx context.Conte
 	if len(ids) == 0 {
 		return out, nil
 	}
-	rows, err := r.db.QueryContext(ctx, monitorIntelligenceQuery, pq.Array(ids), now)
+	rows, err := r.db.QueryContext(ctx, monitorIntelligenceQuery, pq.Array(ids))
 	if err != nil {
 		return nil, fmt.Errorf("query monitor intelligence: %w", err)
 	}
@@ -91,13 +94,17 @@ func (r *channelMonitorRepository) ListIntelligenceForMonitors(ctx context.Conte
 		var id int64
 		var model, effort string
 		var status, checkID sql.NullString
-		var checkedAt sql.NullTime
-		if err := rows.Scan(&id, &model, &effort, &checkedAt, &status, &checkID); err != nil {
+		var windowEnd, checkedAt sql.NullTime
+		if err := rows.Scan(&id, &model, &effort, &windowEnd, &checkedAt, &status, &checkID); err != nil {
 			return nil, err
 		}
 		summary := out[id]
 		if summary == nil {
-			summary = &service.MonitorIntelligence{WindowEnd: now, Series: []service.MonitorIntelligenceSeries{}}
+			end := now
+			if windowEnd.Valid {
+				end = windowEnd.Time
+			}
+			summary = &service.MonitorIntelligence{WindowEnd: end, Series: []service.MonitorIntelligenceSeries{}}
 			out[id] = summary
 		}
 		key := seriesKey{id, model, effort}

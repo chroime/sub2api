@@ -48,15 +48,29 @@ func TestMonitorMetricsHandlerUsesAuthIdentityWithoutCrossUserLeak(t *testing.T)
 		}
 		require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &result))
 		item := result.Data.Items[0]
-		require.Equal(t, 86.2, *item.UsageMetrics["7d"].CacheRatePct)
-		require.Equal(t, 3000.0, *item.UsageMetrics["7d"].FirstTokenMs)
+		require.Nil(t, item.UsageMetrics, "the base list must return before usage aggregation finishes")
 		if userID == 0 {
 			require.Nil(t, item.UserRateMultiplier)
 		} else {
 			require.Equal(t, map[int64]float64{42: 0.075, 99: 1.5}[userID], *item.UserRateMultiplier)
 		}
+
+		analyticsRecorder := httptest.NewRecorder()
+		analyticsContext, _ := gin.CreateTestContext(analyticsRecorder)
+		analyticsContext.Request = httptest.NewRequest(http.MethodGet, "/channel-monitors/analytics", nil)
+		h.Analytics(analyticsContext)
+		require.Equal(t, http.StatusOK, analyticsRecorder.Code)
+		var analyticsResult struct {
+			Data struct {
+				Items []service.UserMonitorAnalytics `json:"items"`
+			} `json:"data"`
+		}
+		require.NoError(t, json.Unmarshal(analyticsRecorder.Body.Bytes(), &analyticsResult))
+		require.Equal(t, int64(41), analyticsResult.Data.Items[0].ID)
+		require.Equal(t, 86.2, *analyticsResult.Data.Items[0].UsageMetrics["7d"].CacheRatePct)
+		require.Equal(t, 3000.0, *analyticsResult.Data.Items[0].UsageMetrics["7d"].FirstTokenMs)
 		for _, sensitive := range []string{"secret-key", "private-token", "account_id", "user_id", "api_key", "endpoint"} {
-			require.NotContains(t, recorder.Body.String(), `"`+sensitive+`"`)
+			require.NotContains(t, recorder.Body.String()+analyticsRecorder.Body.String(), `"`+sensitive+`"`)
 		}
 	}
 }

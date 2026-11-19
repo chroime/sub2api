@@ -42,7 +42,7 @@
     </div>
 
     <dl class="monitor-card-metrics mt-4 grid w-full min-w-0 grid-cols-3 gap-1.5" :aria-label="t(`channelStatus.windowTab.${window}`)">
-      <div v-for="metric in metrics" :key="metric.key" :data-metric="metric.key" class="flex min-w-0 flex-col justify-between gap-3 rounded-xl border border-gray-200/80 bg-gray-50/80 px-2 py-2.5 dark:border-dark-700 dark:bg-dark-900/40" :title="`${metric.label} · ${t(`channelStatus.windowTab.${window}`)}`">
+      <div v-for="metric in metrics" :key="metric.key" :data-metric="metric.key" class="flex min-w-0 flex-col justify-between gap-3 rounded-xl border border-gray-200/80 bg-gray-50/80 px-2 py-2.5 dark:border-dark-700 dark:bg-dark-900/40" :title="`${metric.label} · ${metric.hint}`">
         <dt class="text-[10px] font-semibold leading-4 text-gray-500 dark:text-gray-400">{{ metric.label }}</dt>
         <dd class="whitespace-nowrap font-mono text-base font-bold leading-none tabular-nums" :class="metric.color">
           {{ metric.value }}<span v-if="metric.unit" class="ml-0.5 text-[0.6em] font-medium">{{ metric.unit }}</span>
@@ -55,7 +55,7 @@
 
     <div class="w-full">
       <MonitorTimeline :buckets="item.timeline" :length="timelineLength" :countdown-seconds="countdownSeconds" />
-      <MonitorIntelligence :summary="item.intelligence" />
+      <MonitorIntelligence :summary="item.intelligence" :loading="intelligenceLoading" />
     </div>
   </button>
 </template>
@@ -76,6 +76,7 @@ const props = defineProps<{
   window: '7d' | '15d' | '30d'
   availabilityValue: number | null
   countdownSeconds: number
+  intelligenceLoading?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -124,13 +125,13 @@ const metrics = computed(() => {
   const hasCache = typeof cache === 'number' && Number.isFinite(cache) && cache >= 0 && cache <= 100
   const color = 'text-gray-900 dark:text-gray-100'
   return [
-    { key: 'cache-rate', label: t('monitorCommon.cacheRate'), value: hasCache ? cache.toFixed(1) : t('monitorCommon.latencyEmpty'), unit: hasCache ? '%' : '', color },
-    { key: 'availability', label: t('monitorCommon.availabilityPrefix'), value: availabilityText.value, unit: hasAvailability.value ? '%' : '', color: availabilityClass.value },
-    { key: 'first-token', label: t('monitorCommon.firstToken'), ...latencyMetric(usage?.first_token_ms), color },
+    { key: 'cache-rate', label: t('monitorCommon.cacheRate'), hint: t('monitorCommon.recentStreamCacheHint'), value: hasCache ? cache.toFixed(1) : t('monitorCommon.latencyEmpty'), unit: hasCache ? '%' : '', color },
+    { key: 'availability', label: t('monitorCommon.availabilityPrefix'), hint: t(`channelStatus.windowTab.${props.window}`), value: availabilityText.value, unit: hasAvailability.value ? '%' : '', color: availabilityClass.value },
+    { key: 'first-token', label: t('monitorCommon.firstToken'), hint: t('monitorCommon.recentStreamFirstTokenHint'), ...latencyMetric(usage?.first_token_ms), color },
   ]
 })
 
-const timelineLength = 18
+const timelineLength = 24
 </script>
 
 <style scoped>

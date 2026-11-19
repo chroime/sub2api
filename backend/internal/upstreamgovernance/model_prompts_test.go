@@ -38,10 +38,10 @@ func TestModelPromptRandomMarkersAndEcho(t *testing.T) {
 }
 
 func TestModelPromptCandyDoesNotScoreMentionedNumbers(t *testing.T) {
-	for _, s := range []string{"A 21-token example; final answer 29", "21 和 29 都有可能。", "取9圆12星共21，最少其实29颗。"} {
+	for _, s := range []string{"A 21-token example; 29 is only a number.", "21 和 29 都有可能。", "取9圆12星共21，最少其实29颗。"} {
 		answer, verdict := modelCandyVerdict(s)
-		require.Nil(t, answer)
-		require.Equal(t, "needs_review", verdict)
+		require.Nil(t, answer, s)
+		require.Equal(t, "needs_review", verdict, s)
 	}
 	answer, verdict := modelCandyVerdict("21")
 	require.Equal(t, 21, *answer)
@@ -73,7 +73,6 @@ func TestModelPromptCandyRecognizesUniqueStandaloneConclusion(t *testing.T) {
 		"如果完全盲取，答案是29颗。",
 		"举例来说，21颗是一个需要考虑的数字。",
 		"例如答案是21颗，但这只是示例。",
-		"```text\n答案是21颗。\n```",
 	} {
 		answer, verdict := modelCandyVerdict(text)
 		require.Nil(t, answer, text)

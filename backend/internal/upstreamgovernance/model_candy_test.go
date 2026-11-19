@@ -42,6 +42,36 @@ func TestModelCandyCompatibleIncorrectConclusions(t *testing.T) {
 	}
 }
 
+func TestModelCandyAcceptsCommonFormattedConclusions(t *testing.T) {
+	for _, text := range []string{
+		"Answer: 21 candies, because nine round and twelve star-shaped candies suffice.",
+		"The minimum number of candies is 21.",
+		"| 最终答案 | **21** 颗 |",
+		"```json\n{\"answer\": 21}\n```",
+		"```text\n最终答案：21颗。\n```",
+		"**21**",
+	} {
+		t.Run(text, func(t *testing.T) {
+			answer, verdict := modelCandyVerdict(text)
+			require.Equal(t, "numeric_correct", verdict)
+			require.NotNil(t, answer)
+			require.Equal(t, 21, *answer)
+		})
+	}
+}
+
+func TestModelCandyAcceptsExplicitConclusionsAfterIntroductoryText(t *testing.T) {
+	for _, text := range []string{
+		"我认为最终答案应该是21颗。",
+		"After checking the cases, I think the answer is 21 candies.",
+	} {
+		answer, verdict := modelCandyVerdict(text)
+		require.Equal(t, "numeric_correct", verdict, text)
+		require.NotNil(t, answer, text)
+		require.Equal(t, 21, *answer, text)
+	}
+}
+
 func TestModelCandyCompatibilityRetainsAmbiguity(t *testing.T) {
 	for _, text := range []string{
 		"因此，答案是21或29颗。",
@@ -53,8 +83,7 @@ func TestModelCandyCompatibilityRetainsAmbiguity(t *testing.T) {
 		"答案是21颗。\n\\boxed{29}",
 		"答案可能是21颗。",
 		"如果完全盲取，答案是21颗。",
-		"> 答案是21颗。",
-		"```text\n答案是21颗。\n```",
+		"引用内容：答案是21颗。",
 		"例如答案是21颗，但这只是示例。",
 		"因为21颗够用，因此答案还需要考虑。",
 		"答案是21颗。\n答案为21.5颗。",

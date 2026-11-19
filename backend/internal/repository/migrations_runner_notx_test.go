@@ -51,6 +51,20 @@ DROP INDEX CONCURRENTLY IF EXISTS idx_b;
 	})
 }
 
+func TestMonitorStreamingIndexMigrationDropsInvalidIndexesBeforeRetry(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+	for _, name := range []string{"idx_usage_logs_monitor_stream_recent", "idx_usage_logs_monitor_account_stream_recent"} {
+		mock.ExpectQuery("SELECT EXISTS").WithArgs(name).
+			WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
+		mock.ExpectExec("DROP INDEX CONCURRENTLY IF EXISTS " + name).
+			WillReturnResult(sqlmock.NewResult(0, 0))
+	}
+	require.NoError(t, prepareNonTransactionalMigration(context.Background(), db, "294_channel_monitor_stream_samples_notx.sql"))
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestApplyMigrationsFS_NonTransactionalMigration(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)

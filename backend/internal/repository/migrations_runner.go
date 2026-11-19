@@ -313,6 +313,13 @@ func prepareNonTransactionalMigration(ctx context.Context, db migrationConnectio
 		return dropInvalidIndexIfPresent(ctx, db, usageLogsUpstreamRequestIDIndex)
 	case usageLogsAPIKeyCostIndexMigration:
 		return dropInvalidIndexIfPresent(ctx, db, usageLogsAPIKeyCostIndex)
+	case "294_channel_monitor_stream_samples_notx.sql":
+		for _, indexName := range []string{"idx_usage_logs_monitor_stream_recent", "idx_usage_logs_monitor_account_stream_recent"} {
+			if err := dropInvalidIndexIfPresent(ctx, db, indexName); err != nil {
+				return err
+			}
+		}
+		return nil
 	default:
 		return nil
 	}

@@ -209,6 +209,14 @@ type UserMonitorView struct {
 	LatestQuota *domain.MonitorQuotaSnapshot
 }
 
+// UserMonitorAnalytics carries the slower IQ and usage aggregates separately
+// from the availability-first monitor list response.
+type UserMonitorAnalytics struct {
+	ID           int64                         `json:"id"`
+	Intelligence *MonitorIntelligence          `json:"intelligence,omitempty"`
+	UsageMetrics map[string]MonitorUsageMetric `json:"usage_metrics,omitempty"`
+}
+
 // UserMonitorTimelinePoint 用户视图 timeline 单点数据（去除 message 以减小响应体）。
 type UserMonitorTimelinePoint struct {
 	Status        string    `json:"status"`

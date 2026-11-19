@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -12,23 +11,35 @@ import (
 )
 
 // Use explicit, active group IDs only; an unbound monitor has no inferred
-// usage or billing multiplier. The cache ratio
-// uses aggregate tokens (the same denominator as channel monitor V2).
+// usage or billing multiplier. Both metrics use the same latest 24 streaming
+// records; each request has equal weight, independent of availability windows.
+const monitorStreamingSampleSelect = `
+ SELECT ul.input_tokens,ul.cache_creation_tokens,ul.cache_read_tokens,ul.first_token_ms
+ FROM usage_logs ul
+ WHERE ul.group_id=g.id AND ul.stream=TRUE
+ AND COALESCE(NULLIF(BTRIM(ul.requested_model),''),NULLIF(BTRIM(ul.model),''))=m.primary_model
+ AND ul.created_at < $2::timestamptz
+ AND ` + usageLogSuccessFilterUL
+
+const monitorStreamingSampleOrder = `
+ ORDER BY ul.created_at DESC,ul.id DESC
+ LIMIT 24`
+
+// Separate guarded branches let PostgreSQL use the account-specific index
+// without an OR predicate that scans other accounts' streaming history.
 const monitorUsageMetricsQuery = `
-SELECT m.id,w.days,
- 100.0*SUM(ul.cache_read_tokens)/NULLIF(SUM(ul.input_tokens::bigint+ul.cache_creation_tokens+ul.cache_read_tokens),0),
+SELECT m.id,
+ AVG(100.0*ul.cache_read_tokens/NULLIF(ul.input_tokens::bigint+ul.cache_creation_tokens+ul.cache_read_tokens,0)),
  AVG(ul.first_token_ms) FILTER (WHERE ul.first_token_ms >= 0)
 FROM channel_monitors m
 ` + monitorBoundGroupJoin + `
-JOIN usage_logs ul ON ul.group_id=g.id
- AND COALESCE(NULLIF(TRIM(ul.requested_model),''),NULLIF(TRIM(ul.model),''))=m.primary_model
- AND (m.account_id IS NULL OR ul.account_id=m.account_id)
- AND ul.created_at >= $2::timestamptz-INTERVAL '30 days' AND ul.created_at < $2
-CROSS JOIN (VALUES (7),(15),(30)) AS w(days)
+JOIN LATERAL (
+ (` + monitorStreamingSampleSelect + ` AND m.account_id IS NULL` + monitorStreamingSampleOrder + `)
+ UNION ALL
+ (` + monitorStreamingSampleSelect + ` AND m.account_id IS NOT NULL AND ul.account_id=m.account_id` + monitorStreamingSampleOrder + `)
+) ul ON TRUE
 WHERE m.id=ANY($1) AND m.enabled=TRUE
- AND ul.created_at >= $2::timestamptz-w.days*INTERVAL '1 day'
- AND ` + usageLogSuccessFilterUL + `
-GROUP BY m.id,w.days`
+GROUP BY m.id`
 
 const monitorUserRatesQuery = `
 SELECT m.id,COALESCE(ugr.rate_multiplier,g.rate_multiplier)
@@ -49,9 +60,8 @@ func (r *channelMonitorRepository) ListUsageMetricsForMonitors(ctx context.Conte
 	defer rows.Close()
 	for rows.Next() {
 		var id int64
-		var days int
 		var cacheRate, firstToken sql.NullFloat64
-		if err := rows.Scan(&id, &days, &cacheRate, &firstToken); err != nil {
+		if err := rows.Scan(&id, &cacheRate, &firstToken); err != nil {
 			return nil, err
 		}
 		metric := service.MonitorUsageMetric{}
@@ -61,10 +71,8 @@ func (r *channelMonitorRepository) ListUsageMetricsForMonitors(ctx context.Conte
 		if firstToken.Valid {
 			metric.FirstTokenMs = &firstToken.Float64
 		}
-		if out[id] == nil {
-			out[id] = make(map[string]service.MonitorUsageMetric, 3)
-		}
-		out[id][strconv.Itoa(days)+"d"] = metric
+		// Keep the existing response shape; only availability uses date windows.
+		out[id] = map[string]service.MonitorUsageMetric{"7d": metric, "15d": metric, "30d": metric}
 	}
 	return out, rows.Err()
 }

@@ -305,6 +305,11 @@ func callProvider(ctx context.Context, provider, endpoint, apiKey, model, prompt
 		return "", "", status, err
 	}
 	if streaming {
+		if status >= http.StatusOK && status < http.StatusMultipleChoices {
+			if streamErr := monitorSSEError(respBytes); streamErr != nil {
+				return "", string(respBytes), status, streamErr
+			}
+		}
 		text := extractMonitorSSEText(respBytes, provider, apiMode)
 		if text == "" {
 			// Some OpenAI-compatible gateways advertise/accept stream=true but
@@ -475,10 +480,10 @@ var bodyMergeKeyDenyList = map[string]map[string]bool{
 	MonitorProviderAnthropic: {"model": true, "messages": true},
 	MonitorProviderGemini:    {"contents": true},
 	// 国产 3 家与 OpenAI Chat Completions 同构。
-	MonitorProviderKimi:     {"model": true, "messages": true, "stream": true},
-	MonitorProviderZhipu:    {"model": true, "messages": true, "stream": true},
-	MonitorProviderDeepseek: {"model": true, "messages": true, "stream": true},
-	MonitorProviderMiniMax:  {"model": true, "messages": true, "stream": true},
+	MonitorProviderKimi:     {"model": true, "messages": true},
+	MonitorProviderZhipu:    {"model": true, "messages": true},
+	MonitorProviderDeepseek: {"model": true, "messages": true},
+	MonitorProviderMiniMax:  {"model": true, "messages": true},
 }
 
 func checkAPIMode(opts *CheckOptions) string {
@@ -576,10 +581,39 @@ func postRawJSON(ctx context.Context, fullURL string, payload []byte, headers ma
 	return respBody, resp.StatusCode, nil
 }
 
-// extractMonitorSSEText extracts challenge text from both OpenAI-compatible
-// Chat Completions chunks and Responses API output_text delta events.
-// It intentionally returns an empty string for an SSE stream with no usable
-// text, so the normal challenge validation marks it as failed.
+// monitorSSEError rejects terminal failures even if an earlier event had text.
+func monitorSSEError(respBytes []byte) error {
+	scanner := bufio.NewScanner(bytes.NewReader(respBytes))
+	scanner.Buffer(make([]byte, 1024), monitorResponseMaxBytes)
+	for scanner.Scan() {
+		line := bytes.TrimSpace(scanner.Bytes())
+		if !bytes.HasPrefix(line, []byte("data:")) {
+			continue
+		}
+		event := gjson.ParseBytes(bytes.TrimSpace(line[len("data:"):]))
+		errDetail := event.Get("error")
+		if event.Get("type").String() == "response.failed" {
+			errDetail = event.Get("response.error")
+		} else if event.Get("type").String() != "error" && (!errDetail.Exists() || errDetail.Type == gjson.Null) {
+			continue
+		}
+		message := errDetail.Get("message").String()
+		if message == "" {
+			message = event.Get("message").String()
+		}
+		if message == "" {
+			message = "upstream reported a failed stream"
+		}
+		return fmt.Errorf("upstream stream error: %s", message)
+	}
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("read upstream stream: %w", err)
+	}
+	return nil
+}
+
+// extractMonitorSSEText extracts visible text from Chat, Responses and Anthropic
+// events. A stream without usable text fails the normal challenge validation.
 func extractMonitorSSEText(respBytes []byte, provider, apiMode string) string {
 	var parts []string
 	var completeResponseText string
@@ -599,6 +633,17 @@ func extractMonitorSSEText(respBytes []byte, provider, apiMode string) string {
 			continue
 		}
 		var text string
+		if provider == MonitorProviderAnthropic {
+			if typ, _ := event["type"].(string); typ == "content_block_delta" {
+				if delta, ok := event["delta"].(map[string]any); ok && delta["type"] == "text_delta" {
+					text, _ = delta["text"].(string)
+				}
+			} else if typ == "content_block_start" {
+				if block, ok := event["content_block"].(map[string]any); ok && block["type"] == "text" {
+					text, _ = block["text"].(string)
+				}
+			}
+		}
 		if provider == MonitorProviderOpenAI && defaultAPIMode(apiMode) == MonitorAPIModeResponses {
 			if typ, _ := event["type"].(string); typ == "response.output_text.delta" {
 				text = monitorEventText(event["delta"])

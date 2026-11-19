@@ -128,16 +128,12 @@ func (s *ChannelMonitorService) ListUserViewForUser(ctx context.Context, userID 
 	summaries := s.BatchMonitorStatusSummary(ctx, ids, primaryByID, extrasByID, resetsByID)
 	latestMap := s.batchLatest(ctx, ids)
 	timelineMap := s.batchTimeline(ctx, ids, primaryByID, resetsByID)
-	intelligence := s.intelligenceForMonitors(ctx, ids)
-	usageMetrics := s.usageMetricsForMonitors(ctx, ids, monitors)
 	userRates := s.userRatesForMonitors(ctx, ids, userID)
 
 	views := make([]*UserMonitorView, 0, len(monitors))
 	for _, m := range monitors {
 		primaryLatest := pickLatest(latestMap[m.ID], m.PrimaryModel)
 		view := buildUserViewFromSummary(m, summaries[m.ID], primaryLatest, timelineMap[m.ID])
-		view.Intelligence = intelligence[m.ID]
-		view.UsageMetrics = usageMetrics[m.ID]
 		if rate, ok := userRates[m.ID]; ok {
 			view.UserRateMultiplier = &rate
 		}

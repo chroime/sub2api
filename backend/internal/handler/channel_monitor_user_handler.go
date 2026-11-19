@@ -189,6 +189,21 @@ func (h *ChannelMonitorUserHandler) List(c *gin.Context) {
 	response.Success(c, gin.H{"items": items})
 }
 
+// Analytics GET /api/v1/channel-monitors/analytics
+// Slow IQ and usage aggregations are fetched after the availability list.
+func (h *ChannelMonitorUserHandler) Analytics(c *gin.Context) {
+	if !h.featureEnabled(c) {
+		response.Success(c, gin.H{"items": []service.UserMonitorAnalytics{}})
+		return
+	}
+	items, err := h.monitorService.ListUserAnalytics(c.Request.Context())
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, gin.H{"items": items})
+}
+
 // GetStatus GET /api/v1/channel-monitors/:id/status
 func (h *ChannelMonitorUserHandler) GetStatus(c *gin.Context) {
 	if !h.featureEnabled(c) {

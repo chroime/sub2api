@@ -52,6 +52,12 @@ export interface MonitorUsageMetric {
   first_token_ms: number | null
 }
 
+export interface UserMonitorAnalytics {
+  id: number
+  intelligence?: MonitorIntelligence | null
+  usage_metrics?: Partial<Record<'7d' | '15d' | '30d', MonitorUsageMetric>>
+}
+
 export interface MonitorIntelligence {
   window_end: string
   series: MonitorIntelligenceSeries[]
@@ -96,6 +102,14 @@ export async function list(options?: { signal?: AbortSignal }): Promise<UserMoni
   return data
 }
 
+/** Load IQ history and usage aggregates after the fast availability list. */
+export async function analytics(options?: { signal?: AbortSignal }): Promise<{ items: UserMonitorAnalytics[] }> {
+  const { data } = await apiClient.get<{ items: UserMonitorAnalytics[] }>('/channel-monitors/analytics', {
+    signal: options?.signal,
+  })
+  return data
+}
+
 /**
  * Get detailed status (multi-window availability + latency) for a single monitor.
  */
@@ -106,6 +120,7 @@ export async function status(id: number): Promise<UserMonitorDetail> {
 
 export const channelMonitorUserAPI = {
   list,
+  analytics,
   status,
 }
 
