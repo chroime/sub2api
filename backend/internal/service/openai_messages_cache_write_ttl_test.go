@@ -19,15 +19,19 @@ import (
 func TestOpenAIMessagesRetainsCacheWriteTTL(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	for _, mode := range []string{"buffered", "stream"} {
-		for _, placement := range []string{"response", "event"} {
+		for _, placement := range []string{"response", "event", "both"} {
 			t.Run(mode+"/"+placement, func(t *testing.T) {
 				const usage = `{"input_tokens":400,"output_tokens":10,"cache_creation_input_tokens":300,"input_tokens_details":{"cached_tokens":0,"cache_write_tokens":300,"cache_write_tokens_details":{"ttl_30m_tokens":100,"ttl_12h_tokens":200}}}`
 				response := map[string]any{"id": "resp_ttl_compat", "model": "gpt-6-luna", "status": "completed", "output": []any{map[string]any{"type": "message", "role": "assistant", "status": "completed", "content": []any{map[string]string{"type": "output_text", "text": "ok"}}}}}
 				event := map[string]any{"type": "response.completed", "response": response}
-				if placement == "response" {
+				if placement != "event" {
 					response["usage"] = json.RawMessage(usage)
-				} else {
+				}
+				if placement != "response" {
 					event["usage"] = json.RawMessage(usage)
+				}
+				if placement == "both" {
+					event["usage"] = json.RawMessage(`{"input_tokens":120,"output_tokens":5,"cache_creation_input_tokens":100,"input_tokens_details":{"cache_write_tokens":100,"cache_write_tokens_details":{"ttl_30m_tokens":40,"ttl_12h_tokens":60}}}`)
 				}
 				payload, err := json.Marshal(event)
 				require.NoError(t, err)

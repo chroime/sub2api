@@ -936,6 +936,9 @@ func (s *OpenAIGatewayService) readOpenAICompatBufferedTerminal(
 								}
 							}
 							if response.Usage != nil {
+								if nested, ok := openAIUsageFromGJSON(gjson.Get(payload, "response.usage")); ok {
+									usage = nested
+								}
 								usage = copyOpenAIUsageFromResponsesUsage(response.Usage, usage)
 							}
 							return response, usage, acc, prior, nil
@@ -986,6 +989,9 @@ func (s *OpenAIGatewayService) readOpenAICompatBufferedTerminal(
 					}
 				}
 				if response.Usage != nil {
+					if nested, ok := openAIUsageFromGJSON(gjson.Get(payload, "response.usage")); ok {
+						usage = nested
+					}
 					usage = copyOpenAIUsageFromResponsesUsage(response.Usage, usage)
 				}
 				return response, usage, acc, prior, nil
@@ -1135,16 +1141,19 @@ func (s *OpenAIGatewayService) handleAnthropicStreamingResponse(
 		isTerminalEvent := isOpenAICompatResponsesTerminalEvent(eventType) || isBareErrorEvent
 		if isTerminalEvent {
 			terminalEventType = eventType
+			if event.Usage != nil {
+				usage = copyOpenAIUsageFromResponsesUsage(event.Usage, usage)
+			}
 			if event.Response != nil {
 				if id := strings.TrimSpace(event.Response.ID); id != "" {
 					responseID = id
 				}
 				if event.Response.Usage != nil {
+					if nested, ok := openAIUsageFromGJSON(gjson.Get(payload, "response.usage")); ok {
+						usage = nested
+					}
 					usage = copyOpenAIUsageFromResponsesUsage(event.Response.Usage, usage)
 				}
-			}
-			if event.Usage != nil {
-				usage = copyOpenAIUsageFromResponsesUsage(event.Usage, usage)
 			}
 			// cyber_policy 致命不可重试：标记供 handler 事后记录；以 Anthropic SSE error 事件
 			// 回写让客户端感知并停止重试（F4），丢弃后续转换输出。

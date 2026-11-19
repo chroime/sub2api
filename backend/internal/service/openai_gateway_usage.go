@@ -177,6 +177,27 @@ func isZeroTokenZeroCostOpenAIUsage(usageLog *UsageLog) bool {
 	return usageLog.AccountStatsCost == nil || *usageLog.AccountStatsCost == 0
 }
 
+func (usage OpenAIUsage) billingUsageTokens() UsageTokens {
+	creationTokens := usage.CacheCreationInputTokens
+	if creationTokens <= 0 {
+		creationTokens = max(usage.CacheCreation5mTokens, 0) + max(usage.CacheCreation1hTokens, 0)
+	}
+	tokens := UsageTokens{
+		InputTokens:            max(usage.InputTokens-usage.CacheReadInputTokens-creationTokens, 0),
+		ImageInputTokens:       max(usage.ImageInputTokens-usage.ImageCacheReadTokens, 0),
+		ImageCacheReadTokens:   usage.ImageCacheReadTokens,
+		OutputTokens:           usage.OutputTokens,
+		CacheCreationTokens:    creationTokens,
+		CacheCreation5mTokens:  usage.CacheCreation5mTokens,
+		CacheCreation1hTokens:  usage.CacheCreation1hTokens,
+		CacheCreation30mTokens: usage.CacheCreation30mInputTokens,
+		CacheCreation12hTokens: usage.CacheCreation12hInputTokens,
+		CacheReadTokens:        usage.CacheReadInputTokens,
+		ImageOutputTokens:      usage.ImageOutputTokens,
+	}
+	return tokens
+}
+
 // RecordUsage records usage and deducts balance
 func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRecordUsageInput) (prechargeErr error) {
 	defer finishBalancePrechargeUsage(ctx, &prechargeErr)
@@ -206,16 +227,13 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 
 	// OpenAI input_tokens 是总输入，包含缓存读取和缓存写入明细。
 	// 将三类 token 拆成互斥桶，避免缓存写入同时按普通输入和 cache_write 重复计费。
-	actualInputTokens := result.Usage.InputTokens - result.Usage.CacheReadInputTokens - result.Usage.CacheCreationInputTokens
-	if actualInputTokens < 0 {
-		actualInputTokens = 0
-	}
-	rawActualInputTokens := actualInputTokens
+	rawTokens := result.Usage.billingUsageTokens()
+	rawActualInputTokens := rawTokens.InputTokens
 	rawOutputTokens := result.Usage.OutputTokens
 	adjusted := AdjustedTokenUsage{Customer: TokenUsageBuckets{
 		InputTokens:      rawActualInputTokens,
 		CacheReadTokens:  result.Usage.CacheReadInputTokens,
-		CacheWriteTokens: result.Usage.CacheCreationInputTokens,
+		CacheWriteTokens: rawTokens.CacheCreationTokens,
 		OutputTokens:     rawOutputTokens,
 	}}
 	displayInputTokens := rawActualInputTokens
@@ -225,7 +243,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		adjusted = adjustment.ApplyForRequestUsage(
 			rawActualInputTokens,
 			result.Usage.CacheReadInputTokens,
-			result.Usage.CacheCreationInputTokens,
+			rawTokens.CacheCreationTokens,
 			rawOutputTokens,
 		)
 		displayInputTokens = adjusted.Customer.InputTokens
@@ -235,11 +253,16 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	// Keep the lifetime buckets aligned with the customer cache-write total.
 	// Unified token adjustments scale each lifetime; split adjustments fold
 	// cache into normal input and therefore leave no customer lifetime buckets.
+	customerCache5m, customerCache1h := rawTokens.CacheCreation5mTokens, rawTokens.CacheCreation1hTokens
 	customerCache30m, customerCache12h := fitCacheBuckets(adjusted.Customer.CacheWriteTokens, result.Usage.CacheCreation30mInputTokens, result.Usage.CacheCreation12hInputTokens)
 	if adjusted.Applied && apiKey != nil {
 		adjustment := tokenUsageAdjustmentForGroup(apiKey.Group)
 		if adjustment.unifiedEnabled() {
+			rawFive, rawOne := normalizeCacheCreationBreakdown(rawTokens)
+			customerCache5m, customerCache1h = scaleCacheTTLBuckets(rawFive, rawOne, adjustment.normalized().UnifiedMultiplier, adjusted.Customer.CacheWriteTokens)
 			customerCache30m, customerCache12h = scaleCacheTTLBuckets(result.Usage.CacheCreation30mInputTokens, result.Usage.CacheCreation12hInputTokens, adjustment.UnifiedMultiplier, adjusted.Customer.CacheWriteTokens)
+		} else {
+			customerCache5m, customerCache1h = 0, 0
 		}
 	}
 
@@ -250,20 +273,11 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		ImageCacheReadTokens:   result.Usage.ImageCacheReadTokens,
 		OutputTokens:           adjusted.Customer.OutputTokens,
 		CacheCreationTokens:    adjusted.Customer.CacheWriteTokens,
+		CacheCreation5mTokens:  customerCache5m,
+		CacheCreation1hTokens:  customerCache1h,
 		CacheCreation30mTokens: customerCache30m,
 		CacheCreation12hTokens: customerCache12h,
 		CacheReadTokens:        adjusted.Customer.CacheReadTokens,
-		ImageOutputTokens:      result.Usage.ImageOutputTokens,
-	}
-	rawTokens := UsageTokens{
-		InputTokens:            rawActualInputTokens,
-		ImageInputTokens:       max(result.Usage.ImageInputTokens-result.Usage.ImageCacheReadTokens, 0),
-		ImageCacheReadTokens:   result.Usage.ImageCacheReadTokens,
-		OutputTokens:           rawOutputTokens,
-		CacheCreationTokens:    result.Usage.CacheCreationInputTokens,
-		CacheCreation30mTokens: result.Usage.CacheCreation30mInputTokens,
-		CacheCreation12hTokens: result.Usage.CacheCreation12hInputTokens,
-		CacheReadTokens:        result.Usage.CacheReadInputTokens,
 		ImageOutputTokens:      result.Usage.ImageOutputTokens,
 	}
 
@@ -479,6 +493,8 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		InputTokens:              logInputTokens,
 		OutputTokens:             logOutputTokens,
 		CacheCreationTokens:      adjusted.Customer.CacheWriteTokens,
+		CacheCreation5mTokens:    customerCache5m,
+		CacheCreation1hTokens:    customerCache1h,
 		CacheCreation30mTokens:   customerCache30m,
 		CacheCreation12hTokens:   customerCache12h,
 		CacheReadTokens:          adjusted.Customer.CacheReadTokens,
@@ -496,6 +512,8 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	usageLog.UpstreamOutputTokens = rawOutputTokens
 	usageLog.UpstreamCacheReadTokens = result.Usage.CacheReadInputTokens
 	usageLog.UpstreamCacheCreationTokens = result.Usage.CacheCreationInputTokens
+	usageLog.UpstreamCacheCreation5mTokens = rawTokens.CacheCreation5mTokens
+	usageLog.UpstreamCacheCreation1hTokens = rawTokens.CacheCreation1hTokens
 	isVideoUsage := isGrokVideoUsageResult(result, billingModels)
 	if isVideoUsage {
 		usageLog.VideoCount = result.VideoCount
@@ -670,7 +688,7 @@ func openAISubscriptionLongContextExempt(account *Account, result *OpenAIForward
 	if model == "" {
 		model = result.Model
 	}
-	return openai.IsGPT61SolModelSpelling(model) || openai.IsGPT61TerraModelSpelling(model)
+	return openai.GPT62ModelID(model) != "" || openai.IsGPT61SolModelSpelling(model) || openai.IsGPT61TerraModelSpelling(model)
 }
 
 func (s *OpenAIGatewayService) calculateOpenAIRecordUsageCost(
@@ -844,23 +862,18 @@ func (s *OpenAIGatewayService) calculateOpenAIRecordUsageTokenCost(
 	longContextBillingGate *bool,
 	modelLongContextExempt bool,
 ) (*CostBreakdown, error) {
-	if s.resolver != nil && apiKey.Group != nil {
-		gid := apiKey.Group.ID
-		return s.billingService.CalculateCostUnified(CostInput{
-			Ctx: ctx, Model: billingModel, GroupID: &gid, Group: apiKey.Group,
-			Tokens: tokens, RequestCount: 1, RateMultiplier: multiplier, PricingAt: pricingAt,
-			ServiceTier: serviceTier, ReasoningEffort: reasoningEffort, Resolver: s.resolver,
-			LongContextBillingEnabled:      longContextBillingGate,
-			DisableModelLongContextPricing: modelLongContextExempt,
-		})
+	input := CostInput{
+		Ctx: ctx, Model: billingModel, Tokens: tokens, RequestCount: 1, RateMultiplier: multiplier,
+		PricingAt: pricingAt, ServiceTier: serviceTier, LongContextBillingEnabled: longContextBillingGate,
+		DisableModelLongContextPricing: modelLongContextExempt,
 	}
-	return s.billingService.calculateCostWithServiceTierPolicy(
-		billingModel,
-		tokens,
-		multiplier,
-		serviceTier,
-		(longContextBillingGate == nil || *longContextBillingGate) && !modelLongContextExempt,
-	)
+	if s.resolver != nil && apiKey.Group != nil {
+		input.GroupID = &apiKey.Group.ID
+		input.Group = apiKey.Group
+		input.ReasoningEffort = reasoningEffort
+		input.Resolver = s.resolver
+	}
+	return s.billingService.CalculateCostUnified(input)
 }
 
 func (s *OpenAIGatewayService) calculateOpenAIImageCost(
