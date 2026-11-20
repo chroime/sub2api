@@ -65,6 +65,10 @@
             <div class="flex flex-wrap items-center gap-1.5">
               <ModelIcon :model="m.name" size="16px" />
               <span class="break-all font-mono text-[15px] font-semibold text-gray-900 dark:text-white">{{ m.name }}</span>
+              <button type="button" class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:text-dark-300 dark:hover:bg-dark-700 dark:hover:text-primary-400"
+                :title="t('modelPlaza.table.copyModelId', { model: m.name })" :aria-label="t('modelPlaza.table.copyModelId', { model: m.name })" data-copy-model-id @click="copyToClipboard(m.name)">
+                <Icon name="copy" size="sm" aria-hidden="true" />
+              </button>
               <span
                 v-if="billingMode(m) !== BILLING_MODE_TOKEN"
                 class="rounded-md bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-500 dark:bg-dark-700/70 dark:text-dark-300"
@@ -230,6 +234,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import Icon from '@/components/icons/Icon.vue'
+import { useClipboard } from '@/composables/useClipboard'
 import ModelIcon from '@/components/common/ModelIcon.vue'
 import PlazaPriceComparisonCell from './PlazaPriceComparison.vue'
 import { getTokenComparisons, getUnitComparisons, PLAZA_REFERENCE_USD_TO_CNY, PLAZA_CNY_PER_USD_CREDIT } from './plazaPriceComparison'
@@ -257,6 +263,7 @@ const props = defineProps<{
 }>()
 
 const { t } = useI18n()
+const { copyToClipboard } = useClipboard()
 
 const PER_MILLION = 1_000_000
 const MIN_DECIMALS = 2

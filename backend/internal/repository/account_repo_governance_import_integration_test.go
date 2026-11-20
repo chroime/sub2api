@@ -120,7 +120,7 @@ func TestGovernancePostgresImportSettingsPreserveConcurrentUsage(t *testing.T) {
 	groups := newGroupRepositoryWithSQL(client, fixture)
 	cfg := &config.Config{}
 	cfg.Totp.EncryptionKeyConfigured = true
-	admin := service.NewAdminService(cfg, nil, groups, racing, nil, nil, nil, nil, nil, nil, nil, nil, nil, client, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	admin := service.NewAdminService(cfg, nil, groups, racing, nil, nil, nil, nil, nil, nil, nil, nil, nil, client, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	cipher := governanceImportFixtureCipher{}
 	engine := service.ProvideUpstreamGovernanceService(fixture, admin, governanceImportKeyUpstream{}, nil, cipher, cfg, nil, nil, nil)
 	engine.Stop() // Only the synthetic inventory above is used by this local fixture.

@@ -52,7 +52,7 @@ func TestGroupHandlerCreateImageGenerationDefaultsAndExplicitValues(t *testing.T
 		} {
 			t.Run(platform.name+"/"+test.name, func(t *testing.T) {
 				repo := &groupImageDefaultsRepository{}
-				svc := service.NewAdminService(nil, nil, repo, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+				svc := service.NewAdminService(nil, nil, repo, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 				h := NewGroupHandler(svc, nil, nil)
 				router := gin.New()
 				router.POST("/groups", h.Create)

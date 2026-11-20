@@ -3,6 +3,9 @@ import { mount } from '@vue/test-utils'
 import PlazaVendorPriceTable from '../PlazaVendorPriceTable.vue'
 import type { ModelPlazaGroup, PlazaModel, PlazaPricingSource } from '@/api/modelPlaza'
 
+const { copyToClipboard } = vi.hoisted(() => ({ copyToClipboard: vi.fn().mockResolvedValue(true) }))
+vi.mock('@/composables/useClipboard', () => ({ useClipboard: () => ({ copyToClipboard }) }))
+
 vi.mock('vue-i18n', async () => {
   const actual = await vi.importActual<typeof import('vue-i18n')>('vue-i18n')
   return {
@@ -66,6 +69,13 @@ function mountTable(models: PlazaModel[], g: ModelPlazaGroup | null = group({ ra
 }
 
 describe('PlazaVendorPriceTable 本站价与官方价', () => {
+  it('copies the exact ID of the clicked model', async () => {
+    copyToClipboard.mockClear()
+    const wrapper = mountTable([tokenModel(), tokenModel({ name: 'provider/Model-v2' })])
+    await wrapper.findAll('[data-copy-model-id]')[1].trigger('click')
+    expect(copyToClipboard.mock.calls).toEqual([['provider/Model-v2']])
+    wrapper.unmount()
+  })
   it('全部分组只展示四列官方价格，不展示本站价格', () => {
     const m = tokenModel({
       official_pricing: { input_price: 4e-6, output_price: 2e-5, cache_write_price: 5e-6, cache_read_price: 4e-7 }

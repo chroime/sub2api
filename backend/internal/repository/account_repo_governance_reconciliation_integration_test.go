@@ -74,7 +74,7 @@ func newReconciliationPostgresFixture(t *testing.T) *reconciliationPostgresFixtu
 	groups := newGroupRepositoryWithSQL(client, fixture)
 	cfg := &config.Config{}
 	cfg.Totp.EncryptionKeyConfigured = true
-	admin := service.NewAdminService(cfg, nil, groups, repo, nil, nil, nil, nil, nil, nil, nil, nil, nil, client, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	admin := service.NewAdminService(cfg, nil, groups, repo, nil, nil, nil, nil, nil, nil, nil, nil, nil, client, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	engine := service.ProvideUpstreamGovernanceService(fixture, admin, nil, nil, governanceImportFixtureCipher{}, cfg, nil, nil, nil)
 	engine.Stop()
 	store := gov.NewSQLStore(fixture)
