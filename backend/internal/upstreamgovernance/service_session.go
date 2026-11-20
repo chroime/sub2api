@@ -361,6 +361,9 @@ func (s *Service) ImportBrowserSession(ctx context.Context, id, expectedVersion 
 	if site.Version != expectedVersion {
 		return nil, ErrConflict
 	}
+	if session.AuthVariant == newAPISessionVariant && (site.Platform != "newapi" || session.AccessToken == "" || session.UserID <= 0 || !validNewAPISessionID(session.SessionID) || session.ExpiresAt == nil || session.RefreshToken != "" && !hasSessionRefreshCredential(*site, session)) {
+		return nil, ErrInvalid
+	}
 	verified, err := verifier.VerifySession(ctx, *site, session)
 	if err != nil {
 		return nil, err

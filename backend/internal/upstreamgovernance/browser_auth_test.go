@@ -273,6 +273,28 @@ func TestGovernanceBrowserCompletionIsExplicitVerifiedAndIdempotent(t *testing.T
 	require.EqualValues(t, 1, driver.closed.Load())
 }
 
+func TestGovernanceBrowserCompletionPreservesNewAPISessionID(t *testing.T) {
+	svc, store, connector, _ := setupEngine(t)
+	store.site.Platform = "newapi"
+	svc.connector = &browserVerifyingConnector{fakeConnector: connector}
+	issued := time.Now().UTC().Truncate(time.Second)
+	raw, err := json.Marshal(map[string]any{"access_token": "fixture-access", "refresh_token": "fixture-session.fixture-secret", "session_id": "fixture-session", "auth_variant": "newapi_session", "user_id": 5, "user_agent": "Actual Chrome Browser", "issued_at": issued, "expires_at": issued.Add(15 * time.Minute), "expires_in": 900})
+	require.NoError(t, err)
+	var capture upstreambrowser.Capture
+	require.NoError(t, json.Unmarshal(raw, &capture))
+	a := NewBrowserAuthorizer(svc, &browserFakeFactory{driver: &browserFakeDriver{capture: &capture}}, nil)
+	t.Cleanup(a.Stop)
+	job, err := a.Start(t.Context(), 7, 1, BrowserAuthorizationInput{ExpectedSiteVersion: 1, Username: "fixture", Password: "fixture-password"})
+	require.NoError(t, err)
+	require.Eventually(t, func() bool { v, e := a.Get(t.Context(), 7, 1, job.ID); return e == nil && v.Status == "ready" }, time.Second, time.Millisecond)
+	_, err = a.Complete(t.Context(), 7, 1, job.ID)
+	require.NoError(t, err)
+	session, err := svc.session(store.site)
+	require.NoError(t, err)
+	require.Equal(t, "fixture-session", session.SessionID)
+	require.True(t, hasSessionRefreshCredential(store.site, session), "browser imports must retain the refresh-session binding")
+}
+
 type browserBlockingSiteStore struct {
 	*memoryStore
 	block   atomic.Bool

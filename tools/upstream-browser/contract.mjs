@@ -156,7 +156,26 @@ export class LoginCapture {
     if (bounded(data.access_token, 16384)) {
       result.access_token = data.access_token;
       result.cookies = captureCookies(exchange.cookies, false);
-      if (Number.isSafeInteger(data.expires_in) && data.expires_in > 0 && data.expires_in <= 31536000) {
+      if (this.platform === 'newapi' && (data.access_expires_at !== undefined || data.session?.sid !== undefined)) {
+        const sid = data.session?.sid;
+        const issued = Math.floor(now.getTime() / 1000);
+        const lifetime = data.access_expires_at - issued;
+        if (typeof sid !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(sid) ||
+          !Number.isSafeInteger(data.access_expires_at) || lifetime <= 0 || lifetime > 31536000 ||
+          typeof data.token_type !== 'string' || data.token_type.toLowerCase() !== 'bearer' || !result.user_id) return null;
+        const refresh = exchange.cookies?.new_api_refresh;
+        if (refresh !== undefined) {
+          if (!bounded(refresh, 16384) || /[;,"\\]/.test(refresh)) return null;
+          const parts = refresh.split('.');
+          if (parts.length !== 2 || parts[0] !== sid || !parts[1]) return null;
+          result.refresh_token = refresh;
+        }
+        result.auth_variant = 'newapi_session';
+        result.session_id = sid;
+        result.issued_at = new Date(issued * 1000).toISOString();
+        result.expires_in = lifetime;
+        result.expires_at = new Date(data.access_expires_at * 1000).toISOString();
+      } else if (Number.isSafeInteger(data.expires_in) && data.expires_in > 0 && data.expires_in <= 31536000) {
         result.expires_in = data.expires_in;
         result.expires_at = new Date(now.getTime() + data.expires_in * 1000).toISOString();
         if (bounded(data.refresh_token, 16384)) result.refresh_token = data.refresh_token;

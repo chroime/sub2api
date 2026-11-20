@@ -69,7 +69,7 @@ export function resolveModelVendor(model: string): string | null {
   if (modelLower.includes('spark')) return 'spark'
 
   // Tencent Hunyuan
-  if (modelLower.includes('hunyuan')) return 'hunyuan'
+  if (modelLower.includes('hunyuan') || /(?:^|\/)hy\d+(?:[.-]|$)/.test(modelLower)) return 'hunyuan'
 
   // Cloudflare
   if (modelLower.includes('@cf/')) return 'cloudflare'

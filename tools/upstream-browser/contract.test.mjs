@@ -86,6 +86,28 @@ test('New API legacy requires successful login, positive user id and returned se
   assert.equal(new LoginCapture(origin, 'newapi').accept({ ...entry, body: '{"success":true,"data":{"id":9,"access_token":""}}' }).auth_variant, 'newapi_legacy_cookie');
 });
 
+test('modern New API browser login preserves its refresh session and absolute expiry', () => {
+  const entry = response({ url: `${origin}/api/user/login`, requestBody: JSON.stringify({ username: 'fixture', password: 'password' }),
+    body: JSON.stringify({ success: true, data: { access_token: 'fixture-access', access_expires_at: now.getTime() / 1000 + 900,
+      token_type: 'Bearer', user: { id: 42 }, session: { sid: 'fixture-session' } } }),
+    cookies: { new_api_refresh: 'fixture-session.fixture-secret', cf_clearance: 'clearance' } });
+  const capture = new LoginCapture(origin, 'newapi').accept(entry);
+  assert.equal(capture.auth_variant, 'newapi_session');
+  assert.equal(capture.session_id, 'fixture-session');
+  assert.equal(capture.refresh_token, 'fixture-session.fixture-secret');
+  assert.equal(capture.expires_at, new Date(now.getTime() + 900000).toISOString());
+  assert.equal(capture.expires_in, 900);
+  assert.deepEqual(capture.cookies, { cf_clearance: 'clearance' }, 'refresh cookie is never a general management cookie');
+  for (const data of [
+    { session: { sid: 'bad session' } }, { token_type: 'Basic' }, { access_expires_at: now.getTime() / 1000 - 1 },
+    { user: { id: 0 } }, { access_expires_at: 'invalid' },
+  ]) {
+    const body = JSON.parse(entry.body); Object.assign(body.data, data);
+    assert.equal(new LoginCapture(origin, 'newapi').accept({ ...entry, body: JSON.stringify(body) }), null);
+  }
+  assert.equal(new LoginCapture(origin, 'newapi').accept({ ...entry, cookies: { new_api_refresh: 'other-session.secret' } }), null);
+});
+
 test('token lengths and types are bounded and challenge responses are not successes', () => {
   for (const data of [ { access_token: 7 }, { access_token: 'a'.repeat(16385) }, { access_token: 'bad\nvalue' },
     { access_token: 'a', requires_2fa: true }, { access_token: 'a', require_verification: true } ]) {

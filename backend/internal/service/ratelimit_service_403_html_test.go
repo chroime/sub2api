@@ -6,6 +6,7 @@ import (
 	"context"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/stretchr/testify/require"
@@ -189,6 +190,132 @@ func TestHandleUpstreamError_AnthropicGenuine403StillPenalizes(t *testing.T) {
 	))
 	require.Equal(t, 1, repo.setErrorCalls)
 	require.Contains(t, repo.lastErrorMsg, "invalid API key")
+}
+
+func TestHandleUpstreamError_AnthropicUpstreamQuota403IsRecoverable(t *testing.T) {
+	repo := &rateLimitAccountRepoStub{}
+	blocker := &runtimeBlockRecorder{}
+	counter := &countingOpenAI403CounterCache{
+		openAI403CounterCacheStub: openAI403CounterCacheStub{counts: []int64{openAI403DisableThreshold}},
+	}
+	svc := NewRateLimitService(repo, nil, &config.Config{}, nil, nil)
+	svc.SetAccountRuntimeBlocker(blocker)
+	svc.SetOpenAI403CounterCache(counter)
+	account := &Account{ID: 604, Platform: PlatformAnthropic, Type: AccountTypeAPIKey}
+
+	for attempt := 0; attempt < openAI403DisableThreshold+2; attempt++ {
+		before := time.Now()
+		shouldDisable := svc.HandleUpstreamError(
+			context.Background(), account, http.StatusForbidden, http.Header{},
+			[]byte(`{"error":{"type":"quota_error","message":"Not enough quota to pre-consume for this request: ＄0.132228 remaining, ＄0.141732 required"}}`),
+		)
+		after := time.Now()
+
+		require.True(t, shouldDisable, "the current request must fail over")
+		require.Zero(t, repo.setErrorCalls, "upstream quota shortage must not permanently disable the account")
+		require.Zero(t, repo.tempCalls, "do not apply the long authentication cooldown")
+		require.Zero(t, counter.increments)
+		require.Equal(t, attempt+1, repo.rateLimitedCalls)
+		require.Equal(t, account.ID, repo.lastRateLimitedID)
+		cooldown := time.Duration(defaultRateLimit429CooldownSeconds) * time.Second
+		require.False(t, repo.lastRateLimitedAt.Before(before.Add(cooldown)))
+		require.False(t, repo.lastRateLimitedAt.After(after.Add(cooldown)))
+		require.Len(t, blocker.accounts, attempt+1)
+		require.Equal(t, repo.lastRateLimitedAt, blocker.until[attempt])
+	}
+}
+
+func TestIsUpstreamQuotaPreconsume403RequiresExplicitPreconsumeSignal(t *testing.T) {
+	cases := []struct {
+		name string
+		msg  string
+		body string
+		want bool
+	}{
+		{
+			name: "relay quota error",
+			msg:  "Not enough quota to pre-consume for this request",
+			want: true,
+		},
+		{
+			name: "quota without preconsume",
+			msg:  "quota exceeded",
+			want: false,
+		},
+		{
+			name: "permission error mentioning quota",
+			msg:  "permission denied for quota administration",
+			want: false,
+		},
+		{
+			name: "permission error mentioning preconsumption",
+			msg:  "permission denied: cannot pre-consume quota",
+			want: false,
+		},
+		{
+			name: "request echo is not an error",
+			body: `{"request":{"prompt":"Not enough quota to pre-consume for this request"}}`,
+			want: false,
+		},
+		{
+			name: "html response is not a quota signal",
+			body: `<html><body>Not enough quota to pre-consume for this request</body></html>`,
+			want: false,
+		},
+		{
+			name: "body fallback",
+			body: `{"error":{"message":"insufficient quota to pre-consume"}}`,
+			want: true,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.want, isUpstreamQuotaPreconsume403(tc.msg, []byte(tc.body)))
+		})
+	}
+}
+
+func TestHandleUpstreamError_UpstreamQuota403RespectsCooldownSettings(t *testing.T) {
+	for _, platform := range []string{PlatformAnthropic, PlatformOpenAI} {
+		for _, tc := range []struct {
+			name     string
+			settings string
+			wantHits int
+		}{
+			{"configured", `{"enabled":true,"cooldown_seconds":17}`, 1},
+			{"disabled", `{"enabled":false,"cooldown_seconds":17}`, 0},
+		} {
+			t.Run(platform+"/"+tc.name, func(t *testing.T) {
+				repo := &rateLimitAccountRepoStub{}
+				counter := &countingOpenAI403CounterCache{
+					openAI403CounterCacheStub: openAI403CounterCacheStub{counts: []int64{openAI403DisableThreshold}},
+				}
+				blocker := &runtimeBlockRecorder{}
+				settings := newMockSettingRepo()
+				settings.data[SettingKeyRateLimit429CooldownSettings] = tc.settings
+				svc := NewRateLimitService(repo, nil, &config.Config{}, nil, nil)
+				svc.SetSettingService(NewSettingService(settings, &config.Config{}))
+				svc.SetOpenAI403CounterCache(counter)
+				svc.SetAccountRuntimeBlocker(blocker)
+				account := &Account{ID: 605, Platform: platform, Type: AccountTypeAPIKey}
+
+				before := time.Now()
+				require.True(t, svc.HandleUpstreamError(context.Background(), account, http.StatusForbidden, nil,
+					[]byte(`{"error":{"message":"Not enough quota to pre-consume for this request"}}`)))
+				after := time.Now()
+				require.Zero(t, repo.setErrorCalls)
+				require.Zero(t, repo.tempCalls)
+				require.Zero(t, counter.increments)
+				require.Equal(t, tc.wantHits, repo.rateLimitedCalls)
+				require.Len(t, blocker.accounts, tc.wantHits)
+				if tc.wantHits > 0 {
+					require.False(t, repo.lastRateLimitedAt.Before(before.Add(17*time.Second)))
+					require.False(t, repo.lastRateLimitedAt.After(after.Add(17*time.Second)))
+				}
+			})
+		}
+	}
 }
 
 // 对照不变式：真正的结构化 JSON 403 是账号级证据，处罚链路必须原样保留。

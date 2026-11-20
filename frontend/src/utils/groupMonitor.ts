@@ -122,7 +122,7 @@ function groupIntelligence(monitors: UserMonitorView[], now: number): GroupMonit
 }
 
 export function buildGroupMonitorStates(
-  groups: GroupIdentity[], monitors: UserMonitorView[], options: { now: number; state?: GroupMonitorLoadState },
+  groups: GroupIdentity[], monitors: UserMonitorView[], options: { now: number; state?: GroupMonitorLoadState; intelligenceState?: GroupMonitorLoadState },
 ): Map<number, GroupMonitorState> {
   const result = new Map<number, GroupMonitorState>()
   const indexed = new Map<number, UserMonitorView[]>()
@@ -136,7 +136,9 @@ export function buildGroupMonitorStates(
     const state = options.state || 'ready'
     const matches = (indexed.get(group.id) || []).filter(m => m.provider === group.platform)
     result.set(group.id, state === 'ready' ? {
-      availability: groupAvailability(matches, options.now), intelligence: groupIntelligence(matches, options.now),
+      availability: groupAvailability(matches, options.now),
+      intelligence: options.intelligenceState && options.intelligenceState !== 'ready'
+        ? neutralColumn(options.intelligenceState, true) : groupIntelligence(matches, options.now),
     } : { availability: neutralColumn(state), intelligence: neutralColumn(state, true) })
   }
   return result

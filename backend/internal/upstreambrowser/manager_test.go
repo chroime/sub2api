@@ -229,6 +229,27 @@ func TestCaptureRejectsMalformedAndUnboundedSecrets(t *testing.T) {
 	}
 }
 
+func TestCaptureModernNewAPISession(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+	expires := now.Add(15 * time.Minute)
+	valid := Capture{AccessToken: "fixture-access", RefreshToken: "fixture-session.fixture-secret", AuthVariant: "newapi_session", UserAgent: "Actual browser", IssuedAt: now, ExpiresAt: &expires, ExpiresIn: 900, UserID: 42}
+	raw, err := json.Marshal(valid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw = bytes.Replace(raw, []byte(`"auth_variant"`), []byte(`"session_id":"fixture-session","auth_variant"`), 1)
+	if decodeStrict(raw, &valid) != nil || !validCapture(&valid) {
+		t.Fatal("modern browser session rejected")
+	}
+	for _, replacement := range []string{`"session_id":"other-session"`, `"session_id":"bad session"`, `"session_id":""`} {
+		var bad Capture
+		changed := bytes.Replace(raw, []byte(`"session_id":"fixture-session"`), []byte(replacement), 1)
+		if decodeStrict(changed, &bad) == nil && validCapture(&bad) {
+			t.Fatal("invalid refresh session binding accepted")
+		}
+	}
+}
+
 func fixtureManager(t *testing.T) *Manager {
 	t.Helper()
 	node, err := exec.LookPath("node")

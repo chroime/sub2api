@@ -100,3 +100,27 @@ func TestConnectorPricingMetadataWhitelist(t *testing.T) {
 		}
 	}
 }
+
+func TestConnectorPricingUsageExamplesPreserveBooleanFacts(t *testing.T) {
+	before := `{"model_name":"model","enable_groups":["vip"],"billing_mode":"tiered_expr","billing_expr":"u(\"layer_decomposition\") ? 2 : 1","billing_usage_examples":[{"label":"layered image","facts":{"image_count":1,"layer_decomposition":false}}]}`
+	after := strings.Replace(before, `"layer_decomposition":false`, `"layer_decomposition":true`, 1)
+	oldCatalog := connectorPricingCatalog(t, "newapi", before)
+	catalog := connectorPricingCatalog(t, "newapi", after)
+	examples := catalog.Groups[0].Prices[0].Details["billing_usage_examples"].([]any)
+	facts := examples[0].(map[string]any)["facts"].(map[string]any)
+	if facts["layer_decomposition"] != true {
+		t.Fatal("boolean usage fact lost or coerced")
+	}
+	events := DiffCatalog(1, oldCatalog, catalog)
+	if len(events) != 1 || events[0].Kind != "price_changed" {
+		t.Fatal("boolean pricing metadata change was not observed")
+	}
+}
+
+func TestConnectorPricingUsageExamplesRejectNestedFacts(t *testing.T) {
+	for _, fact := range []string{`{"nested":true}`, `[true,false]`} {
+		if _, err := connectorUsageExamples(json.RawMessage(`[{"facts":{"layer_decomposition":` + fact + `}}]`)); err == nil {
+			t.Fatal("object or array usage fact accepted")
+		}
+	}
+}

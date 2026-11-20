@@ -11,14 +11,19 @@ BACKUP_ROOT="${BACKUP_ROOT:-/home/sub2api/backups}"
 BRANCH="${BRANCH:-main}"
 COMPOSE_FILE="${COMPOSE_FILE:-$DEPLOY_DIR/docker-compose.yml}"
 SERVICE="${SERVICE:-sub2api}"
-POSTGRES_CONTAINER="${POSTGRES_CONTAINER:-sub2api-postgres}"
-REDIS_CONTAINER="${REDIS_CONTAINER:-sub2api-redis}"
+IMAGE="${IMAGE:-}"
+POSTGRES_CONTAINER="${POSTGRES_CONTAINER:-migration211-live-main}"
+REDIS_CONTAINER="${REDIS_CONTAINER:-migration211-live-redis-main}"
+EXPECTED_COMMIT="${EXPECTED_COMMIT:-}"
 SERVER_URL="${SERVER_URL:-http://127.0.0.1:8080}"
 HEALTH_URL="${HEALTH_URL:-$SERVER_URL/health}"
 SETUP_STATUS_URL="${SETUP_STATUS_URL:-$SERVER_URL/setup/status}"
 
 BACKUP_DIR=""
 BACKUP_COMPLETE=false
+DATABASE_USER=""
+DATABASE_DBNAME=""
+DATABASE_PASSWORD=""
 
 log() {
   printf '[update-sub2api] %s\n' "$*"
@@ -46,6 +51,37 @@ on_exit() {
 }
 require_command() {
   command -v "$1" >/dev/null 2>&1 || fail "required command is missing: $1"
+}
+
+load_database_credentials() {
+  local app_env key value
+  app_env="$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$SERVICE")" || \
+    fail "could not inspect application container: $SERVICE"
+  while IFS='=' read -r key value; do
+    case "$key" in
+      DATABASE_USER) DATABASE_USER="$value" ;;
+      DATABASE_DBNAME) DATABASE_DBNAME="$value" ;;
+      DATABASE_PASSWORD) DATABASE_PASSWORD="$value" ;;
+    esac
+  done <<< "$app_env"
+  [[ -n "$DATABASE_USER" ]] || fail "application container does not define DATABASE_USER"
+  [[ -n "$DATABASE_DBNAME" ]] || fail "application container does not define DATABASE_DBNAME"
+  [[ -n "$DATABASE_PASSWORD" ]] || fail "application container does not define DATABASE_PASSWORD"
+}
+
+postgres_command() {
+  printf '%s\n' "$DATABASE_PASSWORD" |
+    docker exec -i "$POSTGRES_CONTAINER" sh -ceu \
+      'IFS= read -r PGPASSWORD; export PGPASSWORD; exec "$@"' sh "$@"
+}
+
+postgres_psql_with_input() {
+  {
+    printf '%s\n' "$DATABASE_PASSWORD"
+    cat
+  } |
+    docker exec -i "$POSTGRES_CONTAINER" sh -ceu \
+      'IFS= read -r PGPASSWORD; export PGPASSWORD; exec psql "$@"' sh "$@"
 }
 
 # Kept in this standalone script so an existing deployment can use the new
@@ -96,7 +132,7 @@ if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then
 fi
 trap on_exit EXIT
 
-for command in git docker curl tar sha256sum head stat grep find sort xargs cmp; do
+for command in git docker curl tar sha256sum head stat grep find sort xargs cmp wc sed; do
   require_command "$command"
 done
 
@@ -105,10 +141,18 @@ done
 [[ -f "$COMPOSE_FILE" ]] || fail "compose file not found: $COMPOSE_FILE"
 [[ -d "$DATA_DIR/app" ]] || fail "application data directory not found: $DATA_DIR/app"
 [[ -f "$DATA_DIR/app/.installed" ]] || fail "installation marker not found: $DATA_DIR/app/.installed"
+if [[ -z "$IMAGE" ]]; then
+  IMAGE="$(docker inspect -f '{{.Config.Image}}' "$SERVICE" 2>/dev/null || true)"
+fi
+[[ -n "$IMAGE" ]] || fail "could not determine the current image for service: $SERVICE (set IMAGE explicitly)"
+[[ "$IMAGE" != sha256:* ]] || fail "current image is digest-only; set IMAGE to a writable tag before updating"
+[[ -f "$APP_DIR/deploy/Dockerfile" ]] || fail "application Dockerfile not found: $APP_DIR/deploy/Dockerfile"
 
 if [[ -n "$(git -C "$APP_DIR" status --porcelain)" ]]; then
   fail "application checkout has uncommitted changes: $APP_DIR"
 fi
+
+load_database_credentials
 
 (cd "$DEPLOY_DIR" && docker compose -f "$COMPOSE_FILE" config >/dev/null) || \
   fail "Docker Compose configuration is invalid"
@@ -133,13 +177,16 @@ cp -p "$DEPLOY_DIR/.env" "$BACKUP_DIR/deploy.env"
 cp -p "$COMPOSE_FILE" "$BACKUP_DIR/docker-compose.yml"
 
 log "Dumping PostgreSQL"
-docker exec "$POSTGRES_CONTAINER" sh -ceu 'PGPASSWORD="${POSTGRES_PASSWORD:-}" pg_dump -h 127.0.0.1 -U "${POSTGRES_USER:-sub2api}" -d "${POSTGRES_DB:-sub2api}" -Fc' > "$BACKUP_DIR/postgres.dump"
-docker exec "$POSTGRES_CONTAINER" sh -ceu 'PGPASSWORD="${POSTGRES_PASSWORD:-}" pg_dumpall -h 127.0.0.1 -U "${POSTGRES_USER:-sub2api}" --globals-only' > "$BACKUP_DIR/postgres-globals.sql"
+postgres_command pg_dump -h 127.0.0.1 -U "$DATABASE_USER" -d "$DATABASE_DBNAME" -Fc > "$BACKUP_DIR/postgres.dump"
+postgres_command pg_dumpall -h 127.0.0.1 -U "$DATABASE_USER" --globals-only > "$BACKUP_DIR/postgres-globals.sql"
 
 log "Snapshotting Redis"
 REDIS_RDB_PATH="/tmp/sub2api-pre-update-$$.rdb"
 REDIS_LOG_PATH="/tmp/sub2api-pre-update-$$.log"
-if docker exec "$REDIS_CONTAINER" sh -c 'test -n "${REDISCLI_AUTH:-}" || test -n "${REDIS_PASSWORD:-}"'; then
+# Probe the server's real authentication policy first. Legacy deployments
+# can retain REDISCLI_AUTH even when requirepass is not configured.
+if ! docker exec "$REDIS_CONTAINER" sh -c 'env -u REDISCLI_AUTH -u REDIS_PASSWORD redis-cli ping' 2>/dev/null | grep -qx PONG &&
+  docker exec "$REDIS_CONTAINER" sh -c 'test -n "${REDISCLI_AUTH:-}" || test -n "${REDIS_PASSWORD:-}"'; then
   if ! docker exec "$REDIS_CONTAINER" sh -c "set -eu; rm -f '$REDIS_RDB_PATH' '$REDIS_LOG_PATH'; if [ -z \"\${REDISCLI_AUTH:-}\" ]; then export REDISCLI_AUTH=\"\${REDIS_PASSWORD:-}\"; fi; if ! redis-cli --rdb '$REDIS_RDB_PATH' > '$REDIS_LOG_PATH' 2>&1; then cat '$REDIS_LOG_PATH' >&2; exit 1; fi; test -s '$REDIS_RDB_PATH'"; then
     docker exec "$REDIS_CONTAINER" rm -f "$REDIS_RDB_PATH" "$REDIS_LOG_PATH" >/dev/null 2>&1 || true
     fail "Redis RDB export failed"
@@ -172,13 +219,12 @@ docker exec "$REDIS_CONTAINER" rm -f "$REDIS_CHECK_PATH" >/dev/null
 [[ -s "$BACKUP_DIR/redis-check.txt" ]] || fail "Redis snapshot validation returned no report"
 
 log "Validating PostgreSQL archive"
-POSTGRES_DUMP_PATH="/tmp/sub2api-pre-update-$$.dump"
-docker cp "$BACKUP_DIR/postgres.dump" "$POSTGRES_CONTAINER:$POSTGRES_DUMP_PATH" >/dev/null
-if ! docker exec "$POSTGRES_CONTAINER" pg_restore -l "$POSTGRES_DUMP_PATH" > "$BACKUP_DIR/postgres-toc.txt"; then
-  docker exec "$POSTGRES_CONTAINER" rm -f "$POSTGRES_DUMP_PATH" >/dev/null 2>&1 || true
+if ! docker exec -i "$POSTGRES_CONTAINER" pg_restore -l < "$BACKUP_DIR/postgres.dump" > "$BACKUP_DIR/postgres-toc.txt"; then
   fail "PostgreSQL archive is not readable"
 fi
-docker exec "$POSTGRES_CONTAINER" rm -f "$POSTGRES_DUMP_PATH" >/dev/null
+if ! docker exec -i "$POSTGRES_CONTAINER" pg_restore --exit-on-error --no-owner --no-privileges --file=/dev/null < "$BACKUP_DIR/postgres.dump"; then
+  fail "PostgreSQL archive failed a complete read"
+fi
 TOC_COUNT="$(wc -l < "$BACKUP_DIR/postgres-toc.txt")"
 REDIS_BYTES="$(stat -c %s "$BACKUP_DIR/redis.rdb")"
 du -sh "$BACKUP_DIR" > "$BACKUP_DIR/size.txt"
@@ -225,31 +271,44 @@ case "${LEGACY_HOMEPAGE_TEMPLATE:-$BEFORE_BRANCH}" in
   *) fail 'set LEGACY_HOMEPAGE_TEMPLATE=classic or brand for this legacy checkout before retrying' ;;
 esac
 log "Preserving the existing homepage (legacy default: $LEGACY_HOMEPAGE_TEMPLATE)"
-homepage_template_sql | docker exec -i "$POSTGRES_CONTAINER" sh -ceu 'PGPASSWORD="${POSTGRES_PASSWORD:-}" psql -X -h 127.0.0.1 -U "${POSTGRES_USER:-sub2api}" -d "${POSTGRES_DB:-sub2api}" -v ON_ERROR_STOP=1 -v legacy_template="$1"' sh "$LEGACY_HOMEPAGE_TEMPLATE"
+homepage_template_sql | postgres_psql_with_input -X -h 127.0.0.1 -U "$DATABASE_USER" -d "$DATABASE_DBNAME" -v ON_ERROR_STOP=1 -v "legacy_template=$LEGACY_HOMEPAGE_TEMPLATE"
 
 log "Fetching origin/$BRANCH"
 git -C "$APP_DIR" fetch origin "$BRANCH"
 git -C "$APP_DIR" switch "$BRANCH"
 git -C "$APP_DIR" pull --ff-only origin "$BRANCH"
+TARGET_COMMIT="$(git -C "$APP_DIR" rev-parse HEAD)"
+if [[ -n "$EXPECTED_COMMIT" && "$TARGET_COMMIT" != "$EXPECTED_COMMIT" ]]; then
+  fail "checked out commit $TARGET_COMMIT does not match EXPECTED_COMMIT $EXPECTED_COMMIT"
+fi
 
-log "Building $SERVICE"
-(cd "$DEPLOY_DIR" && docker compose -f "$COMPOSE_FILE" build "$SERVICE")
+log "Building $SERVICE image $IMAGE"
+BUILD_ARGS=(--build-arg "COMMIT=$TARGET_COMMIT")
+BUILD_LABELS=(--label "org.opencontainers.image.revision=$TARGET_COMMIT")
+if [[ -n "${VERSION:-}" ]]; then
+  BUILD_ARGS+=(--build-arg "VERSION=$VERSION")
+  BUILD_LABELS+=(--label "org.opencontainers.image.version=$VERSION")
+fi
+docker build --pull=false -t "$IMAGE" -f "$APP_DIR/deploy/Dockerfile" "${BUILD_ARGS[@]}" "${BUILD_LABELS[@]}" "$APP_DIR"
 
 # Validate access after dropping privileges before replacing the running service.
 # No entrypoint is invoked, no service ports are published and no dependencies
 # are recreated. The checks only read files and print the binary version.
 log "Checking runtime file access as the service user"
-(cd "$DEPLOY_DIR" && docker compose -f "$COMPOSE_FILE" run --rm --no-deps --entrypoint /bin/sh "$SERVICE" -ec '
+RUNTIME_VERSION="$(cd "$DEPLOY_DIR" && docker compose -f "$COMPOSE_FILE" run --rm --no-deps --entrypoint /bin/sh "$SERVICE" -ec '
   su-exec sub2api test -r /app/docker-entrypoint.sh
   su-exec sub2api test -x /app/docker-entrypoint.sh
   if [ -d /app/upstream-browser ]; then
     su-exec sub2api test -r /app/upstream-browser/main.mjs
   fi
   su-exec sub2api /app/sub2api -version
-')
+' 2>&1)"
+printf '%s\n' "$RUNTIME_VERSION"
+printf '%s\n' "$RUNTIME_VERSION" | grep -Fq "commit: $TARGET_COMMIT" || \
+  fail "built image does not report target commit $TARGET_COMMIT"
 
 log "Recreating $SERVICE"
-(cd "$DEPLOY_DIR" && docker compose -f "$COMPOSE_FILE" up -d --no-build --force-recreate "$SERVICE")
+(cd "$DEPLOY_DIR" && docker compose -f "$COMPOSE_FILE" up -d --no-deps --no-build --pull never --force-recreate "$SERVICE")
 
 log "Waiting for $SERVICE healthcheck"
 HEALTH_STATUS=""
@@ -273,5 +332,5 @@ printf '%s' "$HEALTH_BODY" | grep -Eq '"status"[[:space:]]*:[[:space:]]*"ok"' ||
 SETUP_BODY="$(curl -fsS --max-time 10 "$SETUP_STATUS_URL")"
 printf '%s' "$SETUP_BODY" | grep -Eq '"needs_setup"[[:space:]]*:[[:space:]]*false' || fail "setup status is not completed: $SETUP_BODY"
 
-log "Update complete: $(git -C "$APP_DIR" rev-parse HEAD)"
+log "Update complete: $TARGET_COMMIT"
 (cd "$DEPLOY_DIR" && docker compose -f "$COMPOSE_FILE" ps "$SERVICE")

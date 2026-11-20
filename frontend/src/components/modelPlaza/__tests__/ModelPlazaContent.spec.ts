@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import ModelPlazaContent from '../ModelPlazaContent.vue'
 import PlazaVendorTree from '../PlazaVendorTree.vue'
 import PlazaVendorPriceTable from '../PlazaVendorPriceTable.vue'
@@ -8,9 +8,13 @@ import GroupBadge from '@/components/common/GroupBadge.vue'
 import GroupOptionItem from '@/components/common/GroupOptionItem.vue'
 import type { ModelPlazaGroup, PlazaModel } from '@/api/modelPlaza'
 
-const { auth } = vi.hoisted(() => ({ auth: vi.fn() }))
+const { auth, monitorList, monitorAnalytics, settings } = vi.hoisted(() => ({
+  auth: vi.fn(), monitorList: vi.fn(), monitorAnalytics: vi.fn(),
+  settings: { channel_monitor_enabled: true, channel_monitor_mode: 'v1' }
+}))
 vi.mock('@/stores/auth', () => ({ useAuthStore: auth }))
-vi.mock('@/stores/app', () => ({ useAppStore: () => ({ cachedPublicSettings: null }) }))
+vi.mock('@/stores/app', () => ({ useAppStore: () => ({ cachedPublicSettings: settings }) }))
+vi.mock('@/api/channelMonitor', () => ({ list: monitorList, analytics: monitorAnalytics }))
 vi.mock('vue-i18n', async importOriginal => ({
   ...await importOriginal<typeof import('vue-i18n')>(),
   useI18n: () => ({ t: (key: string) => key })
@@ -78,7 +82,68 @@ function expectVendorCounts(wrapper: ReturnType<typeof render>, labels: string[]
 }
 
 describe('model plaza group selection', () => {
-  beforeEach(() => auth.mockReturnValue({ isAuthenticated: false }))
+  beforeEach(() => {
+    auth.mockReturnValue({ isAuthenticated: false })
+    monitorList.mockReset().mockResolvedValue({ items: [] })
+    monitorAnalytics.mockReset().mockResolvedValue({ items: [] })
+    settings.channel_monitor_enabled = true
+    settings.channel_monitor_mode = 'v1'
+  })
+
+  it('loads availability and model checks on opening the same interactive group picker as API keys', async () => {
+    auth.mockReturnValue({ isAuthenticated: true })
+    const stamp = new Date().toISOString()
+    monitorList.mockResolvedValue({ items: [{
+      id: 7, group_id: 10, name: 'Monitor', group_name: 'Flagship', provider: 'openai',
+      primary_model: 'gpt-6.1-sol', primary_status: 'operational', primary_latency_ms: 1200,
+      primary_ping_latency_ms: null, availability_7d: 100, extra_models: [],
+      probe_valid_until: new Date(Date.now() + 120000).toISOString(),
+      timeline: [{ status: 'operational', checked_at: stamp, latency_ms: 1200, ping_latency_ms: null }]
+    }] })
+    monitorAnalytics.mockResolvedValue({ items: [{ id: 7, intelligence: { window_end: stamp, series: [
+      { model: 'gpt-6.1-sol', effort: 'high', points: [{ status: 'pass', checked_at: stamp }] }
+    ] } }] })
+    const wrapper = render([group({ id: 10, name: 'Flagship' })], true)
+    try {
+      expect(monitorList).not.toHaveBeenCalled()
+      await wrapper.get('#plaza-group-select').trigger('click')
+      await flushPromises()
+      expect(monitorList).toHaveBeenCalledTimes(1)
+      expect(monitorAnalytics).toHaveBeenCalledTimes(1)
+      expect(wrapper.find('[data-group-monitor-header]').exists()).toBe(true)
+      expect(wrapper.getComponent(Select).props('dropdownWidth')).toBe(600)
+      expect(wrapper.getComponent(Select).props('interactiveOptions')).toBe(true)
+      const option = wrapper.getComponent(GroupOptionItem)
+      const availability = option.get('[data-monitor-kind=availability]')
+      expect(availability.attributes('data-monitor-state')).toBe('ready')
+      expect(availability.findAll('[data-monitor-bar]').at(-1)!.attributes('data-status')).toBe('operational')
+      expect(option.get('[data-monitor-kind=intelligence]').attributes('data-monitor-state')).toBe('ready')
+      expect(option.get('[data-monitor-kind=intelligence]').findAll('[data-monitor-bar]').at(-1)!.attributes('data-status')).toBe('pass')
+      await availability.trigger('click')
+      expect(wrapper.getComponent(Select).props('modelValue')).toBe('all')
+      expect(wrapper.find('[role=listbox]').exists()).toBe(true)
+      expect(wrapper.get('[data-group-monitor-detail]').text()).toContain('gpt-6.1-sol')
+      await wrapper.findAll('[role=option]')[1]!.trigger('click')
+      expect(wrapper.getComponent(Select).props('modelValue')).toBe(10)
+    } finally { wrapper.unmount() }
+  })
+
+  it.each(['anonymous', 'disabled', 'v2'])('keeps monitor columns neutral and avoids protected requests when %s', async mode => {
+    auth.mockReturnValue({ isAuthenticated: mode !== 'anonymous' })
+    settings.channel_monitor_enabled = mode !== 'disabled'
+    settings.channel_monitor_mode = mode === 'v2' ? 'v2' : 'v1'
+    const wrapper = render([group({ id: 10 })])
+    try {
+      await wrapper.get('#plaza-group-select').trigger('click')
+      await flushPromises()
+      expect(monitorList).not.toHaveBeenCalled()
+      expect(monitorAnalytics).not.toHaveBeenCalled()
+      const option = wrapper.getComponent(GroupOptionItem)
+      expect(option.findAll('[data-monitor-kind]')).toHaveLength(2)
+      expect(option.get('[data-monitor-kind=availability]').attributes('data-monitor-state')).toBe('disabled')
+      expect(option.get('[data-monitor-kind=intelligence]').attributes('data-monitor-state')).toBe('disabled')
+    } finally { wrapper.unmount() }
+  })
 
   it.each([
     { view: 'anonymous public', authenticated: false, embedded: false },
@@ -120,7 +185,7 @@ describe('model plaza group selection', () => {
     expect(option.get('[data-group-identity]').text()).toBe('自营')
     expect(option.text()).toContain('Full description')
     expect(option.text()).toContain('0.35x')
-    expect(option.text()).toContain('14:00-18:00 ×2')
+    expect(option.props()).toMatchObject({ peakRateEnabled: true, peakStart: '14:00', peakEnd: '18:00', peakRateMultiplier: 2 })
     const unlabelled = wrapper.findAllComponents(GroupOptionItem).find(item => item.props('name') === 'Unlabelled')!
     expect(unlabelled.find('[data-group-identity]').exists()).toBe(false)
     await wrapper.findAll('[role="option"]')[1]!.trigger('click')

@@ -49,6 +49,57 @@ beforeEach(() => {
 })
 
 describe('quality assignment account pickers', () => {
+  it('shows the same override limits as the backend and labels the interval in seconds', async () => {
+    const wrapper = render([39])
+    await flushPromises()
+    await wrapper.get('form input[type=checkbox]').setValue(true)
+    const inputs = wrapper.findAll('input[type=number]')
+    expect(inputs.map(input => [input.attributes('min'), input.attributes('max')])).toEqual([['10', '604800'], ['1', '100'], ['1', '100']])
+    expect(inputs[0]!.element.closest('label')!.textContent).toContain('秒')
+  })
+
+  it.each([
+    [0, 1], [0, 9], [0, 604801], [0, 10.5],
+    [1, 0], [1, 101], [1, 1.5], [2, 0], [2, 101],
+  ])('rejects override field %s value %s before submitting an assignment', async (index, value) => {
+    const wrapper = render([39])
+    await flushPromises()
+    await wrapper.get('form input[type=checkbox]').setValue(true)
+    await wrapper.findAll('input[type=number]')[index]!.setValue(value)
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(api.assign).not.toHaveBeenCalled()
+    expect(wrapper.get('form [role=alert]').text()).toContain('之间的整数')
+    expect(wrapper.emitted('busy')).toBeUndefined()
+  })
+
+  it.each([10, 604800])('accepts the interval boundary %s and one-check thresholds', async interval => {
+    const wrapper = render([39])
+    await flushPromises()
+    await wrapper.get('form input[type=checkbox]').setValue(true)
+    const inputs = wrapper.findAll('input[type=number]')
+    await inputs[0]!.setValue(interval)
+    await inputs[1]!.setValue(1)
+    await inputs[2]!.setValue(1)
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(api.assign).toHaveBeenCalledWith(expect.objectContaining({ overrides: { interval_seconds: interval, failure_threshold: 1, recovery_threshold: 1 } }))
+  })
+
+  it('uses policy defaults for blank overrides and ignores invalid drafts when custom overrides are off', async () => {
+    const wrapper = render([39])
+    await flushPromises()
+    await wrapper.get('form input[type=checkbox]').setValue(true)
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(api.assign).toHaveBeenLastCalledWith(expect.objectContaining({ overrides: {} }))
+    await wrapper.findAll('input[type=number]')[0]!.setValue(1)
+    await wrapper.get('form input[type=checkbox]').setValue(false)
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(vi.mocked(api.assign).mock.calls.at(-1)![0].overrides).toBeUndefined()
+  })
+
   it('uses themed Select controls for every assignment dropdown', async () => {
     const wrapper = render()
     await flushPromises()

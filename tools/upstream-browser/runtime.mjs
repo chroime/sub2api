@@ -9,7 +9,7 @@ export const SSO_SETTLE_MS = 5000;
 export const SSO_RECLICK_MS = 6000;
 export const SSO_MAX_CLICKS = 3;
 const loginPage = (value, origin) => {
-  try { const url = new URL(value); return url.origin === origin && ['/login', '/login/'].includes(url.pathname); } catch { return false; }
+  try { const url = new URL(value); return url.origin === origin && ['/login', '/login/', '/sign-in', '/sign-in/'].includes(url.pathname); } catch { return false; }
 };
 
 export class BrowserError extends Error {
@@ -72,11 +72,13 @@ export function launchOptions(input) {
   };
 }
 
-export function cookieCandidates(cookies, host, observedSession) {
+export function cookieCandidates(cookies, host, observedSession, observedRefresh = '') {
   const result = {};
   for (const cookie of cookies) {
-    if (cookie.domain.replace(/^\./, '').toLowerCase() !== host.toLowerCase() || cookie.path !== '/') continue;
-    if (cookie.name === 'cf_clearance' || (cookie.name === 'session' && observedSession && cookie.value === observedSession))
+    if (cookie.domain.replace(/^\./, '').toLowerCase() !== host.toLowerCase()) continue;
+    if (cookie.name === 'new_api_refresh' && ['/', '/api/user/auth'].includes(cookie.path) && observedRefresh && cookie.value === observedRefresh)
+      result[cookie.name] = cookie.value;
+    if (cookie.path === '/' && (cookie.name === 'cf_clearance' || (cookie.name === 'session' && observedSession && cookie.value === observedSession)))
       result[cookie.name] = cookie.value;
   }
   return result;
@@ -97,6 +99,7 @@ export class BrowserRuntime {
     this.ssoTask = null;
     this.closed = false;
     this.observedSession = '';
+    this.observedRefresh = '';
   }
 
   async start(input) {
@@ -363,9 +366,11 @@ export class BrowserRuntime {
           if (header.name.toLowerCase() !== 'set-cookie') continue;
           const match = /^session=([^;\s,]*)/.exec(header.value);
           if (match && match[1].length <= 8192) this.observedSession = match[1];
+          const refresh = /^new_api_refresh=([^;\s,]*)/.exec(header.value);
+          if (this.platform === 'newapi' && refresh && refresh[1].length <= 16384) this.observedRefresh = refresh[1];
         }
       }
-      const cookies = cookieCandidates(await this.context.cookies([this.origin]), url.hostname, this.observedSession);
+      const cookies = cookieCandidates(await this.context.cookies([`${this.origin}/api/user/auth/refresh`]), url.hostname, this.observedSession, this.observedRefresh);
       const capture = this.parser.accept({ url: response.url(), method: request.method(), frameIsMain: true, pageMatches: true,
         topLevelURL: this.page.url(), status: response.status(), contentType: headers['content-type'] || '',
         requestBody: request.postData() || '', body: text, cookies, userAgent: this.userAgent, now: receivedAt });

@@ -543,11 +543,21 @@ func validCapture(capture *Capture) bool {
 	}
 	switch capture.AuthVariant {
 	case "bearer":
-		if !cleanString(capture.AccessToken, 16384, false) {
+		if !cleanString(capture.AccessToken, 16384, false) || capture.SessionID != "" {
 			return false
 		}
+	case "newapi_session":
+		if !cleanString(capture.AccessToken, 16384, false) || capture.UserID <= 0 || capture.ExpiresAt == nil || !validCaptureSessionID(capture.SessionID) {
+			return false
+		}
+		if capture.RefreshToken != "" {
+			sid, secret, ok := strings.Cut(capture.RefreshToken, ".")
+			if !ok || sid != capture.SessionID || secret == "" || strings.ContainsAny(secret, " .\t;,\"\\") {
+				return false
+			}
+		}
 	case "newapi_legacy_cookie":
-		if capture.UserID <= 0 || capture.Cookies["session"] == "" || capture.AccessToken != "" || capture.RefreshToken != "" {
+		if capture.UserID <= 0 || capture.Cookies["session"] == "" || capture.AccessToken != "" || capture.RefreshToken != "" || capture.SessionID != "" {
 			return false
 		}
 	default:
@@ -565,4 +575,16 @@ func validCapture(capture *Capture) bool {
 		return false
 	}
 	return capture.VerifiedLogin == nil || (cleanString(capture.VerifiedLogin.Username, 512, true) && cleanString(capture.VerifiedLogin.Password, 4096, true))
+}
+
+func validCaptureSessionID(value string) bool {
+	if len(value) == 0 || len(value) > 128 {
+		return false
+	}
+	for _, c := range value {
+		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-' || c == '_') {
+			return false
+		}
+	}
+	return true
 }

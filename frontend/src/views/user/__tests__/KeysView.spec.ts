@@ -19,6 +19,7 @@ const {
   isCurrentStep,
   nextStep,
   listGroupMonitors,
+  groupMonitorAnalytics,
 } = vi.hoisted(() => ({
   listKeys: vi.fn(),
   updateKey: vi.fn(),
@@ -32,9 +33,10 @@ const {
   isCurrentStep: vi.fn(),
   nextStep: vi.fn(),
   listGroupMonitors: vi.fn(),
+  groupMonitorAnalytics: vi.fn(),
 }))
 
-vi.mock('@/api/channelMonitor', () => ({ list: listGroupMonitors }))
+vi.mock('@/api/channelMonitor', () => ({ list: listGroupMonitors, analytics: groupMonitorAnalytics }))
 
 const messages: Record<string, string> = {
   'common.actions': 'Actions',
@@ -310,6 +312,7 @@ describe('user KeysView column settings', () => {
     getAvailableGroups.mockReset()
     getUserGroupRates.mockReset()
     listGroupMonitors.mockReset().mockResolvedValue({ items: [] })
+    groupMonitorAnalytics.mockReset().mockResolvedValue({ items: [] })
     showError.mockReset()
     showSuccess.mockReset()
     copyToClipboard.mockReset()

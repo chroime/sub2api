@@ -177,7 +177,7 @@ function loginResponse(runtime, body) {
 }
 
 test('snapshots remain available on the exact login paths', async () => {
-  for (const suffix of ['/login', '/login/', '/login?next=%2Fdashboard#challenge']) {
+  for (const suffix of ['/login', '/login/', '/login?next=%2Fdashboard#challenge', '/sign-in', '/sign-in/']) {
     const { runtime, state } = runtimeFixture();
     state.url = input.base_url + suffix;
     const view = await runtime.snapshot();
@@ -185,6 +185,40 @@ test('snapshots remain available on the exact login paths', async () => {
     assert.equal(view.error_code, undefined);
     assert.equal(Buffer.from(view.image, 'base64').toString(), 'synthetic-image');
   }
+});
+
+test('modern New API refresh cookies require the observed response value and scoped host/path', () => {
+  const cookie = { name: 'new_api_refresh', value: 'fixture-session.fixture-secret', domain: 'upstream.example', path: '/api/user/auth' };
+  assert.deepEqual(cookieCandidates([cookie], 'upstream.example', '', cookie.value), { new_api_refresh: cookie.value });
+  for (const changed of [{ domain: '.example' }, { path: '/other' }, { value: 'stale-session.secret' }])
+    assert.deepEqual(cookieCandidates([{ ...cookie, ...changed }], 'upstream.example', '', cookie.value), {});
+  assert.deepEqual(cookieCandidates([cookie], 'upstream.example', '', ''), {});
+});
+
+test('New API response inspection captures path-scoped refresh cookies without exposing them as ordinary cookies', async () => {
+  const { runtime, state } = runtimeFixture();
+  runtime.platform = 'newapi';
+  runtime.parser = new LoginCapture(runtime.origin, runtime.platform);
+  state.url = `${runtime.origin}/sign-in`;
+  const cookie = { name: 'new_api_refresh', value: 'fixture-session.fixture-secret', domain: 'upstream.example', path: '/api/user/auth' };
+  runtime.context.cookies = async urls => {
+    assert.deepEqual(urls, [`${runtime.origin}/api/user/auth/refresh`]);
+    return [cookie];
+  };
+  const now = Math.floor(Date.now() / 1000);
+  const response = loginResponse(runtime, JSON.stringify({ success: true, data: {
+    access_token: 'fixture-access', access_expires_at: now + 900, token_type: 'Bearer', user: { id: 42 }, session: { sid: 'fixture-session' }
+  } }));
+  response.url = () => `${runtime.origin}/api/user/login`;
+  response.headersArray = async () => [{ name: 'set-cookie', value: `${cookie.name}=${cookie.value}; Path=/api/user/auth; HttpOnly; Secure` }];
+  await runtime.inspectResponse(response);
+  const capture = runtime.result();
+  assert.equal(capture.auth_variant, 'newapi_session');
+  assert.equal(capture.session_id, 'fixture-session');
+  assert.equal(capture.refresh_token, cookie.value);
+  assert.deepEqual(capture.cookies, {});
+  assert.equal(capture.user_agent, runtime.userAgent);
+  assert.equal(runtime.status, 'ready');
 });
 
 test('leaving the supported login route fails with a bounded code instead of a blank waiting frame', async () => {

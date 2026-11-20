@@ -498,6 +498,12 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 			zap.String("normalization", "call_output_to_user_message"),
 		)
 	}
+	if normalizedBody, changed := normalizeCodexBrowserContext(body); changed {
+		body = normalizedBody
+		reqLog.Info("openai.codex_browser_context_normalized",
+			zap.String("normalization", "call_output_to_user_message"),
+		)
+	}
 	if normalizedBody, changed := normalizeCodexAutomationBootstrap(body); changed {
 		body = normalizedBody
 		reqLog.Info("openai.codex_automation_bootstrap_normalized",

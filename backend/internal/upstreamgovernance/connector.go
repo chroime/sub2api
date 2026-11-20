@@ -114,13 +114,18 @@ func (c *platformConnector) request(ctx context.Context, site Site, session Sess
 	if e != nil {
 		return out, nil, ErrInvalid
 	}
-	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Accept", "application/json, text/plain, */*")
+	origin := strings.TrimRight(site.BaseURL, "/")
+	req.Header.Set("Origin", origin)
+	req.Header.Set("Referer", origin+"/")
 	if !validHeaderValue(session.UserAgent, 1024) || !validHeaderValue(session.AccessToken, maxSessionTokenLength) {
 		return out, nil, ErrInvalid
 	}
-	if session.UserAgent != "" {
-		req.Header.Set("User-Agent", session.UserAgent)
+	userAgent := session.UserAgent
+	if userAgent == "" {
+		userAgent = defaultSessionUserAgent
 	}
+	req.Header.Set("User-Agent", userAgent)
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
@@ -314,7 +319,7 @@ func (c *platformConnector) Login(ctx context.Context, s Site, input LoginInput)
 			body = map[string]any{"flow_token": input.ChallengeToken, "method": "2fa", "code": input.OTP}
 		} else {
 			var status map[string]json.RawMessage
-			if e = c.data(ctx, s, Session{}, "GET", "/api/status", nil, &status); e != nil {
+			if e = c.data(ctx, s, Session{UserAgent: session.UserAgent}, "GET", "/api/status", nil, &status); e != nil {
 				return Session{}, nil, e
 			}
 			var captcha bool
@@ -327,7 +332,7 @@ func (c *platformConnector) Login(ctx context.Context, s Site, input LoginInput)
 				KeyID     string `json:"kid"`
 				PublicKey string `json:"public_key"`
 			}
-			e = c.data(ctx, s, Session{}, "GET", "/api/user/login/encryption-key", nil, &enc)
+			e = c.data(ctx, s, Session{UserAgent: session.UserAgent}, "GET", "/api/user/login/encryption-key", nil, &enc)
 			if e != nil && !errors.Is(e, errConnectorUnavailable) {
 				return Session{}, nil, e
 			}

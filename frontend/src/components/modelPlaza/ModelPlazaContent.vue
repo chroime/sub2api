@@ -55,7 +55,7 @@
       </aside>
 
       <section class="min-w-0 space-y-4">
-        <!-- 全部分组只看官方价；选中分组后展示本站实付价与官方价对照。 -->
+        <!-- 分组选择与监测信息。 -->
         <div class="flex flex-wrap items-center gap-3">
           <label for="plaza-group-select" class="text-base font-semibold text-gray-700 dark:text-dark-200">
             {{ t('modelPlaza.priceTable.groupLabel') }}
@@ -66,8 +66,12 @@
               :model-value="selectedGroupId"
               :options="groupSelectOptions"
               :search-placeholder="t('modelPlaza.priceTable.groupLabel')"
+              :dropdown-width="600"
+              interactive-options
               @update:model-value="onGroupChange"
+              @open-change="groupPickerOpen = $event"
             >
+              <template #options-header><GroupMonitorHeader /></template>
               <template #selected>
                 <GroupBadge
                   v-if="selectedGroup"
@@ -101,6 +105,7 @@
                   :peak-rate-multiplier="(option as PlazaGroupSelectOption).group!.peak_rate_multiplier"
                   :description="(option as PlazaGroupSelectOption).group!.description"
                   :selected="selected"
+                  :monitoring="groupMonitorStates.get((option as PlazaGroupSelectOption).group!.id)"
                 />
                 <template v-else>
                   <span class="min-w-0 flex-1 truncate text-left text-[15px] leading-6">{{ option.label }}</span>
@@ -109,7 +114,6 @@
               </template>
             </Select>
           </div>
-          <!-- 选中分组后倍率已在下拉框和表头标出，不再重复 -->
           <span v-if="!selectedGroup" class="text-sm leading-relaxed plaza-soft text-gray-400 dark:text-dark-500">
             {{ t('modelPlaza.priceTable.allGroupsHint') }}
           </span>
@@ -129,12 +133,7 @@
           {{ peakNote }}
         </p>
 
-        <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
-          <h2 class="shrink-0 text-xl font-semibold text-gray-900 dark:text-white">{{ currentVendorLabel }}</h2>
-          <span class="text-sm leading-relaxed plaza-soft text-gray-400 dark:text-dark-500">
-            {{ t(selectedGroup ? 'modelPlaza.priceTable.siteUnitNote' : 'modelPlaza.priceTable.unitNote') }}
-          </span>
-        </div>
+        <h2 class="text-xl font-semibold text-gray-900 dark:text-white">{{ currentVendorLabel }}</h2>
 
         <PlazaVendorPriceTable
           v-if="tableModels.length > 0"
@@ -164,6 +163,8 @@ import Icon from '@/components/icons/Icon.vue'
 import Select, { type SelectOption } from '@/components/common/Select.vue'
 import GroupBadge from '@/components/common/GroupBadge.vue'
 import GroupOptionItem from '@/components/common/GroupOptionItem.vue'
+import GroupMonitorHeader from '@/components/keys/GroupMonitorHeader.vue'
+import { useGroupMonitorStatus } from '@/composables/useGroupMonitorStatus'
 import type { GroupPlatform, SubscriptionType } from '@/types'
 import PlazaVendorTree from './PlazaVendorTree.vue'
 import PlazaVendorPriceTable from './PlazaVendorPriceTable.vue'
@@ -187,6 +188,7 @@ const isAuthenticated = computed(() => authStore.isAuthenticated)
 
 const selectedVendor = ref<string>('all')
 const selectedGroupId = ref<number | 'all'>('all')
+const groupPickerOpen = ref(false)
 const searchQuery = ref('')
 const highlightedKey = ref('')
 
@@ -227,6 +229,12 @@ const selectedGroup = computed<ModelPlazaGroup | null>(() =>
 )
 
 const appStore = useAppStore()
+const { statuses: groupMonitorStates } = useGroupMonitorStatus(
+  groupPickerOpen,
+  groups,
+  () => isAuthenticated.value && appStore.cachedPublicSettings?.channel_monitor_enabled !== false &&
+    appStore.cachedPublicSettings?.channel_monitor_mode !== 'v2'
+)
 
 /** 选中分组的高峰窗口描述(含倍率与服务器时区标注);未启用高峰为空串。 */
 const peakWindow = computed(() => {

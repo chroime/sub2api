@@ -102,7 +102,7 @@ closing job against the concurrency limit until its driver Close finishes.
 
 ## Interaction And Capture
 
-The helper opens exactly `https://<selected-origin>/login` with a fixed 1024x720
+The helper opens `https://<selected-origin>/login` with a fixed 1024x720
 viewport. It fills an unambiguous, visible username/email and password form when
 saved credentials are supplied. **It does not submit the form automatically.**
 The administrator clicks the ordinary Login button in the screenshot, supplies
@@ -115,7 +115,8 @@ accepted. Coordinates are within the fixed viewport, wheel deltas are at most
 2000, text is at most 2048 UTF-8 bytes without control characters, and keys come
 from a small editing/navigation allowlist. No arbitrary JavaScript, URL navigation,
 file selection, or shell commands are exposed. Screenshots and input are limited
-to the selected origin's exact `/login` and `/login/` paths. Other login routes
+to the selected origin's exact `/login`, `/login/`, `/sign-in`, and `/sign-in/` paths.
+The `/sign-in` route supports New API sites that redirect their login page there. Other login routes
 and cross-origin SSO are not supported by this version. Leaving those paths
 without a captured or in-flight login response ends the session with
 `browser_unsupported_route`, rather than continuing with an empty waiting frame.
@@ -137,7 +138,11 @@ Refresh support requires both a valid refresh token and positive integer expiry;
 expiry is anchored when the response
 arrives, not when the administrator later completes import. New API legacy
 cookie login needs a successful response, positive user ID, and a session cookie
-observed on the login flow. Cookies are limited to exact-host `session` and
+observed on the login flow. Modern New API browser sessions retain their
+`session.sid`, absolute `access_expires_at`, and the exact-host `new_api_refresh`
+cookie observed on the login response. That HttpOnly credential is carried as
+a refresh token and sent only to the native refresh endpoint; it is excluded
+from ordinary management cookies. Cookies are limited to exact-host `session` and
 `cf_clearance`; other domains/cookies and localStorage are never scraped.
 
 Verified login credentials come from the actual matching plaintext login POST,

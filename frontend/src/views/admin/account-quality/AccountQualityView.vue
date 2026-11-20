@@ -21,14 +21,17 @@ const overview = ref<Overview>({ policies: [], bindings: [], templates: [], capa
 const loading = ref(false), error = ref(''), notice = ref(''), tab = ref('accounts'), search = ref(''), state = ref(''), policyFilter = ref('')
 const queueing = ref(false), settingsBusy = ref(false), selected = ref<number[]>([]), editPolicy = ref<Policy | null>(null), policyDialog = ref(false), assignment = ref(false), assignmentPolicy = ref(0), deleting = ref<Policy | null>(null), deletingBusy = ref(false)
 const policyBusy = ref(false), assignmentBusy = ref(false), detailBusy = ref(false), evidenceBusy = ref(false)
+const unbinding = ref<Binding[]>([]), unbindingBusy = ref(false)
 const accountId = ref(0), initialRun = ref(''), evidence = ref(''), history = ref<Run[]>([]), historyLoading = ref(false)
 const initialBindingId = ref(0), initialAction = ref<ControlAction | undefined>()
 let generation = 0, historyGeneration = 0
-const mutationBusy = computed(() => queueing.value || settingsBusy.value || deletingBusy.value || policyBusy.value || assignmentBusy.value || detailBusy.value || evidenceBusy.value)
+const mutationBusy = computed(() => queueing.value || settingsBusy.value || deletingBusy.value || policyBusy.value || assignmentBusy.value || detailBusy.value || evidenceBusy.value || unbindingBusy.value)
 watch(mutationBusy, value => emit('busy', value))
 const label = (kind: string, value?: string) => { const key = `accountQuality.${kind}_${value}`; const result = t(key); return result === key ? value || '—' : result }
 const historyTone = (run: Run) => ({ pass: 'success', fail: 'danger', error: 'warning', unknown: 'neutral' } as const)[sampleTone(run)]
 const filtered = computed(() => overview.value.bindings.filter(binding => (!state.value || binding.state === state.value) && (!policyFilter.value || binding.policy_id === Number(policyFilter.value)) && (!search.value.trim() || `${binding.account_name} ${binding.account_id} ${binding.model} ${binding.platform}`.toLowerCase().includes(search.value.trim().toLowerCase()))))
+const allVisibleSelected = computed(() => filtered.value.length > 0 && filtered.value.every(binding => selected.value.includes(binding.id)))
+const someVisibleSelected = computed(() => !allVisibleSelected.value && filtered.value.some(binding => selected.value.includes(binding.id)))
 const states = computed(() => [...new Set(overview.value.bindings.map(binding => binding.state))])
 const stateOptions = computed(() => [
   { value: '', label: t('accountQuality.allStates') },
@@ -59,13 +62,42 @@ async function loadHistory() {
   finally { if (request === historyGeneration) historyLoading.value = false }
 }
 async function queue(bindings: Binding[]) {
-  if (queueing.value || !bindings.length) return
+  if (mutationBusy.value || !bindings.length) return
   queueing.value = true; error.value = ''; notice.value = ''
   const { success, failed } = await queueChecks(bindings, binding => api.run(binding.id, { version: binding.version, request_id: requestId() }))
   notice.value = failed ? t('accountQuality.partial', { success, failed }) : t('accountQuality.queued')
   queueing.value = false; await load(); if (tab.value === 'history') await loadHistory()
 }
-function toggle(id: number) { selected.value = selected.value.includes(id) ? selected.value.filter(value => value !== id) : [...selected.value, id] }
+function toggle(id: number) { if (!mutationBusy.value && !loading.value) selected.value = selected.value.includes(id) ? selected.value.filter(value => value !== id) : [...selected.value, id] }
+function toggleVisible() {
+  if (mutationBusy.value || loading.value) return
+  const ids = new Set(selected.value), clear = allVisibleSelected.value
+  for (const binding of filtered.value) { if (clear) ids.delete(binding.id); else ids.add(binding.id) }
+  selected.value = [...ids]
+}
+function prepareUnbind() {
+  if (mutationBusy.value || loading.value) return
+  unbinding.value = overview.value.bindings.filter(binding => selected.value.includes(binding.id)).map(binding => ({ ...binding }))
+}
+function closeUnbind() { if (!unbindingBusy.value) unbinding.value = [] }
+async function unbindSelected() {
+  if (mutationBusy.value || !unbinding.value.length) return
+  unbindingBusy.value = true; error.value = ''; notice.value = ''
+  const succeeded = new Set<number>()
+  let failed = 0
+  try {
+    for (const binding of unbinding.value) {
+      try { await api.unbind(binding.id, binding.version); succeeded.add(binding.id) }
+      catch { failed++ }
+    }
+    selected.value = selected.value.filter(id => !succeeded.has(id))
+    // Remove confirmed successes even if the overview refresh fails.
+    overview.value.bindings = overview.value.bindings.filter(binding => !succeeded.has(binding.id))
+    notice.value = failed ? t('accountQuality.bulkUnbindPartial', { success: succeeded.size, failed }) : t('accountQuality.bulkUnboundSuccess', { count: succeeded.size })
+    unbinding.value = []
+    await load()
+  } finally { unbindingBusy.value = false }
+}
 function openPolicy(policy: Policy | null = null) { editPolicy.value = policy; policyDialog.value = true }
 function assign(policy = 0) { assignmentPolicy.value = policy; assignment.value = true }
 async function togglePolicy(policy: Policy) {
@@ -151,7 +183,8 @@ onUnmounted(() => { generation++; historyGeneration++; emit('busy', false) })
           </div>
           <Select v-model="state" data-test="quality-state-filter" class="w-full text-sm sm:w-40" :options="stateOptions" :aria-label="t('accountQuality.state')" />
           <Select v-model="policyFilter" data-test="quality-policy-filter" class="w-full text-sm sm:w-48" :options="policyOptions" :aria-label="t('accountQuality.policy')" />
-          <button v-if="selected.length" type="button" class="btn btn-secondary btn-sm" :disabled="queueing" @click="queue(overview.bindings.filter(binding => selected.includes(binding.id)))">{{ t('accountQuality.queueAll') }} · {{ selected.length }}</button>
+          <button v-if="selected.length" type="button" class="btn btn-secondary btn-sm" :disabled="loading || mutationBusy" @click="queue(overview.bindings.filter(binding => selected.includes(binding.id)))">{{ t('accountQuality.queueAll') }} · {{ selected.length }}</button>
+          <button type="button" data-test="quality-bulk-unbind" class="btn btn-secondary btn-sm text-red-600 dark:text-red-400" :disabled="!selected.length || loading || mutationBusy" @click="prepareUnbind">{{ t('accountQuality.bulkUnbind') }}<span v-if="selected.length" class="ml-1 tabular-nums">· {{ selected.length }}</span></button>
           <p class="ml-auto text-xs tabular-nums text-gray-400 dark:text-dark-300">{{ t('accountQuality.monitoredCount', { count: filtered.length }) }}</p>
         </div>
         <p v-if="!filtered.length && !loading" class="px-5 py-12 text-center text-sm text-gray-500 dark:text-dark-300">{{ t(overview.bindings.length ? 'accountQuality.noMatch' : 'accountQuality.empty') }}</p>
@@ -160,18 +193,18 @@ onUnmounted(() => { generation++; historyGeneration++; emit('busy', false) })
             <caption class="sr-only">{{ t('accountQuality.accounts') }}</caption>
             <colgroup><col class="w-12" /><col class="w-48" /><col class="w-[36rem]" /><col class="w-48" /><col class="w-44" /></colgroup>
             <thead class="border-b border-gray-200 bg-gray-50/80 text-xs font-medium text-gray-500 dark:border-dark-600 dark:bg-dark-900/50 dark:text-dark-300">
-              <tr><th scope="col" class="p-3"><span class="sr-only">{{ t('accountQuality.select') }}</span></th><th scope="col" class="px-4 py-3">{{ t('accountQuality.account') }}</th><th scope="col" class="px-4 py-3">{{ t('accountQuality.monitoring') }}</th><th scope="col" class="px-4 py-3">{{ t('accountQuality.policy') }}</th><th scope="col" class="px-4 py-3">{{ t('accountQuality.nextRun') }}</th></tr>
+              <tr><th scope="col" class="p-3"><input type="checkbox" data-test="quality-select-visible" class="rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-dark-500" :checked="allVisibleSelected" :indeterminate="someVisibleSelected" :disabled="!filtered.length || loading || mutationBusy" :aria-label="t('accountQuality.selectVisible')" @change="toggleVisible" /></th><th scope="col" class="px-4 py-3">{{ t('accountQuality.account') }}</th><th scope="col" class="px-4 py-3">{{ t('accountQuality.monitoring') }}</th><th scope="col" class="px-4 py-3">{{ t('accountQuality.policy') }}</th><th scope="col" class="px-4 py-3">{{ t('accountQuality.nextRun') }}</th></tr>
             </thead>
             <tbody class="divide-y divide-gray-100 dark:divide-dark-700">
               <tr v-for="binding in filtered" :key="binding.id" :data-test="`quality-monitor-binding-${binding.id}`" class="transition-colors hover:bg-gray-50/80 dark:hover:bg-dark-700/30" :class="selected.includes(binding.id) ? 'bg-primary-50/50 dark:bg-primary-900/10' : 'even:bg-gray-50/40 dark:even:bg-dark-900/20'">
-                <td class="p-3 align-middle"><input type="checkbox" class="rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-dark-500" :checked="selected.includes(binding.id)" :aria-label="`${t('accountQuality.select')} ${binding.account_name}`" @change="toggle(binding.id)" /></td>
+                <td class="p-3 align-middle"><input type="checkbox" class="rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-dark-500" :checked="selected.includes(binding.id)" :disabled="loading || mutationBusy" :aria-label="`${t('accountQuality.select')} ${binding.account_name}`" @change="toggle(binding.id)" /></td>
                 <td class="px-4 py-4 align-middle">
                   <button type="button" class="max-w-full break-words text-left font-semibold text-gray-900 hover:text-primary-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-500 dark:text-dark-50 dark:hover:text-primary-400" @click="showAccount(binding)">{{ binding.account_name }}</button>
                   <p class="mt-1 text-[11px] tabular-nums text-gray-400 dark:text-dark-300">#{{ binding.account_id }}</p>
                   <p class="mt-2 flex flex-wrap items-center gap-1 text-[10px] font-medium"><span class="rounded bg-gray-100 px-1.5 py-0.5 text-gray-600 dark:bg-dark-700 dark:text-dark-200">{{ binding.platform }}</span><span v-if="binding.account_type" class="rounded bg-gray-100 px-1.5 py-0.5 text-gray-600 dark:bg-dark-700 dark:text-dark-200">{{ binding.account_type }}</span></p>
                   <p class="mt-1.5 break-all text-[11px] text-gray-500 dark:text-dark-300">{{ binding.model }}</p>
                 </td>
-                <td class="px-4 py-4 align-middle"><AccountQualityCell :bindings="[binding]" :disabled="queueing || detailBusy" @details="showAccount(binding)" @run="queue([$event])" @evidence="evidence = $event.id" @control="showControl" /></td>
+                <td class="px-4 py-4 align-middle"><AccountQualityCell :bindings="[binding]" :disabled="loading || mutationBusy" @details="showAccount(binding)" @run="queue([$event])" @evidence="evidence = $event.id" @control="showControl" /></td>
                 <td class="px-4 py-4 align-middle">
                   <p class="break-words font-medium text-gray-700 dark:text-dark-100">{{ binding.policy_name }}</p>
                   <p class="mt-1 text-[11px] tabular-nums text-gray-400 dark:text-dark-300">v{{ binding.policy_version }}</p>
@@ -207,6 +240,16 @@ onUnmounted(() => { generation++; historyGeneration++; emit('busy', false) })
     <QualityAssignmentDialog v-if="assignment" :policies="overview.policies" :policy-id="assignmentPolicy" @close="assignment = false" @saved="assigned" @changed="load" @busy="assignmentBusy = $event" />
     <AccountQualityDetail v-if="accountId" :key="accountId" :account-id="accountId" :initial-run-id="initialRun" :initial-binding-id="initialBindingId" :initial-action="initialAction" @close="accountId = 0" @changed="load" @busy="detailBusy = $event" />
     <AccountQualityRunDetail v-if="evidence" :run-id="evidence" @close="evidence = ''" @changed="loadHistory" @busy="evidenceBusy = $event" />
+    <BaseDialog v-if="unbinding.length" :show="true" :title="t('accountQuality.bulkUnbind')" width="narrow" :show-close-button="!unbindingBusy" :close-on-escape="!unbindingBusy" @close="closeUnbind">
+      <p class="text-sm leading-relaxed">{{ t('accountQuality.bulkUnbindHint', { count: unbinding.length }) }}</p>
+      <ul class="mt-3 max-h-64 space-y-2 overflow-y-auto rounded-lg border border-gray-200 p-3 text-sm dark:border-dark-600">
+        <li v-for="binding in unbinding" :key="binding.id" class="break-words"><span class="font-medium">{{ binding.account_name }}</span><span class="ml-1 text-xs text-gray-500 dark:text-dark-300">#{{ binding.account_id }}</span><p class="mt-0.5 text-xs text-gray-500 dark:text-dark-300">{{ binding.policy_name }} · {{ binding.model }}</p></li>
+      </ul>
+      <template #footer>
+        <button type="button" data-test="quality-unbind-cancel" class="btn btn-secondary" :disabled="unbindingBusy" @click="closeUnbind">{{ t('accountQuality.cancel') }}</button>
+        <button type="button" data-test="quality-unbind-confirm" class="btn btn-danger" :disabled="unbindingBusy" @click="unbindSelected">{{ t(unbindingBusy ? 'accountQuality.unbinding' : 'accountQuality.bulkUnbind') }}</button>
+      </template>
+    </BaseDialog>
     <BaseDialog v-if="deleting" :show="true" :title="t('accountQuality.delete')" width="narrow" :show-close-button="!deletingBusy" @close="deleting = null"><p class="text-sm leading-relaxed">{{ t('accountQuality.deleteHint') }}</p><p class="mt-2 font-semibold">{{ deleting.name }}</p><template #footer><button type="button" class="btn btn-secondary" :disabled="deletingBusy" @click="deleting = null">{{ t('accountQuality.cancel') }}</button><button type="button" class="btn btn-danger" :disabled="deletingBusy" @click="removePolicy">{{ t('accountQuality.delete') }}</button></template></BaseDialog>
   </div>
 </template>

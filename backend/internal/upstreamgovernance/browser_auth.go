@@ -509,7 +509,7 @@ func (a *BrowserAuthorizer) Complete(ctx context.Context, actorID, siteID int64,
 		return nil, ErrConflict
 	}
 	issued := capture.IssuedAt
-	session := Session{AccessToken: capture.AccessToken, RefreshToken: capture.RefreshToken, ExpiresAt: capture.ExpiresAt, IssuedAt: &issued, Cookies: capture.Cookies, UserID: capture.UserID, AuthVariant: capture.AuthVariant, UserAgent: capture.UserAgent}
+	session := Session{AccessToken: capture.AccessToken, RefreshToken: capture.RefreshToken, SessionID: capture.SessionID, ExpiresAt: capture.ExpiresAt, IssuedAt: &issued, Cookies: capture.Cookies, UserID: capture.UserID, AuthVariant: capture.AuthVariant, UserAgent: capture.UserAgent}
 	var login *LoginCredentials
 	if capture.VerifiedLogin != nil {
 		login = &LoginCredentials{Username: capture.VerifiedLogin.Username, Password: capture.VerifiedLogin.Password}

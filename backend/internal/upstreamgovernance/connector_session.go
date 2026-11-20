@@ -7,7 +7,9 @@ import (
 	"unicode"
 )
 
-const defaultSessionUserAgent = "sub2api-upstream-governance/1.0"
+// Browser captures supply their actual User-Agent. Plain login requests use
+// the current desktop Chrome identity consistently across preflight and API calls.
+const defaultSessionUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36"
 const maxSessionTokenLength = 16384
 const maxSessionLifetimeSeconds = int64(366 * 24 * 60 * 60)
 

@@ -12,6 +12,31 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestConnectorNativeLoginUsesConsistentBrowserRequestIdentity(t *testing.T) {
+	calls := 0
+	c := fixtureConnector(t, func(r *http.Request) (int, string) {
+		calls++
+		require.Contains(t, r.UserAgent(), "Chrome/")
+		require.Equal(t, "https://upstream.example", r.Header.Get("Origin"))
+		require.Equal(t, "https://upstream.example/", r.Header.Get("Referer"))
+		require.Equal(t, "application/json, text/plain, */*", r.Header.Get("Accept"))
+		switch r.URL.Path {
+		case "/api/status":
+			return 200, `{"success":true,"data":{}}`
+		case "/api/user/login/encryption-key":
+			return 404, `{}`
+		case "/api/user/login":
+			return 200, `{"success":true,"data":{"access_token":"fixture-access","user":{"id":42}}}`
+		default:
+			return 200, `{"success":true,"data":{"id":42}}`
+		}
+	})
+	_, challenge, err := c.Login(t.Context(), Site{Platform: "newapi", BaseURL: "https://upstream.example"}, LoginInput{Username: "fixture", Password: "fixture-password"})
+	require.NoError(t, err)
+	require.Nil(t, challenge)
+	require.Equal(t, 4, calls)
+}
+
 func TestConnectorSessionCapturesPairAndKeepsUserAgent(t *testing.T) {
 	c := fixtureConnector(t, func(r *http.Request) (int, string) {
 		require.Equal(t, "FixtureBrowser/1.0", r.UserAgent())

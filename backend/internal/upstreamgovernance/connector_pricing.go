@@ -232,6 +232,9 @@ func connectorUsageExamples(raw json.RawMessage) ([]any, error) {
 					if math.IsNaN(v) || math.IsInf(v, 0) {
 						return nil, ErrUnsupported
 					}
+				case bool:
+					// Boolean schema inputs (for example layer decomposition)
+					// are observed facts, just like numeric and string inputs.
 				default:
 					return nil, ErrUnsupported
 				}

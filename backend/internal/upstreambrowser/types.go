@@ -97,6 +97,7 @@ type VerifiedLogin struct {
 type Capture struct {
 	AccessToken   string            `json:"access_token,omitempty"`
 	RefreshToken  string            `json:"refresh_token,omitempty"`
+	SessionID     string            `json:"session_id,omitempty"`
 	ExpiresIn     int64             `json:"expires_in,omitempty"`
 	IssuedAt      time.Time         `json:"issued_at"`
 	ExpiresAt     *time.Time        `json:"expires_at,omitempty"`

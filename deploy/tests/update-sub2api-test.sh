@@ -23,6 +23,16 @@ grep -Fq 'data-app.tar.gz' "$script" || fail 'script must archive application da
 grep -Fq 'sha256sum' "$script" || fail 'script must verify backup checksums'
 grep -Fq 'pull --ff-only' "$script" || fail 'script must update only with fast-forward pulls'
 grep -Fq 'backup_complete=true' "$script" || fail 'script must mark a completed backup'
+grep -Fq 'POSTGRES_CONTAINER="${POSTGRES_CONTAINER:-migration211-live-main}"' "$script" || fail 'script must default to the live PostgreSQL container'
+grep -Fq 'REDIS_CONTAINER="${REDIS_CONTAINER:-migration211-live-redis-main}"' "$script" || fail 'script must default to the live Redis container'
+grep -Fq 'DATABASE_PASSWORD' "$script" || fail 'script must derive the PostgreSQL password from the application container'
+grep -Fq 'pg_restore --exit-on-error --no-owner --no-privileges --file=/dev/null' "$script" || fail 'script must fully read the PostgreSQL archive'
+grep -Fq 'EXPECTED_COMMIT' "$script" || fail 'script must support target commit verification'
+grep -Fq 'docker build --pull=false -t "$IMAGE" -f "$APP_DIR/deploy/Dockerfile"' "$script" || fail 'script must build the application Dockerfile directly'
+grep -Fq 'BUILD_ARGS=(--build-arg "COMMIT=$TARGET_COMMIT")' "$script" || fail 'script must pass the target commit to the image build'
+grep -Fq 'BUILD_LABELS=(--label "org.opencontainers.image.revision=$TARGET_COMMIT")' "$script" || fail 'script must label the image with the target commit'
+grep -Fq 'up -d --no-deps --no-build --pull never --force-recreate' "$script" || fail 'service replacement must avoid dependency recreation and pulls'
+grep -Fq 'for command in git docker curl tar sha256sum head stat grep find sort xargs cmp wc sed' "$script" || fail 'script must check all utilities it invokes'
 
 bash -n "$script" || fail 'script has shell syntax errors'
 grep -Fq 'BRANCH="${BRANCH:-main}"' "$script" || fail 'default branch must be main'
@@ -43,7 +53,7 @@ if tar_errors_are_log_changes 1 "$report"; then fail 'unreadable log files must 
 if tar_errors_are_log_changes 1 "$report"; then fail 'unexplained tar errors must fail'; fi
 
 backup_line=$(grep -n '^BACKUP_COMPLETE=true$' "$script" | cut -d: -f1)
-init_line=$(grep -n '^homepage_template_sql | docker exec' "$script" | cut -d: -f1)
+init_line=$(grep -n '^homepage_template_sql | postgres_psql_with_input' "$script" | cut -d: -f1)
 checkout_line=$(grep -n '^git -C .* switch' "$script" | cut -d: -f1)
 [[ "$backup_line" -lt "$init_line" && "$init_line" -lt "$checkout_line" ]] || fail 'verified backup must precede settings writes and checkout'
 runtime_line=$(grep -n '^log "Checking runtime file access' "$script" | cut -d: -f1)

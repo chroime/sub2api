@@ -66,6 +66,11 @@ const selectionReady = computed(() => selection.value.valid && !selection.value.
 const platformOptions = computed(() => CONCRETE_PLATFORM_OPTIONS.filter(item => item.value === selectedPolicy.value?.platform))
 const targetPlatformOptions = computed<SelectOption[]>(() => [{ value: '', label: '—', disabled: true }, ...platformOptions.value])
 const overrides = ref<{ interval_seconds: number | ''; failure_threshold: number | ''; recovery_threshold: number | ''; isolation_scope: '' | 'model' | 'account' }>({ interval_seconds: '', failure_threshold: '', recovery_threshold: '', isolation_scope: '' })
+const overrideFields = [
+  { key: 'interval_seconds', label: 'interval', min: 10, max: 604800 },
+  { key: 'failure_threshold', label: 'failureThreshold', min: 1, max: 100 },
+  { key: 'recovery_threshold', label: 'recoveryThreshold', min: 1, max: 100 },
+] as const
 onMounted(async () => { try { groups.value = await groupsAPI.getAll() } catch { /* Direct account selection remains available. */ } })
 watch(() => selectedPolicy.value?.platform, value => { platform.value = value || ''; error.value = '' }, { immediate: true })
 watch(mode, value => { if (value === 'single' && chosenIds.value.length > 1) chosenIds.value = chosenIds.value.slice(0, 1); error.value = '' })
@@ -75,6 +80,19 @@ async function save() {
   const policy = selectedPolicy.value
   if (!policy) { error.value = t('accountQuality.targetRequired'); return }
   if (directSelection.value && (!chosenIds.value.length || !selectionReady.value)) { error.value = t(chosenIds.value.length ? 'accountQuality.accountSelectionInvalid' : 'accountQuality.targetRequired'); return }
+  const effectiveOverrides: BindingOverrides = {}
+  if (custom.value) {
+    for (const field of overrideFields) {
+      const value = overrides.value[field.key]
+      if (value === '') continue
+      if (!Number.isSafeInteger(value) || value < field.min || value > field.max) {
+        error.value = t('accountQuality.invalidPolicyRange', { field: t(`accountQuality.${field.label}`), min: field.min, max: field.max })
+        return
+      }
+      effectiveOverrides[field.key] = value
+    }
+    if (overrides.value.isolation_scope) effectiveOverrides.isolation_scope = overrides.value.isolation_scope
+  }
   error.value = ''; saving.value = true; emit('busy', true)
   try {
     let targets: number[] = []
@@ -94,14 +112,6 @@ async function save() {
     targets = [...new Set(targets)]
     if (!policyId.value || !targets.length) { error.value = t('accountQuality.targetRequired'); return }
     if (targets.length > 500) { error.value = t('accountQuality.assignmentLimit'); return }
-    const effectiveOverrides: BindingOverrides = {}
-    if (custom.value) {
-      for (const key of ['interval_seconds', 'failure_threshold', 'recovery_threshold'] as const) {
-        const value = overrides.value[key]
-        if (value !== '') { if (!Number.isInteger(value) || value <= 0) { error.value = t('accountQuality.invalidPolicy'); return } effectiveOverrides[key] = value }
-      }
-      if (overrides.value.isolation_scope) effectiveOverrides.isolation_scope = overrides.value.isolation_scope
-    }
     const value = await api.assign({ policy_id: policy.id, account_ids: targets, source: directSelection.value ? 'selected_accounts' : `${mode.value}:${mode.value === 'group' ? group.value : platform.value}`, ...(custom.value ? { overrides: effectiveOverrides } : {}) })
     emit('saved', value.length)
   } catch (cause) { error.value = qualityError(cause) || t('accountQuality.saveFailed') }
@@ -139,7 +149,11 @@ async function save() {
       <label class="flex items-center gap-2 text-sm"><input v-model="custom" :disabled="saving" type="checkbox" class="rounded" />{{ t('accountQuality.overrides') }}</label>
       <div v-if="custom" class="grid gap-3 rounded-lg bg-gray-50 p-3 dark:bg-dark-900 sm:grid-cols-2">
         <p class="text-xs text-gray-500 sm:col-span-2">{{ t('accountQuality.overrideHint') }}</p>
-        <label v-for="field in [{ key: 'interval_seconds', label: 'interval' }, { key: 'failure_threshold', label: 'failureThreshold' }, { key: 'recovery_threshold', label: 'recoveryThreshold' }] as const" :key="field.key" class="text-sm"><span class="mb-1 block">{{ t(`accountQuality.${field.label}`) }}</span><input v-model.number="overrides[field.key]" class="input w-full" type="number" min="1" step="1" /></label>
+        <label v-for="field in overrideFields" :key="field.key" class="text-sm">
+          <span class="mb-1 block">{{ t(`accountQuality.${field.label}`) }}<span v-if="field.key === 'interval_seconds'"> · {{ t('accountQuality.seconds') }}</span></span>
+          <input v-model.number="overrides[field.key]" :data-test="`quality-override-${field.key}`" class="input w-full" type="number" :min="field.min" :max="field.max" step="1" :disabled="saving" :placeholder="String(selectedPolicy?.[field.key] ?? '')" />
+          <span class="mt-1 block text-xs text-gray-500 dark:text-dark-300">{{ t('accountQuality.overrideRange', { min: field.min, max: field.max }) }}<span v-if="field.key === 'interval_seconds'"> {{ t('accountQuality.seconds') }}</span></span>
+        </label>
         <label class="text-sm"><span class="mb-1 block">{{ t('accountQuality.scope') }}</span><Select v-model="overrides.isolation_scope" :options="scopeOptions" :searchable="false" :disabled="saving" /></label>
       </div>
       <p class="text-xs text-gray-500">{{ t('accountQuality.automatic') }}: {{ t('accountQuality.off') }}</p>

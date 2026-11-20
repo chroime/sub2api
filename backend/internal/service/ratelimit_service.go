@@ -1028,6 +1028,14 @@ func (s *RateLimitService) handle403(ctx context.Context, account *Account, upst
 		return false
 	}
 
+	if account.Type == AccountTypeAPIKey && isUpstreamQuotaPreconsume403(upstreamMsg, responseBody) {
+		// Relay quota can cover smaller requests or recover after an in-flight
+		// reservation is released. Keep the existing short, configurable backoff
+		// and fail over this request without marking valid credentials as error.
+		s.apply429FallbackRateLimit(ctx, account, "upstream_quota_preconsume_403")
+		return true
+	}
+
 	if account.Platform == PlatformAntigravity {
 		return s.handleAntigravity403(ctx, account, upstreamMsg, responseBody)
 	}
@@ -1061,6 +1069,19 @@ func (s *RateLimitService) handle403(ctx context.Context, account *Account, upst
 	)
 	s.handleAuthError(ctx, account, msg)
 	return true
+}
+
+// isUpstreamQuotaPreconsume403 recognizes the explicit error emitted by a
+// relay before it forwards a request. A generic "quota" or "403" mention is
+// intentionally insufficient: permission failures must keep their existing
+// account-invalid handling.
+func isUpstreamQuotaPreconsume403(upstreamMsg string, responseBody []byte) bool {
+	text := strings.ToLower(strings.TrimSpace(upstreamMsg))
+	if text == "" {
+		text = strings.ToLower(strings.TrimSpace(extractUpstreamErrorMessage(responseBody)))
+	}
+	return strings.HasPrefix(text, "not enough quota to pre-consume") ||
+		strings.HasPrefix(text, "insufficient quota to pre-consume")
 }
 
 func (s *RateLimitService) handleOpenAI403(ctx context.Context, account *Account, upstreamMsg string, responseBody []byte) (shouldDisable bool) {

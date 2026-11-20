@@ -5,6 +5,7 @@ import { isDomesticModelVendor, modelVendorOf } from '@/utils/modelVendor'
 import { resolveIntervalPrices } from '@/utils/pricing'
 
 export type TokenPriceField = 'input_price' | 'output_price' | 'cache_read_price' | 'cache_write_price'
+export type PlazaReferenceSource = 'auto' | 'official' | 'none'
 
 /** Reference exchange rate for the plaza's CNY cost comparison. */
 export const PLAZA_REFERENCE_USD_TO_CNY = 6.7
@@ -17,6 +18,8 @@ export interface PlazaPriceComparison {
   /** Display-unit amounts: per 1M tokens, image, second or request. */
   reference: number | null
   site: number | null
+  configured?: number | null
+  rate?: number
   currency: 'USD' | 'CNY'
   referenceKind: 'official' | 'configured'
   comparable: boolean
@@ -150,10 +153,10 @@ function comparisonRangeLabel(site: TokenRange[], reference: TokenRange[], min: 
  * Times of day, peak hours and reasoning multipliers are disclosed separately:
  * these figures intentionally remain standard-time unit prices.
  */
-export function getTokenComparisons(model: PlazaModel, group: ModelPlazaGroup | null, field: TokenPriceField): PlazaPriceComparison[] {
-  const configured = configuredCny(model)
+export function getTokenComparisons(model: PlazaModel, group: ModelPlazaGroup | null, field: TokenPriceField, referenceSource: PlazaReferenceSource = 'auto', includeEqualCache1h = false): PlazaPriceComparison[] {
+  const configured = referenceSource === 'auto' && configuredCny(model)
   const siteRanges = group ? tokenRanges(model.pricing, true) : []
-  const referenceRanges = tokenRanges(configured ? model.pricing : model.official_pricing, configured)
+  const referenceRanges = referenceSource === 'none' ? [] : tokenRanges(configured ? model.pricing : model.official_pricing, configured)
   const ranges = [...siteRanges, ...referenceRanges]
   const bounds = [...new Set([0, Infinity, ...ranges.flatMap(range => [range.min, range.max])])].sort((a, b) => a - b)
   const rate = effectivePlazaRate(model, group)
@@ -172,6 +175,7 @@ export function getTokenComparisons(model: PlazaModel, group: ModelPlazaGroup | 
         key: `${field}:${min}:${max}${ttl ? `:${ttl}` : ''}`,
         label: ttl ? [label, ttl].filter(Boolean).join(' · ') : label,
         reference: referenceAmount, site: siteAmount,
+        configured: group ? scaled(site?.[priceField], 1, 1_000_000) : null, rate,
         currency: configured ? 'CNY' : 'USD', referenceKind: configured ? 'configured' : 'official',
         comparable: referenceAmount !== null && siteAmount !== null && compatible && model.long_context_basis !== 'marginal',
         billingMode: BILLING_MODE_TOKEN,
@@ -181,7 +185,7 @@ export function getTokenComparisons(model: PlazaModel, group: ModelPlazaGroup | 
     entries.push(entry(field))
     if (field === 'cache_write_price') {
       const differs = (values: TokenValues | null) => values?.cache_write_1h_price != null &&
-        amount(values.cache_write_1h_price) !== null && values.cache_write_1h_price !== values.cache_write_price
+        amount(values.cache_write_1h_price) !== null && (includeEqualCache1h || values.cache_write_1h_price !== values.cache_write_price)
       if (differs(site) || differs(reference)) entries.push(entry('cache_write_1h_price', '1h'))
       // OpenAI's 12h cache is an independent lifetime, never an Anthropic 1h
       // substitute. Compare only explicitly available prices for this lifetime.
@@ -211,23 +215,23 @@ function quoteForLabel(quotes: UnitQuote[], label: string): number | null {
 }
 
 /** Match image sizes / video resolutions, never compare different units. */
-export function getUnitComparisons(model: PlazaModel, group: ModelPlazaGroup | null): PlazaPriceComparison[] {
-  const configured = configuredCny(model)
+export function getUnitComparisons(model: PlazaModel, group: ModelPlazaGroup | null, referenceSource: PlazaReferenceSource = 'auto'): PlazaPriceComparison[] {
+  const configured = referenceSource === 'auto' && configuredCny(model)
   const sitePricing = group ? model.pricing : null
-  const referencePricing = configured ? model.pricing : model.official_pricing
+  const referencePricing = referenceSource === 'none' ? null : configured ? model.pricing : model.official_pricing
   const siteMode = mode(sitePricing), referenceMode = mode(referencePricing)
   const siteQuotes = unitQuotes(sitePricing), referenceQuotes = unitQuotes(referencePricing)
   const rate = effectivePlazaRate(model, group)
   const currency = configured ? 'CNY' as const : 'USD' as const
   const referenceKind = configured ? 'configured' as const : 'official' as const
-  const entry = (label: string, reference: number | null, site: number | null, billingMode: BillingMode, key = label): PlazaPriceComparison => ({
-    key: `${billingMode}:${key}`, label, reference, site, currency, referenceKind,
-    comparable: reference !== null && site !== null && siteMode === referenceMode,
+  const entry = (label: string, reference: number | null, base: number | null, billingMode: BillingMode, key = label): PlazaPriceComparison => ({
+    key: `${billingMode}:${key}`, label, reference, site: scaled(base, rate), configured: base, rate, currency, referenceKind,
+    comparable: reference !== null && scaled(base, rate) !== null && siteMode === referenceMode,
     billingMode
   })
   if (siteQuotes.length && referenceQuotes.length && siteMode !== referenceMode) {
     return [
-      ...siteQuotes.map((quote, index) => entry(quote.label, null, scaled(quote.price, rate), siteMode, `site:${index}`)),
+      ...siteQuotes.map((quote, index) => entry(quote.label, null, quote.price, siteMode, `site:${index}`)),
       ...referenceQuotes.map((quote, index) => entry(quote.label, quote.price, null, referenceMode, `reference:${index}`))
     ]
   }
@@ -237,7 +241,7 @@ export function getUnitComparisons(model: PlazaModel, group: ModelPlazaGroup | n
   return labels.map(label => entry(
     label,
     quoteForLabel(referenceQuotes, label),
-    scaled(quoteForLabel(siteQuotes, label), rate),
+    quoteForLabel(siteQuotes, label),
     siteQuotes.length ? siteMode : referenceMode
   ))
 }
