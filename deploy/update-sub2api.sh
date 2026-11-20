@@ -301,7 +301,7 @@ RUNTIME_VERSION="$(cd "$DEPLOY_DIR" && docker compose -f "$COMPOSE_FILE" run --r
   if [ -d /app/upstream-browser ]; then
     su-exec sub2api test -r /app/upstream-browser/main.mjs
   fi
-  su-exec sub2api /app/sub2api -version
+  su-exec sub2api /app/sub2api --version
 ' 2>&1)"
 printf '%s\n' "$RUNTIME_VERSION"
 printf '%s\n' "$RUNTIME_VERSION" | grep -Fq "commit: $TARGET_COMMIT" || \
