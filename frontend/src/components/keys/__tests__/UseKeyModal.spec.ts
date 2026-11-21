@@ -75,6 +75,33 @@ describe('UseKeyModal', () => {
     wrapper.unmount()
   })
 
+  it('shows the actual image-only catalog without generating text client configuration', () => {
+    const visibleModels = ['gpt-image-2', 'gpt-image-2.5-flare', 'gpt-image-2.5-pro', 'gemini-3.1-flash-image', 'grok-imagine-image']
+    const wrapper = mount(UseKeyModal, {
+      props: { show: true, apiKey: 'sk-fixture', baseUrl: 'https://example.com', platform: 'openai', availableModels: [], availableCodexModels: [], visibleModels },
+      global: { stubs: { BaseDialog: { template: '<div><slot /><slot name="footer" /></div>' }, Icon: { template: '<span />' } } }
+    })
+    const catalog = wrapper.get('[data-testid="non-text-model-catalog"]')
+    expect(catalog.text()).toContain('keys.setupNoTextModels')
+    expect(catalog.findAll('code').map(model => model.text())).toEqual(visibleModels)
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+    expect(wrapper.find('nav[aria-label="Client"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="codex-model-catalog"]').exists()).toBe(false)
+    expect(wrapper.findAll('pre code')).toHaveLength(0)
+    wrapper.unmount()
+  })
+
+  it('shows an accurate empty state for a successfully loaded catalog with no models', () => {
+    const wrapper = mount(UseKeyModal, {
+      props: { show: true, apiKey: 'sk-fixture', baseUrl: 'https://example.com', platform: 'registered-provider', availableModels: [], availableCodexModels: [], visibleModels: [] },
+      global: { stubs: { BaseDialog: { template: '<div><slot /><slot name="footer" /></div>' }, Icon: { template: '<span />' } } }
+    })
+    expect(wrapper.get('[data-testid="non-text-model-catalog"]').text()).toContain('keys.setupNoModels')
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+    expect(wrapper.findAll('pre code')).toHaveLength(0)
+    wrapper.unmount()
+  })
+
   it('does not route a native Antigravity client to a different model family', async () => {
     const wrapper = mount(UseKeyModal, {
       props: { show: true, apiKey: 'sk-fixture', baseUrl: 'https://example.com/v1', platform: 'antigravity', availableModels: ['claude-sonnet-5-5'] },

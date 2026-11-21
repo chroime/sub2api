@@ -133,6 +133,29 @@ func TestRejectConflictingRequestFieldsPassesUnambiguousBodiesUnchanged(t *testi
 	}
 }
 
+func TestRejectConflictingRequestFieldsMetadataKeys(t *testing.T) {
+	for _, path := range []string{"/v1/responses", "/v1/chat/completions", "/v1/messages"} {
+		t.Run(path, func(t *testing.T) {
+			body := `{"model":"gpt-5.2","input":"hello","metadata":{"TraceID":"x","traceid":"y"}}`
+			router, handlerBodies := newRequestFieldConflictTestRouter(allowlistAPIKey(false))
+			w := doJSON(t, router, http.MethodPost, path, body)
+			if w.Code != http.StatusOK || len(*handlerBodies) != 1 || (*handlerBodies)[0] != body {
+				t.Fatalf("custom metadata keys must reach the handler unchanged, got %d: %s; bodies=%v", w.Code, w.Body.String(), *handlerBodies)
+			}
+
+			for _, ambiguous := range []string{
+				`{"metadata":{"TraceID":"x","TraceID":"y"}}`,
+				`{"metadata":{"user_id":"x","USER_ID":"y"}}`,
+			} {
+				w = doJSON(t, router, http.MethodPost, path, ambiguous)
+				if w.Code != http.StatusBadRequest || len(*handlerBodies) != 1 {
+					t.Fatalf("ambiguous metadata must not reach the handler, got %d: %s; bodies=%v", w.Code, w.Body.String(), *handlerBodies)
+				}
+			}
+		})
+	}
+}
+
 func TestRejectConflictingRequestFieldsMultipart(t *testing.T) {
 	send := func(models ...string) *httptest.ResponseRecorder {
 		router, _ := newRequestFieldConflictTestRouter(allowlistAPIKey(false))

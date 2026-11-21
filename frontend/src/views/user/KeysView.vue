@@ -1104,6 +1104,7 @@
       :show="showUseKeyModal"
       :available-models="selectedKeySetupModels"
       :available-codex-models="selectedKeyCodexModels"
+      :visible-models="selectedKeyVisibleModels"
       :api-key="selectedUseKey?.key || ''"
       :base-url="publicSettings?.api_base_url || ''"
       :platform="selectedUseKey ? resolveKeyGroupPlatform(selectedUseKey) : null"
@@ -1494,6 +1495,7 @@ const showResetRateLimitDialog = ref(false)
 const showUseKeyModal = ref(false)
 const selectedKeySetupModels = ref<string[]>()
 const selectedKeyCodexModels = ref<string[]>()
+const selectedKeyVisibleModels = ref<string[]>()
 const selectedUseKey = ref<ApiKey | null>(null)
 let useKeyCatalogRequestID = 0
 let useKeyCatalogController: AbortController | null = null
@@ -1815,11 +1817,27 @@ const openUseKeyModal = async (key: ApiKey) => {
       ])
       if (requestID !== useKeyCatalogRequestID) return
       if (native.status === 'rejected' && codex.status === 'rejected') throw native.reason
-      selectedKeySetupModels.value = native.status === 'fulfilled' ? native.value.modelIds : []
-      selectedKeyCodexModels.value = codex.status === 'fulfilled' ? codex.value.modelIds : []
+      const nativeModels = native.status === 'fulfilled' ? native.value.modelIds : []
+      const codexModels = codex.status === 'fulfilled' ? codex.value.modelIds : []
+      let visibleModels = [...new Set([
+        ...(native.status === 'fulfilled' ? native.value.visibleModelIds : []),
+        ...(codex.status === 'fulfilled' ? codex.value.visibleModelIds : [])
+      ])]
+      if (!nativeModels.length && !codexModels.length) {
+        // Protocol catalogs can omit media models. Load the key's full list for display only.
+        try {
+          const catalog = await fetchClientSetupCatalog(resolveApiBaseUrl(), key.key, controller.signal, 'all')
+          visibleModels = catalog.visibleModelIds
+        } catch { /* Retain the successfully loaded protocol catalogs. */ }
+      }
+      if (requestID !== useKeyCatalogRequestID) return
+      selectedKeySetupModels.value = nativeModels
+      selectedKeyCodexModels.value = codexModels
+      selectedKeyVisibleModels.value = visibleModels
     } else {
       selectedKeySetupModels.value = undefined
       selectedKeyCodexModels.value = undefined
+      selectedKeyVisibleModels.value = undefined
     }
     selectedUseKey.value = key
     showUseKeyModal.value = true

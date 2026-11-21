@@ -66,6 +66,11 @@ dockers:
     extra_files:
       - deploy/docker-entrypoint.sh
       - backend/resources
+      - tools/upstream-browser/package.json
+      - tools/upstream-browser/package-lock.json
+      - tools/upstream-browser/main.mjs
+      - tools/upstream-browser/runtime.mjs
+      - tools/upstream-browser/contract.mjs
     build_flag_templates:
       - "--platform=linux/amd64"
       - "--label=org.opencontainers.image.version={{ .Version }}"
@@ -82,6 +87,11 @@ dockers:
     extra_files:
       - deploy/docker-entrypoint.sh
       - backend/resources
+      - tools/upstream-browser/package.json
+      - tools/upstream-browser/package-lock.json
+      - tools/upstream-browser/main.mjs
+      - tools/upstream-browser/runtime.mjs
+      - tools/upstream-browser/contract.mjs
     build_flag_templates:
       - "--platform=linux/arm64"
       - "--label=org.opencontainers.image.version={{ .Version }}"
@@ -98,6 +108,11 @@ dockers:
     extra_files:
       - deploy/docker-entrypoint.sh
       - backend/resources
+      - tools/upstream-browser/package.json
+      - tools/upstream-browser/package-lock.json
+      - tools/upstream-browser/main.mjs
+      - tools/upstream-browser/runtime.mjs
+      - tools/upstream-browser/contract.mjs
     build_flag_templates:
       - "--platform=linux/amd64"
       - "--label=org.opencontainers.image.version={{ .Version }}"
@@ -114,6 +129,11 @@ dockers:
     extra_files:
       - deploy/docker-entrypoint.sh
       - backend/resources
+      - tools/upstream-browser/package.json
+      - tools/upstream-browser/package-lock.json
+      - tools/upstream-browser/main.mjs
+      - tools/upstream-browser/runtime.mjs
+      - tools/upstream-browser/contract.mjs
     build_flag_templates:
       - "--platform=linux/arm64"
       - "--label=org.opencontainers.image.version={{ .Version }}"

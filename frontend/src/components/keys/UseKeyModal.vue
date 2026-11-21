@@ -24,12 +24,29 @@
       <!-- Platform-specific content -->
       <template v-else>
         <!-- Description -->
-        <p class="text-sm text-gray-600 dark:text-gray-400">
+        <p v-if="!catalogWithoutTextModels" class="text-sm text-gray-600 dark:text-gray-400">
           {{ platformDescription }}
         </p>
 
+        <section
+          v-if="catalogWithoutTextModels"
+          data-testid="non-text-model-catalog"
+          role="status"
+          class="rounded-lg border border-blue-100 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20"
+        >
+          <p class="text-sm leading-6 text-blue-800 dark:text-blue-200">
+            {{ t(visibleModels?.length ? 'keys.setupNoTextModels' : 'keys.setupNoModels') }}
+          </p>
+          <template v-if="visibleModels?.length">
+            <h3 class="mt-4 text-sm font-medium text-gray-900 dark:text-white">{{ t('keys.setupAvailableModels') }}</h3>
+            <ul class="mt-2 space-y-1 text-sm text-gray-700 dark:text-gray-300">
+              <li v-for="model in visibleModels" :key="model"><code class="break-all">{{ model }}</code></li>
+            </ul>
+          </template>
+        </section>
+
         <!-- Client Tabs -->
-        <div v-if="clientTabs.length" class="overflow-x-auto border-b border-gray-200 dark:border-dark-700">
+        <div v-if="!catalogWithoutTextModels && clientTabs.length" class="overflow-x-auto border-b border-gray-200 dark:border-dark-700">
           <nav class="-mb-px flex min-w-max gap-4 sm:gap-6" aria-label="Client">
             <button
               v-for="tab in clientTabs"
@@ -136,7 +153,7 @@
         <p v-if="currentFilesResult.error" role="alert" class="text-sm text-red-600 dark:text-red-400">{{ currentFilesResult.error }}</p>
 
         <!-- Code Blocks (Stacked for multi-file platforms) -->
-        <div class="space-y-4">
+        <div v-if="!catalogWithoutTextModels" class="space-y-4">
           <div
             v-for="(file, index) in currentFiles"
             :key="index"
@@ -279,7 +296,7 @@ import { useClipboard } from '@/composables/useClipboard'
 import { buildCodexModelCatalogUrl, fetchCodexModelsManifest } from '@/api/codex'
 import type { GroupPlatform } from '@/types'
 import { buildCodexApiKeyAuthConfig } from '@/utils/codexAuthConfig'
-import { ClientSetupModelUnavailableError, CLIENT_SETUP_DEFAULT_MODELS, clientV1BaseUrl, normalizeClientBaseUrl, selectClientSetupModel } from '@/utils/clientSetupModels'
+import { ClientSetupModelUnavailableError, CLIENT_SETUP_DEFAULT_MODELS, clientV1BaseUrl, isClientSetupTextModel, normalizeClientBaseUrl, selectClientSetupModel } from '@/utils/clientSetupModels'
 import {
   findCodexCatalogModel,
   formatCodexReasoningEffortTomlLine,
@@ -296,6 +313,7 @@ interface Props {
   allowMessagesDispatch?: boolean
   availableModels?: readonly string[]
   availableCodexModels?: readonly string[]
+  visibleModels?: readonly string[]
 }
 
 interface Emits {
@@ -325,6 +343,10 @@ const { copyToClipboard: clipboardCopy } = useClipboard()
 const copiedIndex = ref<number | null>(null)
 const activeTab = ref<string>('unix')
 const activeClientTab = ref<string>('claude')
+const catalogWithoutTextModels = computed(() => props.visibleModels !== undefined &&
+  !props.visibleModels.some(isClientSetupTextModel) &&
+  !props.availableModels?.some(isClientSetupTextModel) &&
+  !props.availableCodexModels?.some(isClientSetupTextModel))
 type CodexAuthMode = 'legacy' | 'api-key'
 const codexAuthMode = ref<CodexAuthMode>('api-key')
 type CodexModelManifestState = 'idle' | 'loading' | 'ready' | 'error'
@@ -342,7 +364,7 @@ let codexModelManifestController: AbortController | null = null
 let codexModelManifestRequestID = 0
 
 const showCodexModelCatalog = computed(() =>
-  props.show &&
+  props.show && !catalogWithoutTextModels.value &&
   (activeClientTab.value === 'codex' ||
     (props.platform === 'openai' && activeClientTab.value === 'codex-ws'))
 )
@@ -524,10 +546,10 @@ const openaiTabs: TabConfig[] = [
   { id: 'windows', label: 'Windows', icon: WindowsIcon }
 ]
 
-const showShellTabs = computed(() => activeClientTab.value !== 'opencode')
+const showShellTabs = computed(() => !catalogWithoutTextModels.value && activeClientTab.value !== 'opencode')
 
 const showCodexAuthMode = computed(() =>
-  props.platform === 'openai' &&
+  !catalogWithoutTextModels.value && props.platform === 'openai' &&
   (activeClientTab.value === 'codex' || activeClientTab.value === 'codex-ws')
 )
 
@@ -644,7 +666,7 @@ const platformNote = computed(() => {
   }
 })
 
-const showPlatformNote = computed(() => activeClientTab.value !== 'opencode')
+const showPlatformNote = computed(() => !catalogWithoutTextModels.value && activeClientTab.value !== 'opencode')
 
 function resetCodexModelManifest() {
   codexModelManifestController?.abort()
@@ -817,6 +839,7 @@ function generateCurrentFiles(): FileConfig[] {
 }
 
 const currentFilesResult = computed(() => {
+  if (catalogWithoutTextModels.value) return { files: [], error: '' }
   try {
     return { files: generateCurrentFiles(), error: '' }
   } catch (error) {

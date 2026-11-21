@@ -94,6 +94,34 @@ func TestConflictingFieldJSONAcceptsUnambiguousBodies(t *testing.T) {
 	}
 }
 
+func TestConflictingFieldMetadataPreservesCustomKeysAndTypedUserID(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		want string
+	}{
+		{name: "distinct custom keys", body: `{"model":"gpt-5.2","metadata":{"TraceID":"x","traceid":"y"}}`},
+		{name: "escaped custom key", body: `{"metadata":{"TraceID":"x","trace\u0069d":"y"}}`},
+		{name: "nested custom values", body: `{"metadata":{"context":{"Model":"a","model":"b"}}}`},
+		{name: "exact duplicate custom key", body: `{"metadata":{"TraceID":"x","TraceID":"y"}}`, want: "metadata.TraceID"},
+		{name: "escaped duplicate custom key", body: `{"metadata":{"TraceID":"x","Trace\u0049D":"y"}}`, want: "metadata.TraceID"},
+		{name: "typed user ID aliases", body: `{"metadata":{"user_id":"x","USER_ID":"y"}}`, want: "metadata.USER_ID"},
+		{name: "typed user ID aliases reversed", body: `{"metadata":{"USER_ID":"x","user_id":"y"}}`, want: "metadata.user_id"},
+		{name: "escaped typed user ID alias", body: `{"metadata":{"user_id":"x","U\u0053ER_ID":"y"}}`, want: "metadata.USER_ID"},
+		{name: "Unicode typed user ID alias", body: `{"metadata":{"user_id":"x","uſer_id":"y"}}`, want: "metadata.uſer_id"},
+		{name: "typed user ID after custom case variants", body: `{"metadata":{"TraceID":"x","traceid":"y","user_id":"x","USER_ID":"y"}}`, want: "metadata.USER_ID"},
+		{name: "metadata inside freeform tool input", body: `{"messages":[{"content":[{"type":"tool_use","input":{"metadata":{"user_id":"x","USER_ID":"y"}}}]}]}`},
+		{name: "typed fields outside metadata", body: `{"metadata":{"TraceID":"x","traceid":"y"},"reasoning":{"effort":"low","Effort":"high"}}`, want: "reasoning.Effort"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, conflict := ConflictingField("application/json", []byte(tt.body))
+			require.Equal(t, tt.want != "", conflict, got)
+			require.Equal(t, tt.want, got)
+		})
+	}
+}
+
 // 回归：JSON handler 不看 Content-Type，把 JSON 请求体标成 multipart 不能绕过检查。
 func TestConflictingFieldIgnoresMultipartLabelOnJSONBody(t *testing.T) {
 	body := []byte(`{"model":"claude-3-5-haiku-20241022","messages":[],"model":"claude-opus-4-8"}`)

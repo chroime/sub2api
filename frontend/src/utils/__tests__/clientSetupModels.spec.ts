@@ -58,6 +58,28 @@ describe('client setup model selection', () => {
     expect(fetch).toHaveBeenCalledWith(expect.stringMatching(/^https:\/\/example\.com\/v1\/models\?/), expect.objectContaining({ method: 'GET', cache: 'no-store', headers: { Accept: 'application/json', Authorization: 'Bearer sk-fixture' } }))
   })
 
+  it.each(['standard', 'manifest'])('preserves a successful image-only %s catalog without offering text configuration models', async format => {
+    const ids = ['gpt-image-2', 'gpt-image-2.5-flare', 'gpt-image-2.5-pro', 'gemini-3.1-flash-image', 'grok-imagine-image']
+    const payload = format === 'manifest' ? { models: ids.map(slug => ({ slug })) } : { data: ids.map(id => ({ id })) }
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, text: async () => JSON.stringify(payload) }))
+    const catalog = await fetchClientSetupCatalog('https://example.com', 'sk-fixture')
+    expect(catalog.visibleModelIds).toEqual(ids)
+    expect(catalog.modelIds).toEqual([])
+    expect(() => selectClientSetupModel('openai', catalog.modelIds)).toThrow(ClientSetupModelUnavailableError)
+  })
+
+  it('accepts a successfully loaded empty model list without inventing availability', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, text: async () => '{"data":[]}' }))
+    const catalog = await fetchClientSetupCatalog('https://example.com', 'sk-fixture')
+    expect(catalog).toMatchObject({ modelIds: [], visibleModelIds: [] })
+    expect(() => selectClientSetupModel('registered-provider', catalog.modelIds)).toThrow(ClientSetupModelUnavailableError)
+  })
+
+  it('rejects a successful response that is not a model catalog', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, text: async () => '{"unexpected":[]}' }))
+    await expect(fetchClientSetupCatalog('https://example.com', 'sk-fixture')).rejects.toThrow()
+  })
+
   it('uses the same models endpoint when the configured URL includes /v1beta', async () => {
     const fetch = vi.fn().mockResolvedValue({ ok: true, text: async () => '{"data":[{"id":"gemini-3.8-flash"}]}' })
     vi.stubGlobal('fetch', fetch)

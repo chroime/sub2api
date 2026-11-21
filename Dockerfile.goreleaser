@@ -5,12 +5,27 @@
 # It only packages the pre-built binary, no compilation needed.
 # =============================================================================
 
+ARG NODE_IMAGE=node:24-alpine
 ARG ALPINE_IMAGE=alpine:3.21
 ARG POSTGRES_IMAGE=postgres:18-alpine
+ARG NPM_CONFIG_REGISTRY=
+
+# Match the source image's browser helper without downloading a second browser.
+# playwright-core is pure JavaScript, so install it on the build host platform.
+FROM --platform=${BUILDPLATFORM} ${NODE_IMAGE} AS browser-helper
+ARG NPM_CONFIG_REGISTRY
+WORKDIR /opt/upstream-browser
+COPY tools/upstream-browser/package.json tools/upstream-browser/package-lock.json ./
+RUN if [ -n "${NPM_CONFIG_REGISTRY}" ]; then npm config set registry "${NPM_CONFIG_REGISTRY}"; fi && \
+    npm ci --omit=dev --ignore-scripts --no-audit --no-fund
+COPY tools/upstream-browser/main.mjs tools/upstream-browser/runtime.mjs tools/upstream-browser/contract.mjs ./
 
 FROM ${POSTGRES_IMAGE} AS pg-client
 
 FROM ${ALPINE_IMAGE}
+
+# Keep the source image's explicit slim-image opt-out.
+ARG INSTALL_UPSTREAM_BROWSER=true
 
 LABEL maintainer="Wei-Shaw <github.com/Wei-Shaw>"
 LABEL description="Sub2API - AI API Gateway Platform"
@@ -30,6 +45,14 @@ RUN apk add --no-cache \
     libedit \
     && rm -rf /var/cache/apk/*
 
+RUN if [ "${INSTALL_UPSTREAM_BROWSER}" = "true" ]; then \
+        apk add --no-cache nodejs chromium xvfb ttf-freefont font-noto && \
+        CHROMIUM_BIN="$(command -v chromium-browser || command -v chromium)" && \
+        test -n "${CHROMIUM_BIN}" && ln -s "${CHROMIUM_BIN}" /usr/local/bin/sub2api-chromium && \
+        mkdir -p /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix && \
+        rm -rf /var/cache/apk/*; \
+    fi
+
 # Copy pg_dump and psql from a version-matched PostgreSQL image so backup and
 # restore work in the runtime container without requiring Docker socket access.
 COPY --from=pg-client /usr/local/bin/pg_dump /usr/local/bin/pg_dump
@@ -46,8 +69,15 @@ WORKDIR /app
 COPY sub2api /app/sub2api
 COPY --chown=sub2api:sub2api backend/resources /app/resources
 
+# The service user must read the root-owned helper even from a private checkout.
+COPY --from=browser-helper /opt/upstream-browser /app/upstream-browser
+RUN chmod -R a+rX /app/upstream-browser
+ENV GOVERNANCE_BROWSER_NODE=/usr/bin/node \
+    GOVERNANCE_BROWSER_SCRIPT=/app/upstream-browser/main.mjs \
+    GOVERNANCE_BROWSER_EXECUTABLE=/usr/local/bin/sub2api-chromium
+
 # Create data directory
-RUN mkdir -p /app/data && chown -R sub2api:sub2api /app
+RUN mkdir -p /app/data && chown sub2api:sub2api /app/sub2api /app/data
 
 # Copy entrypoint script (fixes volume permissions then drops to sub2api)
 COPY deploy/docker-entrypoint.sh /app/docker-entrypoint.sh

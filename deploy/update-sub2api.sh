@@ -146,7 +146,7 @@ if [[ -z "$IMAGE" ]]; then
 fi
 [[ -n "$IMAGE" ]] || fail "could not determine the current image for service: $SERVICE (set IMAGE explicitly)"
 [[ "$IMAGE" != sha256:* ]] || fail "current image is digest-only; set IMAGE to a writable tag before updating"
-[[ -f "$APP_DIR/deploy/Dockerfile" ]] || fail "application Dockerfile not found: $APP_DIR/deploy/Dockerfile"
+[[ -f "$APP_DIR/Dockerfile" ]] || fail "application Dockerfile not found: $APP_DIR/Dockerfile"
 
 if [[ -n "$(git -C "$APP_DIR" status --porcelain)" ]]; then
   fail "application checkout has uncommitted changes: $APP_DIR"
@@ -289,7 +289,7 @@ if [[ -n "${VERSION:-}" ]]; then
   BUILD_ARGS+=(--build-arg "VERSION=$VERSION")
   BUILD_LABELS+=(--label "org.opencontainers.image.version=$VERSION")
 fi
-docker build --pull=false -t "$IMAGE" -f "$APP_DIR/deploy/Dockerfile" "${BUILD_ARGS[@]}" "${BUILD_LABELS[@]}" "$APP_DIR"
+docker build --pull=false -t "$IMAGE" -f "$APP_DIR/Dockerfile" "${BUILD_ARGS[@]}" "${BUILD_LABELS[@]}" "$APP_DIR"
 
 # Validate access after dropping privileges before replacing the running service.
 # No entrypoint is invoked, no service ports are published and no dependencies

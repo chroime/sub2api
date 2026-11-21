@@ -119,6 +119,9 @@ export default {
     copied: 'Copied!',
     importToCcSwitch: 'Import to CCS',
     setupModelUnavailable: 'This API key does not offer the required model ({model} or a supported newer version). Ask your administrator to enable it, then try again.',
+    setupNoTextModels: 'The model catalog loaded successfully. These models provide specialized capabilities such as image generation and cannot configure these text clients. Use a client that supports the corresponding capability.',
+    setupNoModels: 'The model catalog loaded successfully, but this API key has no available models. Ask your administrator to check its group and model permissions.',
+    setupAvailableModels: 'Models available to this API key',
     setupSystemOneOnly: 'TypeSafe uses /v1/systemone and cannot be imported into these chat clients. Click Use Key for its supported request example.',
     quickSetup: 'Quick Setup',
     quickSetupPlatforms: {

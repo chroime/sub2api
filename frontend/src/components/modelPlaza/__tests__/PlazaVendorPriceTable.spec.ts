@@ -3,6 +3,9 @@ import { mount } from '@vue/test-utils'
 import PlazaVendorPriceTable from '../PlazaVendorPriceTable.vue'
 import type { ModelPlazaGroup, PlazaModel, PlazaPricingSource } from '@/api/modelPlaza'
 
+const { copyToClipboard } = vi.hoisted(() => ({ copyToClipboard: vi.fn() }))
+vi.mock('@/composables/useClipboard', () => ({ useClipboard: () => ({ copyToClipboard }) }))
+
 vi.mock('vue-i18n', async () => {
   const actual = await vi.importActual<typeof import('vue-i18n')>('vue-i18n')
   return {
@@ -64,6 +67,21 @@ function mountTable(models: PlazaModel[], g: ModelPlazaGroup | null = group({ ra
     props: { models, group: g, caption: 'test' }
   })
 }
+
+describe('PlazaVendorPriceTable model ID copy', () => {
+  it.each([false, true])('copies the selected model ID from its accessible row action (group=%s)', async selectedGroup => {
+    copyToClipboard.mockClear()
+    const models = [tokenModel(), tokenModel({ name: 'gpt-6.1-terra', platform: 'openai' })]
+    const wrapper = mountTable(models, selectedGroup ? group() : null)
+    const buttons = wrapper.findAll('[data-copy-model-id]')
+    expect(buttons).toHaveLength(models.length)
+    expect(buttons[1].attributes('type')).toBe('button')
+    expect(buttons[1].attributes('aria-label')).toContain(models[1].name)
+    await buttons[1].trigger('click')
+    expect(copyToClipboard).toHaveBeenCalledOnce()
+    expect(copyToClipboard).toHaveBeenCalledWith(models[1].name)
+  })
+})
 
 describe('PlazaVendorPriceTable 本站价与官方价', () => {
   it('直接在表格显示实付与小字基础参考价，移除详情入口与弹窗', () => {

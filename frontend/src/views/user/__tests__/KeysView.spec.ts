@@ -643,6 +643,100 @@ describe('user KeysView column settings', () => {
     click.mockRestore()
   })
 
+  it('opens Use Key with the complete image catalog when both text protocol catalogs are empty', async () => {
+    const visibleModels = ['gpt-image-2', 'gpt-image-2.5-flare', 'gpt-image-2.5-pro', 'gemini-3.1-flash-image', 'grok-imagine-image']
+    listKeys.mockResolvedValue({ items: [createApiKey({ group_id: 7, group: { id: 7, name: 'Image generation', platform: 'openai' } as ApiKey['group'] })], total: 1 })
+    vi.mocked(fetch).mockImplementation(async url => ({
+      ok: true,
+      text: async () => JSON.stringify(String(url).includes('client_version=') ? { models: [] }
+        : String(url).includes('endpoint=messages') ? { data: [] } : { data: visibleModels.map(id => ({ id })) })
+    } as Response))
+    const wrapper = await mountView()
+    await getButtonByText(wrapper, 'Use Key').trigger('click')
+    await flushPromises()
+    const modal = wrapper.findComponent({ name: 'UseKeyModal' })
+    expect(modal.props('show')).toBe(true)
+    expect(modal.props('availableModels')).toEqual([])
+    expect(modal.props('availableCodexModels')).toEqual([])
+    expect(modal.props('visibleModels')).toEqual(visibleModels)
+    expect(showError).not.toHaveBeenCalled()
+    expect(fetch).toHaveBeenCalledWith(expect.stringMatching(/\/v1\/models$/), expect.objectContaining({ headers: expect.objectContaining({ Authorization: `Bearer ${createApiKey().key}` }) }))
+  })
+
+  it('opens a successful empty model catalog without a fetch failure', async () => {
+    vi.mocked(fetch).mockResolvedValue({ ok: true, text: async () => '{"data":[]}' } as Response)
+    const wrapper = await mountView()
+    await getButtonByText(wrapper, 'Use Key').trigger('click')
+    await flushPromises()
+    const modal = wrapper.findComponent({ name: 'UseKeyModal' })
+    expect(modal.props('show')).toBe(true)
+    expect(modal.props('visibleModels')).toEqual([])
+    expect(showError).not.toHaveBeenCalled()
+  })
+
+  it('keeps image models visible while passing only text models to mixed-catalog client configuration', async () => {
+    vi.mocked(fetch).mockResolvedValue({ ok: true, text: async () => '{"data":[{"id":"gpt-image-2"},{"id":"gpt-6.1-sol"}]}' } as Response)
+    const wrapper = await mountView()
+    await getButtonByText(wrapper, 'Use Key').trigger('click')
+    await flushPromises()
+    const modal = wrapper.findComponent({ name: 'UseKeyModal' })
+    expect(modal.props('availableModels')).toEqual(['gpt-6.1-sol'])
+    expect(modal.props('availableCodexModels')).toEqual(['gpt-6.1-sol'])
+    expect(modal.props('visibleModels')).toEqual(['gpt-image-2', 'gpt-6.1-sol'])
+    expect(fetch).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps genuine catalog request failures as errors', async () => {
+    vi.mocked(fetch).mockRejectedValue(new Error('network unavailable'))
+    const wrapper = await mountView()
+    await getButtonByText(wrapper, 'Use Key').trigger('click')
+    await flushPromises()
+    expect(wrapper.findComponent({ name: 'UseKeyModal' }).props('show')).toBe(false)
+    expect(showError).toHaveBeenCalledWith('keys.useKeyModal.codexModelCatalog.errorDescription')
+  })
+
+  it('ignores an older full media catalog after a different key is selected', async () => {
+    listKeys.mockResolvedValue({ items: [createApiKey({ id: 1, key: 'sk-first' }), createApiKey({ id: 2, key: 'sk-second' })], total: 2 })
+    let finishFirst!: (response: Response) => void
+    vi.mocked(fetch).mockImplementation(async (url, options) => {
+      if ((options?.headers as Record<string, string>).Authorization === 'Bearer sk-first') {
+        if (!String(url).includes('?')) return new Promise(resolve => { finishFirst = resolve })
+        return { ok: true, text: async () => '{"data":[]}' } as Response
+      }
+      return { ok: true, text: async () => '{"data":[{"id":"gpt-6.1-sol"}]}' } as Response
+    })
+    const wrapper = await mountView()
+    const buttons = wrapper.findAll('button').filter(button => button.text().includes('Use Key'))
+    await buttons[0].trigger('click')
+    await flushPromises()
+    await buttons[2].trigger('click')
+    await flushPromises()
+    finishFirst({ ok: true, text: async () => '{"data":[{"id":"gpt-image-2"}]}' } as Response)
+    await flushPromises()
+    const modal = wrapper.findComponent({ name: 'UseKeyModal' })
+    expect(modal.props('apiKey')).toBe('sk-second')
+    expect(modal.props('availableModels')).toEqual(['gpt-6.1-sol'])
+    expect(modal.props('visibleModels')).toEqual(['gpt-6.1-sol'])
+  })
+
+  it.each(['quick-setup', 'ccs'])('refuses image-only text client %s without calling it a catalog fetch failure', async action => {
+    vi.mocked(fetch).mockResolvedValue({ ok: true, text: async () => '{"data":[{"id":"gpt-image-2"},{"id":"gemini-3.1-flash-image"}]}' } as Response)
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null)
+    const wrapper = await mountView()
+    if (action === 'quick-setup') {
+      await getButtonByText(wrapper, 'Quick Setup').trigger('click')
+      await getButtonByText(wrapper, 'Linux').trigger('click')
+    } else await getButtonByText(wrapper, 'Import to CCS').trigger('click')
+    await flushPromises()
+    expect(click).not.toHaveBeenCalled()
+    expect(open).not.toHaveBeenCalled()
+    expect(showError).toHaveBeenCalledWith('keys.setupModelUnavailable')
+    expect(showError).not.toHaveBeenCalledWith('keys.useKeyModal.codexModelCatalog.errorDescription')
+    click.mockRestore()
+    open.mockRestore()
+  })
+
   it('keeps a delayed Use Key catalog response separate from editing another key', async () => {
     const first = createApiKey({ id: 1, name: 'first', key: 'sk-first', group_id: 7 })
     const second = createApiKey({ id: 2, name: 'second', key: 'sk-second', group_id: 7 })
@@ -706,14 +800,14 @@ describe('user KeysView column settings', () => {
     open.mockRestore()
   })
 
-  it('does not import a CC Switch provider with an empty model catalog', async () => {
+  it('does not import a CC Switch provider with a successfully loaded empty model catalog', async () => {
     vi.mocked(fetch).mockResolvedValueOnce({ ok: true, text: async () => '{"data":[]}' } as Response)
     const open = vi.spyOn(window, 'open').mockImplementation(() => null)
     const wrapper = await mountView()
     await getButtonByText(wrapper, 'Import to CCS').trigger('click')
     await flushPromises()
     expect(open).not.toHaveBeenCalled()
-    expect(showError).toHaveBeenCalledWith('keys.useKeyModal.codexModelCatalog.errorDescription')
+    expect(showError).toHaveBeenCalledWith('keys.setupModelUnavailable')
     open.mockRestore()
   })
 

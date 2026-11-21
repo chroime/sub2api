@@ -16,6 +16,14 @@ FRONTEND_CRITICAL_VITEST := \
 	src/components/account/__tests__/EditAccountModal.spec.ts \
 	src/components/account/__tests__/credentialsBuilder.spec.ts \
 	src/components/account/__tests__/OpenCodeGoProtocolRulesEditor.spec.ts \
+	src/components/account/__tests__/AccountUsageCell.spec.ts \
+	src/components/account/__tests__/BulkEditAccountModal.spec.ts \
+	src/views/admin/__tests__/AccountsView.lite.spec.ts \
+	src/components/modelPlaza/__tests__/ModelPlazaContent.spec.ts \
+	src/components/modelPlaza/__tests__/PlazaVendorPriceTable.spec.ts \
+	src/composables/__tests__/useGroupMonitorStatus.spec.ts \
+	src/components/admin/monitor/__tests__/MonitorFormDialog.streaming.spec.ts \
+	src/views/admin/account-quality/AccountQualityView.reference.spec.ts \
 	src/components/keys/__tests__/BulkEditKeysModal.spec.ts \
 	src/components/admin/user/__tests__/UserPlatformQuotaModal.spec.ts \
 	src/views/user/__tests__/KeysView.spec.ts \

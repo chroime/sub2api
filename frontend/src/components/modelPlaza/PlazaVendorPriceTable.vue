@@ -31,6 +31,16 @@
             <div class="flex items-start gap-2">
               <ModelIcon :model="model.name" size="16px" class="mt-0.5 shrink-0" />
               <span class="break-words font-mono text-sm font-semibold text-gray-900 dark:text-white [overflow-wrap:anywhere]">{{ model.name }}</span>
+              <button
+                type="button"
+                class="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:text-dark-300 dark:hover:bg-dark-700 dark:hover:text-primary-400"
+                :title="t('modelPlaza.table.copyModelId', { model: model.name })"
+                :aria-label="t('modelPlaza.table.copyModelId', { model: model.name })"
+                data-copy-model-id
+                @click="copyToClipboard(model.name)"
+              >
+                <Icon name="copy" size="sm" aria-hidden="true" />
+              </button>
             </div>
             <div v-if="group && hasPricingRules(model)" class="mt-2 max-w-[11rem] space-y-1.5 break-words whitespace-normal text-xs leading-5" data-pricing-rules>
               <p v-if="model.long_context_basis === 'marginal'" class="rounded-md bg-violet-50 px-2 py-1 text-violet-700 dark:bg-violet-500/10 dark:text-violet-300" data-marginal-pricing>
@@ -96,6 +106,8 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ModelIcon from '@/components/common/ModelIcon.vue'
+import Icon from '@/components/icons/Icon.vue'
+import { useClipboard } from '@/composables/useClipboard'
 import {
   getTokenComparisons, getUnitComparisons, getPlazaPayableComparison,
   PLAZA_REFERENCE_USD_TO_CNY, PLAZA_CNY_PER_USD_CREDIT, type PlazaPriceComparison, type TokenPriceField
@@ -114,6 +126,7 @@ const props = defineProps<{
   peakWindow?: string
 }>()
 const { t } = useI18n()
+const { copyToClipboard } = useClipboard()
 const TOKEN_FIELDS = ['input_price', 'output_price', 'cache_read_price', 'cache_write_price'] as const
 
 interface PriceRow {

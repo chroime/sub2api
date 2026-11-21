@@ -115,11 +115,61 @@ class ReleaseMatrixTest(unittest.TestCase):
         Path('deploy/docker-entrypoint.sh').write_text('#!/bin/sh\nexec /app/sub2api\n')
         Path('backend/resources').mkdir()
         Path('backend/resources/data').write_text('fixture')
+        self.fixture_browser_helper()
         release.contexts(args)
         for arch in ('amd64', 'arm64'):
             binary = Path('contexts') / arch / 'sub2api'
             self.assertEqual(binary.read_bytes(), b'fixture')
             self.assertEqual(binary.stat().st_mode & 0o777, 0o755)
+
+    def fixture_browser_helper(self):
+        helper = Path('tools/upstream-browser')
+        helper.mkdir(parents=True)
+        names = ('package.json', 'package-lock.json', 'main.mjs', 'runtime.mjs', 'contract.mjs')
+        for name in names:
+            shutil.copyfile(ROOT / helper / name, helper / name)
+        return helper, names
+
+    def assert_context_browser_runtime(self, simple):
+        args = self.fixture_artifacts(simple)
+        shutil.copyfile(ROOT / 'Dockerfile.goreleaser', 'Dockerfile.goreleaser')
+        Path('deploy').mkdir()
+        shutil.copyfile(ROOT / 'deploy/docker-entrypoint.sh', 'deploy/docker-entrypoint.sh')
+        Path('backend/resources').mkdir()
+        Path('backend/resources/data').write_text('fixture')
+        helper, names = self.fixture_browser_helper()
+        (helper / 'node_modules').mkdir()
+        (helper / 'node_modules/development-only.js').write_text('not a runtime source')
+        (helper / 'local-session.json').write_text('not a release asset')
+
+        release.contexts(args)
+
+        arches = ['amd64'] if simple else ['amd64', 'arm64']
+        self.assertEqual(sorted(path.name for path in Path(args.output).iterdir()), arches)
+        for arch in arches:
+            context = Path(args.output) / arch
+            with self.subTest(simple=simple, arch=arch):
+                self.assertEqual((context / 'Dockerfile').read_bytes(), Path('Dockerfile.goreleaser').read_bytes())
+                actual = context / helper
+                self.assertTrue(actual.is_dir(), 'release context must package the browser authorization helper')
+                self.assertEqual(sorted(path.name for path in actual.iterdir()), sorted(names))
+                for name in names:
+                    self.assertEqual((actual / name).read_bytes(), (helper / name).read_bytes())
+
+    def test_full_linux_contexts_package_browser_runtime_sources(self):
+        self.assert_context_browser_runtime(False)
+
+    def test_simple_linux_context_packages_browser_runtime_sources(self):
+        self.assert_context_browser_runtime(True)
+
+    def test_direct_goreleaser_images_include_browser_runtime_sources(self):
+        expected = {f'tools/upstream-browser/{name}' for name in
+                    ('package.json', 'package-lock.json', 'main.mjs', 'runtime.mjs', 'contract.mjs')}
+        for simple in (False, True):
+            for image in release.config(simple)['dockers']:
+                with self.subTest(simple=simple, image=image['id']):
+                    self.assertTrue(expected.issubset(image['extra_files']),
+                                    'direct GoReleaser image contexts must preserve browser authorization')
 
     def test_plan_requires_a_tag_for_publication(self):
         args = argparse.Namespace(ref='main', dry_run=False, simple=False)

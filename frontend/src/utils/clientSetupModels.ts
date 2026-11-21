@@ -33,7 +33,7 @@ export function isClientSetupTextModel(model: string): boolean {
 
 export class ClientSetupModelUnavailableError extends Error {}
 
-export function clientSetupModelIds(payload: unknown): string[] {
+function visibleClientSetupModelIds(payload: unknown): string[] {
   if (!payload || typeof payload !== 'object') return []
   const value = payload as { models?: unknown; data?: unknown }
   const entries = Array.isArray(value.models) ? value.models : Array.isArray(value.data) ? value.data : []
@@ -41,8 +41,12 @@ export function clientSetupModelIds(payload: unknown): string[] {
     if (!entry || typeof entry !== 'object') return []
     const model = entry as { slug?: unknown; id?: unknown }
     const id = typeof model.slug === 'string' ? model.slug.trim() : typeof model.id === 'string' ? model.id.trim() : ''
-    return isClientSetupTextModel(id) ? [id] : []
+    return id ? [id] : []
   }))]
+}
+
+export function clientSetupModelIds(payload: unknown): string[] {
+  return visibleClientSetupModelIds(payload).filter(isClientSetupTextModel)
 }
 
 /** An absent catalog permits a documented example default; a loaded empty one fails closed. */
@@ -86,14 +90,18 @@ export function selectClientSetupModel(
 }
 
 export interface ClientSetupCatalog {
+  /** Models suitable for text client configuration only. */
   modelIds: string[]
+  /** All IDs returned by this catalog, including media and other specialized models. */
+  visibleModelIds: string[]
   manifestContent: string
   responseBytes: number
 }
 
-export async function fetchClientSetupCatalog(baseUrl: string, apiKey: string, signal?: AbortSignal, protocol: 'native' | 'responses' = 'responses'): Promise<ClientSetupCatalog> {
+export async function fetchClientSetupCatalog(baseUrl: string, apiKey: string, signal?: AbortSignal, protocol: 'native' | 'responses' | 'all' = 'responses'): Promise<ClientSetupCatalog> {
   const root = normalizeClientBaseUrl(baseUrl)
-  const url = protocol === 'native' ? `${buildCodexModelCatalogUrl(root)}?endpoint=messages` : buildCodexModelsManifestUrl(root)
+  const url = protocol === 'all' ? buildCodexModelCatalogUrl(root)
+    : protocol === 'native' ? `${buildCodexModelCatalogUrl(root)}?endpoint=messages` : buildCodexModelsManifestUrl(root)
   const response = await fetch(url, {
     method: 'GET',
     headers: { Accept: 'application/json', Authorization: `Bearer ${apiKey}` },
@@ -103,8 +111,12 @@ export async function fetchClientSetupCatalog(baseUrl: string, apiKey: string, s
   if (!response.ok) throw new Error(`Model list request failed (${response.status})`)
   const text = await response.text()
   const payload: unknown = JSON.parse(text)
-  const modelIds = clientSetupModelIds(payload)
-  if (modelIds.length === 0) throw new Error('No usable text model is available for this API key')
+  const value = payload as { models?: unknown; data?: unknown } | null
+  if (!value || typeof value !== 'object' || (!Array.isArray(value.models) && !Array.isArray(value.data))) {
+    throw new Error('Model list response is not a valid catalog')
+  }
+  const visibleModelIds = visibleClientSetupModelIds(payload)
+  const modelIds = visibleModelIds.filter(isClientSetupTextModel)
   const isManifest = typeof payload === 'object' && payload !== null && 'models' in payload && Array.isArray(payload.models)
-  return { modelIds, manifestContent: isManifest ? JSON.stringify(payload, null, 2) : '', responseBytes: new TextEncoder().encode(text).byteLength }
+  return { modelIds, visibleModelIds, manifestContent: isManifest ? JSON.stringify(payload, null, 2) : '', responseBytes: new TextEncoder().encode(text).byteLength }
 }

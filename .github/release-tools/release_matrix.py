@@ -152,6 +152,10 @@ def contexts(args):
         (dest / 'deploy').mkdir(exist_ok=True)
         shutil.copy2('deploy/docker-entrypoint.sh', dest / 'deploy/docker-entrypoint.sh')
         shutil.copytree('backend/resources', dest / 'backend/resources', dirs_exist_ok=True)
+        helper = Path('tools/upstream-browser')
+        (dest / helper).mkdir(parents=True, exist_ok=True)
+        for name in ('package.json', 'package-lock.json', 'main.mjs', 'runtime.mjs', 'contract.mjs'):
+            shutil.copy2(helper / name, dest / helper / name)
 
 
 def main():

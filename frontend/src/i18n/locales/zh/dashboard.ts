@@ -119,6 +119,9 @@ export default {
     copied: '已复制！',
     importToCcSwitch: '导入到 CCS',
     setupModelUnavailable: '当前密钥的模型列表未包含要求的模型（{model} 或受支持的新版本）。请联系管理员启用该模型后重试。',
+    setupNoTextModels: '模型目录已加载。下列模型用于生图等专用能力，不能用于这里的文本客户端配置。请在支持对应能力的客户端中使用。',
+    setupNoModels: '模型目录已加载，但当前密钥没有可用模型。请联系管理员检查分组与模型权限。',
+    setupAvailableModels: '当前密钥可用模型',
     setupSystemOneOnly: 'TypeSafe 使用 /v1/systemone，无法导入这些聊天客户端。请点击“使用密钥”查看专用请求示例。',
     quickSetup: '快速配置',
     quickSetupPlatforms: {

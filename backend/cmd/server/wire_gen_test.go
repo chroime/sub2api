@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"reflect"
 	"testing"
 	"time"
 
@@ -21,6 +23,12 @@ func TestProvideServiceBuildInfo(t *testing.T) {
 }
 
 func TestProvideCleanup_WithMinimalDependencies_NoPanic(t *testing.T) {
+	cleanup := minimalCleanup(t, nil)
+	require.NotPanics(t, cleanup)
+}
+
+func minimalCleanup(t *testing.T, lanes *service.UsageBillingLaneCombiner) func() {
+	t.Helper()
 	cfg := &config.Config{}
 
 	oauthSvc := service.NewOAuthService(nil, nil)
@@ -51,7 +59,7 @@ func TestProvideCleanup_WithMinimalDependencies_NoPanic(t *testing.T) {
 	schedulerSnapshotSvc := service.NewSchedulerSnapshotService(nil, nil, nil, nil, cfg)
 	opsSystemLogSinkSvc := service.NewOpsSystemLogSink(nil)
 
-	cleanup := provideCleanup(
+	dependencies := []any{
 		nil, // entClient
 		nil, // redis
 		&service.OpsMetricsCollector{},
@@ -109,9 +117,67 @@ func TestProvideCleanup_WithMinimalDependencies_NoPanic(t *testing.T) {
 		nil, // promptAudit
 		nil, // pluginManager
 		nil, // notificationEmails
-	)
+	}
+	dependencies = append(dependencies, lanes)
+	byType := make(map[reflect.Type]reflect.Value)
+	for _, dependency := range dependencies {
+		if dependency != nil {
+			byType[reflect.TypeOf(dependency)] = reflect.ValueOf(dependency)
+		}
+	}
+	constructor := reflect.ValueOf(provideCleanup)
+	inputs := make([]reflect.Value, constructor.Type().NumIn())
+	for i := range inputs {
+		typeOf := constructor.Type().In(i)
+		inputs[i] = reflect.Zero(typeOf)
+		if dependency, ok := byType[typeOf]; ok {
+			inputs[i] = dependency
+		}
+	}
+	return constructor.Call(inputs)[0].Interface().(func())
+}
 
-	require.NotPanics(t, func() {
-		cleanup()
-	})
+type cleanupBlockingBillingRepo struct {
+	service.UsageBillingBatchRepository
+	started chan struct{}
+	release chan struct{}
+}
+
+func (r *cleanupBlockingBillingRepo) Apply(context.Context, *service.UsageBillingCommand) (*service.UsageBillingApplyResult, error) {
+	close(r.started)
+	<-r.release
+	return &service.UsageBillingApplyResult{Applied: true}, nil
+}
+
+func TestProvideCleanupWaitsForInFlightBilling(t *testing.T) {
+	repo := &cleanupBlockingBillingRepo{started: make(chan struct{}), release: make(chan struct{})}
+	lanes := service.NewUsageBillingLaneCombiner(repo)
+	cleanup := minimalCleanup(t, lanes)
+	applied := make(chan error, 1)
+	go func() {
+		_, err := lanes.Apply(context.Background(), &service.UsageBillingCommand{UserID: 1, RequestID: "shutdown-billing"})
+		applied <- err
+	}()
+	select {
+	case <-repo.started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("billing did not start")
+	}
+	done := make(chan struct{})
+	go func() { cleanup(); close(done) }()
+	returnedEarly := false
+	select {
+	case <-done:
+		returnedEarly = true
+	case <-time.After(100 * time.Millisecond):
+	}
+	close(repo.release)
+	require.NoError(t, <-applied)
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("cleanup did not finish after billing settled")
+	}
+	lanes.Stop()
+	require.False(t, returnedEarly, "cleanup must drain billing before closing its database")
 }
