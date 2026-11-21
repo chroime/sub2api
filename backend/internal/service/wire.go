@@ -1009,8 +1009,30 @@ var ProviderSet = wire.NewSet(
 	ProvideUsageBillingRepository,
 )
 
-// ProvideUsageBillingRepository 以按用户合并结算的通道作为各服务使用的计费仓储。
+// usageBillingPrechargeLedger keeps the durable precharge lifecycle together.
+// Ordinary usage still settles through the combiner; holds and their maintenance
+// must reach the same underlying ledger without entering a usage lane.
+type usageBillingPrechargeLedger interface {
+	BalancePrechargeRepository
+	BalancePrechargeRecoveryRepository
+	BalancePrechargeReconciliationRepository
+	balancePrechargeArchiver
+}
+
+type usageBillingRepositoryWithPrecharge struct {
+	UsageBillingRepository
+	usageBillingPrechargeLedger
+}
+
+// ProvideUsageBillingRepository 以按用户合并结算的通道作为各服务使用的计费仓储，
+// 同时保留底层持久化仓储的余额预扣、恢复、对账和归档能力。
 func ProvideUsageBillingRepository(lanes *UsageBillingLaneCombiner) UsageBillingRepository {
+	if ledger, ok := lanes.repo.(usageBillingPrechargeLedger); ok {
+		return &usageBillingRepositoryWithPrecharge{
+			UsageBillingRepository:      lanes,
+			usageBillingPrechargeLedger: ledger,
+		}
+	}
 	return lanes
 }
 
