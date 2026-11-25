@@ -285,6 +285,16 @@ type LiteLLMModelPricing struct {
 	// CacheStorageCostPerTokenPerHour 显式上下文缓存存储单价（每 token 每小时，USD），一般由定价覆盖文件提供，
 	// 配置后优先于内置价（见 BillingService.CacheStoragePricePerTokenHour）。
 	CacheStorageCostPerTokenPerHour float64 `json:"cache_storage_cost_per_token_per_hour"`
+	// Currency is used by the model plaza official directory. Billing keeps its
+	// existing numeric calculation and does not apply this display marker.
+	Currency string `json:"currency,omitempty"`
+	// OfficialCurrency records the source currency when a domestic USD catalog
+	// entry is normalized to CNY for internal billing.
+	OfficialCurrency string `json:"official_currency,omitempty"`
+	// DeepSeekPeakPrice marks an unmodified peak/list quote; off-peak billing is half.
+	DeepSeekPeakPrice bool `json:"deepseek_peak_price,omitempty"`
+	// ContextPricingTiers contains whole-request token prices for each input-length band.
+	ContextPricingTiers []PricingInterval `json:"context_pricing_tiers,omitempty"`
 
 	// TokenPricingAbsent 表示源数据中 input/output token 价格均缺失（仅有图片价）。
 	// 此类条目只可用于图片计费，token 计费必须回退到 fallback 或 fail-closed，
@@ -305,27 +315,31 @@ type LiteLLMRawEntry struct {
 	MaxInputTokens  json.RawMessage `json:"max_input_tokens"`
 	MaxOutputTokens json.RawMessage `json:"max_output_tokens"`
 
-	InputCostPerToken                   *float64 `json:"input_cost_per_token"`
-	InputCostPerTokenPriority           *float64 `json:"input_cost_per_token_priority"`
-	OutputCostPerToken                  *float64 `json:"output_cost_per_token"`
-	OutputCostPerTokenPriority          *float64 `json:"output_cost_per_token_priority"`
-	CacheCreationInputTokenCost         *float64 `json:"cache_creation_input_token_cost"`
-	CacheCreationInputTokenCostPriority *float64 `json:"cache_creation_input_token_cost_priority"`
-	CacheCreationInputTokenCostAbove1hr *float64 `json:"cache_creation_input_token_cost_above_1hr"`
-	CacheReadInputTokenCost             *float64 `json:"cache_read_input_token_cost"`
-	CacheReadInputTokenCostPriority     *float64 `json:"cache_read_input_token_cost_priority"`
-	LongContextInputTokenThreshold      *int     `json:"long_context_input_token_threshold"`
-	LongContextInputCostMultiplier      *float64 `json:"long_context_input_cost_multiplier"`
-	LongContextOutputCostMultiplier     *float64 `json:"long_context_output_cost_multiplier"`
-	SupportsServiceTier                 bool     `json:"supports_service_tier"`
-	LiteLLMProvider                     string   `json:"litellm_provider"`
-	Mode                                string   `json:"mode"`
-	SupportsPromptCaching               bool     `json:"supports_prompt_caching"`
-	OutputCostPerImage                  *float64 `json:"output_cost_per_image"`
-	OutputCostPerImageToken             *float64 `json:"output_cost_per_image_token"`
-	InputCostPerImageToken              *float64 `json:"input_cost_per_image_token"`
-	CacheReadInputImageTokenCost        *float64 `json:"cache_read_input_image_token_cost"`
-	CacheStorageCostPerTokenPerHour     *float64 `json:"cache_storage_cost_per_token_per_hour"`
+	InputCostPerToken                   *float64          `json:"input_cost_per_token"`
+	InputCostPerTokenPriority           *float64          `json:"input_cost_per_token_priority"`
+	OutputCostPerToken                  *float64          `json:"output_cost_per_token"`
+	OutputCostPerTokenPriority          *float64          `json:"output_cost_per_token_priority"`
+	CacheCreationInputTokenCost         *float64          `json:"cache_creation_input_token_cost"`
+	CacheCreationInputTokenCostPriority *float64          `json:"cache_creation_input_token_cost_priority"`
+	CacheCreationInputTokenCostAbove1hr *float64          `json:"cache_creation_input_token_cost_above_1hr"`
+	CacheReadInputTokenCost             *float64          `json:"cache_read_input_token_cost"`
+	CacheReadInputTokenCostPriority     *float64          `json:"cache_read_input_token_cost_priority"`
+	LongContextInputTokenThreshold      *int              `json:"long_context_input_token_threshold"`
+	LongContextInputCostMultiplier      *float64          `json:"long_context_input_cost_multiplier"`
+	LongContextOutputCostMultiplier     *float64          `json:"long_context_output_cost_multiplier"`
+	SupportsServiceTier                 bool              `json:"supports_service_tier"`
+	LiteLLMProvider                     string            `json:"litellm_provider"`
+	Mode                                string            `json:"mode"`
+	SupportsPromptCaching               bool              `json:"supports_prompt_caching"`
+	OutputCostPerImage                  *float64          `json:"output_cost_per_image"`
+	OutputCostPerImageToken             *float64          `json:"output_cost_per_image_token"`
+	InputCostPerImageToken              *float64          `json:"input_cost_per_image_token"`
+	CacheReadInputImageTokenCost        *float64          `json:"cache_read_input_image_token_cost"`
+	CacheStorageCostPerTokenPerHour     *float64          `json:"cache_storage_cost_per_token_per_hour"`
+	Currency                            string            `json:"currency"`
+	OfficialCurrency                    string            `json:"official_currency"`
+	DeepSeekPeakPrice                   bool              `json:"deepseek_peak_price"`
+	ContextPricingTiers                 []PricingInterval `json:"context_pricing_tiers"`
 }
 
 // PricingService 动态价格服务
@@ -729,6 +743,7 @@ func (s *PricingService) parsePricingData(body []byte) (map[string]*LiteLLMModel
 	if err := json.Unmarshal(body, &rawData); err != nil {
 		return nil, fmt.Errorf("parse raw JSON: %w", err)
 	}
+	rawData = normalizeDomesticPricingCatalog(rawData)
 	rawData, priceOverrides := s.applyPricingOverrides(rawData)
 
 	result := make(map[string]*LiteLLMModelPricing)
@@ -762,6 +777,14 @@ func (s *PricingService) parsePricingData(body []byte) (map[string]*LiteLLMModel
 			SupportsPromptCaching: entry.SupportsPromptCaching,
 			SupportsServiceTier:   entry.SupportsServiceTier,
 			TokenPricingAbsent:    entry.InputCostPerToken == nil && entry.OutputCostPerToken == nil,
+			Currency:              entry.Currency,
+			OfficialCurrency:      entry.OfficialCurrency,
+			DeepSeekPeakPrice:     entry.DeepSeekPeakPrice,
+			ContextPricingTiers:   filterValidIntervals(entry.ContextPricingTiers),
+		}
+		if overrides := pricing.priceOverrides; overrides.input || overrides.output || overrides.cacheRead {
+			// Operator flat prices must not be replaced by absolute catalog tier prices.
+			pricing.ContextPricingTiers = nil
 		}
 
 		if entry.InputCostPerToken != nil {
@@ -845,6 +868,54 @@ func (s *PricingService) parsePricingData(body []byte) (map[string]*LiteLLMModel
 	}
 
 	return result, nil
+}
+
+const domesticPricingNormalizationRate = 6.7
+
+// normalizeDomesticPricingCatalog keeps the shared catalog numerically aligned
+// with the application's 1 CNY = 1 USD credit rule. The remote mirror is an
+// external USD catalog, so domestic entries without an explicit CNY override
+// are normalized locally before both billing and plaza read them.
+func normalizeDomesticPricingCatalog(rawData map[string]json.RawMessage) map[string]json.RawMessage {
+	for modelName, rawEntry := range rawData {
+		if !isDomesticPricingModelName(modelName) {
+			continue
+		}
+		var fields map[string]any
+		if err := json.Unmarshal(rawEntry, &fields); err != nil {
+			continue
+		}
+		currency, _ := fields["currency"].(string)
+		if strings.EqualFold(strings.TrimSpace(currency), "CNY") {
+			continue
+		}
+		for key, value := range fields {
+			number, ok := value.(float64)
+			fieldName := strings.ToLower(key)
+			if !ok || number == 0 || !strings.Contains(fieldName, "cost") || strings.Contains(fieldName, "multiplier") {
+				continue
+			}
+			fields[key] = number * domesticPricingNormalizationRate
+		}
+		fields["currency"] = "CNY"
+		fields["official_currency"] = "USD"
+		if normalized, err := json.Marshal(fields); err == nil {
+			rawData[modelName] = normalized
+		}
+	}
+	return rawData
+}
+
+func isDomesticPricingModelName(modelName string) bool {
+	lower := strings.ToLower(strings.TrimSpace(modelName))
+	return strings.HasPrefix(lower, "deepseek") || strings.HasPrefix(lower, "kimi") ||
+		strings.HasPrefix(lower, "moonshot") || strings.HasPrefix(lower, "glm") ||
+		strings.HasPrefix(lower, "chatglm") || strings.HasPrefix(lower, "minimax") ||
+		strings.HasPrefix(lower, "mimo-") || strings.HasPrefix(lower, "qwen") ||
+		strings.HasPrefix(lower, "qwq") || strings.HasPrefix(lower, "hunyuan") ||
+		strings.HasPrefix(lower, "hy") || strings.HasPrefix(lower, "doubao") ||
+		strings.HasPrefix(lower, "ernie-") || strings.HasPrefix(lower, "spark-") ||
+		strings.HasPrefix(lower, "step-") || strings.HasPrefix(lower, "baichuan-")
 }
 
 // deriveLongContextFromAboveTierFields 把 LiteLLM 目录的 *_above_XXXk_tokens 绝对价字段
@@ -1080,6 +1151,9 @@ func mergePricingOverrideEntry(base, patch json.RawMessage) (json.RawMessage, bo
 		}
 		merged[k] = v
 	}
+	if currency, _ := patchFields["currency"].(string); strings.EqualFold(strings.TrimSpace(currency), "CNY") {
+		delete(merged, "official_currency")
+	}
 	out, err := json.Marshal(merged)
 	if err != nil {
 		return nil, false
@@ -1196,14 +1270,34 @@ func (s *PricingService) mergeFallbackPricingData(data map[string]*LiteLLMModelP
 	}
 	merged := 0
 	for modelName, pricing := range fallbackData {
-		if _, ok := data[modelName]; ok {
-			continue
+		if current, ok := data[modelName]; ok {
+			// Curated domestic CNY cards are local base prices, not USD fallbacks.
+			// Both cards have already received the operator override, so it stays last.
+			if !isDomesticPricingModelName(modelName) || pricing.Currency != "CNY" || pricing.OfficialCurrency == "USD" {
+				continue
+			}
+			cloned := *pricing
+			if current != nil {
+				if cloned.MaxInputTokens == nil {
+					cloned.MaxInputTokens = current.MaxInputTokens
+				}
+				if cloned.MaxOutputTokens == nil {
+					cloned.MaxOutputTokens = current.MaxOutputTokens
+				}
+				if cloned.Mode == "" {
+					cloned.Mode = current.Mode
+				}
+				if cloned.LiteLLMProvider == "" {
+					cloned.LiteLLMProvider = current.LiteLLMProvider
+				}
+			}
+			pricing = &cloned
 		}
 		data[modelName] = pricing
 		merged++
 	}
 	if merged > 0 {
-		logger.LegacyPrintf("service.pricing", "[Pricing] Merged %d fallback-only models", merged)
+		logger.LegacyPrintf("service.pricing", "[Pricing] Merged %d fallback or domestic CNY model prices", merged)
 	}
 	return data
 }
@@ -1221,7 +1315,7 @@ func warnDroppedLongContextLadders(old, next map[string]*LiteLLMModelPricing) {
 		if prev == nil || prev.LongContextInputTokenThreshold <= 0 {
 			continue
 		}
-		if cur, ok := next[name]; ok && (cur == nil || cur.LongContextInputTokenThreshold <= 0) {
+		if cur, ok := next[name]; ok && (cur == nil || (cur.LongContextInputTokenThreshold <= 0 && len(cur.ContextPricingTiers) == 0)) {
 			dropped = append(dropped, name)
 		}
 	}

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import ModelPlazaContent from '../ModelPlazaContent.vue'
-import PlazaVendorTree from '../PlazaVendorTree.vue'
+import PlazaVendorFilter from '../PlazaVendorFilter.vue'
 import PlazaVendorPriceTable from '../PlazaVendorPriceTable.vue'
 import Select from '@/components/common/Select.vue'
 import GroupBadge from '@/components/common/GroupBadge.vue'
@@ -62,10 +62,10 @@ async function selectGroup(wrapper: ReturnType<typeof render>, id: number | 'all
   expect(wrapper.getComponent(Select).props('modelValue')).toBe(id)
 }
 
-function expectModelScope(wrapper: ReturnType<typeof render>, models: PlazaModel[], groupId: number | null) {
-  const treeModels = wrapper.getComponent(PlazaVendorTree).props('vendors').flatMap(node => node.models)
-  expect(treeModels).toHaveLength(models.length)
-  expect(treeModels).toEqual(expect.arrayContaining(models))
+function expectModelScope(wrapper: ReturnType<typeof render>, models: PlazaModel[], groupId: number | null, vendorModels = models) {
+  const treeModels = wrapper.getComponent(PlazaVendorFilter).props('vendors').flatMap(node => node.models)
+  expect(treeModels).toHaveLength(vendorModels.length)
+  expect(treeModels).toEqual(expect.arrayContaining(vendorModels))
   const table = wrapper.findComponent(PlazaVendorPriceTable)
   expect(table.exists()).toBe(models.length > 0)
   if (models.length > 0) {
@@ -76,9 +76,10 @@ function expectModelScope(wrapper: ReturnType<typeof render>, models: PlazaModel
 }
 
 function expectVendorCounts(wrapper: ReturnType<typeof render>, labels: string[]) {
-  expect(wrapper.findAll('[data-vendor-chips] > button').map(chip => chip.text())).toEqual(labels)
-  expect(wrapper.get('[role="tree"]').findAll('.tabular-nums').map(count => count.text()))
-    .toEqual(labels.map(label => label.split(' ').at(-1)))
+  const filter = wrapper.getComponent(PlazaVendorFilter)
+  const vendors = filter.props('vendors')
+  const actual = ['modelPlaza.vendor.all ' + vendors.reduce((sum, v) => sum + v.models.length, 0), ...vendors.map(v => v.label + ' ' + v.models.length)]
+  expect(actual.sort()).toEqual([...labels].sort())
 }
 
 describe('model plaza group selection', () => {
@@ -197,7 +198,7 @@ describe('model plaza group selection', () => {
     expectModelScope(wrapper, [], selected.id)
     await selectGroup(wrapper, 'all')
     expect(wrapper.get('#plaza-group-select').find('[data-group-identity]').exists()).toBe(false)
-    expect(wrapper.get('#plaza-group-select').text()).toBe('modelPlaza.priceTable.allGroups')
+    expect(wrapper.get('#plaza-group-select').text()).toBe('modelPlaza.filters.officialScope')
     wrapper.unmount()
   })
 
@@ -257,17 +258,20 @@ describe('model plaza group selection', () => {
     wrapper.unmount()
   })
 
-  it('resets an unavailable vendor when changing groups without retaining its models', async () => {
+  it('preserves an unavailable vendor across group changes and clears it explicitly', async () => {
     const kimi = model('kimi-a')
     const b = group({ id: 20, name: 'B', models: [model('claude-b', 'anthropic')] })
-    const wrapper = render([group({ id: 10, name: 'A', models: [model('gpt-a'), kimi] }), b])
+    const a = group({ id: 10, name: 'A', models: [model('gpt-a'), kimi] })
+    const wrapper = render([a, b])
     await selectGroup(wrapper, 10)
-    await wrapper.findAll('[data-vendor-chips] > button').find(chip => chip.text() === 'Moonshot 1')!.trigger('click')
-    expect(wrapper.getComponent(PlazaVendorTree).props('vendor')).toBe('moonshot')
+    await wrapper.get('[data-vendor=moonshot]').trigger('click')
+    expect(wrapper.getComponent(PlazaVendorFilter).props('vendor')).toBe('moonshot')
     expect(wrapper.getComponent(PlazaVendorPriceTable).props('models')).toEqual([kimi])
 
     await selectGroup(wrapper, b.id)
-    expect(wrapper.getComponent(PlazaVendorTree).props('vendor')).toBe('all')
+    expect(wrapper.getComponent(PlazaVendorFilter).props('vendor')).toBe('moonshot')
+    expect(wrapper.findComponent(PlazaVendorPriceTable).exists()).toBe(false)
+    await wrapper.get('[data-empty-clear]').trigger('click')
     expectModelScope(wrapper, b.models, b.id)
     expectVendorCounts(wrapper, ['modelPlaza.vendor.all 1', 'Anthropic 1'])
     wrapper.unmount()
@@ -276,17 +280,18 @@ describe('model plaza group selection', () => {
   it('keeps search within the selected group and restores only that group when cleared', async () => {
     const kimi = model('kimi-a')
     const b = group({ id: 20, name: 'B', models: [model('claude-b', 'anthropic')] })
-    const wrapper = render([group({ id: 10, name: 'A', models: [model('gpt-a'), kimi] }), b])
+    const a = group({ id: 10, name: 'A', models: [model('gpt-a'), kimi] })
+    const wrapper = render([a, b])
     await selectGroup(wrapper, 10)
     await wrapper.get('input[type="search"]').setValue('KiMi')
-    expectModelScope(wrapper, [kimi], 10)
-    expectVendorCounts(wrapper, ['modelPlaza.vendor.all 1', 'Moonshot 1'])
+    expectModelScope(wrapper, [kimi], 10, a.models)
+    expectVendorCounts(wrapper, ['modelPlaza.vendor.all 2', 'Moonshot 1', 'OpenAI 1'])
 
     await selectGroup(wrapper, b.id)
     expect(wrapper.get<HTMLInputElement>('input[type="search"]').element.value).toBe('KiMi')
-    expectModelScope(wrapper, [], b.id)
-    expectVendorCounts(wrapper, ['modelPlaza.vendor.all 0'])
-    expect(wrapper.get('section .plaza-empty').text()).toBe('modelPlaza.noSearchResult')
+    expectModelScope(wrapper, [], b.id, b.models)
+    expectVendorCounts(wrapper, ['modelPlaza.vendor.all 1', 'Anthropic 1'])
+    expect(wrapper.get('section .plaza-empty').text()).toContain('modelPlaza.noSearchResult')
 
     await wrapper.get('input[type="search"]').setValue('')
     expectModelScope(wrapper, b.models, b.id)
@@ -347,14 +352,14 @@ describe('model plaza group selection', () => {
       expectVendorCounts(wrapper, catalogCounts)
 
       await wrapper.get('input[type="search"]').setValue('KiMi')
-      expectModelScope(wrapper, [catalog[3]!], null)
-      expectVendorCounts(wrapper, ['modelPlaza.vendor.all 1', 'Moonshot 1'])
+      expectModelScope(wrapper, [catalog[3]!], null, catalog)
+      expectVendorCounts(wrapper, catalogCounts)
       await selectGroup(wrapper, a.id)
-      expectModelScope(wrapper, [], a.id)
-      expectVendorCounts(wrapper, ['modelPlaza.vendor.all 0'])
-      expect(wrapper.get('section .plaza-empty').text()).toBe('modelPlaza.noSearchResult')
+      expectModelScope(wrapper, [], a.id, a.models)
+      expectVendorCounts(wrapper, ['modelPlaza.vendor.all 1', 'OpenAI 1'])
+      expect(wrapper.get('section .plaza-empty').text()).toContain('modelPlaza.noSearchResult')
       await selectGroup(wrapper, 'all')
-      expectModelScope(wrapper, [catalog[3]!], null)
+      expectModelScope(wrapper, [catalog[3]!], null, catalog)
       await wrapper.get('input[type="search"]').setValue('')
       expectModelScope(wrapper, catalog, null)
       expectVendorCounts(wrapper, catalogCounts)

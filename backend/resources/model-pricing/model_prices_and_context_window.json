@@ -1205,15 +1205,12 @@
     "supports_xhigh_reasoning_effort": true
   },
   "deepseek-flash": {
-    "cache_read_input_token_cost": 3e-09,
-    "input_cost_per_token": 1.5e-07,
     "litellm_provider": "deepseek",
     "max_input_tokens": 1048576,
     "max_output_tokens": 393216,
     "max_tokens": 393216,
     "mode": "chat",
-    "output_cost_per_token": 6e-07,
-    "source": "https://api-docs.deepseek.com/quick_start/pricing",
+    "source": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing",
     "supported_endpoints": [
       "/v1/chat/completions"
     ],
@@ -1225,39 +1222,21 @@
     "supports_response_schema": true,
     "supports_system_messages": true,
     "supports_tool_choice": true,
-    "supports_vision": true
+    "supports_vision": true,
+    "input_cost_per_token": 2e-06,
+    "output_cost_per_token": 8e-06,
+    "cache_read_input_token_cost": 4e-08,
+    "currency": "CNY",
+    "pricing_verified_at": "2026-11-23",
+    "pricing_notes": "Native CNY reference quote (peak/list price). Billing applies the off-peak discount separately.",
+    "deepseek_peak_price": true
   },
   "deepseek-v4-flash": {
-    "cache_read_input_token_cost": 3e-09,
-    "input_cost_per_token": 1.5e-07,
     "litellm_provider": "deepseek",
     "max_input_tokens": 1048576,
     "max_output_tokens": 393216,
     "max_tokens": 393216,
     "mode": "chat",
-    "output_cost_per_token": 6e-07,
-    "source": "https://api-docs.deepseek.com/quick_start/pricing",
-    "supported_endpoints": [
-      "/v1/chat/completions"
-    ],
-    "supports_function_calling": true,
-    "supports_native_streaming": true,
-    "supports_parallel_function_calling": true,
-    "supports_prompt_caching": true,
-    "supports_reasoning": true,
-    "supports_response_schema": true,
-    "supports_system_messages": true,
-    "supports_tool_choice": true
-  },
-  "deepseek-v4-flash-vision-exp": {
-    "cache_read_input_token_cost": 3e-09,
-    "input_cost_per_token": 1.5e-07,
-    "litellm_provider": "deepseek",
-    "max_input_tokens": 1048576,
-    "max_output_tokens": 393216,
-    "max_tokens": 393216,
-    "mode": "chat",
-    "output_cost_per_token": 6e-07,
     "source": "https://api-docs.deepseek.com/quick_start/pricing",
     "supported_endpoints": [
       "/v1/chat/completions"
@@ -1270,17 +1249,52 @@
     "supports_response_schema": true,
     "supports_system_messages": true,
     "supports_tool_choice": true,
-    "supports_vision": true
+    "currency": "CNY",
+    "pricing_verified_at": "2026-11-22",
+    "pricing_notes": "Native CNY reference quote (peak/list price). Billing applies the off-peak discount separately.",
+    "input_cost_per_token": 2e-06,
+    "output_cost_per_token": 8e-06,
+    "cache_read_input_token_cost": 4e-08,
+    "deepseek_peak_price": true,
+    "pricing_reference": "https://mofcloud.cn/tools/llm-explorer/",
+    "pricing_reference_model": "deepseek-v4-flash",
+    "pricing_data_source": "https://www.llmabacus.com",
+    "pricing_data_license": "CC-BY-4.0",
+    "pricing_collected_at": "2026-11-23"
   },
-  "deepseek-v4-pro": {
-    "cache_read_input_token_cost": 2.2e-08,
-    "input_cost_per_token": 6.6e-07,
+  "deepseek-v4-flash-vision-exp": {
     "litellm_provider": "deepseek",
     "max_input_tokens": 1048576,
     "max_output_tokens": 393216,
     "max_tokens": 393216,
     "mode": "chat",
-    "output_cost_per_token": 1.98e-06,
+    "source": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing",
+    "supported_endpoints": [
+      "/v1/chat/completions"
+    ],
+    "supports_function_calling": true,
+    "supports_native_streaming": true,
+    "supports_parallel_function_calling": true,
+    "supports_prompt_caching": true,
+    "supports_reasoning": true,
+    "supports_response_schema": true,
+    "supports_system_messages": true,
+    "supports_tool_choice": true,
+    "supports_vision": true,
+    "input_cost_per_token": 2e-06,
+    "output_cost_per_token": 8e-06,
+    "cache_read_input_token_cost": 4e-08,
+    "currency": "CNY",
+    "pricing_verified_at": "2026-11-23",
+    "pricing_notes": "Native CNY reference quote (peak/list price). Billing applies the off-peak discount separately.",
+    "deepseek_peak_price": true
+  },
+  "deepseek-v4-pro": {
+    "litellm_provider": "deepseek",
+    "max_input_tokens": 1048576,
+    "max_output_tokens": 393216,
+    "max_tokens": 393216,
+    "mode": "chat",
     "source": "https://api-docs.deepseek.com/quick_start/pricing",
     "supported_endpoints": [
       "/v1/chat/completions"
@@ -1292,7 +1306,19 @@
     "supports_reasoning": true,
     "supports_response_schema": true,
     "supports_system_messages": true,
-    "supports_tool_choice": true
+    "supports_tool_choice": true,
+    "currency": "CNY",
+    "pricing_verified_at": "2026-11-22",
+    "pricing_notes": "Native CNY reference quote (peak/list price). Billing applies the off-peak discount separately.",
+    "input_cost_per_token": 9e-06,
+    "output_cost_per_token": 2.7e-05,
+    "cache_read_input_token_cost": 3e-07,
+    "deepseek_peak_price": true,
+    "pricing_reference": "https://mofcloud.cn/tools/llm-explorer/",
+    "pricing_reference_model": "deepseek-v4-pro",
+    "pricing_data_source": "https://www.llmabacus.com",
+    "pricing_data_license": "CC-BY-4.0",
+    "pricing_collected_at": "2026-11-23"
   },
   "gemini-2.0-flash": {
     "cache_read_input_token_cost": 2.5e-08,
@@ -5736,12 +5762,12 @@
     "cache_read_input_token_cost": 5e-07,
     "cache_read_input_token_cost_above_272k_tokens": 1e-06,
     "cache_read_input_token_cost_flex": 2.5e-07,
-    "cache_read_input_token_cost_priority": 1.25e-6,
+    "cache_read_input_token_cost_priority": 1.25e-06,
     "input_cost_per_token": 5e-06,
     "input_cost_per_token_above_272k_tokens": 1e-05,
     "input_cost_per_token_batches": 2.5e-06,
     "input_cost_per_token_flex": 2.5e-06,
-    "input_cost_per_token_priority": 12.5e-6,
+    "input_cost_per_token_priority": 1.25e-05,
     "litellm_provider": "openai",
     "max_input_tokens": 1050000,
     "max_output_tokens": 128000,
@@ -5751,7 +5777,7 @@
     "output_cost_per_token_above_272k_tokens": 4.5e-05,
     "output_cost_per_token_batches": 1.5e-05,
     "output_cost_per_token_flex": 1.5e-05,
-    "output_cost_per_token_priority": 75e-6,
+    "output_cost_per_token_priority": 7.5e-05,
     "supported_endpoints": [
       "/v1/chat/completions",
       "/v1/batch",
@@ -5784,12 +5810,12 @@
     "cache_read_input_token_cost": 5e-07,
     "cache_read_input_token_cost_above_272k_tokens": 1e-06,
     "cache_read_input_token_cost_flex": 2.5e-07,
-    "cache_read_input_token_cost_priority": 1.25e-6,
+    "cache_read_input_token_cost_priority": 1.25e-06,
     "input_cost_per_token": 5e-06,
     "input_cost_per_token_above_272k_tokens": 1e-05,
     "input_cost_per_token_batches": 2.5e-06,
     "input_cost_per_token_flex": 2.5e-06,
-    "input_cost_per_token_priority": 12.5e-6,
+    "input_cost_per_token_priority": 1.25e-05,
     "litellm_provider": "openai",
     "max_input_tokens": 1050000,
     "max_output_tokens": 128000,
@@ -5799,7 +5825,7 @@
     "output_cost_per_token_above_272k_tokens": 4.5e-05,
     "output_cost_per_token_batches": 1.5e-05,
     "output_cost_per_token_flex": 1.5e-05,
-    "output_cost_per_token_priority": 75e-6,
+    "output_cost_per_token_priority": 7.5e-05,
     "supported_endpoints": [
       "/v1/chat/completions",
       "/v1/batch",
@@ -6875,100 +6901,899 @@
     "supports_vision": true,
     "supports_web_search": true
   },
-    "gpt-image-2.6-flare": {
-        "cache_read_input_image_token_cost": 2e-06,
-        "cache_read_input_token_cost": 1.25e-06,
-        "input_cost_per_image_token": 8e-06,
-        "input_cost_per_token": 5e-06,
-        "litellm_provider": "openai",
-        "mode": "image_generation",
-        "output_cost_per_image_token": 3e-05,
-        "output_cost_per_token": 0,
-        "supported_endpoints": [
-            "/v1/images/generations",
-            "/v1/images/edits"
-        ],
-        "supports_vision": true,
-        "supports_prompt_caching": true
-    },
-    "gpt-image-2.5-flare": {
-        "cache_read_input_image_token_cost": 2e-06,
-        "cache_read_input_token_cost": 1.25e-06,
-        "input_cost_per_image_token": 8e-06,
-        "input_cost_per_token": 5e-06,
-        "litellm_provider": "openai",
-        "mode": "image_generation",
-        "output_cost_per_image_token": 3e-05,
-        "output_cost_per_token": 0,
-        "supported_endpoints": [
-            "/v1/images/generations",
-            "/v1/images/edits"
-        ],
-        "supports_vision": true,
-        "supports_prompt_caching": true
-    },
-    "gpt-image-2.5-flare-2026-09-08": {
-        "cache_read_input_image_token_cost": 2e-06,
-        "cache_read_input_token_cost": 1.25e-06,
-        "input_cost_per_image_token": 8e-06,
-        "input_cost_per_token": 5e-06,
-        "litellm_provider": "openai",
-        "mode": "image_generation",
-        "output_cost_per_image_token": 3e-05,
-        "output_cost_per_token": 0,
-        "supported_endpoints": [
-            "/v1/images/generations",
-            "/v1/images/edits"
-        ],
-        "supports_vision": true,
-        "supports_prompt_caching": true
-    },
-    "gpt-image-2.6-sunburst": {
-        "cache_read_input_image_token_cost": 2e-06,
-        "cache_read_input_token_cost": 1.25e-06,
-        "input_cost_per_image_token": 8e-06,
-        "input_cost_per_token": 5e-06,
-        "litellm_provider": "openai",
-        "mode": "image_generation",
-        "output_cost_per_image_token": 3e-05,
-        "output_cost_per_token": 0,
-        "supported_endpoints": [
-            "/v1/images/generations",
-            "/v1/images/edits"
-        ],
-        "supports_vision": true,
-        "supports_prompt_caching": true
-    },
-    "gpt-image-2.5-sunburst": {
-        "cache_read_input_image_token_cost": 2e-06,
-        "cache_read_input_token_cost": 1.25e-06,
-        "input_cost_per_image_token": 8e-06,
-        "input_cost_per_token": 5e-06,
-        "litellm_provider": "openai",
-        "mode": "image_generation",
-        "output_cost_per_image_token": 3e-05,
-        "output_cost_per_token": 0,
-        "supported_endpoints": [
-            "/v1/images/generations",
-            "/v1/images/edits"
-        ],
-        "supports_vision": true,
-        "supports_prompt_caching": true
-    },
-    "gpt-image-2.5-sunburst-2026-09-08": {
-        "cache_read_input_image_token_cost": 2e-06,
-        "cache_read_input_token_cost": 1.25e-06,
-        "input_cost_per_image_token": 8e-06,
-        "input_cost_per_token": 5e-06,
-        "litellm_provider": "openai",
-        "mode": "image_generation",
-        "output_cost_per_image_token": 3e-05,
-        "output_cost_per_token": 0,
-        "supported_endpoints": [
-            "/v1/images/generations",
-            "/v1/images/edits"
-        ],
-        "supports_vision": true,
-        "supports_prompt_caching": true
-    }
+  "gpt-image-2.6-flare": {
+    "cache_read_input_image_token_cost": 2e-06,
+    "cache_read_input_token_cost": 1.25e-06,
+    "input_cost_per_image_token": 8e-06,
+    "input_cost_per_token": 5e-06,
+    "litellm_provider": "openai",
+    "mode": "image_generation",
+    "output_cost_per_image_token": 3e-05,
+    "output_cost_per_token": 0,
+    "supported_endpoints": [
+      "/v1/images/generations",
+      "/v1/images/edits"
+    ],
+    "supports_vision": true,
+    "supports_prompt_caching": true
+  },
+  "gpt-image-2.5-flare": {
+    "cache_read_input_image_token_cost": 2e-06,
+    "cache_read_input_token_cost": 1.25e-06,
+    "input_cost_per_image_token": 8e-06,
+    "input_cost_per_token": 5e-06,
+    "litellm_provider": "openai",
+    "mode": "image_generation",
+    "output_cost_per_image_token": 3e-05,
+    "output_cost_per_token": 0,
+    "supported_endpoints": [
+      "/v1/images/generations",
+      "/v1/images/edits"
+    ],
+    "supports_vision": true,
+    "supports_prompt_caching": true
+  },
+  "gpt-image-2.5-flare-2026-09-08": {
+    "cache_read_input_image_token_cost": 2e-06,
+    "cache_read_input_token_cost": 1.25e-06,
+    "input_cost_per_image_token": 8e-06,
+    "input_cost_per_token": 5e-06,
+    "litellm_provider": "openai",
+    "mode": "image_generation",
+    "output_cost_per_image_token": 3e-05,
+    "output_cost_per_token": 0,
+    "supported_endpoints": [
+      "/v1/images/generations",
+      "/v1/images/edits"
+    ],
+    "supports_vision": true,
+    "supports_prompt_caching": true
+  },
+  "gpt-image-2.6-sunburst": {
+    "cache_read_input_image_token_cost": 2e-06,
+    "cache_read_input_token_cost": 1.25e-06,
+    "input_cost_per_image_token": 8e-06,
+    "input_cost_per_token": 5e-06,
+    "litellm_provider": "openai",
+    "mode": "image_generation",
+    "output_cost_per_image_token": 3e-05,
+    "output_cost_per_token": 0,
+    "supported_endpoints": [
+      "/v1/images/generations",
+      "/v1/images/edits"
+    ],
+    "supports_vision": true,
+    "supports_prompt_caching": true
+  },
+  "gpt-image-2.5-sunburst": {
+    "cache_read_input_image_token_cost": 2e-06,
+    "cache_read_input_token_cost": 1.25e-06,
+    "input_cost_per_image_token": 8e-06,
+    "input_cost_per_token": 5e-06,
+    "litellm_provider": "openai",
+    "mode": "image_generation",
+    "output_cost_per_image_token": 3e-05,
+    "output_cost_per_token": 0,
+    "supported_endpoints": [
+      "/v1/images/generations",
+      "/v1/images/edits"
+    ],
+    "supports_vision": true,
+    "supports_prompt_caching": true
+  },
+  "gpt-image-2.5-sunburst-2026-09-08": {
+    "cache_read_input_image_token_cost": 2e-06,
+    "cache_read_input_token_cost": 1.25e-06,
+    "input_cost_per_image_token": 8e-06,
+    "input_cost_per_token": 5e-06,
+    "litellm_provider": "openai",
+    "mode": "image_generation",
+    "output_cost_per_image_token": 3e-05,
+    "output_cost_per_token": 0,
+    "supported_endpoints": [
+      "/v1/images/generations",
+      "/v1/images/edits"
+    ],
+    "supports_vision": true,
+    "supports_prompt_caching": true
+  },
+  "deepseek-v4.1-flash": {
+    "input_cost_per_token": 2e-06,
+    "output_cost_per_token": 8e-06,
+    "cache_read_input_token_cost": 4e-08,
+    "currency": "CNY",
+    "source": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing",
+    "mode": "chat",
+    "litellm_provider": "deepseek",
+    "pricing_verified_at": "2026-11-23",
+    "pricing_notes": "Native CNY reference quote (peak/list price). Billing applies the off-peak discount separately.",
+    "deepseek_peak_price": true
+  },
+  "deepseek-v4-pro-0813": {
+    "input_cost_per_token": 9e-06,
+    "output_cost_per_token": 2.7e-05,
+    "cache_read_input_token_cost": 3e-07,
+    "currency": "CNY",
+    "source": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing",
+    "mode": "chat",
+    "litellm_provider": "deepseek",
+    "pricing_verified_at": "2026-11-23",
+    "pricing_notes": "Native CNY reference quote (peak/list price). Billing applies the off-peak discount separately.",
+    "deepseek_peak_price": true
+  },
+  "kimi-k3.1-pro": {
+    "input_cost_per_token": 1.3e-05,
+    "output_cost_per_token": 6.8e-05,
+    "cache_read_input_token_cost": 1.3e-06,
+    "cache_creation_input_token_cost": 1.3e-05,
+    "cache_creation_input_token_cost_above_1hr": 2.6e-05,
+    "currency": "CNY",
+    "source": "https://platform.kimi.com/docs/pricing/chat",
+    "mode": "chat",
+    "litellm_provider": "moonshot",
+    "pricing_verified_at": "2026-11-23"
+  },
+  "kimi-k3.1-pro-highspeed": {
+    "input_cost_per_token": 2.6e-05,
+    "output_cost_per_token": 0.000136,
+    "cache_read_input_token_cost": 1.3e-06,
+    "cache_creation_input_token_cost": 2.6e-05,
+    "cache_creation_input_token_cost_above_1hr": 5.2e-05,
+    "currency": "CNY",
+    "source": "https://platform.kimi.com/docs/pricing/chat",
+    "mode": "chat",
+    "litellm_provider": "moonshot",
+    "pricing_verified_at": "2026-11-23"
+  },
+  "kimi-k3": {
+    "input_cost_per_token": 2e-05,
+    "output_cost_per_token": 0.0001,
+    "cache_read_input_token_cost": 2e-06,
+    "cache_creation_input_token_cost": 2e-05,
+    "cache_creation_input_token_cost_above_1hr": 4e-05,
+    "currency": "CNY",
+    "source": "https://platform.kimi.com/docs/pricing/chat",
+    "mode": "chat",
+    "litellm_provider": "moonshot",
+    "pricing_verified_at": "2026-11-23"
+  },
+  "kimi-k2.7-code": {
+    "input_cost_per_token": 6.5e-06,
+    "output_cost_per_token": 2.7e-05,
+    "cache_read_input_token_cost": 1.3e-06,
+    "currency": "CNY",
+    "source": "https://platform.kimi.com/docs/pricing/chat",
+    "mode": "chat",
+    "litellm_provider": "moonshot",
+    "pricing_verified_at": "2026-11-23"
+  },
+  "kimi-k2.7-code-highspeed": {
+    "input_cost_per_token": 1.3e-05,
+    "output_cost_per_token": 5.4e-05,
+    "cache_read_input_token_cost": 2.6e-06,
+    "currency": "CNY",
+    "source": "https://platform.kimi.com/docs/pricing/chat",
+    "mode": "chat",
+    "litellm_provider": "moonshot",
+    "pricing_verified_at": "2026-11-23"
+  },
+  "kimi-k2.6": {
+    "input_cost_per_token": 6.5e-06,
+    "output_cost_per_token": 2.7e-05,
+    "cache_read_input_token_cost": 1.1e-06,
+    "currency": "CNY",
+    "source": "https://platform.kimi.com/docs/pricing/chat",
+    "mode": "chat",
+    "litellm_provider": "moonshot",
+    "pricing_verified_at": "2026-11-23"
+  },
+  "glm-5.2": {
+    "input_cost_per_token": 8e-06,
+    "output_cost_per_token": 2.8e-05,
+    "cache_read_input_token_cost": 2e-06,
+    "currency": "CNY",
+    "source": "https://docs.bigmodel.cn/cn/guide/start/pricing",
+    "mode": "chat",
+    "litellm_provider": "zhipu",
+    "pricing_verified_at": "2026-11-23"
+  },
+  "glm-5.3": {
+    "input_cost_per_token": 8e-06,
+    "output_cost_per_token": 2.8e-05,
+    "cache_read_input_token_cost": 2e-06,
+    "currency": "CNY",
+    "source": "https://docs.bigmodel.cn/cn/guide/start/pricing",
+    "mode": "chat",
+    "litellm_provider": "zhipu",
+    "pricing_verified_at": "2026-11-23"
+  },
+  "glm-5.3-flash": {
+    "input_cost_per_token": 8e-07,
+    "output_cost_per_token": 2.8e-06,
+    "cache_read_input_token_cost": 2.3e-07,
+    "cache_creation_input_token_cost": 0,
+    "currency": "CNY",
+    "source": "https://docs.bigmodel.cn/cn/guide/start/pricing",
+    "mode": "chat",
+    "litellm_provider": "zhipu",
+    "pricing_verified_at": "2026-11-23"
+  },
+  "glm-5.3-flashx": {
+    "input_cost_per_token": 2e-06,
+    "output_cost_per_token": 7e-06,
+    "cache_read_input_token_cost": 5.7e-07,
+    "cache_creation_input_token_cost": 0,
+    "currency": "CNY",
+    "source": "https://docs.bigmodel.cn/cn/guide/start/pricing",
+    "mode": "chat",
+    "litellm_provider": "zhipu",
+    "pricing_verified_at": "2026-11-23"
+  },
+  "glm-5.3-flashx-legal": {
+    "input_cost_per_token": 2e-06,
+    "output_cost_per_token": 7e-06,
+    "cache_read_input_token_cost": 5.7e-07,
+    "cache_creation_input_token_cost": 0,
+    "currency": "CNY",
+    "source": "https://docs.bigmodel.cn/cn/guide/start/pricing",
+    "mode": "chat",
+    "litellm_provider": "zhipu",
+    "pricing_verified_at": "2026-11-23"
+  },
+  "glm-5v-turbo": {
+    "input_cost_per_token": 5e-06,
+    "output_cost_per_token": 2.2e-05,
+    "cache_read_input_token_cost": 1.2e-06,
+    "input_cost_per_token_above_32k_tokens": 7e-06,
+    "output_cost_per_token_above_32k_tokens": 2.6e-05,
+    "cache_read_input_token_cost_above_32k_tokens": 1.8e-06,
+    "currency": "CNY",
+    "source": "https://docs.bigmodel.cn/cn/guide/start/pricing",
+    "mode": "chat",
+    "litellm_provider": "zhipu",
+    "pricing_verified_at": "2026-11-23"
+  },
+  "minimax-m3": {
+    "input_cost_per_token": 2.1e-06,
+    "output_cost_per_token": 8.4e-06,
+    "cache_read_input_token_cost": 4.2e-07,
+    "input_cost_per_token_above_512k_tokens": 4.2e-06,
+    "output_cost_per_token_above_512k_tokens": 1.68e-05,
+    "cache_read_input_token_cost_above_512k_tokens": 8.4e-07,
+    "currency": "CNY",
+    "source": "https://platform.minimaxi.com/document/Price",
+    "mode": "chat",
+    "litellm_provider": "minimax",
+    "pricing_verified_at": "2026-11-23"
+  },
+  "minimax-m3.1-flash": {
+    "input_cost_per_token": 1e-06,
+    "output_cost_per_token": 4e-06,
+    "cache_read_input_token_cost": 1e-07,
+    "currency": "CNY",
+    "source": "https://platform.minimaxi.com/document/Price",
+    "mode": "chat",
+    "litellm_provider": "minimax",
+    "pricing_verified_at": "2026-11-23"
+  },
+  "mimo-v2.6-pro": {
+    "input_cost_per_token": 3e-06,
+    "output_cost_per_token": 6e-06,
+    "cache_read_input_token_cost": 2.5e-08,
+    "currency": "CNY",
+    "source": "https://platform.xiaomimimo.com/docs/zh-CN/price/pay-as-you-go",
+    "mode": "chat",
+    "litellm_provider": "xiaomi",
+    "pricing_verified_at": "2026-11-23"
+  },
+  "mimo-v2.6-flash": {
+    "input_cost_per_token": 1e-06,
+    "output_cost_per_token": 2e-06,
+    "cache_read_input_token_cost": 2e-08,
+    "currency": "CNY",
+    "source": "https://platform.xiaomimimo.com/docs/zh-CN/price/pay-as-you-go",
+    "mode": "chat",
+    "litellm_provider": "xiaomi",
+    "pricing_verified_at": "2026-11-23"
+  },
+  "mimo-v2.6-pro-ultraspeed": {
+    "input_cost_per_token": 3e-05,
+    "output_cost_per_token": 6e-05,
+    "cache_read_input_token_cost": 2.5e-07,
+    "currency": "CNY",
+    "source": "https://platform.xiaomimimo.com/docs/zh-CN/price/pay-as-you-go",
+    "mode": "chat",
+    "litellm_provider": "xiaomi",
+    "pricing_verified_at": "2026-11-23"
+  },
+  "qwen3.8-max": {
+    "input_cost_per_token": 1.2e-05,
+    "output_cost_per_token": 3.6e-05,
+    "cache_read_input_token_cost": 2.2e-07,
+    "currency": "CNY",
+    "source": "https://mofcloud.cn/tools/llm-explorer/qwen3-8-max/",
+    "mode": "chat",
+    "litellm_provider": "dashscope",
+    "pricing_verified_at": "2026-11-23",
+    "pricing_notes": "User-confirmed reference image (2026-11-23): CNY 12 input, 36 output, 0.22 cache read per million tokens. Cache-write price was not quoted."
+  },
+  "qwen3.8-flash": {
+    "input_cost_per_token": 7.9e-07,
+    "output_cost_per_token": 2.67e-06,
+    "cache_read_input_token_cost": 1e-07,
+    "currency": "CNY",
+    "source": "https://mofcloud.cn/tools/llm-explorer/qwen3-8-flash/",
+    "mode": "chat",
+    "litellm_provider": "dashscope",
+    "pricing_verified_at": "2026-11-23",
+    "pricing_notes": "User-confirmed reference image (2026-11-23): CNY 0.79 input, 2.67 output, 0.10 cache read per million tokens. Cache-write price was not quoted."
+  },
+  "baichuan-m2": {
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "baichuan",
+    "source": "https://platform.baichuan-ai.com/prices",
+    "pricing_reference": "https://mofcloud.cn/tools/llm-explorer/",
+    "pricing_reference_model": "baichuan-m2",
+    "pricing_data_source": "https://www.llmabacus.com",
+    "pricing_data_license": "CC-BY-4.0",
+    "pricing_verified_at": "2026-11-22",
+    "pricing_collected_at": "2026-11-23",
+    "input_cost_per_token": 2e-06,
+    "output_cost_per_token": 2e-05
+  },
+  "baichuan-m3-plus": {
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "baichuan",
+    "source": "https://platform.baichuan-ai.com/prices",
+    "pricing_reference": "https://mofcloud.cn/tools/llm-explorer/",
+    "pricing_reference_model": "baichuan-m3-plus",
+    "pricing_data_source": "https://www.llmabacus.com",
+    "pricing_data_license": "CC-BY-4.0",
+    "pricing_verified_at": "2026-11-22",
+    "pricing_collected_at": "2026-11-23",
+    "input_cost_per_token": 5e-06,
+    "output_cost_per_token": 9e-06
+  },
+  "doubao-1.5-pro": {
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "bytedance",
+    "source": "https://www.volcengine.com/docs/82379/1544106",
+    "pricing_reference": "https://mofcloud.cn/tools/llm-explorer/",
+    "pricing_reference_model": "doubao-1-5-pro",
+    "pricing_data_source": "https://www.llmabacus.com",
+    "pricing_data_license": "CC-BY-4.0",
+    "pricing_verified_at": "2026-09-28",
+    "pricing_collected_at": "2026-11-23",
+    "input_cost_per_token": 8e-07,
+    "output_cost_per_token": 2e-06,
+    "cache_read_input_token_cost": 1.6e-07
+  },
+  "doubao-1.6": {
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "bytedance",
+    "source": "https://www.volcengine.com/docs/82379/1544106",
+    "pricing_reference": "https://mofcloud.cn/tools/llm-explorer/",
+    "pricing_reference_model": "doubao-1-6",
+    "pricing_data_source": "https://www.llmabacus.com",
+    "pricing_data_license": "CC-BY-4.0",
+    "pricing_verified_at": "2026-09-28",
+    "pricing_collected_at": "2026-11-23",
+    "input_cost_per_token": 8e-07,
+    "output_cost_per_token": 8e-06,
+    "cache_read_input_token_cost": 1.6e-07,
+    "context_pricing_tiers": [
+      {
+        "min_tokens": 0,
+        "input_price": 8e-07,
+        "output_price": 8e-06,
+        "max_tokens": 32000,
+        "cache_read_price": 1.6e-07
+      },
+      {
+        "min_tokens": 32000,
+        "input_price": 1.2e-06,
+        "output_price": 1.6e-05,
+        "max_tokens": 128000,
+        "cache_read_price": 1.6e-07
+      },
+      {
+        "min_tokens": 128000,
+        "input_price": 2.4e-06,
+        "output_price": 2.4e-05,
+        "cache_read_price": 1.6e-07
+      }
+    ]
+  },
+  "doubao-seed-2.1-pro": {
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "bytedance",
+    "source": "https://www.volcengine.com/docs/82379/1544106",
+    "pricing_reference": "https://mofcloud.cn/tools/llm-explorer/",
+    "pricing_reference_model": "doubao-seed-2-1-pro",
+    "pricing_data_source": "https://www.llmabacus.com",
+    "pricing_data_license": "CC-BY-4.0",
+    "pricing_verified_at": "2026-09-28",
+    "pricing_collected_at": "2026-11-23",
+    "input_cost_per_token": 6e-06,
+    "output_cost_per_token": 3e-05,
+    "cache_read_input_token_cost": 1.2e-06
+  },
+  "ernie-4.5-turbo": {
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "baidu",
+    "source": "https://cloud.baidu.com/doc/qianfan/s/wmh4sv6ya",
+    "pricing_reference": "https://mofcloud.cn/tools/llm-explorer/",
+    "pricing_reference_model": "ernie-4-5-turbo",
+    "pricing_data_source": "https://www.llmabacus.com",
+    "pricing_data_license": "CC-BY-4.0",
+    "pricing_verified_at": "2026-09-28",
+    "pricing_collected_at": "2026-11-23",
+    "input_cost_per_token": 8e-07,
+    "output_cost_per_token": 3.2e-06,
+    "cache_read_input_token_cost": 2e-07
+  },
+  "ernie-5.1": {
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "baidu",
+    "source": "https://cloud.baidu.com/doc/qianfan/s/wmh4sv6ya",
+    "pricing_reference": "https://mofcloud.cn/tools/llm-explorer/",
+    "pricing_reference_model": "ernie-5-1",
+    "pricing_data_source": "https://www.llmabacus.com",
+    "pricing_data_license": "CC-BY-4.0",
+    "pricing_verified_at": "2026-09-28",
+    "pricing_collected_at": "2026-11-23",
+    "input_cost_per_token": 4e-06,
+    "output_cost_per_token": 1.8e-05,
+    "context_pricing_tiers": [
+      {
+        "min_tokens": 0,
+        "input_price": 4e-06,
+        "output_price": 1.8e-05,
+        "max_tokens": 32000
+      },
+      {
+        "min_tokens": 32000,
+        "input_price": 6e-06,
+        "output_price": 2.2e-05
+      }
+    ]
+  },
+  "ernie-x1-turbo": {
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "baidu",
+    "source": "https://cloud.baidu.com/doc/qianfan/s/wmh4sv6ya",
+    "pricing_reference": "https://mofcloud.cn/tools/llm-explorer/",
+    "pricing_reference_model": "ernie-x1-turbo",
+    "pricing_data_source": "https://www.llmabacus.com",
+    "pricing_data_license": "CC-BY-4.0",
+    "pricing_verified_at": "2026-09-28",
+    "pricing_collected_at": "2026-11-23",
+    "input_cost_per_token": 1e-06,
+    "output_cost_per_token": 4e-06
+  },
+  "glm-5": {
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "zhipu",
+    "source": "https://open.bigmodel.cn/pricing",
+    "pricing_reference": "https://mofcloud.cn/tools/llm-explorer/",
+    "pricing_reference_model": "glm-5",
+    "pricing_data_source": "https://www.llmabacus.com",
+    "pricing_data_license": "CC-BY-4.0",
+    "pricing_verified_at": "2026-09-28",
+    "pricing_collected_at": "2026-11-23",
+    "input_cost_per_token": 4e-06,
+    "output_cost_per_token": 1.8e-05,
+    "cache_read_input_token_cost": 1e-06,
+    "context_pricing_tiers": [
+      {
+        "min_tokens": 0,
+        "input_price": 4e-06,
+        "output_price": 1.8e-05,
+        "max_tokens": 32000,
+        "cache_read_price": 1e-06
+      },
+      {
+        "min_tokens": 32000,
+        "input_price": 6e-06,
+        "output_price": 2.2e-05,
+        "cache_read_price": 1.5e-06
+      }
+    ]
+  },
+  "glm-5.1": {
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "zhipu",
+    "source": "https://open.bigmodel.cn/pricing",
+    "pricing_reference": "https://mofcloud.cn/tools/llm-explorer/",
+    "pricing_reference_model": "glm-5-1",
+    "pricing_data_source": "https://www.llmabacus.com",
+    "pricing_data_license": "CC-BY-4.0",
+    "pricing_verified_at": "2026-09-28",
+    "pricing_collected_at": "2026-11-23",
+    "input_cost_per_token": 6e-06,
+    "output_cost_per_token": 2.4e-05,
+    "cache_read_input_token_cost": 1.3e-06,
+    "context_pricing_tiers": [
+      {
+        "min_tokens": 0,
+        "input_price": 6e-06,
+        "output_price": 2.4e-05,
+        "max_tokens": 32000,
+        "cache_read_price": 1.3e-06
+      },
+      {
+        "min_tokens": 32000,
+        "input_price": 8e-06,
+        "output_price": 2.8e-05,
+        "cache_read_price": 2e-06
+      }
+    ]
+  },
+  "hunyuan-2.0-think": {
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "tencent",
+    "source": "https://cloud.tencent.com/document/product/1729/97731",
+    "pricing_reference": "https://mofcloud.cn/tools/llm-explorer/",
+    "pricing_reference_model": "hunyuan-2-0-think",
+    "pricing_data_source": "https://www.llmabacus.com",
+    "pricing_data_license": "CC-BY-4.0",
+    "pricing_verified_at": "2026-09-28",
+    "pricing_collected_at": "2026-11-23",
+    "input_cost_per_token": 3.975e-06,
+    "output_cost_per_token": 1.59e-05
+  },
+  "hy3": {
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "tencent",
+    "source": "https://cloud.tencent.com/document/product/1729/97731",
+    "pricing_reference": "https://mofcloud.cn/tools/llm-explorer/",
+    "pricing_reference_model": "hunyuan-hy3",
+    "pricing_data_source": "https://www.llmabacus.com",
+    "pricing_data_license": "CC-BY-4.0",
+    "pricing_verified_at": "2026-09-28",
+    "pricing_collected_at": "2026-11-23",
+    "input_cost_per_token": 1e-06,
+    "output_cost_per_token": 4e-06,
+    "cache_read_input_token_cost": 2.5e-07
+  },
+  "hy4-preview": {
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "tencent",
+    "source": "https://cloud.tencent.com/document/product/1729/97731",
+    "pricing_reference": "https://mofcloud.cn/tools/llm-explorer/",
+    "pricing_reference_model": "hunyuan-hy4-preview",
+    "pricing_data_source": "https://www.llmabacus.com",
+    "pricing_data_license": "CC-BY-4.0",
+    "pricing_verified_at": "2026-09-28",
+    "pricing_collected_at": "2026-11-23",
+    "input_cost_per_token": 6e-06,
+    "output_cost_per_token": 1.8e-05,
+    "cache_read_input_token_cost": 3e-07
+  },
+  "hunyuan-t1": {
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "tencent",
+    "source": "https://cloud.tencent.com/document/product/1729/97731",
+    "pricing_reference": "https://mofcloud.cn/tools/llm-explorer/",
+    "pricing_reference_model": "hunyuan-t1",
+    "pricing_data_source": "https://www.llmabacus.com",
+    "pricing_data_license": "CC-BY-4.0",
+    "pricing_verified_at": "2026-09-28",
+    "pricing_collected_at": "2026-11-23",
+    "input_cost_per_token": 1e-06,
+    "output_cost_per_token": 4e-06
+  },
+  "hunyuan-turbos": {
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "tencent",
+    "source": "https://cloud.tencent.com/document/product/1729/97731",
+    "pricing_reference": "https://mofcloud.cn/tools/llm-explorer/",
+    "pricing_reference_model": "hunyuan-turbos",
+    "pricing_data_source": "https://www.llmabacus.com",
+    "pricing_data_license": "CC-BY-4.0",
+    "pricing_verified_at": "2026-09-28",
+    "pricing_collected_at": "2026-11-23",
+    "input_cost_per_token": 8e-07,
+    "output_cost_per_token": 2e-06
+  },
+  "mimo-v2.5": {
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "xiaomi",
+    "source": "https://mimo.mi.com/docs/zh-CN/price/pay-as-you-go",
+    "pricing_reference": "https://mofcloud.cn/tools/llm-explorer/",
+    "pricing_reference_model": "mimo-v2-5",
+    "pricing_data_source": "https://www.llmabacus.com",
+    "pricing_data_license": "CC-BY-4.0",
+    "pricing_verified_at": "2026-09-28",
+    "pricing_collected_at": "2026-11-23",
+    "input_cost_per_token": 1e-06,
+    "output_cost_per_token": 2e-06,
+    "cache_read_input_token_cost": 2e-08
+  },
+  "minimax-m2.7": {
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "minimax",
+    "source": "https://platform.minimaxi.com/docs/guides/pricing-paygo",
+    "pricing_reference": "https://mofcloud.cn/tools/llm-explorer/",
+    "pricing_reference_model": "minimax-m2-7",
+    "pricing_data_source": "https://www.llmabacus.com",
+    "pricing_data_license": "CC-BY-4.0",
+    "pricing_verified_at": "2026-10-19",
+    "pricing_collected_at": "2026-11-23",
+    "input_cost_per_token": 2.1e-06,
+    "output_cost_per_token": 8.4e-06,
+    "cache_read_input_token_cost": 4.2e-07
+  },
+  "minimax-m2.7-highspeed": {
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "minimax",
+    "source": "https://platform.minimaxi.com/docs/guides/pricing-paygo",
+    "pricing_reference": "https://mofcloud.cn/tools/llm-explorer/",
+    "pricing_reference_model": "minimax-m2-7-highspeed",
+    "pricing_data_source": "https://www.llmabacus.com",
+    "pricing_data_license": "CC-BY-4.0",
+    "pricing_verified_at": "2026-10-19",
+    "pricing_collected_at": "2026-11-23",
+    "input_cost_per_token": 4.2e-06,
+    "output_cost_per_token": 1.68e-05,
+    "cache_read_input_token_cost": 4.2e-07
+  },
+  "qwen3.5-flash": {
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "alibaba",
+    "source": "https://help.aliyun.com/zh/model-studio/model-pricing",
+    "pricing_reference": "https://mofcloud.cn/tools/llm-explorer/",
+    "pricing_reference_model": "qwen3-5-flash",
+    "pricing_data_source": "https://www.llmabacus.com",
+    "pricing_data_license": "CC-BY-4.0",
+    "pricing_verified_at": "2026-10-10",
+    "pricing_collected_at": "2026-11-23",
+    "input_cost_per_token": 2e-07,
+    "output_cost_per_token": 2e-06,
+    "context_pricing_tiers": [
+      {
+        "min_tokens": 0,
+        "input_price": 2e-07,
+        "output_price": 2e-06,
+        "max_tokens": 128000
+      },
+      {
+        "min_tokens": 128000,
+        "input_price": 8e-07,
+        "output_price": 8e-06,
+        "max_tokens": 256000
+      },
+      {
+        "min_tokens": 256000,
+        "input_price": 1.2e-06,
+        "output_price": 1.2e-05
+      }
+    ]
+  },
+  "qwen3.5-plus": {
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "alibaba",
+    "source": "https://help.aliyun.com/zh/model-studio/model-pricing",
+    "pricing_reference": "https://mofcloud.cn/tools/llm-explorer/",
+    "pricing_reference_model": "qwen3-5-plus",
+    "pricing_data_source": "https://www.llmabacus.com",
+    "pricing_data_license": "CC-BY-4.0",
+    "pricing_verified_at": "2026-10-10",
+    "pricing_collected_at": "2026-11-23",
+    "input_cost_per_token": 8e-07,
+    "output_cost_per_token": 4.8e-06,
+    "context_pricing_tiers": [
+      {
+        "min_tokens": 0,
+        "input_price": 8e-07,
+        "output_price": 4.8e-06,
+        "max_tokens": 128000
+      },
+      {
+        "min_tokens": 128000,
+        "input_price": 2e-06,
+        "output_price": 1.2e-05,
+        "max_tokens": 256000
+      },
+      {
+        "min_tokens": 256000,
+        "input_price": 4e-06,
+        "output_price": 2.4e-05
+      }
+    ]
+  },
+  "qwen3.6-max-preview": {
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "alibaba",
+    "source": "https://help.aliyun.com/zh/model-studio/model-pricing",
+    "pricing_reference": "https://mofcloud.cn/tools/llm-explorer/",
+    "pricing_reference_model": "qwen3-6-max-preview",
+    "pricing_data_source": "https://www.llmabacus.com",
+    "pricing_data_license": "CC-BY-4.0",
+    "pricing_verified_at": "2026-10-10",
+    "pricing_collected_at": "2026-11-23",
+    "input_cost_per_token": 9e-06,
+    "output_cost_per_token": 5.4e-05,
+    "context_pricing_tiers": [
+      {
+        "min_tokens": 0,
+        "input_price": 9e-06,
+        "output_price": 5.4e-05,
+        "max_tokens": 128000
+      },
+      {
+        "min_tokens": 128000,
+        "input_price": 1.5e-05,
+        "output_price": 9e-05
+      }
+    ]
+  },
+  "qwen3.7-max": {
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "alibaba",
+    "source": "https://help.aliyun.com/zh/model-studio/model-pricing",
+    "pricing_reference": "https://mofcloud.cn/tools/llm-explorer/",
+    "pricing_reference_model": "qwen3-7-max",
+    "pricing_data_source": "https://www.llmabacus.com",
+    "pricing_data_license": "CC-BY-4.0",
+    "pricing_verified_at": "2026-10-10",
+    "pricing_collected_at": "2026-11-23",
+    "input_cost_per_token": 1.2e-05,
+    "output_cost_per_token": 3.6e-05
+  },
+  "qwen3.8-max-prime": {
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "alibaba",
+    "source": "https://help.aliyun.com/zh/model-studio/model-pricing",
+    "pricing_reference": "https://mofcloud.cn/tools/llm-explorer/",
+    "pricing_reference_model": "qwen3-8-max-prime",
+    "pricing_data_source": "https://www.llmabacus.com",
+    "pricing_data_license": "CC-BY-4.0",
+    "pricing_verified_at": "2026-10-10",
+    "pricing_collected_at": "2026-11-23",
+    "input_cost_per_token": 2.4e-05,
+    "output_cost_per_token": 7.2e-05
+  },
+  "qwen3-max": {
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "alibaba",
+    "source": "https://help.aliyun.com/zh/model-studio/model-pricing",
+    "pricing_reference": "https://mofcloud.cn/tools/llm-explorer/",
+    "pricing_reference_model": "qwen3-max",
+    "pricing_data_source": "https://www.llmabacus.com",
+    "pricing_data_license": "CC-BY-4.0",
+    "pricing_verified_at": "2026-10-10",
+    "pricing_collected_at": "2026-11-23",
+    "input_cost_per_token": 2.5e-06,
+    "output_cost_per_token": 1e-05,
+    "context_pricing_tiers": [
+      {
+        "min_tokens": 0,
+        "input_price": 2.5e-06,
+        "output_price": 1e-05,
+        "max_tokens": 32000
+      },
+      {
+        "min_tokens": 32000,
+        "input_price": 4e-06,
+        "output_price": 1.6e-05,
+        "max_tokens": 128000
+      },
+      {
+        "min_tokens": 128000,
+        "input_price": 7e-06,
+        "output_price": 2.8e-05
+      }
+    ]
+  },
+  "spark-pro": {
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "xfyun",
+    "source": "https://xinghuo.xfyun.cn/sparkapi",
+    "pricing_reference": "https://mofcloud.cn/tools/llm-explorer/",
+    "pricing_reference_model": "spark-pro",
+    "pricing_data_source": "https://www.llmabacus.com",
+    "pricing_data_license": "CC-BY-4.0",
+    "pricing_verified_at": "2026-09-28",
+    "pricing_collected_at": "2026-11-23",
+    "input_cost_per_token": 5e-06,
+    "output_cost_per_token": 5e-06
+  },
+  "spark-ultra": {
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "xfyun",
+    "source": "https://xinghuo.xfyun.cn/sparkapi",
+    "pricing_reference": "https://mofcloud.cn/tools/llm-explorer/",
+    "pricing_reference_model": "spark-ultra",
+    "pricing_data_source": "https://www.llmabacus.com",
+    "pricing_data_license": "CC-BY-4.0",
+    "pricing_verified_at": "2026-09-28",
+    "pricing_collected_at": "2026-11-23",
+    "input_cost_per_token": 8e-07,
+    "output_cost_per_token": 8e-07
+  },
+  "spark-x2": {
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "xfyun",
+    "source": "https://xinghuo.xfyun.cn/sparkapi",
+    "pricing_reference": "https://mofcloud.cn/tools/llm-explorer/",
+    "pricing_reference_model": "spark-x2",
+    "pricing_data_source": "https://www.llmabacus.com",
+    "pricing_data_license": "CC-BY-4.0",
+    "pricing_verified_at": "2026-09-28",
+    "pricing_collected_at": "2026-11-23",
+    "input_cost_per_token": 2e-06,
+    "output_cost_per_token": 2e-06
+  },
+  "spark-x2.5": {
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "xfyun",
+    "source": "https://xinghuo.xfyun.cn/sparkapi",
+    "pricing_reference": "https://mofcloud.cn/tools/llm-explorer/",
+    "pricing_reference_model": "spark-x2-5",
+    "pricing_data_source": "https://www.llmabacus.com",
+    "pricing_data_license": "CC-BY-4.0",
+    "pricing_verified_at": "2026-09-28",
+    "pricing_collected_at": "2026-11-23",
+    "input_cost_per_token": 1.6e-06,
+    "output_cost_per_token": 6e-06,
+    "cache_read_input_token_cost": 2.4e-07
+  },
+  "spark-x2-flash": {
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "xfyun",
+    "source": "https://xinghuo.xfyun.cn/sparkapi",
+    "pricing_reference": "https://mofcloud.cn/tools/llm-explorer/",
+    "pricing_reference_model": "spark-x2-flash",
+    "pricing_data_source": "https://www.llmabacus.com",
+    "pricing_data_license": "CC-BY-4.0",
+    "pricing_verified_at": "2026-09-28",
+    "pricing_collected_at": "2026-11-23",
+    "input_cost_per_token": 2e-06,
+    "output_cost_per_token": 2e-06
+  },
+  "step-3.7-flash": {
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "stepfun",
+    "source": "https://platform.stepfun.com",
+    "pricing_reference": "https://mofcloud.cn/tools/llm-explorer/",
+    "pricing_reference_model": "step-3-7-flash",
+    "pricing_data_source": "https://www.llmabacus.com",
+    "pricing_data_license": "CC-BY-4.0",
+    "pricing_verified_at": "2026-09-28",
+    "pricing_collected_at": "2026-11-23",
+    "input_cost_per_token": 1.35e-06,
+    "output_cost_per_token": 8.1e-06,
+    "cache_read_input_token_cost": 2.7e-07
+  }
 }

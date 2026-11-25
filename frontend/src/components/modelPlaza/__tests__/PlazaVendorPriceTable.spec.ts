@@ -84,13 +84,70 @@ describe('PlazaVendorPriceTable model ID copy', () => {
 })
 
 describe('PlazaVendorPriceTable 本站价与官方价', () => {
-  it('直接在表格显示实付与小字基础参考价，移除详情入口与弹窗', () => {
+  it.each(['group', 'channel'] as const)('参考价优先使用 %s 配置，节省继续以官方价计算', source => {
+    const m = tokenModel({ pricing_source: source,
+      official_pricing: { input_price: 3e-6, output_price: 15e-6, cache_read_price: null, cache_write_price: null } })
+    m.pricing!.input_price = 5e-6
+    const cell = mountTable([m], group()).get('[data-price-field=input_price]')
+    const reference = cell.get('[data-reference-price]')
+    expect(reference.text()).toContain('$5.00')
+    expect(reference.attributes('data-reference-source')).toBe(source)
+    expect(cell.get('[data-site-price]').text()).toBe('$2.50')
+    expect(cell.get('[data-savings]').text()).toContain('¥17.60')
+    expect(cell.get('[data-savings]').attributes('data-savings-reference')).toBe('official')
+  })
+
+  it('未配置本站价时使用官方参考，零元本站配置不回退', async () => {
+    const m = tokenModel({ pricing_source: 'official',
+      official_pricing: { input_price: 3e-6, output_price: 15e-6, cache_read_price: null, cache_write_price: null } })
+    const wrapper = mountTable([m])
+    expect(wrapper.get('[data-reference-price]').text()).toContain('$3.00')
+    expect(wrapper.get('[data-reference-price]').attributes('data-reference-source')).toBe('official')
+    await wrapper.setProps({ models: [{ ...m, pricing_source: 'channel', pricing: { ...m.pricing!, input_price: 0 } }] })
+    expect(wrapper.get('[data-reference-price]').text()).toContain('$0.00')
+    expect(wrapper.get('[data-reference-price]').attributes('data-reference-source')).toBe('channel')
+  })
+
+  it('官方价置于参考价上方，本站配置为零时仍相对官方节省 100%', () => {
+    const m = tokenModel({ pricing_source: 'group',
+      official_pricing: { input_price: 3e-6, output_price: 15e-6, cache_read_price: null, cache_write_price: null } })
+    m.pricing!.input_price = 0
+    const cell = mountTable([m], group()).get('[data-price-field=input_price]')
+    expect(cell.get('[data-official-reference]').text()).toContain('$3.00')
+    expect(cell.get('[data-reference-price]').text()).toContain('$0.00')
+    expect(cell.get('[data-site-price]').text()).toBe('$0.00')
+    expect(cell.get('[data-savings]').text()).toContain('100.00%')
+    expect(cell.get('[data-savings]').text()).toContain('¥20.10')
+    const html = cell.html()
+    expect(html.indexOf('data-official-reference')).toBeLessThan(html.indexOf('data-reference-price'))
+    expect(html.indexOf('data-reference-price')).toBeLessThan(html.indexOf('data-site-price'))
+  })
+
+  it.each([0, null])('缓存写入区分官方零价和未收录，不把缺失当成免费（official=%s）', officialPrice => {
+    const m = tokenModel({ name: 'glm-5.3-flash', platform: 'zhipu',
+      official_pricing: { input_price: 1.5e-7, output_price: 5e-7, cache_read_price: 3e-8, cache_write_price: officialPrice, currency: 'CNY' } })
+    m.pricing!.cache_write_price = 0
+    const cell = mountTable([m]).get('[data-price-field=cache_write_price]')
+    expect(cell.get('[data-reference-price]').text()).toContain('¥0.00')
+    expect(cell.get('[data-site-price]').text()).toBe('¥0.00')
+    if (officialPrice === 0) {
+      expect(cell.get('[data-official-reference]').text()).toContain('¥0.00')
+      expect(cell.get('[data-savings]').text()).toBe('modelPlaza.comparison.sameOfficialPrice')
+    } else {
+      expect(cell.get('[data-official-reference]').text()).toContain('—')
+      expect(cell.find('[data-savings]').exists()).toBe(false)
+      expect(cell.text()).toContain('modelPlaza.comparison.noOfficialReference')
+    }
+    expect(cell.text()).not.toContain('100.00%')
+  })
+
+  it('直接在表格显示实付与小字本站基础参考价，移除详情入口与弹窗', () => {
     const m = tokenModel({ pricing_source: 'group',
       official_pricing: { input_price: 3e-6, output_price: 15e-6, cache_read_price: null, cache_write_price: null } })
     m.pricing!.input_price = 5e-6
     const wrapper = mountTable([m], group({ rate_multiplier: 0.5 }))
     expect(wrapper.get('tbody td [data-site-price]').text()).toBe('$2.50')
-    const reference = wrapper.get('tbody td [data-configured-price]')
+    const reference = wrapper.get('tbody td [data-reference-price]')
     expect(reference.text()).toContain('$5.00')
     expect(reference.text()).not.toContain('$3.00')
     expect(reference.classes()).toContain('text-xs')
@@ -104,9 +161,55 @@ describe('PlazaVendorPriceTable 本站价与官方价', () => {
     m.pricing!.input_price = 5e-6
     const wrapper = mountTable([m], group({ rate_multiplier: 0.5 }))
     const saving = wrapper.get('[data-price-field=input_price] [data-savings]')
-    expect(saving.text()).toContain('¥31.00')
-    expect(saving.text()).toContain('92.54%')
-    expect(saving.classes()).toContain('text-emerald-600')
+    expect(saving.text()).toContain('¥17.60')
+    expect(saving.text()).toContain('87.56%')
+    expect(saving.classes()).toContain('pz-savings-highlight')
+  })
+
+  it('本站基础参考置顶，实付居中且节省独立以官方价计算', () => {
+    const m = tokenModel({ pricing_source: 'group',
+      official_pricing: { input_price: 3e-6, output_price: 15e-6, cache_read_price: null, cache_write_price: null } })
+    m.pricing!.input_price = 5e-6
+    const wrapper = mountTable([m], group({ rate_multiplier: 0.5 }))
+    const cell = wrapper.get('[data-price-field=input_price]')
+    expect(cell.get('[data-reference-price]').text()).toContain('$5.00')
+    expect(cell.get('[data-site-price]').text()).toBe('$2.50')
+    const saving = cell.get('[data-savings]')
+    expect(saving.text()).toContain('¥17.60')
+    expect(saving.text()).toContain('87.56%')
+    expect(saving.attributes('data-savings-reference')).toBe('official')
+    expect(saving.classes()).toContain('pz-savings-highlight')
+    expect(cell.find('[data-configured-price]').exists()).toBe(false)
+    const html = cell.html()
+    expect(html.indexOf('data-reference-price')).toBeLessThan(html.indexOf('data-site-price'))
+    expect(html.indexOf('data-site-price')).toBeLessThan(html.indexOf('data-savings'))
+  })
+
+  it('实付高于官方人民币成本时显示加价，并使用正数幅度', () => {
+    const m = tokenModel({ official_pricing: { input_price: 1e-6, output_price: null, cache_read_price: null, cache_write_price: null } })
+    m.pricing!.input_price = 10e-6
+    const saving = mountTable([m]).get('[data-price-field=input_price] [data-savings]')
+    expect(saving.classes()).toContain('pz-savings-higher')
+    expect(saving.text()).toContain('modelPlaza.priceTable.surchargeLabel')
+    expect(saving.text()).toContain('49.25%')
+    expect(saving.text()).toContain('¥3.30')
+    expect(saving.text()).not.toContain('-49.25%')
+  })
+
+  it('人民币实际支出相等时显示一致，不把缺省比例作为节省', () => {
+    const m = tokenModel({ official_pricing: { input_price: 1e-6, output_price: null, cache_read_price: null, cache_write_price: null } })
+    m.pricing!.input_price = 6.7e-6
+    const saving = mountTable([m]).get('[data-price-field=input_price] [data-savings]')
+    expect(saving.text()).toBe('modelPlaza.comparison.sameOfficialPrice')
+    expect(saving.text()).not.toContain('100%')
+  })
+
+  it('非零实付即使极低也不宣称节省 100%，零倍率才显示 100%', () => {
+    const m = tokenModel({ official_pricing: { input_price: 3e-6, output_price: null, cache_read_price: null, cache_write_price: null } })
+    const paid = mountTable([m], group({ rate_multiplier: 0.000001 }))
+    expect(paid.get('[data-price-field=input_price] [data-savings]').text()).toContain('>99.99%')
+    const free = mountTable([m], group({ rate_multiplier: 0 }))
+    expect(free.get('[data-price-field=input_price] [data-savings]').text()).toContain('100.00%')
   })
 
   it('全部分组只展示四列官方价格，不展示本站价格', () => {
@@ -197,7 +300,7 @@ describe('PlazaVendorPriceTable 本站价与官方价', () => {
     const m = tokenModel({ official_pricing: { input_price: 3e-6, output_price: 1.5e-5, cache_write_price: null, cache_read_price: null } })
     const wrapper = mountTable([m], group({ rate_multiplier: 0.5 }))
     expect(wrapper.get('[data-site-price]').text()).toBe('$1.50')
-    expect(wrapper.get('[data-configured-price]').text()).toContain('$3.00')
+    expect(wrapper.get('[data-reference-price]').text()).toContain('$3.00')
   })
 
   it('用户专属倍率优先于分组倍率', () => {
@@ -210,14 +313,14 @@ describe('PlazaVendorPriceTable 本站价与官方价', () => {
     expect(text).not.toContain('$1.50')
   })
 
-  it('固定价显示实付价与倍率前基础参考价', () => {
+  it('固定价显示实付价与本站配置的基础参考价', () => {
     const m = tokenModel({ official_pricing: { input_price: 3e-6, output_price: 1e-5, cache_write_price: null, cache_read_price: null } })
     m.pricing!.input_price = 5e-6
     const wrapper = mountTable([m], group({ rate_multiplier: 0.5 }))
     const input = wrapper.get('tbody td')
     expect(input.get('[data-site-price]').text()).toBe('$2.50')
-    expect(input.get('[data-configured-price]').text()).toContain('$5.00')
-    expect(input.find('[data-site-credit], [data-reference-price], [data-reference-cny], [data-price-difference], [data-comparison]').exists()).toBe(false)
+    expect(input.get('[data-reference-price]').text()).toContain('$5.00')
+    expect(input.find('[data-site-credit], [data-reference-cny], [data-price-difference], [data-comparison]').exists()).toBe(false)
   })
 
   it('固定价不随官方参考价改变展示形式', () => {
@@ -296,10 +399,35 @@ describe('PlazaVendorPriceTable 长上下文阶梯', () => {
     } }
     const wrapper = mountTable([m])
     expect(wrapper.findAll('[data-price-field=input_price] [data-site-price]').map(price => price.text())).toEqual(['$3.00', '$6.00'])
-    expect(wrapper.find('[data-reference-price]').exists()).toBe(false)
+    expect(wrapper.get('[data-official-reference]').text()).toContain('$4.00')
     expect(wrapper.findAll('[data-price-tier]').map(tier => tier.text())).toEqual(['≤200K', '>200K'])
     expect(wrapper.get('tbody th.pz-sticky').attributes('rowspan')).toBe('2')
     expect(wrapper.find('[data-price-details-button]').exists()).toBe(false)
+  })
+
+  it('本站阶梯每档把配置参考置顶并按同一档官方价计算蓝底节省', () => {
+    const m = { ...tiered, pricing_source: 'group' as PlazaPricingSource,
+      official_pricing: {
+        input_price: 4e-6, output_price: 2e-5, cache_read_price: null, cache_write_price: null,
+        intervals: [
+          { min_tokens: 0, max_tokens: 200000, input_price: 4e-6, output_price: 2e-5,
+            cache_read_price: null, cache_write_price: null, per_request_price: null },
+          { min_tokens: 200000, max_tokens: null, input_price: 8e-6, output_price: 3e-5,
+            cache_read_price: null, cache_write_price: null, per_request_price: null }
+        ]
+      }
+    }
+    const wrapper = mountTable([m], group({ rate_multiplier: 0.5 }))
+    const rows = wrapper.findAll('[data-price-field=input_price]')
+    expect(rows).toHaveLength(2)
+    expect(rows.map(row => row.get('[data-reference-price]').text())).toEqual([
+      expect.stringContaining('$3.00'), expect.stringContaining('$6.00')
+    ])
+    expect(rows.map(row => row.get('[data-site-price]').text())).toEqual(['$1.50', '$3.00'])
+    expect(rows.map(row => row.get('[data-savings]').text())).toEqual([
+      expect.stringContaining('¥25.30'), expect.stringContaining('¥50.60')
+    ])
+    expect(rows.every(row => row.get('[data-savings]').attributes('data-savings-reference') === 'official')).toBe(true)
   })
 
   it('官方阶梯边界不会增加主表的本站计费档位', () => {
@@ -323,7 +451,7 @@ describe('PlazaVendorPriceTable 长上下文阶梯', () => {
   })
 
   it('本站固定价直接展示一次，不受官方阶梯和官方缓存档位影响', () => {
-    const m = tokenModel({ name: 'gpt-6.1-terra', platform: 'openai',
+    const m = tokenModel({ name: 'gpt-6.1-terra', platform: 'openai', pricing_source: 'official',
       official_pricing: {
         input_price: 1e-6, output_price: 5e-6, cache_read_price: 0.05e-6, cache_write_price: 1.25e-6,
         intervals: [
@@ -343,8 +471,15 @@ describe('PlazaVendorPriceTable 长上下文阶梯', () => {
     const cells = wrapper.get('tbody tr').findAll('td')
     expect(cells.map(cell => cell.findAll('[data-site-price]').map(price => price.text())))
       .toEqual([['$0.09'], ['$0.45'], ['$0.0045'], ['$0.1125', '$0.225']])
-    expect(wrapper.find('[data-reference-price], [data-reference-cny], [data-price-difference]').exists()).toBe(false)
-    expect(wrapper.text()).not.toContain('272K')
+    expect(wrapper.find('[data-reference-cny], [data-price-difference]').exists()).toBe(false)
+    expect(wrapper.findAll('tbody tr')).toHaveLength(1)
+    expect(wrapper.find('[data-price-tier]').exists()).toBe(false)
+    expect(cells[0].get('[data-reference-price]').text()).toContain('$1.00')
+    expect(cells[0].get('[data-reference-tier]').text()).toContain('≤272K')
+    expect(cells[0].get('[data-savings]').text()).toContain('98.66%')
+    expect(cells[0].get('[data-savings]').text()).toContain('¥6.61')
+    expect(cells[3].findAll('[data-reference-price]').map(price => price.text()))
+      .toEqual([expect.stringContaining('$1.25'), expect.stringContaining('$2.50')])
     expect(wrapper.findAll('[data-cache-lifetime]').map(tier => tier.text())).toEqual(['12h'])
   })
 
@@ -357,7 +492,7 @@ describe('PlazaVendorPriceTable 长上下文阶梯', () => {
 })
 
 describe('PlazaVendorPriceTable 缓存与思考等级', () => {
-  it('每个实际档位直接展示实付与基础参考价', () => {
+  it('每个实际档位展示本站基础参考与实付，缺少官方价时不计算节省', () => {
     const m = tokenModel({ name: 'gpt-6.1-terra', platform: 'openai' })
     m.pricing!.intervals = [1, 2].map((factor, index) => ({
       min_tokens: index ? 272000 : 0, max_tokens: index ? null : 272000,
@@ -369,9 +504,10 @@ describe('PlazaVendorPriceTable 缓存与思考等级', () => {
     const rows = wrapper.findAll('tbody tr')
     expect(rows.map(row => row.get('[data-price-tier]').text())).toEqual(['≤272K', '>272K'])
     expect(rows[0].findAll('[data-site-price]').map(price => price.text())).toEqual(['$12.80', '$64.00', '$1.28', '$16.00'])
-    expect(rows[0].findAll('[data-configured-price]').map(price => price.text())).toEqual(['$10.00', '$50.00', '$1.00', '$12.50'].map(price => `modelPlaza.priceTable.referenceLabel${price}`))
+    expect(rows[0].findAll('[data-reference-price]').map(price => price.text())).toEqual(['$10.00', '$50.00', '$1.00', '$12.50'].map(price => `modelPlaza.priceTable.referenceLabel${price}`))
     expect(rows[1].get('[data-site-price]').text()).toBe('$25.60')
-    expect(rows[1].get('[data-configured-price]').text()).toContain('$20.00')
+    expect(rows[1].get('[data-reference-price]').text()).toContain('$20.00')
+    expect(wrapper.find('[data-savings]').exists()).toBe(false)
   })
 
   it.each([false, true])('keeps 12h cache prices distinct in the live vendor table (intervals=%s)', (intervals) => {
@@ -386,7 +522,7 @@ describe('PlazaVendorPriceTable 缓存与思考等级', () => {
     const wrapper = mountTable([m])
     const twelveHour = wrapper.findAll('[data-price-field=cache_write_price] > div').find(pair => pair.find('[data-cache-lifetime]').exists() && pair.get('[data-cache-lifetime]').text() === '12h')!
     expect(twelveHour.get('[data-site-price]').text()).toBe('$2.00')
-    expect(twelveHour.find('[data-reference-price]').exists()).toBe(false)
+    expect(twelveHour.get('[data-official-reference]').text()).toContain('$4.00')
     expect(wrapper.text()).not.toContain('1h')
   })
   it('支持 5m/1h 分档时显示 1h 缓存写入价', () => {
@@ -421,7 +557,7 @@ describe('PlazaVendorPriceTable 缓存与思考等级', () => {
 
 describe('PlazaVendorPriceTable 币种', () => {
   const cnyModel = () =>
-    tokenModel({ name: 'glm-5', platform: 'zhipu', pricing_source: 'channel' })
+    tokenModel({ name: 'glm-5', platform: 'zhipu', pricing_source: 'channel', pricing_rules: { currency: 'CNY', context_status: 'flat', context_tier_count: 1, context_basis: 'whole_request', time_status: 'uniform', price_basis: 'standard' } })
 
   it('具体分组主表按模型厂商显示美元或人民币，并保持倍率后的金额', () => {
     const foreign = tokenModel({ name: 'gpt-6.1-terra', platform: 'openai' })
@@ -437,13 +573,14 @@ describe('PlazaVendorPriceTable 币种', () => {
   })
 
   it('全部分组的国产官方价来自独立参考，本站配置在所选分组生效', async () => {
-    const m = { ...cnyModel(), official_pricing: { input_price: 2e-6, output_price: 8e-6, cache_read_price: null, cache_write_price: null } }
+    const m = { ...cnyModel(), official_pricing: { input_price: 2e-6, output_price: 8e-6, cache_read_price: null, cache_write_price: null, currency: 'CNY' as const } }
     const wrapper = mountTable([m], null)
     try {
-      expect(wrapper.get('[data-price-field=input_price]').text()).toBe('¥13.40')
+      expect(wrapper.get('[data-price-field=input_price]').text()).toBe('¥2.00')
       await wrapper.setProps({ group: group({ rate_multiplier: 0.5 }) })
       expect(wrapper.get('[data-price-field=input_price] [data-site-price]').text()).toBe('¥1.50')
-      expect(wrapper.get('[data-price-field=input_price] [data-configured-price]').text()).toContain('¥3.00')
+      expect(wrapper.get('[data-price-field=input_price] [data-reference-price]').text()).toContain('¥3.00')
+      expect(wrapper.get('[data-price-field=input_price] [data-savings]').text()).toContain('¥0.50')
       await wrapper.setProps({ group: group({ id: 2 }) })
       expect(document.body.querySelector('[data-model-price-details]')).toBeNull()
     } finally { wrapper.unmount() }
@@ -453,7 +590,7 @@ describe('PlazaVendorPriceTable 币种', () => {
     const wrapper = mountTable([cnyModel()])
     const text = wrapper.text()
     expect(text).toContain('¥3.00')
-    expect(text).not.toContain('CNY')
+    expect(wrapper.get('[data-price-currency]').attributes('data-currency')).toBe('CNY')
     expect(wrapper.find('[data-exchange-basis]').exists()).toBe(false)
   })
 
@@ -461,7 +598,7 @@ describe('PlazaVendorPriceTable 币种', () => {
     const wrapper = mountTable([cnyModel()].map((m) => ({ ...m, pricing_source: 'official' as PlazaPricingSource })))
     expect(wrapper.get('[data-site-price]').text()).toBe('¥3.00')
     expect(wrapper.find('[data-site-credit]').exists()).toBe(false)
-    expect(wrapper.text()).not.toContain('CNY')
+    expect(wrapper.get('[data-price-currency]').attributes('data-currency')).toBe('CNY')
   })
 
   it('非国产模型主表显示美元单价', () => {
@@ -521,39 +658,36 @@ describe('PlazaVendorPriceTable 分时倍率', () => {
     expect(wrapper.text()).toContain('$4.00')
   })
 
-  it('分时规则直接显示在模型名下，单价保持标准时段价', () => {
-    const m = tokenModel({
-      time_pricing: {
-        timezone: 'Asia/Shanghai', weekdays_only: true,
-        periods: [
-          { start_time: '09:00:00', end_time: '12:00:00', multiplier: 2 },
-          { start_time: '14:00:00', end_time: '18:00:00', multiplier: 2 }
-        ]
-      }
-    })
+  it('分时时段通过标记详情展示，单价保持标准时段价', async () => {
+    const m = tokenModel({ pricing_rules: { currency: 'USD', context_status: 'flat', context_tier_count: 1,
+      context_basis: 'whole_request', price_basis: 'standard', time_status: 'scheduled', time_rules: [{
+        source: 'channel', timezone: 'Asia/Shanghai', weekdays_only: true, base_multiplier: 1,
+        fields: ['input_price','output_price'], periods: [{ start_time: '09:00', end_time: '12:00', multiplier: 2 }, { start_time: '14:00', end_time: '18:00', multiplier: 2 }]
+      }] } })
     const wrapper = mountTable([m])
-    expect(wrapper.findAll('tbody tr')).toHaveLength(1)
     expect(wrapper.get('[data-site-price]').text()).toBe('$3.00')
-    const periods = wrapper.get('tbody th.pz-sticky [data-time-pricing]')
-    expect(periods.classes()).toContain('text-amber-800')
-    expect(periods.text()).toContain('modelPlaza.table.timePricingWeekdays')
-    expect(periods.text()).toContain('09:00–12:00 ×2')
-    expect(periods.text()).toContain('14:00–18:00 ×2')
-    expect(periods.text()).toContain('Asia/Shanghai')
+    expect(wrapper.get('[data-time-rule]').attributes('data-status')).toBe('scheduled')
+    expect(wrapper.find('[data-time-pricing]').exists()).toBe(false)
+    await wrapper.get('[data-time-rule]').trigger('click')
+    const details = document.body.querySelector('[data-pricing-rule-details]')!
+    expect(details.textContent).toContain('Asia/Shanghai')
+    expect(details.textContent).toContain('09:00–12:00')
+    expect(details.textContent).toContain('14:00–18:00')
+    wrapper.unmount()
   })
 
-  it('高峰时段及倍率显示在模型名下，切换全部分组后隐藏', async () => {
-    const wrapper = mount(PlazaVendorPriceTable, {
-      props: { models: [tokenModel()], group: group({ peak_rate_enabled: true, peak_rate_multiplier: 2 }),
-        caption: 'test', peakWindow: '09:00–18:00 ×2 UTC+8' }
-    })
-    const peak = wrapper.get('tbody th.pz-sticky [data-peak-pricing]')
-    expect(peak.classes()).toContain('text-rose-700')
-    expect(peak.text()).toContain('09:00–18:00 ×2 UTC+8')
-    expect(peak.text().match(/×2/g)).toHaveLength(1)
+  it('分组高峰规则只显示在本站范围，切换官方参考后隐藏未知时段标记', async () => {
+    const m = tokenModel({ pricing_rules: { currency: 'USD', context_status: 'flat', context_tier_count: 1,
+      context_basis: 'whole_request', price_basis: 'standard', time_status: 'scheduled', time_rules: [{ source: 'group', timezone: 'Asia/Shanghai', base_multiplier: 1,
+      fields: ['input_price'], periods: [{ start_time: '09:00', end_time: '18:00', multiplier: 2 }] }] } })
+    const wrapper = mountTable([m])
+    expect(wrapper.get('[data-time-rule]').attributes('data-status')).toBe('scheduled')
     await wrapper.setProps({ group: null })
+    expect(wrapper.find('[data-time-rule]').exists()).toBe(false)
     expect(wrapper.find('[data-pricing-rules]').exists()).toBe(false)
+    wrapper.unmount()
   })
+
 })
 
 describe('PlazaVendorPriceTable 按张与按秒计费', () => {
@@ -598,9 +732,9 @@ describe('PlazaVendorPriceTable 按张与按秒计费', () => {
     const pairs = mountTable([videoModel()], group({ rate_multiplier: 0.5 })).findAll('tbody tr')
     expect(pairs[0].get('[data-price-tier]').text()).toBe('480P')
     expect(pairs[0].get('[data-site-price]').text()).toBe('$0.04modelPlaza.table.perUnitSecond')
-    expect(pairs[0].get('[data-configured-price]').text()).toContain('$0.08')
-    expect(pairs[0].get('[data-configured-price]').text()).toContain('modelPlaza.table.perUnitSecond')
-    expect(pairs[0].find('[data-reference-price]').exists()).toBe(false)
+    expect(pairs[0].get('[data-reference-price]').text()).toContain('$0.08')
+    expect(pairs[0].get('[data-reference-price]').text()).toContain('modelPlaza.table.perUnitSecond')
+    expect(pairs[0].get('[data-official-reference]').text()).toContain('$0.08')
     expect(pairs[1].get('[data-price-tier]').text()).toBe('720P')
     expect(pairs[1].get('[data-site-price]').text()).toBe('$0.07modelPlaza.table.perUnitSecond')
   })
@@ -610,7 +744,7 @@ describe('PlazaVendorPriceTable 按张与按秒计费', () => {
     expect(mountTable([videoModel()], g).get('[data-site-price]').text()).toBe('$0.16modelPlaza.table.perUnitSecond')
   })
 
-  it('图片按张独立定价直接展示实付和基础参考价', () => {
+  it('图片按张独立定价直接展示实付，不与官方按 Token 价比较', () => {
     const m = tokenModel({ name: 'gpt-image-2.5-flare', platform: 'openai', pricing_source: 'group',
       official_pricing: { input_price: 5e-6, output_price: 30e-6, cache_read_price: null, cache_write_price: null } })
     m.pricing!.billing_mode = 'image'
@@ -624,7 +758,8 @@ describe('PlazaVendorPriceTable 按张与按秒计费', () => {
       expect(wrapper.get('thead').text()).not.toContain('modelPlaza.table.output')
       expect(wrapper.get('[data-site-price]').text()).toBe('$0.05modelPlaza.table.perUnitImage')
       expect(wrapper.text()).not.toContain('单独定价')
-      expect(wrapper.get('[data-configured-price]').text()).toContain('$0.20')
+      expect(wrapper.get('[data-reference-price]').text()).toContain('$0.20')
+      expect(wrapper.find('[data-savings]').exists()).toBe(false)
       expect(wrapper.find('[data-model-price-details], [data-price-difference]').exists()).toBe(false)
     } finally { wrapper.unmount() }
   })

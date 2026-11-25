@@ -7,11 +7,13 @@ import (
 	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/domain"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
 )
 
-// PlazaOfficialPricing 模型广场展示用的官方参考价（USD per token），与计费同源：
-// LiteLLM → 内置兜底价卡 → 模型策略。字段为 nil 表示该项缺失（0 视为未配置）。
+// PlazaOfficialPricing 模型广场展示用的官方参考价。token 价格按 Currency 解释，
+// 与实际渠道/计费目录隔离；国产官方人民币目录不会改动额度扣费口径。
 type PlazaOfficialPricing struct {
+	Currency           string
 	InputPrice         *float64
 	OutputPrice        *float64
 	CacheWritePrice    *float64 // 5m 缓存写入（= LiteLLM cache_creation）
@@ -40,8 +42,10 @@ type PlazaModel struct {
 	Platform string
 	Pricing  *ChannelModelPricing
 	// PricingSource 展示定价来自哪一层（见 PlazaPricingSource*）；无任何定价为空。
-	PricingSource   string
-	OfficialPricing *PlazaOfficialPricing
+	PricingSource        string
+	OfficialPricing      *PlazaOfficialPricing
+	PricingRules         *PlazaPricingRules
+	OfficialPricingRules *PlazaPricingRules
 	// LongContextBasis 多档时的计价基准（整单 / 仅超出部分），单档为空。
 	LongContextBasis ContextPricingBasis
 	// TimePricing 计费会生效的分时倍率时段；无分时为 nil。
@@ -323,6 +327,7 @@ func (s *ModelPlazaService) ListGroupsWithAccountModels(ctx context.Context, acc
 	}
 
 	officialMemo := make(map[string]*PlazaOfficialPricing)
+	pricingAt := timezone.Now()
 	out := make([]PlazaGroup, 0, len(order))
 	for _, gid := range order {
 		pg := byGroup[gid]
@@ -365,7 +370,8 @@ func (s *ModelPlazaService) ListGroupsWithAccountModels(ctx context.Context, acc
 			if pg.Models[j].PricingSource == "" && pg.Models[j].Pricing != nil {
 				pg.Models[j].PricingSource = PlazaPricingSourceOfficial
 			}
-			pg.Models[j].OfficialPricing = s.lookupOfficialPricing(ctx, pg.Models[j].Name, officialMemo)
+			pg.Models[j].OfficialPricing = s.lookupOfficialPricing(ctx, pg.Models[j].Name, pg.Models[j].Platform, officialMemo)
+			s.fillPricingRules(ctx, &pg.Models[j], g, pricingAt)
 		}
 		if accountModels != nil {
 			// 全部分组保留配置价目目录；具体分组仅返回真实账号支持的模型。
@@ -536,7 +542,7 @@ func grokMediaOfficialPricing(model string) *PlazaOfficialPricing {
 		return nil
 	}
 	p := plazaMediaPricing(mode, tiers)
-	return &PlazaOfficialPricing{BillingMode: mode, PerRequestPrice: p.PerRequestPrice, Intervals: p.Intervals}
+	return &PlazaOfficialPricing{Currency: "USD", BillingMode: mode, PerRequestPrice: p.PerRequestPrice, Intervals: p.Intervals}
 }
 
 // plazaMediaPricing 把媒体档位价压成展示定价：各档同价时只给一个单价，否则逐档给出。
@@ -654,9 +660,16 @@ func plazaImageDisplayPricing(p *ChannelModelPricing, g *Group) *ChannelModelPri
 // lookupOfficialPricing 查询模型的官方参考价（与计费同源：LiteLLM → 内置兜底 → 模型策略），
 // 带 memo 避免同名模型重复解析。官方阶梯按无分组、无渠道的口径查阶梯表。
 // billingService 为 nil（测试场景）或查不到时返回 nil。
-func (s *ModelPlazaService) lookupOfficialPricing(ctx context.Context, modelName string, memo map[string]*PlazaOfficialPricing) *PlazaOfficialPricing {
+func (s *ModelPlazaService) lookupOfficialPricing(ctx context.Context, modelName, platform string, memo map[string]*PlazaOfficialPricing) *PlazaOfficialPricing {
 	if s.billingService == nil {
 		return nil
+	}
+	if s.pricingService != nil && isDomesticPricingModelName(modelName) {
+		catalog := s.pricingService.GetModelPricing(modelName)
+		if catalog == nil || strings.EqualFold(catalog.OfficialCurrency, "USD") {
+			memo[modelName] = nil
+			return nil
+		}
 	}
 	if cached, ok := memo[modelName]; ok {
 		return cached
@@ -664,10 +677,23 @@ func (s *ModelPlazaService) lookupOfficialPricing(ctx context.Context, modelName
 	var result *PlazaOfficialPricing
 	if mp, err := s.billingService.GetModelPricing(modelName); err == nil && mp != nil {
 		result = &PlazaOfficialPricing{
+			Currency:        mp.Currency,
 			InputPrice:      nonZeroPtr(mp.InputPricePerToken),
 			OutputPrice:     nonZeroPtr(mp.OutputPricePerToken),
 			CacheWritePrice: nonZeroPtr(mp.CacheCreationPricePerToken),
 			CacheReadPrice:  nonZeroPtr(mp.CacheReadPricePerToken),
+		}
+		if result.Currency == "" {
+			result.Currency = "USD"
+		}
+		// A catalog's explicit zero is a free quote, while an absent field is
+		// unknown. Preserve that distinction without changing billing policy.
+		if mp.CacheCreationPricePerToken == 0 && s.pricingService != nil {
+			catalog := s.pricingService.GetModelPricing(modelName)
+			if catalog != nil && !catalog.TokenPricingAbsent && catalog.CacheCreationInputTokenCostExplicit && catalog.CacheCreationInputTokenCost == 0 {
+				zero := 0.0
+				result.CacheWritePrice = &zero
+			}
 		}
 		// 计费只在支持 5m/1h 分档时使用 1h 价，其余情况 1h 价对用户无意义。
 		if mp.SupportsCacheBreakdown {

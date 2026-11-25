@@ -164,10 +164,9 @@ func TestListPlazaGroups_CompositeAndOrdinaryGroupsDoNotLeakPlatforms(t *testing
 		byName[group.Name] = group
 	}
 	require.Len(t, byName["anthropic-only"].Models, 1)
-	require.Equal(t, []PlazaModel{{
-		Name: "claude-sonnet", Platform: PlatformAnthropic, Pricing: byName["anthropic-only"].Models[0].Pricing,
-		PricingSource: PlazaPricingSourceChannel,
-	}}, byName["anthropic-only"].Models)
+	require.Equal(t, "claude-sonnet", byName["anthropic-only"].Models[0].Name)
+	require.Equal(t, PlatformAnthropic, byName["anthropic-only"].Models[0].Platform)
+	require.Equal(t, PlazaPricingSourceChannel, byName["anthropic-only"].Models[0].PricingSource)
 	require.Len(t, byName["composite"].Models, 2)
 	require.Equal(t, []string{"claude-sonnet", "gpt-5"}, []string{
 		byName["composite"].Models[0].Name,
@@ -256,6 +255,119 @@ func TestListPlazaGroups_OfficialPricingFill(t *testing.T) {
 	require.Nil(t, byName["unknown-model"].OfficialPricing)
 	// TokenPricingAbsent 条目不作为官方 token 价展示
 	require.Nil(t, byName["token-absent"].OfficialPricing)
+}
+
+func TestLookupOfficialPricing_CacheWriteZeroAndMissing(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		explicit bool
+		price    float64
+		missing  bool
+	}{
+		{name: "explicit zero", explicit: true, price: 0},
+		{name: "missing", price: 0, missing: true},
+		{name: "positive", explicit: true, price: 6.7e-6},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			pricingSvc := newStubPricingServiceFromMap(map[string]*LiteLLMModelPricing{
+				"glm-5.3-flash": {
+					Mode: "chat", InputCostPerToken: 1.5e-7, OutputCostPerToken: 5e-7,
+					CacheCreationInputTokenCostExplicit: tc.explicit,
+					CacheCreationInputTokenCost:         tc.price,
+					Currency:                            "CNY",
+				},
+			})
+			svc := newPlazaService(nil, nil, pricingSvc)
+			svc.billingService = NewBillingService(&config.Config{}, pricingSvc)
+			// This regression exercises the generic USD directory path; domestic
+			// models intentionally use the curated CNY catalog instead.
+			official := svc.lookupOfficialPricing(context.Background(), "glm-5.3-flash", PlatformOpenAI, map[string]*PlazaOfficialPricing{})
+			require.NotNil(t, official)
+			if tc.missing {
+				require.Nil(t, official.CacheWritePrice, "missing must not be displayed as free")
+			} else {
+				require.NotNil(t, official.CacheWritePrice, "explicit zero must survive the public quote")
+				require.Equal(t, tc.price, *official.CacheWritePrice)
+			}
+		})
+	}
+}
+
+func TestLookupOfficialPricing_DomesticUsesOfficialCNYCatalog(t *testing.T) {
+	pricingSvc := newStubPricingServiceFromMap(map[string]*LiteLLMModelPricing{
+		"glm-5.3":             {InputCostPerToken: 8e-6, OutputCostPerToken: 28e-6, CacheReadInputTokenCost: 2e-6, Currency: "CNY"},
+		"deepseek-v4.1-flash": {InputCostPerToken: 1e-6, OutputCostPerToken: 4e-6, CacheReadInputTokenCost: 0.02e-6, Currency: "CNY"},
+		"deepseek-v4-pro":     {InputCostPerToken: 4.5e-6, OutputCostPerToken: 13.5e-6, CacheReadInputTokenCost: 0.15e-6, Currency: "CNY"},
+	})
+	svc := newPlazaService(nil, nil, pricingSvc)
+	svc.billingService = NewBillingService(&config.Config{}, pricingSvc)
+	pricing := svc.lookupOfficialPricing(context.Background(), "glm-5.3", PlatformZhipu, map[string]*PlazaOfficialPricing{})
+	require.NotNil(t, pricing)
+	require.Equal(t, "CNY", pricing.Currency)
+	require.InDelta(t, 8e-6, *pricing.InputPrice, 1e-15)
+	require.InDelta(t, 28e-6, *pricing.OutputPrice, 1e-15)
+	require.InDelta(t, 2e-6, *pricing.CacheReadPrice, 1e-15)
+	flash := svc.lookupOfficialPricing(context.Background(), "deepseek-v4.1-flash", PlatformDeepseek, map[string]*PlazaOfficialPricing{})
+	require.NotNil(t, flash)
+	require.Equal(t, "CNY", flash.Currency)
+	require.InDelta(t, 1e-6, *flash.InputPrice, 1e-15)
+	require.InDelta(t, 4e-6, *flash.OutputPrice, 1e-15)
+	require.InDelta(t, 0.02e-6, *flash.CacheReadPrice, 1e-15)
+	pro := svc.lookupOfficialPricing(context.Background(), "deepseek-v4-pro", PlatformDeepseek, map[string]*PlazaOfficialPricing{})
+	require.NotNil(t, pro)
+	require.Equal(t, "CNY", pro.Currency)
+	require.InDelta(t, 4.5e-6, *pro.InputPrice, 1e-15)
+	require.InDelta(t, 13.5e-6, *pro.OutputPrice, 1e-15)
+	require.InDelta(t, 0.15e-6, *pro.CacheReadPrice, 1e-15)
+}
+
+func TestLookupOfficialPricing_KimiUsesOfficialCNYCatalog(t *testing.T) {
+	pricingSvc := newStubPricingServiceFromMap(map[string]*LiteLLMModelPricing{
+		"kimi-k3.1-pro": {InputCostPerToken: 13e-6, OutputCostPerToken: 68e-6, CacheReadInputTokenCost: 1.3e-6, CacheCreationInputTokenCost: 13e-6, CacheCreationInputTokenCostAbove1hr: 26e-6, Currency: "CNY"},
+		"kimi-k2.6":     {InputCostPerToken: 6.5e-6, OutputCostPerToken: 27e-6, CacheReadInputTokenCost: 1.1e-6, Currency: "CNY"},
+	})
+	svc := newPlazaService(nil, nil, pricingSvc)
+	svc.billingService = NewBillingService(&config.Config{}, pricingSvc)
+
+	k3 := svc.lookupOfficialPricing(context.Background(), "kimi-k3.1-pro", PlatformKimi, map[string]*PlazaOfficialPricing{})
+	require.NotNil(t, k3)
+	require.Equal(t, "CNY", k3.Currency)
+	require.InDelta(t, 13e-6, *k3.InputPrice, 1e-15)
+	require.InDelta(t, 68e-6, *k3.OutputPrice, 1e-15)
+	require.InDelta(t, 1.3e-6, *k3.CacheReadPrice, 1e-15)
+	require.InDelta(t, 13e-6, *k3.CacheWritePrice, 1e-15)
+	require.InDelta(t, 26e-6, *k3.CacheWrite1hPrice, 1e-15)
+
+	k26 := svc.lookupOfficialPricing(context.Background(), "kimi-k2.6", PlatformKimi, map[string]*PlazaOfficialPricing{})
+	require.NotNil(t, k26)
+	require.Equal(t, "CNY", k26.Currency)
+	require.InDelta(t, 6.5e-6, *k26.InputPrice, 1e-15)
+	require.InDelta(t, 27e-6, *k26.OutputPrice, 1e-15)
+	require.InDelta(t, 1.1e-6, *k26.CacheReadPrice, 1e-15)
+}
+
+func TestLookupOfficialPricing_DomesticWithoutCNYCatalogIsUnavailable(t *testing.T) {
+	pricingSvc := newStubPricingServiceFromMap(map[string]*LiteLLMModelPricing{
+		"deepseek-chat": {InputCostPerToken: 6.7e-6, OutputCostPerToken: 13.4e-6, Currency: "CNY", OfficialCurrency: "USD"},
+		"kimi-k2.7":     {InputCostPerToken: 3.752e-6, OutputCostPerToken: 15.008e-6, Currency: "CNY", OfficialCurrency: "USD"},
+	})
+	svc := newPlazaService(nil, nil, pricingSvc)
+	svc.billingService = NewBillingService(&config.Config{}, pricingSvc)
+	deepseek := svc.lookupOfficialPricing(context.Background(), "deepseek-chat", PlatformDeepseek, map[string]*PlazaOfficialPricing{})
+	require.Nil(t, deepseek, "没有官方 CNY 价的国产模型不应伪造官方人民币价")
+	k27 := svc.lookupOfficialPricing(context.Background(), "kimi-k2.7", PlatformKimi, map[string]*PlazaOfficialPricing{})
+	require.Nil(t, k27)
+}
+
+func TestLookupOfficialPricing_ForeignKeepsUSDDirectory(t *testing.T) {
+	pricingSvc := newStubPricingServiceFromMap(map[string]*LiteLLMModelPricing{
+		"gpt-6-sol": {InputCostPerToken: 2e-6, OutputCostPerToken: 1e-5, CacheReadInputTokenCost: 2e-7},
+	})
+	svc := newPlazaService(nil, nil, pricingSvc)
+	svc.billingService = NewBillingService(&config.Config{}, pricingSvc)
+	pricing := svc.lookupOfficialPricing(context.Background(), "gpt-6-sol", PlatformOpenAI, map[string]*PlazaOfficialPricing{})
+	require.NotNil(t, pricing)
+	require.Equal(t, "USD", pricing.Currency)
 }
 
 func TestListPlazaGroups_GroupImagePriceOverridesChannelPricing(t *testing.T) {

@@ -212,6 +212,25 @@ func (p *ChannelModelPricing) GetTierByLabel(label string) *PricingInterval {
 	return nil
 }
 
+// NormalizeCacheWriteDurations drops the hidden legacy 1h field only for
+// canonical GPT cards. OpenAI-compatible Claude and shared/unknown cards may
+// legitimately price Anthropic 1h cache writes and retain their configuration.
+func (p *ChannelModelPricing) NormalizeCacheWriteDurations() {
+	if p == nil || p.Platform != PlatformOpenAI || len(p.Models) == 0 {
+		return
+	}
+	for _, model := range p.Models {
+		name := strings.ToLower(strings.TrimSpace(model))
+		if canonical := normalizeKnownOpenAICodexModel(name); canonical == "" || name != canonical {
+			return
+		}
+	}
+	p.CacheWrite1hPrice = nil
+	for i := range p.Intervals {
+		p.Intervals[i].CacheWrite1hPrice = nil
+	}
+}
+
 // Clone 返回 ChannelModelPricing 的拷贝（切片和映射独立，价格指针字段共享，调用方只读安全）
 func (p ChannelModelPricing) Clone() ChannelModelPricing {
 	cp := p

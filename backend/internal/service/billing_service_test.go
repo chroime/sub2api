@@ -188,9 +188,54 @@ func TestGetModelPricing_GLM52UsesOwnPrice(t *testing.T) {
 	require.NotNil(t, got)
 
 	// 官方 z.ai 口径:与 glm-5.1 同价(见 TestGetFallbackPricing_FamilyMatching)。
-	require.InDelta(t, 1.4e-6, got.InputPricePerToken, 1e-12)
-	require.InDelta(t, 4.4e-6, got.OutputPricePerToken, 1e-12)
-	require.InDelta(t, 0.26e-6, got.CacheReadPricePerToken, 1e-12)
+	require.InDelta(t, 9.38e-6, got.InputPricePerToken, 1e-12)
+	require.InDelta(t, 29.48e-6, got.OutputPricePerToken, 1e-12)
+	require.InDelta(t, 1.742e-6, got.CacheReadPricePerToken, 1e-12)
+}
+
+func TestGetModelPricing_DomesticCatalogValuesAreCNY(t *testing.T) {
+	pricingSvc := &PricingService{pricingData: map[string]*LiteLLMModelPricing{
+		"glm-5.3": {
+			InputCostPerToken:       8e-6,
+			OutputCostPerToken:      28e-6,
+			CacheReadInputTokenCost: 2e-6,
+			Currency:                "CNY",
+		},
+	}}
+	billing := NewBillingService(&config.Config{}, pricingSvc)
+	pricing, err := billing.GetModelPricing("glm-5.3")
+	require.NoError(t, err)
+	require.InDelta(t, 8e-6, pricing.InputPricePerToken, 1e-15)
+	require.InDelta(t, 28e-6, pricing.OutputPricePerToken, 1e-15)
+	require.InDelta(t, 2e-6, pricing.CacheReadPricePerToken, 1e-15)
+}
+
+func TestGetModelPricing_DomesticRemoteUSDIsNormalizedToCNY(t *testing.T) {
+	pricingSvc := &PricingService{pricingData: map[string]*LiteLLMModelPricing{
+		"qwen3.8-max": {InputCostPerToken: 1e-6, OutputCostPerToken: 3e-6},
+	}}
+	billing := NewBillingService(&config.Config{}, pricingSvc)
+	pricing, err := billing.GetModelPricing("qwen3.8-max")
+	require.NoError(t, err)
+	require.InDelta(t, 6.7e-6, pricing.InputPricePerToken, 1e-15)
+	require.InDelta(t, 20.1e-6, pricing.OutputPricePerToken, 1e-15)
+}
+
+func TestGetModelPricing_DeepSeekCNYCatalogIsNotOverwrittenByUSDPolicy(t *testing.T) {
+	pricingSvc := &PricingService{pricingData: map[string]*LiteLLMModelPricing{
+		"deepseek-v4-pro": {
+			InputCostPerToken:       4.422e-6,
+			OutputCostPerToken:      13.266e-6,
+			CacheReadInputTokenCost: 0.1474e-6,
+			Currency:                "CNY",
+		},
+	}}
+	billing := NewBillingService(&config.Config{}, pricingSvc)
+	pricing, err := billing.GetModelPricing("deepseek-v4-pro")
+	require.NoError(t, err)
+	require.InDelta(t, 4.422e-6, pricing.InputPricePerToken, 1e-15)
+	require.InDelta(t, 13.266e-6, pricing.OutputPricePerToken, 1e-15)
+	require.InDelta(t, 0.1474e-6, pricing.CacheReadPricePerToken, 1e-15)
 }
 
 func TestGetModelPricing_UnknownClaudeModelFallsBackToSonnet(t *testing.T) {
@@ -977,11 +1022,11 @@ func TestGetModelPricing_Qwen3EmbeddingFallback(t *testing.T) {
 		model string
 		input float64
 	}{
-		{model: "Qwen/Qwen3-Embedding-8B", input: 0.04e-6},
-		{model: "qwen3-embedding-8b", input: 0.04e-6},
-		{model: "Qwen/Qwen3-Embedding-4B", input: 0.02e-6},
-		{model: "Qwen/Qwen3-Embedding-0.6B", input: 0.01e-6},
-		{model: "qwen3-embedding-0-6b", input: 0.01e-6},
+		{model: "Qwen/Qwen3-Embedding-8B", input: 0.268e-6},
+		{model: "qwen3-embedding-8b", input: 0.268e-6},
+		{model: "Qwen/Qwen3-Embedding-4B", input: 0.134e-6},
+		{model: "Qwen/Qwen3-Embedding-0.6B", input: 0.067e-6},
+		{model: "qwen3-embedding-0-6b", input: 0.067e-6},
 	}
 	for _, tt := range tests {
 		t.Run(tt.model, func(t *testing.T) {
@@ -1003,11 +1048,11 @@ func TestGetModelPricing_Qwen3RerankerFallback(t *testing.T) {
 		model string
 		input float64
 	}{
-		{model: "Qwen/Qwen3-Reranker-8B", input: 0.04e-6},
-		{model: "qwen3-reranker-8b", input: 0.04e-6},
-		{model: "Qwen/Qwen3-Reranker-4B", input: 0.02e-6},
-		{model: "Qwen/Qwen3-Reranker-0.6B", input: 0.01e-6},
-		{model: "qwen3-reranker-0-6b", input: 0.01e-6},
+		{model: "Qwen/Qwen3-Reranker-8B", input: 0.268e-6},
+		{model: "qwen3-reranker-8b", input: 0.268e-6},
+		{model: "Qwen/Qwen3-Reranker-4B", input: 0.134e-6},
+		{model: "Qwen/Qwen3-Reranker-0.6B", input: 0.067e-6},
+		{model: "qwen3-reranker-0-6b", input: 0.067e-6},
 	}
 	for _, tt := range tests {
 		t.Run(tt.model, func(t *testing.T) {
@@ -1033,8 +1078,8 @@ func TestGetModelPricing_DoubaoEmbeddingVisionImageInputRate(t *testing.T) {
 		pricing, err := svc.GetModelPricing(model)
 		require.NoError(t, err, "model %s should resolve fallback pricing", model)
 		require.NotNil(t, pricing)
-		require.InDelta(t, 0.098e-6, pricing.InputPricePerToken, 1e-12, "text input rate for %s", model)
-		require.InDelta(t, 0.252e-6, pricing.ImageInputPricePerToken, 1e-12, "image input rate for %s", model)
+		require.InDelta(t, 0.6566e-6, pricing.InputPricePerToken, 1e-12, "text input rate for %s", model)
+		require.InDelta(t, 1.6884e-6, pricing.ImageInputPricePerToken, 1e-12, "image input rate for %s", model)
 		require.Zero(t, pricing.OutputPricePerToken, "embedding has no output cost for %s", model)
 	}
 }
@@ -1048,8 +1093,8 @@ func TestCalculateCost_DoubaoEmbeddingVisionDifferentialInput(t *testing.T) {
 	mixed := UsageTokens{InputTokens: 1340, ImageInputTokens: 28}
 	cost, err := svc.CalculateCost("doubao-embedding-vision", mixed, 1.0)
 	require.NoError(t, err)
-	wantText := float64(1312) * 0.098e-6
-	wantImage := float64(28) * 0.252e-6
+	wantText := float64(1312) * 0.6566e-6
+	wantImage := float64(28) * 1.6884e-6
 	require.InDelta(t, wantText, cost.InputCost, 1e-15, "InputCost 仅计文本输入")
 	require.InDelta(t, wantImage, cost.ImageInputCost, 1e-15, "ImageInputCost 单独计图片输入")
 	require.InDelta(t, wantText+wantImage, cost.TotalCost, 1e-15, "TotalCost 口径不变")
@@ -1059,7 +1104,7 @@ func TestCalculateCost_DoubaoEmbeddingVisionDifferentialInput(t *testing.T) {
 	textOnly := UsageTokens{InputTokens: 1340}
 	costText, err := svc.CalculateCost("doubao-embedding-vision", textOnly, 1.0)
 	require.NoError(t, err)
-	require.InDelta(t, float64(1340)*0.098e-6, costText.InputCost, 1e-15)
+	require.InDelta(t, float64(1340)*0.6566e-6, costText.InputCost, 1e-15)
 	require.Zero(t, costText.ImageInputCost)
 
 	// 健壮性：ImageInputTokens 超过 InputTokens 时，文本置 0、计费 token 不超过 InputTokens。
@@ -1067,8 +1112,8 @@ func TestCalculateCost_DoubaoEmbeddingVisionDifferentialInput(t *testing.T) {
 	costWeird, err := svc.CalculateCost("doubao-embedding-vision", weird, 1.0)
 	require.NoError(t, err)
 	require.Zero(t, costWeird.InputCost, "全为图片输入时文本费用为 0")
-	require.InDelta(t, float64(10)*0.252e-6, costWeird.ImageInputCost, 1e-15)
-	require.InDelta(t, float64(10)*0.252e-6, costWeird.TotalCost, 1e-15)
+	require.InDelta(t, float64(10)*1.6884e-6, costWeird.ImageInputCost, 1e-15)
+	require.InDelta(t, float64(10)*1.6884e-6, costWeird.TotalCost, 1e-15)
 }
 
 // 复现 issue #4386：gpt-image-2 /v1/images/edits 带 1 张输入图。

@@ -390,6 +390,7 @@ func pricingRequestToService(reqs []channelModelPricingRequest, allowChannelMult
 			Intervals:                  intervals,
 			TimePricing:                timePricingRequestToService(r.TimePricing),
 		})
+		result[len(result)-1].NormalizeCacheWriteDurations()
 	}
 	return result
 }

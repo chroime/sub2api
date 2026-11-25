@@ -16,7 +16,8 @@ func TestPlazaRestriction_AccountCatalogCannotBypassConfiguredKimiModels(t *test
 	svc := newPlazaServiceWithBilling([]Channel{channel}, groups, map[int64]string{85: PlatformOpenAI}, nil)
 	fallback, err := svc.billingService.GetModelPricing("kimi-k3")
 	require.NoError(t, err)
-	require.Equal(t, 3e-6, fallback.InputPricePerToken, "an official fallback exists but does not authorize the model")
+	require.Positive(t, fallback.InputPricePerToken, "a priced fallback exists but does not authorize the model")
+	require.Equal(t, "CNY", fallback.Currency)
 
 	out, err := svc.ListGroupsWithAccountModels(context.Background(), staticPlazaAccountModels(map[int64][]PlazaAccountModel{
 		85: {{Name: "kimi-k3", Platform: PlatformOpenAI}, {Name: "kimi-k3-1", Platform: PlatformOpenAI}, {Name: "kimi-k3.1-pro", Platform: PlatformOpenAI}},

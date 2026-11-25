@@ -430,6 +430,36 @@ func TestPricingRequestToService_NilPriceFields(t *testing.T) {
 	require.Nil(t, r.PerRequestPrice)
 }
 
+func TestPricingRequestToService_OpenAICacheDurations(t *testing.T) {
+	for _, platform := range []string{service.PlatformOpenAI, service.PlatformAnthropic} {
+		t.Run(platform, func(t *testing.T) {
+			request := channelModelPricingRequest{Platform: platform, Models: []string{"gpt-6.2-sol"}, BillingMode: "token",
+				CacheWritePrice: float64Ptr(0), CacheWrite1hPrice: float64Ptr(2.5e-6), CacheWrite12hPrice: float64Ptr(0),
+				Intervals: []pricingIntervalRequest{{MinTokens: 0, CacheWritePrice: float64Ptr(0), CacheWrite1hPrice: float64Ptr(5e-6), CacheWrite12hPrice: float64Ptr(0)}}}
+			got := pricingRequestToService([]channelModelPricingRequest{request}, true)[0]
+			require.Equal(t, float64Ptr(0), got.CacheWritePrice)
+			require.Equal(t, float64Ptr(0), got.CacheWrite12hPrice)
+			require.Equal(t, float64Ptr(0), got.Intervals[0].CacheWritePrice)
+			require.Equal(t, float64Ptr(0), got.Intervals[0].CacheWrite12hPrice)
+			if platform == service.PlatformOpenAI {
+				require.Nil(t, got.CacheWrite1hPrice, "the hidden OpenAI 1h field must not be saved")
+				require.Nil(t, got.Intervals[0].CacheWrite1hPrice)
+			} else {
+				require.Equal(t, float64Ptr(2.5e-6), got.CacheWrite1hPrice)
+				require.Equal(t, float64Ptr(5e-6), got.Intervals[0].CacheWrite1hPrice)
+			}
+		})
+	}
+}
+
+func TestPricingRequestToService_CompatibleClaudeCacheDurations(t *testing.T) {
+	request := channelModelPricingRequest{Platform: service.PlatformOpenAI, Models: []string{"claude-sonnet-4"}, BillingMode: "token",
+		CacheWrite1hPrice: float64Ptr(2.5e-6), Intervals: []pricingIntervalRequest{{CacheWrite1hPrice: float64Ptr(5e-6)}}}
+	got := pricingRequestToService([]channelModelPricingRequest{request}, true)[0]
+	require.Equal(t, float64Ptr(2.5e-6), got.CacheWrite1hPrice)
+	require.Equal(t, float64Ptr(5e-6), got.Intervals[0].CacheWrite1hPrice)
+}
+
 func TestPricingRequestToService_TimePricing(t *testing.T) {
 	req := channelModelPricingRequest{
 		Models:      []string{"gpt-5"},

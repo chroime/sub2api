@@ -1329,6 +1329,7 @@ func normalizeGroupModelPricing(platform string, pricing []ChannelModelPricing) 
 		for j := range out[i].Models {
 			out[i].Models[j] = strings.TrimSpace(out[i].Models[j])
 		}
+		out[i].NormalizeCacheWriteDurations()
 		if len(out[i].Models) == 0 {
 			return nil, infraerrors.New(http.StatusBadRequest, "GROUP_MODEL_PRICING_MODELS_REQUIRED", "group model pricing entry requires at least one model")
 		}

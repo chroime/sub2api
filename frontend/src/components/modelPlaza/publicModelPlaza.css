@@ -197,3 +197,15 @@
 .public-model-plaza .model-plaza-content .plaza-vendor-price-table tbody tr:hover {
   background: var(--public-hover);
 }
+
+/* The model table uses the full content width; filters remain above it. */
+.public-model-plaza .model-plaza-content .plaza-toolbar {
+  background: var(--public-surface);
+  border-color: var(--public-border-strong);
+}
+.public-model-plaza .plaza-vendor-filter { border-color: var(--public-border); }
+.public-model-plaza .plaza-vendor-filter button[aria-pressed="true"] {
+  color: var(--public-accent);
+  background: var(--public-accent-soft);
+  border-color: color-mix(in srgb, var(--public-accent) 35%, var(--public-border));
+}

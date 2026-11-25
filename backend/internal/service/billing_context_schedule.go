@@ -112,6 +112,16 @@ func (s *BillingService) ResolveContextPricingSchedule(ctx context.Context, reso
 		Resolver:       resolver,
 		Resolved:       resolved,
 	}
+	// A directory quote has a stable time basis. Probe DeepSeek in that basis,
+	// so a peak/list card is not silently halved by the wall clock at night.
+	// Real requests keep their own PricingAt and the existing billing policy.
+	if resolved.Source == PricingSourceLiteLLM && isDeepSeekModel(in.Model) && resolved.BasePricing != nil {
+		hour := 12
+		if resolved.BasePricing.DeepSeekPeakPrice {
+			hour = deepseekPeakWindowsUTC[0][0]
+		}
+		req.PricingAt = time.Date(2026, time.January, 5, hour, 0, 0, 0, time.UTC)
+	}
 	probe := func(tokens UsageTokens) (*CostBreakdown, error) {
 		r := req
 		r.Tokens = tokens
@@ -229,6 +239,22 @@ func (s *BillingService) contextPricingBreakpoints(resolver *ModelPricingResolve
 	// 当前时刻；此处 pricing 仅取 LongContextInputThreshold 等时间无关字段，
 	// DeepSeek pro→Flash 切换不影响断点结果。
 	pricing = s.applyModelSpecificPricingPolicyEx(model, pricing, true, timezone.Now())
+	if len(pricing.ContextPricingTiers) > 0 {
+		bounds := make(map[int]struct{})
+		for _, tier := range pricing.ContextPricingTiers {
+			if tier.MinTokens > 0 {
+				bounds[tier.MinTokens] = struct{}{}
+			}
+			if tier.MaxTokens != nil && *tier.MaxTokens > 0 {
+				bounds[*tier.MaxTokens] = struct{}{}
+			}
+		}
+		for bound := range bounds {
+			plan.bounds = append(plan.bounds, bound)
+		}
+		sort.Ints(plan.bounds)
+		return plan
+	}
 	if pricing.LongContextInputThreshold <= 0 {
 		return plan
 	}
@@ -295,11 +321,14 @@ func probeContextTier(seg contextSegment, resolved *ResolvedPricing, probe func(
 	if err != nil {
 		return tier, err
 	}
-	// 输出价只随上下文所在档变化：固定上下文 c，对输出 token 数做差商（固定部分相减抵消）。
-	tier.CacheWrite1h, err = probeComponentPrice(func(n int) UsageTokens { return UsageTokens{CacheCreationTokens: n, CacheCreation1hTokens: n} }, c, delta, probe)
-	if err != nil {
-		return tier, err
+	// A generic cache-write quote does not imply an independent 1h duration.
+	if resolved.SupportsCacheBreakdown {
+		tier.CacheWrite1h, err = probeComponentPrice(func(n int) UsageTokens { return UsageTokens{CacheCreationTokens: n, CacheCreation1hTokens: n} }, c, delta, probe)
+		if err != nil {
+			return tier, err
+		}
 	}
+	// 输出价只随上下文所在档变化：固定上下文 c，对输出 token 数做差商（固定部分相减抵消）。
 	tier.Output, err = probeComponentPrice(func(n int) UsageTokens { return UsageTokens{InputTokens: c, OutputTokens: n} }, 0, contextProbeDelta, probe)
 	if err != nil {
 		return tier, err

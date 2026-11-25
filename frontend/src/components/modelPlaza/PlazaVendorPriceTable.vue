@@ -7,10 +7,10 @@
       <caption class="sr-only">{{ caption }}</caption>
       <thead>
         <tr>
-          <th scope="col" rowspan="2" class="pz-sticky pz-sticky-head w-52 px-4 py-3 text-left font-medium">
+          <th scope="col" rowspan="2" class="pz-sticky pz-sticky-head w-[29%] min-w-[250px] px-4 py-3 text-left font-medium">
             {{ t('modelPlaza.table.model') }}
           </th>
-          <th v-if="showTiers" scope="col" rowspan="2" class="w-28 px-3 py-3 text-left font-medium">{{ t('modelPlaza.priceTable.tier') }}</th>
+          <th v-if="showTiers" scope="col" rowspan="2" class="w-20 min-w-[80px] px-3 py-3 text-left font-medium">{{ t('modelPlaza.priceTable.tier') }}</th>
           <th scope="colgroup" colspan="4" class="px-3 pt-3 text-center font-semibold" :class="{ 'pz-bg': group }">
             {{ t(group ? 'modelPlaza.priceTable.sitePrice' : 'modelPlaza.priceTable.official') }}
             <span class="ml-2 text-xs font-normal text-gray-500 dark:text-dark-300">
@@ -30,7 +30,10 @@
           <th v-if="index === 0" scope="rowgroup" :rowspan="prices.length" class="pz-sticky px-4 py-3 text-left align-top font-normal">
             <div class="flex items-start gap-2">
               <ModelIcon :model="model.name" size="16px" class="mt-0.5 shrink-0" />
-              <span class="break-words font-mono text-sm font-semibold text-gray-900 dark:text-white [overflow-wrap:anywhere]">{{ model.name }}</span>
+              <div class="min-w-0 flex-1">
+                <span class="block break-words font-mono text-sm font-semibold text-gray-900 dark:text-white [overflow-wrap:anywhere]">{{ model.name }}</span>
+                <PlazaPricingBadges :model="model" :group="group" />
+              </div>
               <button
                 type="button"
                 class="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:text-dark-300 dark:hover:bg-dark-700 dark:hover:text-primary-400"
@@ -52,45 +55,58 @@
                   <span v-for="[effort, multiplier] in reasoningMultipliers(model)" :key="effort" :data-reasoning-effort="effort">{{ t('modelPlaza.table.reasoningMultiplierBadge', { effort, multiplier }) }}</span>
                 </div>
               </div>
-              <div v-if="model.time_pricing?.periods.length" class="rounded-md bg-amber-50 px-2 py-1 text-amber-800 dark:bg-amber-500/10 dark:text-amber-300" data-time-pricing>
-                <div class="font-medium">
-                  {{ model.time_pricing.timezone }}<span v-if="model.time_pricing.weekdays_only" class="ml-1">· {{ t('modelPlaza.table.timePricingWeekdays') }}</span>
-                </div>
-                <div v-for="(period, periodIndex) in model.time_pricing.periods" :key="periodIndex">{{ formatTimeWindow(period) }} ×{{ period.multiplier }}</div>
-              </div>
-              <p v-if="peakWindow" class="rounded-md bg-rose-50 px-2 py-1 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300" data-peak-pricing>
-                {{ t('modelPlaza.priceTable.peakRate', { window: peakWindow }) }}
-              </p>
+
             </div>
           </th>
           <th v-if="showTiers" scope="row" class="px-3 py-3 text-left align-top text-xs font-normal text-gray-500 dark:text-dark-300" data-price-tier>
             {{ row.label || '—' }}
           </th>
           <td v-if="row.unpriced" colspan="4" class="px-4 py-3 text-center text-xs text-gray-500 dark:text-dark-300" data-unpriced>{{ t('modelPlaza.priceTable.unpriced') }}</td>
-          <td v-else-if="row.unit" colspan="4" class="px-4 py-3 text-right align-top" :class="{ 'pz-cell': group }">
+          <td v-else-if="row.unit" colspan="4" class="px-3 py-3 text-right align-top" :class="{ 'pz-cell': group }">
             <span v-if="!showTiers && row.label" class="mr-2 text-xs text-gray-500 dark:text-dark-300">{{ row.label }}</span>
-            <div class="space-y-0.5 text-right">
-              <div class="font-mono text-base font-semibold" :class="{ 'pz-payable': group }">
-                <span v-if="group" class="mr-1 font-sans text-xs font-normal text-gray-500 dark:text-dark-300">{{ t('modelPlaza.priceTable.paidLabel') }}</span><span :data-site-price="group ? '' : undefined">{{ displayPrice(model, row.columns[0][0]) }}<span class="ml-1 font-sans text-xs font-normal">{{ row.unit }}</span></span>
+            <div class="pz-price-stack ml-auto w-fit text-right">
+              <div v-if="group" class="flex items-baseline justify-between gap-2 font-mono text-xs font-normal leading-5 text-gray-500 dark:text-dark-300" :title="t('modelPlaza.priceTable.official')" data-official-reference>
+                <span class="font-sans">{{ t('modelPlaza.priceTable.officialLabel') }}</span><span>{{ displayOfficialPrice(row.columns[0][0]) }}<span class="ml-1 font-sans">{{ row.unit }}</span></span>
               </div>
-              <div v-if="group && row.columns[0][0].configured != null" class="font-mono text-xs font-normal leading-5 text-gray-500 dark:text-dark-300" :title="t('modelPlaza.priceTable.basePrice')" data-configured-price>
-                <span class="mr-1 font-sans">{{ t('modelPlaza.priceTable.referenceLabel') }}</span>{{ displayConfiguredPrice(model, row.columns[0][0]) }}<span class="ml-1 font-sans">{{ row.unit }}</span>
+              <div v-if="group" class="flex items-baseline justify-between gap-2 font-mono text-xs font-normal leading-5 text-gray-500 dark:text-dark-300" :title="referenceTitle(model, row.columns[0][0])" data-reference-price :data-reference-source="referenceSource(model, row.columns[0][0])">
+                <span class="font-sans">{{ t('modelPlaza.priceTable.referenceLabel') }}</span><span>{{ displayReferencePrice(model, row.columns[0][0]) }}<span class="ml-1 font-sans">{{ row.unit }}</span></span>
               </div>
-              <div v-if="group && savings(model, row.columns[0][0])" class="font-mono text-xs font-medium leading-5" :class="savings(model, row.columns[0][0])!.status === 'saving' ? 'text-emerald-600 dark:text-emerald-300' : savings(model, row.columns[0][0])!.status === 'higher' ? 'text-rose-600 dark:text-rose-300' : 'text-gray-500 dark:text-dark-300'" data-savings>
-                <span class="mr-1 font-sans">{{ savingsLabel(savings(model, row.columns[0][0])!.status) }}</span>{{ savings(model, row.columns[0][0])!.amount }} ({{ savings(model, row.columns[0][0])!.percent }})
+              <div class="font-mono font-semibold" :class="group ? 'pz-payable mt-1 flex items-baseline justify-between gap-2 text-2xl leading-9' : 'text-base'">
+                <span v-if="group" class="font-sans text-xs font-normal text-gray-500 dark:text-dark-300">{{ t('modelPlaza.priceTable.paidLabel') }}</span><span :data-site-price="group ? '' : undefined">{{ displayPrice(row.columns[0][0]) }}<span class="ml-1 font-sans text-xs font-normal">{{ row.unit }}</span></span>
+              </div>
+              <div v-if="group" class="mt-2 flex justify-end">
+                <div v-if="savings(row.columns[0][0])" class="pz-savings-highlight" :class="{ 'pz-savings-higher': savings(row.columns[0][0])!.status === 'higher' }" :title="savingsBasis" data-savings data-savings-reference="official">
+                  <template v-if="savings(row.columns[0][0])!.status !== 'equal'">
+                    <span><span class="mr-1 font-sans text-[11px]">{{ savingsLabel(savings(row.columns[0][0])!.status) }}</span><span class="font-mono text-lg font-bold tabular-nums">{{ savings(row.columns[0][0])!.percent }}</span></span>
+                    <span class="font-mono text-sm font-semibold tabular-nums">{{ savings(row.columns[0][0])!.amount }}</span>
+                  </template>
+                  <span v-else class="text-xs">{{ t('modelPlaza.comparison.sameOfficialPrice') }}</span>
+                </div>
+                <span v-else class="pz-savings-unavailable">{{ unavailableSavingsLabel(row.columns[0][0]) }}</span>
               </div>
             </div>
           </td>
-          <td v-for="(column, columnIndex) in row.unit || row.unpriced ? [] : row.columns" :key="columnIndex" class="px-4 py-3 text-right align-top" :class="{ 'pz-cell': group }" :data-price-field="TOKEN_FIELDS[columnIndex]">
-            <div v-for="price in column" :key="price.key" class="flex items-baseline justify-end gap-1.5 whitespace-nowrap leading-6">
-              <span v-if="cacheLifetime(price)" class="text-[11px] text-gray-500 dark:text-dark-300" data-cache-lifetime>{{ cacheLifetime(price) }}</span>
-              <div class="space-y-0.5 text-right">
-                <div class="font-mono text-base font-semibold" :class="{ 'pz-payable': group }"><span v-if="group" class="mr-1 font-sans text-xs font-normal text-gray-500 dark:text-dark-300">{{ t('modelPlaza.priceTable.paidLabel') }}</span><span :data-site-price="group ? '' : undefined">{{ displayPrice(model, price) }}<span v-if="row.unit" class="ml-1 font-sans text-xs font-normal">{{ row.unit }}</span></span></div>
-                <div v-if="group && price.configured != null" class="font-mono text-xs font-normal leading-5 text-gray-500 dark:text-dark-300" :title="t('modelPlaza.priceTable.basePrice')" data-configured-price>
-                  <span class="mr-1 font-sans">{{ t('modelPlaza.priceTable.referenceLabel') }}</span>{{ displayConfiguredPrice(model, price) }}
+          <td v-for="(column, columnIndex) in row.unit || row.unpriced ? [] : row.columns" :key="columnIndex" class="px-3 py-3 text-right align-top" :class="{ 'pz-cell': group }" :data-price-field="TOKEN_FIELDS[columnIndex]">
+            <div v-for="price in column" :key="price.key" class="flex justify-end whitespace-nowrap leading-6">
+              <div class="pz-price-stack w-full text-right">
+                <span v-if="cacheLifetime(price)" class="mb-1 block text-left text-[11px] leading-4 text-gray-500 dark:text-dark-300" data-cache-lifetime>{{ cacheLifetime(price) }}</span>
+                <div v-if="group" class="flex items-baseline justify-between gap-2 font-mono text-xs font-normal leading-5 text-gray-500 dark:text-dark-300" :title="t('modelPlaza.priceTable.official')" data-official-reference>
+                  <span class="font-sans">{{ t('modelPlaza.priceTable.officialLabel') }}</span><span>{{ displayOfficialPrice(price) }}</span>
                 </div>
-                <div v-if="group && savings(model, price)" class="font-mono text-xs font-medium leading-5" :class="savings(model, price)!.status === 'saving' ? 'text-emerald-600 dark:text-emerald-300' : savings(model, price)!.status === 'higher' ? 'text-rose-600 dark:text-rose-300' : 'text-gray-500 dark:text-dark-300'" data-savings>
-                  <span class="mr-1 font-sans">{{ savingsLabel(savings(model, price)!.status) }}</span>{{ savings(model, price)!.amount }} ({{ savings(model, price)!.percent }})
+                <div v-if="group && price.referenceLabel" class="text-right text-[10px] leading-4 text-gray-500 dark:text-dark-300" data-reference-tier>{{ t('modelPlaza.priceTable.referenceTier', { tier: price.referenceLabel }) }}</div>
+                <div v-if="group" class="flex items-baseline justify-between gap-2 font-mono text-xs font-normal leading-5 text-gray-500 dark:text-dark-300" :title="referenceTitle(model, price)" data-reference-price :data-reference-source="referenceSource(model, price)">
+                  <span class="font-sans">{{ t('modelPlaza.priceTable.referenceLabel') }}</span><span>{{ displayReferencePrice(model, price) }}</span>
+                </div>
+                <div class="font-mono font-semibold" :class="group ? 'pz-payable mt-1 flex items-baseline justify-between gap-2 text-2xl leading-9' : 'text-base'"><span v-if="group" class="font-sans text-xs font-normal text-gray-500 dark:text-dark-300">{{ t('modelPlaza.priceTable.paidLabel') }}</span><span :data-site-price="group ? '' : undefined">{{ displayPrice(price) }}</span></div>
+                <div v-if="group" class="mt-2 flex justify-end">
+                  <div v-if="savings(price)" class="pz-savings-highlight" :class="{ 'pz-savings-higher': savings(price)!.status === 'higher' }" :title="savingsTitle(price)" data-savings data-savings-reference="official">
+                    <template v-if="savings(price)!.status !== 'equal'">
+                      <span><span class="mr-1 font-sans text-[11px]">{{ savingsLabel(savings(price)!.status) }}</span><span class="font-mono text-lg font-bold tabular-nums">{{ savings(price)!.percent }}</span></span>
+                      <span class="font-mono text-sm font-semibold tabular-nums">{{ savings(price)!.amount }}</span>
+                    </template>
+                    <span v-else class="text-xs">{{ t('modelPlaza.comparison.sameOfficialPrice') }}</span>
+                  </div>
+                  <span v-else class="pz-savings-unavailable">{{ unavailableSavingsLabel(price) }}</span>
                 </div>
               </div>
             </div>
@@ -104,18 +120,18 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import PlazaPricingBadges from './PlazaPricingBadges.vue'
 import { useI18n } from 'vue-i18n'
 import ModelIcon from '@/components/common/ModelIcon.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { useClipboard } from '@/composables/useClipboard'
 import {
-  getTokenComparisons, getUnitComparisons, getPlazaPayableComparison,
+  getTokenComparisons, getUnitComparisons, getPlazaPayableComparison, comparePriceAmounts,
   PLAZA_REFERENCE_USD_TO_CNY, PLAZA_CNY_PER_USD_CREDIT, type PlazaPriceComparison, type TokenPriceField
 } from './plazaPriceComparison'
 import { formatScaled } from '@/utils/pricing'
-import { isDomesticModelVendor, modelVendorOf } from '@/utils/modelVendor'
 import { BILLING_MODE_TOKEN, BILLING_MODE_IMAGE, BILLING_MODE_VIDEO, REASONING_EFFORT_LEVELS, type BillingMode } from '@/constants/channel'
-import type { ModelPlazaGroup, PlazaModel, PlazaTimePricingPeriod } from '@/api/modelPlaza'
+import type { ModelPlazaGroup, PlazaModel } from '@/api/modelPlaza'
 import { plazaModelKey } from './plazaVendorTree'
 
 const props = defineProps<{
@@ -128,6 +144,9 @@ const props = defineProps<{
 const { t } = useI18n()
 const { copyToClipboard } = useClipboard()
 const TOKEN_FIELDS = ['input_price', 'output_price', 'cache_read_price', 'cache_write_price'] as const
+const savingsBasis = computed(() => t('modelPlaza.comparison.officialBasis', {
+  rate: PLAZA_REFERENCE_USD_TO_CNY, creditRate: PLAZA_CNY_PER_USD_CREDIT
+}))
 
 interface PriceRow {
   key: string
@@ -143,7 +162,7 @@ function billingMode(model: PlazaModel): BillingMode {
 }
 
 function priceRows(model: PlazaModel): PriceRow[] {
-  const referenceSource = props.group ? 'none' : 'official'
+  const referenceSource = props.group ? 'official-matched' : 'official'
   if (billingMode(model) !== BILLING_MODE_TOKEN) {
     return getUnitComparisons(model, props.group, referenceSource)
       .filter(price => (props.group ? price.site : price.reference) != null)
@@ -181,40 +200,67 @@ function cacheLifetime(price: PlazaPriceComparison): string {
   return price.key.match(/:(1h|12h)$/)?.[1] || ''
 }
 
-function displayPrice(model: PlazaModel, price: PlazaPriceComparison): string {
-  const cny = isDomesticModelVendor(modelVendorOf(model.name, model.platform))
-  let amount = props.group ? (cny ? getPlazaPayableComparison(price).site : price.site) : price.reference
+function displayPrice(price: PlazaPriceComparison): string {
+  const currency = props.group ? (price.siteCurrency ?? price.currency) : (price.referenceCurrency ?? price.currency)
+  let amount = props.group ? price.site : price.reference
   if (amount == null || !Number.isFinite(amount)) return '—'
-  if (!props.group && cny) amount *= PLAZA_REFERENCE_USD_TO_CNY
   const digits = amount === 0 ? 1 : Math.floor(Math.log10(Math.abs(amount))) + 1
   const rounded = Number(amount.toPrecision(Math.min(100, Math.max(5, digits + 2))))
   const formatted = formatScaled(rounded, 1, 2)
-  return cny ? formatted.replace(/^\$/, '¥') : formatted
+  return formatted.replace(/^\$/, currency === 'CNY' ? '¥' : currency === 'USD' ? '$' : '')
 }
+
 
 function fieldLabel(field: TokenPriceField): string {
   const keys = { input_price: 'table.input', output_price: 'table.output', cache_read_price: 'priceTable.cacheRead', cache_write_price: 'priceTable.cacheWrite' }
   return t(`modelPlaza.${keys[field]}`)
 }
 
-function displayConfiguredPrice(model: PlazaModel, price: PlazaPriceComparison): string {
-  return displayPrice(model, { ...price, site: price.configured ?? null })
+function displayReferencePrice(model: PlazaModel, price: PlazaPriceComparison): string {
+  const currency = referenceSource(model, price) !== 'official'
+    ? (price.siteCurrency ?? price.currency) : (price.referenceCurrency ?? price.currency)
+  const amount = referenceSource(model, price) !== 'official' ? price.configured : price.reference
+  if (amount == null || !Number.isFinite(amount)) return '—'
+  const digits = amount === 0 ? 1 : Math.floor(Math.log10(Math.abs(amount))) + 1
+  const rounded = Number(amount.toPrecision(Math.min(100, Math.max(5, digits + 2))))
+  const formatted = formatScaled(rounded, 1, 2)
+  return formatted.replace(/^\$/, currency === 'CNY' ? '¥' : currency === 'USD' ? '$' : '')
+}
+
+function displayOfficialPrice(price: PlazaPriceComparison): string {
+  const currency = price.referenceCurrency ?? price.currency
+  const amount = price.reference
+  if (amount == null || !Number.isFinite(amount)) return '—'
+  const digits = amount === 0 ? 1 : Math.floor(Math.log10(Math.abs(amount))) + 1
+  const rounded = Number(amount.toPrecision(Math.min(100, Math.max(5, digits + 2))))
+  const formatted = formatScaled(rounded, 1, 2)
+  return formatted.replace(/^\$/, currency === 'CNY' ? '¥' : currency === 'USD' ? '$' : '')
+}
+
+function referenceSource(model: PlazaModel, price: PlazaPriceComparison): 'group' | 'channel' | 'official' {
+  const source = model.pricing_source
+  return (source === 'group' || source === 'channel') && price.configured != null && Number.isFinite(price.configured)
+    ? source : 'official'
+}
+
+function referenceTitle(model: PlazaModel, price: PlazaPriceComparison): string {
+  const source = referenceSource(model, price)
+  return t(source === 'official' ? 'modelPlaza.priceTable.official' : `modelPlaza.priceTable.source_${source}`)
 }
 
 type SavingsStatus = 'saving' | 'higher' | 'equal'
 interface SavingsResult { status: SavingsStatus; amount: string; percent: string }
 
-function savings(model: PlazaModel, price: PlazaPriceComparison): SavingsResult | null {
-  if (!props.group || price.configured == null || price.site == null || !Number.isFinite(price.configured) || !Number.isFinite(price.site)) return null
-  const domestic = isDomesticModelVendor(modelVendorOf(model.name, model.platform))
-  const referenceCny = domestic ? price.configured : price.configured * PLAZA_REFERENCE_USD_TO_CNY
-  const siteCny = domestic ? price.site : price.site * PLAZA_CNY_PER_USD_CREDIT
-  if (!Number.isFinite(referenceCny) || referenceCny <= 0 || !Number.isFinite(siteCny)) return null
-  const difference = referenceCny - siteCny
-  const tolerance = Math.max(referenceCny, siteCny) * 1e-10
-  const status: SavingsStatus = Math.abs(difference) <= tolerance ? 'equal' : difference > 0 ? 'saving' : 'higher'
-  const amount = formatCny(Math.abs(difference))
-  const percent = `${Math.abs(difference / referenceCny * 100).toFixed(2)}%`
+function savings(price: PlazaPriceComparison): SavingsResult | null {
+  if (!props.group || !price.comparable) return null
+  const comparison = getPlazaPayableComparison(price)
+  if (!comparison.comparable || comparison.reference == null || comparison.site == null) return null
+  const result = comparePriceAmounts(comparison.reference, comparison.site)
+  if (result.difference == null || result.status === 'unavailable') return null
+  const status = result.status
+  const amount = formatCny(Math.abs(result.difference))
+  const percentage = result.percent == null ? null : Math.abs(result.percent)
+  const percent = percentage == null ? '—' : (status === 'saving' && comparison.site > 0 && percentage >= 99.995 ? '>99.99%' : `${percentage.toFixed(2)}%`)
   return { status, amount, percent }
 }
 
@@ -228,6 +274,15 @@ function savingsLabel(status: SavingsStatus): string {
   return t(status === 'saving' ? 'modelPlaza.priceTable.savingLabel' : status === 'higher' ? 'modelPlaza.priceTable.surchargeLabel' : 'modelPlaza.priceTable.equalLabel')
 }
 
+function unavailableSavingsLabel(price: PlazaPriceComparison): string {
+  return t(price.reference != null ? 'modelPlaza.comparison.differentBasis' : 'modelPlaza.comparison.noOfficialReference')
+}
+
+function savingsTitle(price: PlazaPriceComparison): string {
+  return [price.referenceLabel ? t('modelPlaza.priceTable.referenceTier', { tier: price.referenceLabel }) : '', savingsBasis.value]
+    .filter(Boolean).join(' · ')
+}
+
 function unitSuffix(mode: BillingMode): string {
   if (mode === BILLING_MODE_IMAGE) return t('modelPlaza.table.perUnitImage')
   if (mode === BILLING_MODE_VIDEO) return t('modelPlaza.table.perUnitSecond')
@@ -235,8 +290,7 @@ function unitSuffix(mode: BillingMode): string {
 }
 
 function hasPricingRules(model: PlazaModel): boolean {
-  return model.long_context_basis === 'marginal' || reasoningMultipliers(model).length > 0 ||
-    Boolean(model.time_pricing?.periods.length) || Boolean(props.peakWindow)
+  return model.long_context_basis === 'marginal' || reasoningMultipliers(model).length > 0
 }
 
 function reasoningMultipliers(model: PlazaModel): [string, number][] {
@@ -248,10 +302,6 @@ function reasoningMultipliers(model: PlazaModel): [string, number][] {
   })
 }
 
-function formatTimeWindow(period: PlazaTimePricingPeriod): string {
-  const clock = (value: string) => value.replace(/^(\d{2}:\d{2}):00$/, '$1')
-  return `${clock(period.start_time)}–${clock(period.end_time)}`
-}
 
 defineExpose({ rowId })
 </script>
@@ -283,4 +333,15 @@ tbody tr + tr > :is(th, td) { border-top: 1px solid var(--pz-grid); }
 .pz-sticky { position: sticky; left: 0; z-index: 1; background: var(--pz-surface); box-shadow: inset -1px 0 0 var(--pz-divider); }
 .pz-sticky-head { background: var(--pz-head); }
 .pz-row-highlight .pz-sticky { background: var(--pz-bg); }
+.pz-cell .pz-price-stack { min-width: 8rem; }
+.pz-cell > div + div { margin-top: 0.75rem; }
+.pz-savings-highlight {
+  @apply inline-flex min-h-14 w-full max-w-full flex-col items-end justify-center rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 leading-6 text-blue-800 dark:border-blue-800/70 dark:bg-blue-950/50 dark:text-blue-200;
+}
+.pz-savings-unavailable {
+  @apply inline-flex min-h-14 w-full items-center justify-end rounded-lg bg-slate-100/60 px-3 py-1.5 text-xs text-gray-500 dark:bg-slate-700/40 dark:text-dark-300;
+}
+.pz-savings-higher {
+  @apply border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-800/70 dark:bg-rose-950/40 dark:text-rose-200;
+}
 </style>

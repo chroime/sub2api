@@ -62,6 +62,9 @@ export function resolveModelVendor(model: string): string | null {
   // Xiaomi MiMo uses an OpenAI-compatible protocol but is a domestic vendor.
   if (modelLower.startsWith('mimo-') || modelLower.includes('/mimo-')) return 'mimo'
 
+  if (modelLower.startsWith('step-') || modelLower.includes('/step-')) return 'step'
+  if (modelLower.startsWith('baichuan-') || modelLower.includes('/baichuan-')) return 'baichuan'
+
   // Baidu Wenxin
   if (modelLower.includes('ernie') || modelLower.includes('wenxin')) return 'wenxin'
 
@@ -138,6 +141,8 @@ const MODEL_VENDOR_LABELS: Record<string, string> = {
   doubao: 'Doubao',
   minimax: 'MiniMax',
   mimo: 'Xiaomi MiMo',
+  step: 'StepFun',
+  baichuan: 'Baichuan',
   wenxin: 'Baidu ERNIE',
   spark: 'iFlytek Spark',
   hunyuan: 'Tencent Hunyuan',
@@ -168,6 +173,8 @@ const DOMESTIC_MODEL_VENDORS = new Set([
   'doubao',
   'minimax',
   'mimo',
+  'step',
+  'baichuan',
   'wenxin',
   'spark',
   'hunyuan',

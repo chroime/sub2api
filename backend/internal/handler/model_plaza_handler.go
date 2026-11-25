@@ -43,8 +43,9 @@ func NewModelPlazaHandler(
 	return h
 }
 
-// modelPlazaOfficialPricing 官方参考价（USD per token，与计费目录同源）。
+// modelPlazaOfficialPricing 官方参考价；token 单价按 currency 解释。
 type modelPlazaOfficialPricing struct {
+	Currency           string   `json:"currency"`
 	InputPrice         *float64 `json:"input_price"`
 	OutputPrice        *float64 `json:"output_price"`
 	CacheWritePrice    *float64 `json:"cache_write_price"`
@@ -79,8 +80,10 @@ type modelPlazaModel struct {
 	Platform string                     `json:"platform"`
 	Pricing  *userSupportedModelPricing `json:"pricing"`
 	// PricingSource 展示定价来源："group" | "channel" | "official"；无定价省略。
-	PricingSource   string                     `json:"pricing_source,omitempty"`
-	OfficialPricing *modelPlazaOfficialPricing `json:"official_pricing"`
+	PricingSource        string                     `json:"pricing_source,omitempty"`
+	OfficialPricing      *modelPlazaOfficialPricing `json:"official_pricing"`
+	PricingRules         *service.PlazaPricingRules `json:"pricing_rules,omitempty"`
+	OfficialPricingRules *service.PlazaPricingRules `json:"official_pricing_rules,omitempty"`
 	// LongContextBasis 多档时的计价基准："whole_request"（整单按档）| "marginal"（仅超出部分）。
 	LongContextBasis string `json:"long_context_basis,omitempty"`
 	// TimePricing 分时倍率时段，落在时段内的请求整单乘倍率；无分时省略。
@@ -249,13 +252,15 @@ func toModelPlazaModelsDTO(source []service.PlazaModel) []modelPlazaModel {
 	for i := range source {
 		m := &source[i]
 		models = append(models, modelPlazaModel{
-			Name:             m.Name,
-			Platform:         m.Platform,
-			Pricing:          toUserPricing(m.Pricing),
-			PricingSource:    m.PricingSource,
-			OfficialPricing:  toModelPlazaOfficialPricing(m.OfficialPricing),
-			LongContextBasis: string(m.LongContextBasis),
-			TimePricing:      toModelPlazaTimePricing(m.TimePricing),
+			Name:                 m.Name,
+			Platform:             m.Platform,
+			Pricing:              toUserPricing(m.Pricing),
+			PricingSource:        m.PricingSource,
+			OfficialPricing:      toModelPlazaOfficialPricing(m.OfficialPricing),
+			PricingRules:         m.PricingRules,
+			OfficialPricingRules: m.OfficialPricingRules,
+			LongContextBasis:     string(m.LongContextBasis),
+			TimePricing:          toModelPlazaTimePricing(m.TimePricing),
 		})
 	}
 	return models
@@ -283,6 +288,7 @@ func toModelPlazaOfficialPricing(p *service.PlazaOfficialPricing) *modelPlazaOff
 		return nil
 	}
 	return &modelPlazaOfficialPricing{
+		Currency:           p.Currency,
 		InputPrice:         p.InputPrice,
 		OutputPrice:        p.OutputPrice,
 		CacheWritePrice:    p.CacheWritePrice,

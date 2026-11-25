@@ -348,6 +348,8 @@ func intervalToModelPricing(iv *PricingInterval, base *ModelPricing, chPricing *
 	if base != nil {
 		*pricing = *base
 	}
+	// This card already represents one selected context tier.
+	pricing.ContextPricingTiers = nil
 	applyMultiplier := func(value float64, multiplier *float64) float64 {
 		if multiplier == nil {
 			return value

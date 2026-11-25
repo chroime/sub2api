@@ -7,11 +7,10 @@
     </div>
 
     <!-- 全局价格说明(管理员配置,Markdown) -->
-    <div
-      v-if="descriptionHtml"
-      class="plaza-description rounded-2xl border border-gray-100 bg-white px-5 py-4 text-[15px] shadow-card dark:border-dark-700/50 dark:bg-dark-800/50 sm:text-base"
-      v-html="descriptionHtml"
-    ></div>
+    <details v-if="descriptionHtml" class="plaza-description rounded-xl border border-gray-100 bg-white px-4 py-3 text-sm dark:border-dark-700 dark:bg-dark-800/50">
+      <summary class="cursor-pointer font-medium text-gray-600 dark:text-dark-200">{{ t('modelPlaza.filters.description') }}</summary>
+      <div class="mt-3" v-html="descriptionHtml"></div>
+    </details>
 
     <!-- 未登录提示 -->
     <p
@@ -39,28 +38,16 @@
       {{ t('modelPlaza.empty') }}
     </div>
 
-    <!-- 左侧厂商树 + 右侧模型价格 -->
-    <div v-else class="grid gap-5 lg:grid-cols-[260px_minmax(0,1fr)]">
-      <!-- min-w-0：窄屏单列时横向标签栏不能把网格撑出视口 -->
-      <aside class="min-w-0 lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:self-start lg:overflow-y-auto">
-        <PlazaVendorTree
-          :vendors="vendorTree"
-          :vendor="selectedVendor"
-          :search="searchQuery"
-          :highlighted="highlightedKey"
-          @update:vendor="selectVendor"
-          @update:search="searchQuery = $event"
-          @select-model="focusModel"
-        />
-      </aside>
-
+    <!-- Full-width price scope, vendor filters and model table. -->
+    <div v-else class="space-y-4">
       <section class="min-w-0 space-y-4">
         <!-- 分组选择与监测信息。 -->
-        <div class="flex flex-wrap items-center gap-3">
-          <label for="plaza-group-select" class="text-base font-semibold text-gray-700 dark:text-dark-200">
-            {{ t('modelPlaza.priceTable.groupLabel') }}
+        <div class="plaza-toolbar overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-dark-700 dark:bg-dark-800" data-plaza-toolbar>
+        <div class="flex flex-wrap items-center gap-3 p-4">
+          <label for="plaza-group-select" class="hidden text-sm font-semibold text-gray-700 dark:text-dark-200 sm:block">
+            {{ t('modelPlaza.filters.priceScope') }}
           </label>
-          <div class="plaza-group-select min-w-0 w-full sm:w-80">
+          <div class="plaza-group-select min-w-0 w-full sm:w-80 lg:w-[360px]">
             <Select
               id="plaza-group-select"
               :model-value="selectedGroupId"
@@ -88,7 +75,7 @@
                   always-show-rate
                   class="max-w-full"
                 />
-                <span v-else>{{ t('modelPlaza.priceTable.allGroups') }}</span>
+                <span v-else>{{ t('modelPlaza.filters.officialScope') }}</span>
               </template>
               <template #option="{ option, selected }">
                 <GroupOptionItem
@@ -114,10 +101,15 @@
               </template>
             </Select>
           </div>
-          <span v-if="!selectedGroup" class="text-sm leading-relaxed plaza-soft text-gray-400 dark:text-dark-500">
-            {{ t('modelPlaza.priceTable.allGroupsHint') }}
-          </span>
+          <label class="plaza-model-search relative min-w-0 flex-1 sm:ml-auto sm:min-w-[220px]">
+            <Icon name="search" size="sm" class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input v-model="searchQuery" type="search" class="input plaza-search w-full py-2.5 pl-9 text-sm" :placeholder="t('modelPlaza.filters.searchPlaceholder')" :aria-label="t('modelPlaza.filters.searchPlaceholder')" />
+          </label>
+          <button v-if="searchActive || selectedVendor !== 'all'" type="button" data-clear-plaza-filters class="text-xs text-gray-500 hover:text-primary-600" @click="clearFilters">{{ t('modelPlaza.filters.clear') }}</button>
         </div>
+        <PlazaVendorFilter :vendors="scopeVendors" :vendor="selectedVendor" @update:vendor="selectVendor" />
+        </div>
+        <p v-if="!selectedGroup" class="text-xs leading-relaxed text-gray-500 dark:text-dark-300">{{ t('modelPlaza.priceTable.allGroupsHint') }}</p>
 
         <p
           v-if="selectedGroup?.description"
@@ -147,7 +139,8 @@
           v-else
           class="plaza-empty rounded-2xl border border-dashed border-gray-300 px-5 py-12 text-center text-base plaza-muted text-gray-500 dark:border-dark-600 dark:text-dark-400"
         >
-          {{ searchActive ? t('modelPlaza.noSearchResult') : t('modelPlaza.detail.noModels') }}
+          <p>{{ searchActive ? t('modelPlaza.noSearchResult') : t('modelPlaza.detail.noModels') }}</p>
+          <button v-if="searchActive || selectedVendor !== 'all'" type="button" data-empty-clear class="mt-3 text-sm font-medium text-primary-600 dark:text-primary-400" @click="clearFilters">{{ t('modelPlaza.filters.showAllVendors') }}</button>
         </div>
       </section>
     </div>
@@ -155,7 +148,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
@@ -166,12 +159,13 @@ import GroupOptionItem from '@/components/common/GroupOptionItem.vue'
 import GroupMonitorHeader from '@/components/keys/GroupMonitorHeader.vue'
 import { useGroupMonitorStatus } from '@/composables/useGroupMonitorStatus'
 import type { GroupPlatform, SubscriptionType } from '@/types'
-import PlazaVendorTree from './PlazaVendorTree.vue'
+import PlazaVendorFilter from './PlazaVendorFilter.vue'
 import PlazaVendorPriceTable from './PlazaVendorPriceTable.vue'
-import { buildVendorTree, collectPlazaModels, plazaModelKey } from './plazaVendorTree'
+import { buildVendorTree, collectPlazaModels } from './plazaVendorTree'
 import type { ModelPlazaGroup, ModelPlazaResponse, PlazaModel } from '@/api/modelPlaza'
 import { useAuthStore } from '@/stores/auth'
 import { useAppStore } from '@/stores/app'
+import { modelVendorLabel } from '@/utils/modelVendor'
 import { formatPeakRateWindow, hasPeakRate, serverTimezoneLabel } from '@/utils/peak-rate'
 
 const props = defineProps<{
@@ -216,7 +210,7 @@ interface PlazaGroupSelectOption extends SelectOption {
 }
 
 const groupSelectOptions = computed<PlazaGroupSelectOption[]>(() => [
-  { value: 'all', label: t('modelPlaza.priceTable.allGroups') },
+  { value: 'all', label: t('modelPlaza.filters.officialScope') },
   ...sortedGroups.value.map((g) => ({ value: g.id, label: `${g.name} · ${effectiveRate(g)}x`, description: g.description, group: g }))
 ])
 
@@ -239,7 +233,7 @@ const { statuses: groupMonitorStates } = useGroupMonitorStatus(
 /** 选中分组的高峰窗口描述(含倍率与服务器时区标注);未启用高峰为空串。 */
 const peakWindow = computed(() => {
   const g = selectedGroup.value
-  if (!g || !hasPeakRate(g)) return ''
+  if (!g || g.subscription_type !== 'subscription' || !hasPeakRate(g)) return ''
   return formatPeakRateWindow(g, serverTimezoneLabel(appStore.cachedPublicSettings?.server_utc_offset))
 })
 
@@ -258,16 +252,13 @@ watch(groups, (list) => {
   }
 })
 
+const scopeVendors = computed(() =>
+  buildVendorTree(collectPlazaModels(groups.value, selectedGroupId.value), '', t('modelPlaza.vendor.other'))
+)
+
 const vendorTree = computed(() =>
   buildVendorTree(collectPlazaModels(groups.value, selectedGroupId.value), searchQuery.value, t('modelPlaza.vendor.other'))
 )
-
-// 切换分组或搜索后选中的厂商可能没有模型了。
-watch(vendorTree, (nodes) => {
-  if (selectedVendor.value !== 'all' && !nodes.some((n) => n.key === selectedVendor.value)) {
-    selectedVendor.value = 'all'
-  }
-})
 
 const tableModels = computed<PlazaModel[]>(() => {
   if (selectedVendor.value === 'all') return vendorTree.value.flatMap((n) => n.models)
@@ -276,7 +267,7 @@ const tableModels = computed<PlazaModel[]>(() => {
 
 const currentVendorLabel = computed(() => {
   if (selectedVendor.value === 'all') return t('modelPlaza.vendor.all')
-  return vendorTree.value.find((n) => n.key === selectedVendor.value)?.label ?? ''
+  return vendorTree.value.find((n) => n.key === selectedVendor.value)?.label ?? modelVendorLabel(selectedVendor.value)
 })
 
 function selectVendor(key: string) {
@@ -284,13 +275,10 @@ function selectVendor(key: string) {
   highlightedKey.value = ''
 }
 
-/** 点击树中模型:切到其厂商并滚动到对应行。 */
-async function focusModel(model: PlazaModel, vendor: string) {
-  selectedVendor.value = vendor
-  highlightedKey.value = plazaModelKey(model)
-  await nextTick()
-  const id = `plaza-model-${highlightedKey.value.replace(/[^a-zA-Z0-9_-]/g, '_')}`
-  document.getElementById(id)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+function clearFilters() {
+  selectedVendor.value = 'all'
+  searchQuery.value = ''
+  highlightedKey.value = ''
 }
 </script>
 

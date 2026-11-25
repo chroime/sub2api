@@ -403,6 +403,31 @@ func TestPlazaSchedulePreservesCacheWrite1h(t *testing.T) {
 	require.Len(t, mergeEqualContextTiers([]ContextPricingTier{a, b}), 2)
 }
 
+func TestResolveContextPricingSchedule_OpenAICacheDurations(t *testing.T) {
+	for _, configured := range []bool{false, true} {
+		t.Run(map[bool]string{false: "official", true: "zero_override"}[configured], func(t *testing.T) {
+			scenario := scheduleScenario{catalog: openAILadderCatalog(), groupPlatform: PlatformOpenAI}
+			group := enabledGroup(PlatformOpenAI)
+			if configured {
+				scenario.channel = []ChannelModelPricing{{Platform: PlatformOpenAI, Models: []string{"gpt-5.4"}, BillingMode: BillingModeToken,
+					CacheWritePrice: testPtrFloat64(0), CacheWrite12hPrice: testPtrFloat64(0)}}
+				group = disabledGroup(PlatformOpenAI)
+			}
+			bs, resolver := newScheduleTestEnv(t, scenario)
+			sched, err := bs.ResolveContextPricingSchedule(context.Background(), resolver, ContextPricingScheduleInput{Model: "gpt-5.4", Group: group, Platform: PlatformOpenAI})
+			require.NoError(t, err)
+			require.NotEmpty(t, sched.Tiers)
+			for _, tier := range sched.Tiers {
+				require.Nil(t, tier.CacheWrite1h, "a generic OpenAI cache quote is not an independent 1h quote")
+				if configured {
+					requirePrice(t, testPtrFloat64(0), tier.CacheWrite, "explicit zero cache write")
+					requirePrice(t, testPtrFloat64(0), tier.CacheWrite12h, "explicit zero 12h cache write")
+				}
+			}
+		})
+	}
+}
+
 // --- 对账：阶梯表推算的费用必须等于真实计费函数 ---
 
 type tokenKind int

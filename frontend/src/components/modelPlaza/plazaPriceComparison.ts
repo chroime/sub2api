@@ -5,12 +5,15 @@ import { isDomesticModelVendor, modelVendorOf } from '@/utils/modelVendor'
 import { resolveIntervalPrices } from '@/utils/pricing'
 
 export type TokenPriceField = 'input_price' | 'output_price' | 'cache_read_price' | 'cache_write_price'
-export type PlazaReferenceSource = 'auto' | 'official' | 'none'
+// official-matched attaches official quotes without adding or splitting site tiers.
+export type PlazaReferenceSource = 'auto' | 'official' | 'none' | 'official-matched'
 
 /** Reference exchange rate for the plaza's CNY cost comparison. */
 export const PLAZA_REFERENCE_USD_TO_CNY = 6.7
 /** One CNY purchases one USD of site credit. */
 export const PLAZA_CNY_PER_USD_CREDIT = 1
+
+type PlazaCurrency = 'USD' | 'CNY' | ''
 
 export interface PlazaPriceComparison {
   key: string
@@ -20,8 +23,13 @@ export interface PlazaPriceComparison {
   site: number | null
   configured?: number | null
   rate?: number
-  currency: 'USD' | 'CNY'
+  currency: PlazaCurrency
+  /** Raw currency of each side; differs while comparing a legacy USD quote with CNY site pricing. */
+  referenceCurrency?: PlazaCurrency
+  siteCurrency?: PlazaCurrency
   referenceKind: 'official' | 'configured'
+  /** Official scope when a flat site price is compared with the official base tier. */
+  referenceLabel?: string
   comparable: boolean
   billingMode: BillingMode
   cache1h?: boolean
@@ -54,11 +62,14 @@ function scaled(value: number | null | undefined, multiplier: number, unit = 1):
 
 /** Normalize real CNY costs after the quote's unit and effective rate are resolved. */
 export function getPlazaPayableComparison(price: PlazaPriceComparison): PlazaPayableComparison {
-  const converted = price.currency === 'USD'
-  const reference = converted ? scaled(price.reference, PLAZA_REFERENCE_USD_TO_CNY) : amount(price.reference)
-  const site = converted ? scaled(price.site, PLAZA_CNY_PER_USD_CREDIT) : amount(price.site)
+  const referenceCurrency = price.referenceCurrency ?? price.currency
+  const siteCurrency = price.siteCurrency ?? price.currency
+  const referenceConverted = referenceCurrency === 'USD'
+  const siteConverted = siteCurrency === 'USD'
+  const reference = !referenceCurrency ? null : referenceConverted ? scaled(price.reference, PLAZA_REFERENCE_USD_TO_CNY) : amount(price.reference)
+  const site = !siteCurrency ? null : siteConverted ? scaled(price.site, PLAZA_CNY_PER_USD_CREDIT) : amount(price.site)
   return {
-    reference, site, currency: 'CNY', converted,
+    reference, site, currency: 'CNY', converted: referenceConverted || siteConverted,
     comparable: price.comparable && reference !== null && site !== null
   }
 }
@@ -81,6 +92,14 @@ export function comparePriceAmounts(reference: number | null | undefined, site: 
 function configuredCny(model: PlazaModel): boolean {
   return (model.pricing_source === 'group' || model.pricing_source === 'channel') &&
     isDomesticModelVendor(modelVendorOf(model.name, model.platform))
+}
+
+function quoteCurrencies(model: PlazaModel, configured: boolean) {
+  const normalize = (currency: string | undefined): PlazaCurrency => currency === 'USD' || currency === 'CNY' ? currency : ''
+  const official = normalize(model.official_pricing_rules ? model.official_pricing_rules.currency : model.official_pricing?.currency ?? 'USD')
+  const site = model.pricing_rules ? normalize(model.pricing_rules.currency)
+    : isDomesticModelVendor(modelVendorOf(model.name, model.platform)) ? 'CNY' : 'USD'
+  return { siteCurrency: site, referenceCurrency: configured ? site : official }
 }
 
 function mode(pricing: { billing_mode?: BillingMode } | null | undefined): BillingMode {
@@ -116,6 +135,26 @@ function rangeValue(ranges: TokenRange[], min: number, max: number): TokenValues
   const matches = ranges.filter(range => range.min <= min && range.max >= max)
   // Overlapping ranges do not provide an unambiguous comparative price.
   return matches.length === 1 ? matches[0].values : null
+}
+
+/** A displayed site tier can only have one reference if coverage is complete and uniform. */
+function uniformReference(ranges: TokenRange[], min: number, max: number, field: keyof TokenValues): number | null {
+  const bounds = [...new Set([min, max, ...ranges.flatMap(range => [range.min, range.max])
+    .filter(bound => bound > min && bound < max)])].sort((a, b) => a - b)
+  let result: number | null = null
+  for (let index = 0; index < bounds.length - 1; index++) {
+    const value = amount(rangeValue(ranges, bounds[index], bounds[index + 1])?.[field])
+    if (value === null || (result !== null && value !== result)) return null
+    result = value
+  }
+  return scaled(result, 1, 1_000_000)
+}
+
+function officialBaseRange(ranges: TokenRange[]): TokenRange | undefined {
+  // Only a complete, unambiguous official schedule has a safe base tier.
+  if (ranges.length < 2 || ranges[0].min !== 0 || ranges[ranges.length - 1].max !== Infinity) return undefined
+  if (ranges.some((range, index) => index > 0 && range.min !== ranges[index - 1].max)) return undefined
+  return ranges[0]
 }
 
 function tokenCount(value: number): string {
@@ -155,9 +194,11 @@ function comparisonRangeLabel(site: TokenRange[], reference: TokenRange[], min: 
  */
 export function getTokenComparisons(model: PlazaModel, group: ModelPlazaGroup | null, field: TokenPriceField, referenceSource: PlazaReferenceSource = 'auto', includeEqualCache1h = false): PlazaPriceComparison[] {
   const configured = referenceSource === 'auto' && configuredCny(model)
+  const { siteCurrency, referenceCurrency } = quoteCurrencies(model, configured)
+  const matchSite = referenceSource === 'official-matched' && group !== null
   const siteRanges = group ? tokenRanges(model.pricing, true) : []
   const referenceRanges = referenceSource === 'none' ? [] : tokenRanges(configured ? model.pricing : model.official_pricing, configured)
-  const ranges = [...siteRanges, ...referenceRanges]
+  const ranges = matchSite ? siteRanges : [...siteRanges, ...referenceRanges]
   const bounds = [...new Set([0, Infinity, ...ranges.flatMap(range => [range.min, range.max])])].sort((a, b) => a - b)
   const rate = effectivePlazaRate(model, group)
   const entries: PlazaPriceComparison[] = []
@@ -167,17 +208,30 @@ export function getTokenComparisons(model: PlazaModel, group: ModelPlazaGroup | 
     const reference = rangeValue(referenceRanges, min, max)
     // Don't add an empty artificial segment after a finite-only schedule.
     if (!site && !reference && ranges.length > 0) continue
-    const { label, compatible } = comparisonRangeLabel(siteRanges, referenceRanges, min, max)
+    const { label: comparisonLabel, compatible } = comparisonRangeLabel(siteRanges, referenceRanges, min, max)
+    const label = matchSite ? comparisonRangeLabel(siteRanges, [], min, max).label : comparisonLabel
+    const baseReference = matchSite && siteRanges.length === 1 && min === 0 && max === Infinity
+      ? officialBaseRange(referenceRanges) : undefined
     const entry = (priceField: TokenPriceField | 'cache_write_1h_price' | 'cache_write_12h_price', ttl?: '1h' | '12h'): PlazaPriceComparison => {
-      const referenceAmount = scaled(reference?.[priceField], 1, 1_000_000)
+      let referenceAmount = matchSite
+        ? (compatible ? uniformReference(referenceRanges, min, max, priceField) : null)
+        : scaled(reference?.[priceField], 1, 1_000_000)
+      let referenceLabel: string | undefined
+      if (referenceAmount === null && compatible && baseReference) {
+        referenceAmount = scaled(baseReference.values[priceField], 1, 1_000_000)
+        if (referenceAmount !== null) referenceLabel = baseReference.label || tokenRangeLabel(baseReference.min, baseReference.max)
+      }
       const siteAmount = group ? scaled(site?.[priceField], rate, 1_000_000) : null
       return {
         key: `${field}:${min}:${max}${ttl ? `:${ttl}` : ''}`,
         label: ttl ? [label, ttl].filter(Boolean).join(' · ') : label,
         reference: referenceAmount, site: siteAmount,
         configured: group ? scaled(site?.[priceField], 1, 1_000_000) : null, rate,
-        currency: configured ? 'CNY' : 'USD', referenceKind: configured ? 'configured' : 'official',
-        comparable: referenceAmount !== null && siteAmount !== null && compatible && model.long_context_basis !== 'marginal',
+        currency: group ? siteCurrency : referenceCurrency,
+        referenceCurrency, siteCurrency,
+        referenceKind: configured ? 'configured' : 'official',
+        ...(referenceLabel ? { referenceLabel } : {}),
+        comparable: Boolean(referenceCurrency && siteCurrency) && referenceAmount !== null && siteAmount !== null && compatible && model.long_context_basis !== 'marginal',
         billingMode: BILLING_MODE_TOKEN,
         ...(ttl === '1h' ? { cache1h: true } : {})
       }
@@ -186,10 +240,10 @@ export function getTokenComparisons(model: PlazaModel, group: ModelPlazaGroup | 
     if (field === 'cache_write_price') {
       const differs = (values: TokenValues | null) => values?.cache_write_1h_price != null &&
         amount(values.cache_write_1h_price) !== null && (includeEqualCache1h || values.cache_write_1h_price !== values.cache_write_price)
-      if (differs(site) || differs(reference)) entries.push(entry('cache_write_1h_price', '1h'))
+      if (differs(site) || (!matchSite && differs(reference))) entries.push(entry('cache_write_1h_price', '1h'))
       // OpenAI's 12h cache is an independent lifetime, never an Anthropic 1h
       // substitute. Compare only explicitly available prices for this lifetime.
-      if (amount(site?.cache_write_12h_price) !== null || amount(reference?.cache_write_12h_price) !== null) {
+      if (amount(site?.cache_write_12h_price) !== null || (!matchSite && amount(reference?.cache_write_12h_price) !== null)) {
         entries.push(entry('cache_write_12h_price', '12h'))
       }
     }
@@ -217,18 +271,26 @@ function quoteForLabel(quotes: UnitQuote[], label: string): number | null {
 /** Match image sizes / video resolutions, never compare different units. */
 export function getUnitComparisons(model: PlazaModel, group: ModelPlazaGroup | null, referenceSource: PlazaReferenceSource = 'auto'): PlazaPriceComparison[] {
   const configured = referenceSource === 'auto' && configuredCny(model)
+  const { siteCurrency, referenceCurrency } = quoteCurrencies(model, configured)
   const sitePricing = group ? model.pricing : null
   const referencePricing = referenceSource === 'none' ? null : configured ? model.pricing : model.official_pricing
   const siteMode = mode(sitePricing), referenceMode = mode(referencePricing)
   const siteQuotes = unitQuotes(sitePricing), referenceQuotes = unitQuotes(referencePricing)
   const rate = effectivePlazaRate(model, group)
-  const currency = configured ? 'CNY' as const : 'USD' as const
+  const currency = group ? siteCurrency : referenceCurrency
   const referenceKind = configured ? 'configured' as const : 'official' as const
   const entry = (label: string, reference: number | null, base: number | null, billingMode: BillingMode, key = label): PlazaPriceComparison => ({
-    key: `${billingMode}:${key}`, label, reference, site: scaled(base, rate), configured: base, rate, currency, referenceKind,
-    comparable: reference !== null && scaled(base, rate) !== null && siteMode === referenceMode,
+    key: `${billingMode}:${key}`, label, reference, site: scaled(base, rate), configured: base, rate,
+    currency, referenceCurrency, siteCurrency, referenceKind,
+    comparable: Boolean(referenceCurrency && siteCurrency) && reference !== null && scaled(base, rate) !== null && siteMode === referenceMode,
     billingMode
   })
+  if (referenceSource === 'official-matched' && group) {
+    return siteQuotes.map((quote, index) => entry(
+      quote.label, siteMode === referenceMode ? quoteForLabel(referenceQuotes, quote.label) : null,
+      quote.price, siteMode, `site:${index}`
+    ))
+  }
   if (siteQuotes.length && referenceQuotes.length && siteMode !== referenceMode) {
     return [
       ...siteQuotes.map((quote, index) => entry(quote.label, null, quote.price, siteMode, `site:${index}`)),

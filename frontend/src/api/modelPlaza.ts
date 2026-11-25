@@ -9,8 +9,9 @@ import type { GroupIdentity } from '@/types'
 import type { UserPricingInterval, UserSupportedModelPricing } from './channels'
 import type { BillingMode } from '@/constants/channel'
 
-/** 官方参考价（USD per token，与计费目录同源；字段缺失 = 目录未覆盖）。 */
+/** 官方参考价；token 单价按 currency 解释，字段缺失 = 目录未覆盖。 */
 export interface PlazaOfficialPricing {
+  currency?: 'USD' | 'CNY'
   input_price: number | null
   output_price: number | null
   /** 5m 缓存写入（= LiteLLM cache_creation）。 */
@@ -52,6 +53,26 @@ export interface PlazaTimePricing {
 
 export type PlazaPricingSource = 'group' | 'channel' | 'official'
 
+export interface PlazaPricingTimeRule extends PlazaTimePricing {
+  source: 'official' | 'channel' | 'group'
+  base_multiplier: number
+  current_multiplier?: number
+  fields: string[]
+}
+
+/** Explicit summaries of the official or effective billing card, independently. */
+export interface PlazaPricingRules {
+  currency: string
+  context_status: 'flat' | 'tiered' | 'unknown' | 'not_applicable'
+  context_tier_count: number
+  context_basis: PlazaLongContextBasis
+  time_status: 'uniform' | 'peak_offpeak' | 'scheduled' | 'unknown'
+  price_basis: 'standard' | 'peak' | 'off_peak'
+  time_rules?: PlazaPricingTimeRule[]
+  evaluated_at?: string
+  current_multipliers?: Record<string, number>
+}
+
 export interface PlazaModel {
   name: string
   platform: string
@@ -60,6 +81,8 @@ export interface PlazaModel {
   /** 展示定价来源：分组模型级定价 > 渠道模型定价 > 官方目录价；无定价时缺省。 */
   pricing_source?: PlazaPricingSource
   official_pricing: PlazaOfficialPricing | null
+  pricing_rules?: PlazaPricingRules
+  official_pricing_rules?: PlazaPricingRules
   /** 仅多档模型返回。 */
   long_context_basis?: PlazaLongContextBasis
   /** 仅配置了分时倍率的模型返回。 */

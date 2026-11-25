@@ -390,6 +390,44 @@ func TestNormalizeGroupModelPricing_NormalizesEmptyTimePricing(t *testing.T) {
 	require.Nil(t, pricing[0].TimePricing)
 }
 
+func TestNormalizeGroupModelPricing_CacheDurations(t *testing.T) {
+	for _, test := range []struct {
+		name, groupPlatform, pricingPlatform string
+		models                               []string
+		drop1h                               bool
+	}{
+		{"inherited GPT platform", PlatformOpenAI, "", []string{"gpt-6.2-sol"}, true},
+		{"GPT in composite", PlatformComposite, PlatformOpenAI, []string{"gpt-6.2-sol"}, true},
+		{"compatible Claude", PlatformOpenAI, "", []string{"claude-sonnet-4"}, false},
+		{"shared card", PlatformOpenAI, "", []string{"gpt-6.2-sol", "claude-sonnet-4"}, false},
+		{"unknown alias", PlatformOpenAI, "", []string{"private-model"}, false},
+		{"unknown Codex alias", PlatformOpenAI, "", []string{"private-codex"}, false},
+		{"compatible Claude Codex alias", PlatformOpenAI, "", []string{"claude-sonnet-4-codex"}, false},
+		{"Anthropic", PlatformAnthropic, "", []string{"claude-sonnet-4"}, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			input := []ChannelModelPricing{{Platform: test.pricingPlatform, Models: test.models, BillingMode: BillingModeToken,
+				CacheWritePrice: testPtrFloat64(0), CacheWrite1hPrice: testPtrFloat64(2.5e-6), CacheWrite12hPrice: testPtrFloat64(0),
+				Intervals: []PricingInterval{{CacheWritePrice: testPtrFloat64(0), CacheWrite1hPrice: testPtrFloat64(5e-6), CacheWrite12hPrice: testPtrFloat64(0)}}}}
+			got, err := normalizeGroupModelPricing(test.groupPlatform, input)
+			require.NoError(t, err)
+			require.Equal(t, testPtrFloat64(0), got[0].CacheWritePrice)
+			require.Equal(t, testPtrFloat64(0), got[0].CacheWrite12hPrice)
+			require.Equal(t, testPtrFloat64(0), got[0].Intervals[0].CacheWritePrice)
+			require.Equal(t, testPtrFloat64(0), got[0].Intervals[0].CacheWrite12hPrice)
+			if test.drop1h {
+				require.Nil(t, got[0].CacheWrite1hPrice)
+				require.Nil(t, got[0].Intervals[0].CacheWrite1hPrice)
+			} else {
+				require.Equal(t, testPtrFloat64(2.5e-6), got[0].CacheWrite1hPrice)
+				require.Equal(t, testPtrFloat64(5e-6), got[0].Intervals[0].CacheWrite1hPrice)
+			}
+			require.NotNil(t, input[0].CacheWrite1hPrice, "normalizing a cloned group card must not mutate its source")
+			require.NotNil(t, input[0].Intervals[0].CacheWrite1hPrice)
+		})
+	}
+}
+
 type compositeRouteRepoStubForAdmin struct {
 	routes    []CompositeModelRoute
 	created   *CompositeModelRoute

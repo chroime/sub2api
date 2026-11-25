@@ -45,6 +45,103 @@ function tier(min: number, max: number | null, input: number): UserPricingInterv
 }
 
 describe('model plaza price comparisons', () => {
+  it.each(['token', 'image'] as const)('keeps explicitly unknown %s currencies out of savings calculations', billingMode => {
+    const m = model({ name: 'unknown-model', pricing: price({ billing_mode: billingMode, per_request_price: .2 }),
+      official_pricing: { currency: 'USD', billing_mode: billingMode, input_price: 3e-6, output_price: null, cache_read_price: null, cache_write_price: null, per_request_price: .4 },
+      pricing_rules: { currency: '', context_status: 'unknown', context_tier_count: 0, context_basis: 'whole_request', time_status: 'unknown', price_basis: 'standard' } })
+    const entries = billingMode === 'token' ? getTokenComparisons(m, group(), 'input_price', 'official-matched') : getUnitComparisons(m, group(), 'official-matched')
+    expect(entries[0].siteCurrency).toBe('')
+    expect(entries[0].referenceCurrency).toBe('USD')
+    expect(entries[0].comparable).toBe(false)
+    expect(getPlazaPayableComparison(entries[0])).toMatchObject({ site: null, comparable: false })
+  })
+
+  it('matches official prices to actual site tiers without splitting them', () => {
+    const m = model({ pricing: price({ intervals: [tier(0, 200_000, 2e-6), tier(200_000, null, 8e-6)] }) })
+    m.official_pricing!.intervals = [tier(0, 100_000, 4e-6), tier(100_000, null, 10e-6)]
+    const entries = getTokenComparisons(m, group(), 'input_price', 'official-matched')
+    expect(entries.map(entry => [entry.label, entry.reference, entry.site, entry.comparable])).toEqual([
+      ['≤200K', null, 1, false], ['>200K', 10, 4, true]
+    ])
+  })
+
+  it('shows the official base tier for a flat site quote and discloses its scope', () => {
+    const m = model({ pricing: price({ input_price: 1e-6 }) })
+    m.official_pricing!.intervals = [
+      { ...tier(0, 272_000, 1e-6), tier_label: '≤272K' },
+      { ...tier(272_000, null, 2e-6), tier_label: '>272K' }
+    ]
+    const entries = getTokenComparisons(m, group({ rate_multiplier: 0.09, long_context_pricing_enabled: false }), 'input_price', 'official-matched')
+    expect(entries).toHaveLength(1)
+    expect(entries[0]).toMatchObject({ label: '', site: 0.09, reference: 1, referenceLabel: '≤272K', comparable: true })
+    const costs = getPlazaPayableComparison(entries[0])
+    expect(comparePriceAmounts(costs.reference, costs.site).difference).toBeCloseTo(6.61)
+  })
+
+  it('uses the same official base tier for 12h cache without comparing a different lifetime', () => {
+    const m = model({ pricing: price({ cache_write_price: null, cache_write_12h_price: 2.5e-6 }) })
+    m.official_pricing!.intervals = [
+      { ...tier(0, 272_000, 1e-6), cache_write_12h_price: 2.5e-6 },
+      { ...tier(272_000, null, 2e-6), cache_write_12h_price: 5e-6 }
+    ]
+    const entry = getTokenComparisons(m, group({ rate_multiplier: 0.09 }), 'cache_write_price', 'official-matched')
+      .find(price => price.key.endsWith(':12h'))!
+    expect(entry).toMatchObject({ site: 0.225, reference: 2.5, referenceLabel: '≤272K', comparable: true })
+  })
+
+  it('accepts uniform official coverage but rejects gaps or overlapping quotes', () => {
+    const m = model()
+    m.official_pricing!.intervals = [tier(0, 100_000, 4e-6), tier(100_000, null, 4e-6)]
+    expect(getTokenComparisons(m, group(), 'input_price', 'official-matched'))
+      .toMatchObject([{ reference: 4, site: 2.5, comparable: true }])
+    m.official_pricing!.intervals[1].min_tokens = 200_000
+    expect(getTokenComparisons(m, group(), 'input_price', 'official-matched')[0].reference).toBeNull()
+    m.official_pricing!.intervals[1].min_tokens = 50_000
+    expect(getTokenComparisons(m, group(), 'input_price', 'official-matched')[0].reference).toBeNull()
+  })
+
+  it('keeps domestic official references in CNY without exchange conversion', () => {
+    const [entry] = getTokenComparisons(model({ name: 'glm-5', platform: 'zhipu',
+      official_pricing: { input_price: 3e-6, output_price: 15e-6, cache_read_price: null, cache_write_price: null, currency: 'CNY' } }), group(), 'input_price', 'official-matched')
+    expect(entry).toMatchObject({ reference: 3, site: 2.5, referenceKind: 'official', currency: 'CNY' })
+    expect(getPlazaPayableComparison(entry)).toMatchObject({ reference: 3, site: 2.5 })
+  })
+
+  it('does not hide a one-token boundary difference behind identical tier labels', () => {
+    const m = model({ pricing: price({ intervals: [
+      { ...tier(0, 100_001, 1e-6), tier_label: '≤100K' },
+      { ...tier(100_001, null, 5e-6), tier_label: '>100K' }
+    ] }) })
+    m.official_pricing!.intervals = [
+      { ...tier(0, 100_000, 1e-6), tier_label: '≤100K' },
+      { ...tier(100_000, null, 5e-6), tier_label: '>100K' }
+    ]
+    const entries = getTokenComparisons(m, group(), 'input_price', 'official-matched')
+    expect(entries.map(entry => [entry.label, entry.reference, entry.site])).toEqual([
+      ['≤100K', null, 0.5], ['>100K', 5, 2.5]
+    ])
+  })
+
+  it('preserves site labels while rejecting conflicting official inclusion rules', () => {
+    const m = model({ pricing: price({ intervals: [{ ...tier(0, 200_000, 1e-6), tier_label: '≤200K' }] }) })
+    m.official_pricing!.intervals = [{ ...tier(0, 200_000, 2e-6), tier_label: '<200K' }]
+    expect(getTokenComparisons(m, group(), 'input_price', 'official-matched')[0])
+      .toMatchObject({ label: '≤200K', site: 0.5, reference: null, comparable: false })
+  })
+
+  it('does not invent site image tiers from official size quotes', () => {
+    const m = model({ pricing: price({ billing_mode: 'image', per_request_price: 0.2 }),
+      official_pricing: { billing_mode: 'image', input_price: null, output_price: null,
+        cache_read_price: null, cache_write_price: null, intervals: [
+          { ...tier(0, null, 0), tier_label: '1024', per_request_price: 0.4 },
+          { ...tier(0, null, 0), tier_label: '2048', per_request_price: 0.8 }
+        ] }
+    })
+    expect(getUnitComparisons(m, group(), 'official-matched')).toMatchObject([
+      { label: '', site: 0.1, reference: null, comparable: false }
+    ])
+  })
+
   it('compares the CNY cost of official USD and the actual configured site credits', () => {
     const [entry] = getTokenComparisons(model(), group(), 'input_price')
     expect(entry).toMatchObject({ reference: 3, site: 2.5, currency: 'USD', referenceKind: 'official', comparable: true })
@@ -73,11 +170,12 @@ describe('model plaza price comparisons', () => {
   })
 
   it('calls domestic configured CNY a configured reference without mixing the official USD quote', () => {
-    const m = model({ name: 'glm-5', platform: 'zhipu' })
+    const m = model({ name: 'glm-5', platform: 'zhipu',
+      official_pricing: { input_price: 3e-6, output_price: 15e-6, cache_read_price: null, cache_write_price: null, currency: 'CNY' } })
     const [entry] = getTokenComparisons(m, group(), 'input_price')
     expect(entry).toMatchObject({ reference: 5, site: 2.5, currency: 'CNY', referenceKind: 'configured', comparable: true })
     expect(getTokenComparisons({ ...m, pricing_source: 'official' }, group(), 'input_price')[0])
-      .toMatchObject({ reference: 3, currency: 'USD', referenceKind: 'official' })
+      .toMatchObject({ reference: 3, currency: 'CNY', referenceKind: 'official' })
   })
 
   it('splits unequal token tiers at shared boundaries instead of pairing array indexes', () => {

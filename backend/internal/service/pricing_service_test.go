@@ -77,6 +77,73 @@ func TestParsePricingData_ParsesPriorityAndServiceTierFields(t *testing.T) {
 	require.True(t, pricing.SupportsServiceTier)
 }
 
+func TestParsePricingData_NormalizesAllDomesticCostFieldsToCNY(t *testing.T) {
+	svc := &PricingService{}
+	entry := json.RawMessage(`{
+		"input_cost_per_token": 1e-6,
+		"output_cost_per_token": 2e-6,
+		"cache_creation_input_token_cost": 3e-6,
+		"cache_creation_input_token_cost_above_1hr": 4e-6,
+		"cache_read_input_token_cost": 5e-7,
+		"cache_read_input_token_cost_above_272k_tokens": 7e-7,
+		"cache_storage_cost_per_token_per_hour": 8e-8,
+		"input_cost_per_token_above_272k_tokens": 2e-6,
+		"long_context_input_cost_multiplier": 2,
+		"litellm_provider": "qwen",
+		"mode": "chat"
+	}`)
+	body := []byte(`{
+		"qwen-uncovered": ` + string(entry) + `
+	}`)
+	normalized := normalizeDomesticPricingCatalog(map[string]json.RawMessage{"qwen-uncovered": entry})
+	var normalizedFields map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(normalized["qwen-uncovered"], &normalizedFields))
+	var cacheReadAbove float64
+	require.NoError(t, json.Unmarshal(normalizedFields["cache_read_input_token_cost_above_272k_tokens"], &cacheReadAbove))
+	require.InDelta(t, 4.69e-6, cacheReadAbove, 1e-12)
+
+	data, err := svc.parsePricingData(body)
+	require.NoError(t, err)
+	pricing := data["qwen-uncovered"]
+	require.NotNil(t, pricing)
+	require.Equal(t, "CNY", pricing.Currency)
+	require.Equal(t, "USD", pricing.OfficialCurrency)
+	require.InDelta(t, 6.7e-6, pricing.InputCostPerToken, 1e-12)
+	require.InDelta(t, 13.4e-6, pricing.OutputCostPerToken, 1e-12)
+	require.InDelta(t, 20.1e-6, pricing.CacheCreationInputTokenCost, 1e-12)
+	require.InDelta(t, 26.8e-6, pricing.CacheCreationInputTokenCostAbove1hr, 1e-12)
+	require.InDelta(t, 3.35e-6, pricing.CacheReadInputTokenCost, 1e-12)
+	require.InDelta(t, 0.536e-6, pricing.CacheStorageCostPerTokenPerHour, 1e-12)
+	require.InDelta(t, 2, pricing.LongContextInputCostMultiplier, 1e-12)
+}
+
+func TestParsePricingData_RecordsNormalizedDomesticUSDSource(t *testing.T) {
+	svc := &PricingService{}
+	data, err := svc.parsePricingData([]byte(`{"deepseek-chat":{"input_cost_per_token":1e-6,"output_cost_per_token":2e-6}}`))
+	require.NoError(t, err)
+	require.Equal(t, "CNY", data["deepseek-chat"].Currency)
+	require.Equal(t, "USD", data["deepseek-chat"].OfficialCurrency)
+}
+
+func TestParsePricingData_PreservesOfficialDomesticCNYPrices(t *testing.T) {
+	svc := &PricingService{}
+	data, err := svc.parsePricingData([]byte(`{
+		"deepseek-flash": {
+			"input_cost_per_token": 1e-6,
+			"output_cost_per_token": 4e-6,
+			"cache_read_input_token_cost": 2e-8,
+			"currency": "CNY"
+		}
+	}`))
+	require.NoError(t, err)
+	pricing := data["deepseek-flash"]
+	require.Equal(t, "CNY", pricing.Currency)
+	require.Empty(t, pricing.OfficialCurrency)
+	require.InDelta(t, 1e-6, pricing.InputCostPerToken, 1e-15)
+	require.InDelta(t, 4e-6, pricing.OutputCostPerToken, 1e-15)
+	require.InDelta(t, 2e-8, pricing.CacheReadInputTokenCost, 1e-15)
+}
+
 const gpt6AstraCatalogJSON = `{
 	"gpt-6-astra": {
 		"litellm_provider": "openai",
