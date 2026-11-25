@@ -12,6 +12,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestIsDomesticPricingModelName_HunyuanAliasesAreBounded(t *testing.T) {
+	for _, model := range []string{"hy3", "hy3-preview", "hy4-preview", "hy4-preview-2026"} {
+		require.True(t, isDomesticPricingModelName(model), model)
+	}
+	for _, model := range []string{"hyperbolic/claude-sonnet-4", "hybrid-llm", "hyperscale-model"} {
+		require.False(t, isDomesticPricingModelName(model), model)
+	}
+}
+
 func TestDomesticCatalog_CNYFallbackWinsRemoteUSDAndPreservesOperatorOverride(t *testing.T) {
 	for _, override := range []string{"", `{"glm-5.3":{"input_cost_per_token":9e-6}}`} {
 		t.Run(override, func(t *testing.T) {

@@ -913,9 +913,14 @@ func isDomesticPricingModelName(modelName string) bool {
 		strings.HasPrefix(lower, "chatglm") || strings.HasPrefix(lower, "minimax") ||
 		strings.HasPrefix(lower, "mimo-") || strings.HasPrefix(lower, "qwen") ||
 		strings.HasPrefix(lower, "qwq") || strings.HasPrefix(lower, "hunyuan") ||
-		strings.HasPrefix(lower, "hy") || strings.HasPrefix(lower, "doubao") ||
+		isHunyuanShortAlias(lower) || strings.HasPrefix(lower, "doubao") ||
 		strings.HasPrefix(lower, "ernie-") || strings.HasPrefix(lower, "spark-") ||
 		strings.HasPrefix(lower, "step-") || strings.HasPrefix(lower, "baichuan-")
+}
+
+func isHunyuanShortAlias(model string) bool {
+	return model == "hy3" || strings.HasPrefix(model, "hy3-") ||
+		model == "hy4-preview" || strings.HasPrefix(model, "hy4-preview-")
 }
 
 // deriveLongContextFromAboveTierFields 把 LiteLLM 目录的 *_above_XXXk_tokens 绝对价字段
