@@ -424,7 +424,7 @@ func (s *AccountTestService) buildAccountQualityRequest(ctx context.Context, a *
 		if req == nil {
 			return nil, errors.New("unsupported Gemini credentials")
 		}
-		a.ApplyHeaderOverrides(req.Header)
+		a.ApplyHeaderOverrides(req.Context(), req.Header)
 		return req, nil
 	default:
 		return nil, errors.New("unsupported protocol")
@@ -482,7 +482,7 @@ func (s *AccountTestService) buildAccountQualityRequest(ctx context.Context, a *
 			applyOpenAICodexProbeHeaders(req.Header)
 		}
 	}
-	a.ApplyHeaderOverrides(req.Header)
+	a.ApplyHeaderOverrides(req.Context(), req.Header)
 	// Every diagnostic is an independent conversation, even with shared header overrides.
 	session := uuid.NewString()
 	req.Header.Set("session_id", isolateOpenAIUpstreamSessionID(0, a, session))

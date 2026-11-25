@@ -148,9 +148,9 @@ func TestGovernancePostgresReconciliationPreservesAccountAndArbitratesNativeProb
 	// A network probe started before governance took ownership must fail its CAS.
 	probeRate := 9.0
 	probe := &service.UpstreamBillingProbeSnapshot{Status: service.UpstreamBillingProbeStatusOK}
-	require.ErrorIs(t, f.repo.UpdateUpstreamBillingProbeSnapshot(ctx, inFlight, probe, &probeRate), service.ErrUpstreamBillingProbeIdentityChanged)
+	require.ErrorIs(t, f.repo.UpdateUpstreamBillingProbeSnapshot(ctx, inFlight, probe, &probeRate, service.BillingGroupInfo{}), service.ErrUpstreamBillingProbeIdentityChanged)
 	// Even a caller that proposes a rate while already owned cannot bypass SQL.
-	require.NoError(t, f.repo.UpdateUpstreamBillingProbeSnapshot(ctx, got, probe, &probeRate))
+	require.NoError(t, f.repo.UpdateUpstreamBillingProbeSnapshot(ctx, got, probe, &probeRate, service.BillingGroupInfo{}))
 	require.Equal(t, 1.1, f.account(t).BillingRateMultiplier())
 	// Preserve the owner through ordinary updates that omit/forge reserved extra.
 	_, err = f.admin.UpdateAccount(ctx, f.accountID, &service.UpdateAccountInput{Extra: map[string]any{"unrelated": "edited", gov.GovernanceRateOwnerExtraKey: "forged"}})
@@ -356,7 +356,7 @@ func TestGovernancePostgresUnrelatedStaleEditCannotUndoGovernancePause(t *testin
 	notes := "administrator note"
 	stale.Notes = &notes
 	stale.Priority = 7
-	require.NoError(t, f.repo.UpdateWithAccountBillingSettings(ctx, stale, nil, nil, nil))
+	require.NoError(t, f.repo.UpdateWithAccountBillingSettings(ctx, stale, service.AccountBillingSettingsUpdate{SetName: true, SetNotes: true}))
 	got := f.account(t)
 	require.False(t, got.Schedulable, "unrelated stale edit must preserve committed governance pause")
 	require.Equal(t, 7, got.Priority)
@@ -368,7 +368,7 @@ func TestGovernancePostgresUnrelatedStaleEditCannotUndoGovernancePause(t *testin
 	_, err = f.repo.ReconcileGovernanceAccount(ctx, restore)
 	require.NoError(t, err)
 	stalePaused.Priority = 8
-	require.NoError(t, f.repo.UpdateWithAccountBillingSettings(ctx, stalePaused, nil, nil, nil))
+	require.NoError(t, f.repo.UpdateWithAccountBillingSettings(ctx, stalePaused, service.AccountBillingSettingsUpdate{SetName: true, SetNotes: true}))
 	got = f.account(t)
 	require.True(t, got.Schedulable, "unrelated stale edit must preserve committed governance restore")
 	require.Equal(t, 8, got.Priority)

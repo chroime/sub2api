@@ -56,7 +56,7 @@ type governanceImportRacingRepository struct {
 	targetEditID   int64
 }
 
-func (r *governanceImportRacingRepository) UpdateWithAccountBillingSettings(ctx context.Context, account *service.Account, probe, sync *bool, rate *float64) error {
+func (r *governanceImportRacingRepository) UpdateWithAccountBillingSettings(ctx context.Context, account *service.Account, settings service.AccountBillingSettingsUpdate) error {
 	if r.targetEditID > 0 {
 		_, err := r.db.ExecContext(ctx, `UPDATE groups SET rate_multiplier=rate_multiplier+1 WHERE id=$1`, r.targetEditID)
 		if err != nil {
@@ -72,7 +72,7 @@ func (r *governanceImportRacingRepository) UpdateWithAccountBillingSettings(ctx 
 			return err
 		}
 	}
-	return r.AdminAccountRepository.UpdateWithAccountBillingSettings(ctx, account, probe, sync, rate)
+	return r.AdminAccountRepository.UpdateWithAccountBillingSettings(ctx, account, settings)
 }
 
 func TestGovernancePostgresImportSettingsPreserveConcurrentUsage(t *testing.T) {
