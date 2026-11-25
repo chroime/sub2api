@@ -120,6 +120,58 @@ func TestOpenAIPassthroughStructuredErrorsPreserveSSEAfterStreamingCommit(t *tes
 	}
 }
 
+func TestOpenAIPassthroughGenericErrorsPreserveSSEAfterAdmissionHeartbeat(t *testing.T) {
+	for _, customRule := range []bool{false, true} {
+		for _, committed := range []bool{false, true} {
+			name := "sanitized/http"
+			if customRule {
+				name = "custom/http"
+			}
+			if committed {
+				name += "/after-heartbeat"
+			}
+			t.Run(name, func(t *testing.T) {
+				c, rec := syntheticFirstResponseTestContext(t, "generic-error")
+				upstreamStatus, wantStatus := http.StatusForbidden, http.StatusBadGateway
+				wantMessage := "Upstream access denied"
+				body := `{"error":{"type":"invalid_request_error","message":"upstream denied"}}`
+				if customRule {
+					upstreamStatus, wantStatus = http.StatusBadRequest, http.StatusUnprocessableEntity
+					wantMessage = "Custom encrypted content error"
+					body = `{"error":{"type":"invalid_request_error","code":"invalid_encrypted_content","message":"upstream denied"}}`
+					ruleSvc := &ErrorPassthroughService{}
+					ruleSvc.setLocalCache([]*model.ErrorPassthroughRule{{
+						ID: 1, Enabled: true, Priority: 1, ErrorCodes: []int{upstreamStatus},
+						MatchMode: model.MatchModeAny, Platforms: []string{PlatformOpenAI},
+						ResponseCode: &wantStatus, CustomMessage: &wantMessage,
+					}})
+					BindErrorPassthroughService(c, ruleSvc)
+				}
+				if committed {
+					c.Header("Content-Type", "text/event-stream")
+					_, err := c.Writer.WriteString(": keepalive\n\n")
+					require.NoError(t, err)
+					c.Writer.Flush()
+				}
+				forwardOpenAIPassthroughErrorForTest(t, c, upstreamStatus, body, map[string]any{"api_key": "sk-test"})
+				if committed {
+					require.Equal(t, http.StatusOK, rec.Code)
+					require.Contains(t, rec.Header().Get("Content-Type"), "text/event-stream")
+					require.Contains(t, rec.Body.String(), "event: response.failed")
+					require.NotContains(t, rec.Body.String(), "\n\n{")
+					events := parseCompactBridgeSSE(t, stripKeepaliveComments(rec.Body.String()))
+					require.Len(t, events, 1)
+					require.Equal(t, wantMessage, gjson.Get(events[0][1], "response.error.message").String())
+				} else {
+					require.Equal(t, wantStatus, rec.Code)
+					require.Contains(t, rec.Header().Get("Content-Type"), "application/json")
+					require.Equal(t, wantMessage, gjson.Get(rec.Body.String(), "error.message").String())
+				}
+			})
+		}
+	}
+}
+
 func TestOpenAIGatewayService_APIKeyPassthrough_InvalidEncryptedContentRedactsUpstreamHostAndGuardsNon400(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

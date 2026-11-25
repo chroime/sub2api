@@ -861,6 +861,10 @@ func writeOpenAIPassthroughErrorEnvelope(c *gin.Context, downstreamStatus int, u
 	if writeOpenAICompactSSEBridge(c, downstreamStatus, body) {
 		return
 	}
+	if stopStreamingErrorWritersCommitted(c) {
+		writeStreamingACKErrorFrame(c, downstreamStatus, body)
+		return
+	}
 	writeOpenAIPassthroughErrorHeaders(c.Writer.Header(), upstreamHeaders)
 	writeStreamingACKDataError(c, downstreamStatus, "application/json; charset=utf-8", body)
 }
