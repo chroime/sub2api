@@ -445,8 +445,9 @@ func (s *ModelPlazaService) fillDisplayPricing(ctx context.Context, m *PlazaMode
 		}
 	}
 	// Native GPT image requests honor the group's count-billing switch before
-	// token pricing. Reflect that same per-image path instead of a token ladder.
-	if m.Pricing == nil || m.Pricing.BillingMode == "" || m.Pricing.BillingMode == BillingModeToken {
+	// catalog/token pricing. A catalog's image_generation mode can still quote
+	// image tokens, so it must not bypass the group's per-image override.
+	if m.PricingSource == PlazaPricingSourceOfficial || m.Pricing == nil || m.Pricing.BillingMode == "" || m.Pricing.BillingMode == BillingModeToken {
 		if pricing, fromGroup := s.gptImageCountDisplayPricing(m.Name, g); pricing != nil {
 			m.Pricing = pricing
 			m.PricingSource = PlazaPricingSourceOfficial

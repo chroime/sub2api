@@ -19,7 +19,8 @@ func TestListGroups_GPTImageCountBillingOverridesTokenDisplay(t *testing.T) {
 			catalog := make(map[string]*LiteLLMModelPricing)
 			accountModels := make([]PlazaAccountModel, 0, len(models))
 			for _, name := range models {
-				catalog[name] = &LiteLLMModelPricing{InputCostPerToken: 5e-6, CacheReadInputTokenCost: 1.25e-6}
+				catalog[name] = &LiteLLMModelPricing{Mode: "image_generation", InputCostPerToken: 5e-6,
+					CacheReadInputTokenCost: 1.25e-6, OutputCostPerImageToken: 3e-5}
 				accountModels = append(accountModels, PlazaAccountModel{Name: name, Platform: PlatformOpenAI})
 			}
 			var channels []Channel

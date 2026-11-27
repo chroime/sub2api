@@ -4,6 +4,8 @@ The GPT Image group on server 15 has image-count billing enabled, image rate ind
 
 The plaza must resolve native GPT image models through the existing billed image-unit resolver when their group enables count billing and the otherwise selected price is token based or missing. Explicit group model cards with image or per-request pricing retain priority. Uniform image-size prices collapse to one per-image price; distinct prices retain their size labels. Official token quotes retain their units and do not become per-image comparisons. Image-independent rates apply once, and media-only tables omit token-unit notes.
 
+Local synchronization reproduced an additional catalog case: `mode: image_generation` identifies model capability while prices can still use image tokens. Official catalog cards must therefore honor the count-billing override even when synthesis initially assigns image mode. The regression fixture includes the actual catalog mode and image-output-token price.
+
 The channel status page must show its three metric summaries without native hover hints. All routes to its monitor detail dialog are removed, including the dialog mount and card event forwarding. The cards become static articles.
 
 Payment settings replace the misleading disabled-draft wording with New receiving account and Save without enabling, including the associated Chinese and English guidance.
