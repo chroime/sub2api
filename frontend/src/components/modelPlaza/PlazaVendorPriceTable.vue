@@ -14,7 +14,9 @@
           <th scope="colgroup" colspan="4" class="px-3 pt-3 text-center font-semibold" :class="{ 'pz-bg': group }">
             {{ t(group ? 'modelPlaza.priceTable.sitePrice' : 'modelPlaza.priceTable.official') }}
             <span class="ml-2 text-xs font-normal text-gray-500 dark:text-dark-300">
-              {{ t(group ? 'modelPlaza.priceTable.siteUnitNote' : 'modelPlaza.priceTable.unitNote') }}
+              {{ t(unitOnly
+                ? group ? 'modelPlaza.priceTable.siteMediaUnitNote' : 'modelPlaza.priceTable.mediaUnitNote'
+                : group ? 'modelPlaza.priceTable.siteUnitNote' : 'modelPlaza.priceTable.unitNote') }}
             </span>
           </th>
         </tr>

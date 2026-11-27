@@ -444,6 +444,18 @@ func (s *ModelPlazaService) fillDisplayPricing(ctx context.Context, m *PlazaMode
 			return
 		}
 	}
+	// Native GPT image requests honor the group's count-billing switch before
+	// token pricing. Reflect that same per-image path instead of a token ladder.
+	if m.Pricing == nil || m.Pricing.BillingMode == "" || m.Pricing.BillingMode == BillingModeToken {
+		if pricing, fromGroup := s.gptImageCountDisplayPricing(m.Name, g); pricing != nil {
+			m.Pricing = pricing
+			m.PricingSource = PlazaPricingSourceOfficial
+			if fromGroup {
+				m.PricingSource = PlazaPricingSourceGroup
+			}
+			return
+		}
+	}
 	if s.billingService != nil && s.resolver != nil {
 		sched, err := s.billingService.ResolveContextPricingSchedule(ctx, s.resolver, ContextPricingScheduleInput{
 			Model:    m.Name,
@@ -468,6 +480,22 @@ func (s *ModelPlazaService) fillDisplayPricing(ctx context.Context, m *PlazaMode
 			}
 		}
 	}
+}
+
+// gptImageCountDisplayPricing shares the billed image-unit resolver. Only native
+// image models use this override; mixed text/image requests retain token pricing.
+func (s *ModelPlazaService) gptImageCountDisplayPricing(model string, g *Group) (*ChannelModelPricing, bool) {
+	if s.billingService == nil || g == nil || !g.ImageCountBilling || !IsGPTImageGenerationModel(model) {
+		return nil, false
+	}
+	cfg := &ImagePriceConfig{Price1K: g.ImagePrice1K, Price2K: g.ImagePrice2K, Price4K: g.ImagePrice4K}
+	tiers := make([]plazaMediaTier, 0, 3)
+	fromGroup := false
+	for _, size := range []string{ImageBillingSize1K, ImageBillingSize2K, ImageBillingSize4K} {
+		tiers = append(tiers, plazaMediaTier{label: size, price: s.billingService.getImageUnitPrice(model, size, cfg)})
+		fromGroup = fromGroup || g.GetImagePrice(size) != nil
+	}
+	return plazaMediaPricing(BillingModeImage, tiers), fromGroup
 }
 
 // plazaMediaTier 图片尺寸或视频分辨率的一个档位单价。

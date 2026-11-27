@@ -27,9 +27,12 @@ const monitorStreamingSampleOrder = `
 
 // Separate guarded branches let PostgreSQL use the account-specific index
 // without an OR predicate that scans other accounts' streaming history.
+// Filter cache eligibility only after selecting the latest 24 requests;
+// cache-free requests must not be replaced with older cache-bearing requests.
 const monitorUsageMetricsQuery = `
 SELECT m.id,
- AVG(100.0*ul.cache_read_tokens/NULLIF(ul.input_tokens::bigint+ul.cache_creation_tokens+ul.cache_read_tokens,0)),
+ AVG(100.0*ul.cache_read_tokens/NULLIF(ul.input_tokens::bigint+ul.cache_creation_tokens+ul.cache_read_tokens,0))
+  FILTER (WHERE ul.cache_read_tokens > 0),
  AVG(ul.first_token_ms) FILTER (WHERE ul.first_token_ms >= 0)
 FROM channel_monitors m
 ` + monitorBoundGroupJoin + `

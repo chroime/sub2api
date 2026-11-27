@@ -42,7 +42,6 @@ function mountCard(item: UserMonitorView, availabilityValue: number | null = 100
   return mount(MonitorCard, {
     props: {
       item,
-      window: '7d',
       availabilityValue,
       countdownSeconds: 0,
     },
@@ -105,6 +104,17 @@ describe('MonitorCard quota snapshot visibility', () => {
 })
 
 describe('MonitorCard real metric values', () => {
+  it('keeps metric labels and values free of hover hints and detail clicks', async () => {
+    const wrapper = mountCard(makeItem(), null)
+    expect(wrapper.get('.monitor-card-metrics').attributes('title')).toBe('')
+    for (const metric of wrapper.findAll('[data-metric]')) {
+      expect(metric.attributes('title')).toBeUndefined()
+      await metric.get('dt').trigger('click')
+      await metric.get('dd').trigger('click')
+    }
+    expect(wrapper.emitted('click')).toBeUndefined()
+  })
+
   it('shows distinct 24-point probe and 60-minute intelligence histories', () => {
     isQuotaVisible.mockReturnValue(false)
     const checkedAt = new Date().toISOString()
@@ -113,7 +123,7 @@ describe('MonitorCard real metric values', () => {
         timeline: Array.from({ length: 60 }, () => ({ status: 'failed', latency_ms: null, ping_latency_ms: null, checked_at: checkedAt })),
         intelligence: { window_end: checkedAt, series: [{ model: 'local-model', effort: 'medium', points: [{ status: 'pass', checked_at: checkedAt }] }] },
       }),
-      window: '7d', availabilityValue: 98, countdownSeconds: 58,
+      availabilityValue: 98, countdownSeconds: 58,
     } })
     expect(wrapper.findAll('[data-testid="history-bar"]')).toHaveLength(24)
     expect(wrapper.findAll('[data-testid="intelligence-bar"]')).toHaveLength(60)
@@ -143,16 +153,13 @@ describe('MonitorCard real metric values', () => {
     expect(wrapper.findAll('dd')[1].text()).toBe('monitorCommon.latencyEmpty')
   })
 
-  it('switches cache and first-token metrics with the selected period', async () => {
+  it('uses the fixed recent sample while ignoring legacy date-window aliases', () => {
     const wrapper = mountCard(makeItem({ usage_metrics: {
       '7d': { cache_rate_pct: 80, first_token_ms: 2000 },
       '15d': { cache_rate_pct: 62.5, first_token_ms: 500 },
       '30d': { cache_rate_pct: null, first_token_ms: null },
     } }))
-    await wrapper.setProps({ window: '15d' })
-    expect(wrapper.findAll('dd').map(value => value.text())).toEqual(['62.5%', '100.0%', '500ms'])
-    await wrapper.setProps({ window: '30d' })
-    expect(wrapper.findAll('dd').map(value => value.text())).toEqual(['monitorCommon.latencyEmpty', '100.0%', 'monitorCommon.latencyEmpty'])
+    expect(wrapper.findAll('dd').map(value => value.text())).toEqual(['80.0%', '100.0%', '2.0s'])
   })
 
   it('keeps valid zero metrics and free user rates visible', () => {

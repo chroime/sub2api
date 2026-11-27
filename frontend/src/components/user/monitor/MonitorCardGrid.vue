@@ -44,11 +44,9 @@
             v-for="item in group.items"
             :key="item.id"
             :item="item"
-            :window="window"
             :availability-value="resolveAvailability(item)"
             :countdown-seconds="countdownSeconds"
             :intelligence-loading="intelligenceLoading"
-            @click="emit('cardClick', item)"
           />
         </div>
       </section>
@@ -59,23 +57,18 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { UserMonitorView, UserMonitorDetail } from '@/api/channelMonitor'
+import type { UserMonitorView } from '@/api/channelMonitor'
 import EmptyState from '@/components/common/EmptyState.vue'
 import MonitorCard from './MonitorCard.vue'
 import ProviderIcon from './ProviderIcon.vue'
 import { useChannelMonitorFormat } from '@/composables/useChannelMonitorFormat'
+import { recentMonitorAvailability } from '@/utils/recentMonitorAvailability'
 
 const props = defineProps<{
   items: UserMonitorView[]
-  window: '7d' | '15d' | '30d'
   countdownSeconds: number
   loading: boolean
   intelligenceLoading?: boolean
-  detailCache: Record<number, UserMonitorDetail>
-}>()
-
-const emit = defineEmits<{
-  (e: 'cardClick', item: UserMonitorView): void
 }>()
 
 const { t } = useI18n()
@@ -94,14 +87,7 @@ const providerGroups = computed(() => {
 })
 
 function resolveAvailability(item: UserMonitorView): number | null {
-  if (props.window === '7d') {
-    return item.availability_7d ?? null
-  }
-  const detail = props.detailCache[item.id]
-  if (!detail) return null
-  const primary = detail.models.find(m => m.model === item.primary_model)
-  if (!primary) return null
-  return props.window === '15d' ? primary.availability_15d ?? null : primary.availability_30d ?? null
+  return recentMonitorAvailability(item.timeline || [])
 }
 </script>
 

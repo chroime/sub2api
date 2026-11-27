@@ -245,6 +245,20 @@ describe('PlazaVendorPriceTable 本站价与官方价', () => {
     expect(wrapper.get('tbody td').attributes('colspan')).toBe('4')
   })
 
+  it('按张计价使用图片独立倍率，且不显示 Token 表头或跨单位官方参考价', () => {
+    const m = tokenModel({ name: 'gpt-image-2.6', platform: 'openai', pricing_source: 'group',
+      official_pricing: { currency: 'USD', input_price: 5e-6, output_price: null, cache_read_price: 1.25e-6, cache_write_price: null } })
+    m.pricing!.billing_mode = 'image'
+    m.pricing!.per_request_price = 0.03
+    const wrapper = mountTable([m], group({ platform: 'openai', rate_multiplier: 0.03, image_rate_independent: true, image_rate_multiplier: 1 }))
+    expect(wrapper.get('[data-site-price]').text()).toBe('$0.03modelPlaza.table.perUnitImage')
+    expect(wrapper.find('[data-price-field]').exists()).toBe(false)
+    expect(wrapper.get('thead').text()).toContain('modelPlaza.priceTable.siteMediaUnitNote')
+    expect(wrapper.get('thead').text()).not.toContain('modelPlaza.priceTable.siteUnitNote')
+    expect(wrapper.get('[data-official-reference]').text()).toContain('—')
+    expect(wrapper.find('[data-savings]').exists()).toBe(false)
+  })
+
   it('全部分组按官方阶梯展示，不依赖本站是否配置阶梯', () => {
     const m = tokenModel({
       official_pricing: {

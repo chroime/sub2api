@@ -46,7 +46,7 @@ INSERT INTO usage_logs VALUES
 	for _, window := range []string{"7d", "15d", "30d"} {
 		metric := metrics[1][window]
 		require.NotNil(t, metric.CacheRatePct)
-		require.InDelta(t, 45, *metric.CacheRatePct, 0.00001, "average request percentages, rather than token-weighting")
+		require.InDelta(t, 90, *metric.CacheRatePct, 0.00001, "only requests with cache reads contribute to cache rate")
 		require.NotNil(t, metric.FirstTokenMs)
 		require.Equal(t, 1450.0, *metric.FirstTokenMs, "equal timestamps use descending IDs to select records 3..26")
 	}
@@ -63,7 +63,7 @@ func TestMonitorUsagePostgresSparseAndInvalidMeasurements(t *testing.T) {
 	metrics, err := (&channelMonitorRepository{db: db}).ListUsageMetricsForMonitors(context.Background(), []int64{1, 2}, now)
 	require.NoError(t, err)
 	require.NotNil(t, metrics[1]["7d"].CacheRatePct)
-	require.InDelta(t, 30, *metrics[1]["7d"].CacheRatePct, 0.00001)
+	require.InDelta(t, 60, *metrics[1]["7d"].CacheRatePct, 0.00001)
 	require.Equal(t, 100.0, *metrics[1]["7d"].FirstTokenMs, "zero is measured; null/negative times are omitted")
 	require.Equal(t, metrics[1]["7d"], metrics[1]["30d"], "availability windows do not restrict recent request samples")
 	require.Nil(t, metrics[2], "no samples must not produce fabricated zero metrics")
@@ -81,6 +81,36 @@ FROM generate_series(1,25) n;`, now)
 	require.Contains(t, metrics, int64(1))
 	require.Nil(t, metrics[1]["7d"].CacheRatePct)
 	require.Nil(t, metrics[1]["7d"].FirstTokenMs)
+}
+
+func TestMonitorUsagePostgresDoesNotBackfillCacheFreeRecentSamples(t *testing.T) {
+	db, now := monitorUsagePostgres(t)
+	_, err := db.Exec(`INSERT INTO usage_logs
+SELECT n,1,9,'usage-model','usage-model',CASE WHEN n=25 THEN 100 ELSE 0 END,
+ 100,0,n*100,$1::timestamptz-n*interval '1 second',1,TRUE
+FROM generate_series(1,25) n;`, now)
+	require.NoError(t, err)
+	metrics, err := (&channelMonitorRepository{db: db}).ListUsageMetricsForMonitors(context.Background(), []int64{1}, now)
+	require.NoError(t, err)
+	require.Contains(t, metrics, int64(1))
+	require.Nil(t, metrics[1]["7d"].CacheRatePct, "the older cache-bearing request must not replace any of the newest 24 streams")
+	require.NotNil(t, metrics[1]["7d"].FirstTokenMs)
+	require.Equal(t, 1250.0, *metrics[1]["7d"].FirstTokenMs, "cache-free requests still contribute to first-token time")
+}
+
+func TestMonitorUsagePostgresCacheBearingRequestsHaveEqualWeight(t *testing.T) {
+	db, now := monitorUsagePostgres(t)
+	_, err := db.Exec(`INSERT INTO usage_logs VALUES
+ (1,1,9,'usage-model','usage-model',900,100,0,100,$1::timestamptz-interval '3 seconds',1,TRUE),
+ (2,1,9,'usage-model','usage-model',5,3,2,300,$1::timestamptz-interval '2 seconds',1,TRUE),
+ (3,1,9,'usage-model','usage-model',0,1000,0,500,$1::timestamptz-interval '1 second',1,TRUE);`, now)
+	require.NoError(t, err)
+	metrics, err := (&channelMonitorRepository{db: db}).ListUsageMetricsForMonitors(context.Background(), []int64{1}, now)
+	require.NoError(t, err)
+	require.NotNil(t, metrics[1]["7d"].CacheRatePct)
+	require.InDelta(t, 70, *metrics[1]["7d"].CacheRatePct, 0.00001, "average 90%% and 50%% per-request rates without token weighting")
+	require.NotNil(t, metrics[1]["7d"].FirstTokenMs)
+	require.Equal(t, 300.0, *metrics[1]["7d"].FirstTokenMs)
 }
 
 func TestMonitorUsagePostgresAccountAndBindingIsolation(t *testing.T) {

@@ -4,6 +4,8 @@ import { describe, expect, it, vi } from 'vitest'
 import type { UserMonitorView } from '@/api/channelMonitor'
 import MonitorCardGrid from '../monitor/MonitorCardGrid.vue'
 import MonitorCard from '../monitor/MonitorCard.vue'
+import zhDashboard from '@/i18n/locales/zh/dashboard'
+import enDashboard from '@/i18n/locales/en/dashboard'
 
 vi.mock('vue-i18n', async () => ({
   ...await vi.importActual<typeof import('vue-i18n')>('vue-i18n'),
@@ -15,8 +17,8 @@ function item(id: number, provider: UserMonitorView['provider'], name: string): 
 }
 const items = [item(9, 'grok', 'Grok first'), item(5, 'openai', 'OpenAI first'), item(3, 'grok', 'Grok second'), item(1, 'anthropic', 'Claude first')]
 
-function open(window: '7d' | '15d' | '30d' = '7d') {
-  return mount(MonitorCardGrid, { props: { items, window, countdownSeconds: 58, loading: false, detailCache: {} }, global: { stubs: { MonitorCard: { props: ['item', 'availabilityValue'], emits: ['click'], template: '<button @click="$emit(\'click\')">{{ item.name }}</button>' }, ProviderIcon: true } } })
+function open(rows: UserMonitorView[] = items) {
+  return mount(MonitorCardGrid, { props: { items: rows, countdownSeconds: 58, loading: false }, global: { stubs: { MonitorCard: { props: ['item', 'availabilityValue'], emits: ['click'], template: '<button @click="$emit(\'click\')">{{ item.name }}</button>' }, ProviderIcon: true } } })
 }
 
 describe('channel status platform sections', () => {
@@ -29,26 +31,71 @@ describe('channel status platform sections', () => {
     expect(sections[0].get('[data-testid="provider-count"]').text()).toBe('2')
   })
 
-  it('forwards the original monitor when a card is selected', async () => {
+  it('does not forward card clicks to a details dialog', async () => {
     const wrapper = open()
     await wrapper.findAllComponents(MonitorCard)[1].trigger('click')
-    expect(wrapper.emitted('cardClick')).toEqual([[items[2]]])
+    expect(wrapper.emitted('cardClick')).toBeUndefined()
   })
 
-  it('uses a neutral value until the selected window has detail data', () => {
-    const wrapper = open('30d')
+  it('uses a neutral value when there are no recent probe records', () => {
+    const wrapper = open([items[0]!])
     expect(wrapper.findComponent(MonitorCard).props('availabilityValue')).toBeNull()
+  })
+
+  it('calculates availability from only the newest 24 timeline points', () => {
+    const statuses: UserMonitorView['timeline'][number]['status'][] = [
+      ...Array.from({ length: 12 }, () => 'operational' as const),
+      ...Array.from({ length: 6 }, () => 'degraded' as const),
+      ...Array.from({ length: 6 }, () => 'failed' as const),
+      ...Array.from({ length: 6 }, () => 'failed' as const),
+    ]
+    const checkedAt = Date.now()
+    const monitor = {
+      ...items[0]!,
+      availability_7d: 99,
+      timeline: statuses.map((status, index) => ({
+        status,
+        latency_ms: null,
+        ping_latency_ms: null,
+        checked_at: new Date(checkedAt - index * 1000).toISOString(),
+      })),
+    }
+
+    const wrapper = open([monitor])
+
+    expect(wrapper.findComponent(MonitorCard).props('availabilityValue')).toBe(75)
+  })
+
+  it('does not invent availability when the timeline is empty', () => {
+    const wrapper = open([{ ...items[0]!, timeline: [] }])
+    expect(wrapper.findComponent(MonitorCard).props('availabilityValue')).toBeNull()
+  })
+
+  it('counts probe errors as unavailable', () => {
+    const wrapper = open([{
+      ...items[0]!,
+      timeline: [
+        { status: 'operational', latency_ms: null, ping_latency_ms: null, checked_at: '2026-11-26T00:00:00Z' },
+        { status: 'error', latency_ms: null, ping_latency_ms: null, checked_at: '2026-11-25T23:59:00Z' },
+      ],
+    }])
+    expect(wrapper.findComponent(MonitorCard).props('availabilityValue')).toBe(50)
   })
 })
 
-describe('monitor metric sample hints', () => {
-  it('keeps the recent-stream hints independent of the availability window', () => {
+describe('monitor metric sample description', () => {
+  it('keeps an accessible sample label without hover hints', () => {
     const wrapper = mount(MonitorCard, {
-      props: { item: items[0], window: '30d', availabilityValue: 99, countdownSeconds: 58 },
+      props: { item: items[0], availabilityValue: 99, countdownSeconds: 58 },
       global: { plugins: [createPinia()], stubs: { ProviderIcon: true, MonitorTimeline: true, MonitorIntelligence: true, MonitorQuotaView: true } },
     })
-    expect(wrapper.get('[data-metric="cache-rate"]').attributes('title')).toContain('monitorCommon.recentStreamCacheHint')
-    expect(wrapper.get('[data-metric="first-token"]').attributes('title')).toContain('monitorCommon.recentStreamFirstTokenHint')
-    expect(wrapper.get('[data-metric="availability"]').attributes('title')).toContain('channelStatus.windowTab.30d')
+    expect(wrapper.get('.monitor-card-metrics').attributes('aria-label')).toBe('monitorCommon.recent24Metrics')
+    expect(wrapper.get('.monitor-card-metrics').attributes('title')).toBe('')
+    expect(wrapper.findAll('[data-metric][title]')).toHaveLength(0)
+  })
+
+  it('explains that cache rate excludes requests without cache reads', () => {
+    expect(zhDashboard.monitorCommon.recentStreamCacheHint).toContain('无缓存请求不计入')
+    expect(enDashboard.monitorCommon.recentStreamCacheHint).toContain('requests with no cache reads are excluded')
   })
 })

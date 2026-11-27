@@ -1,52 +1,34 @@
 <template>
   <AppLayout>
     <MonitorHero
-      :interval-seconds="DEFAULT_INTERVAL_SECONDS"
-      :window="currentWindow"
       :loading="loading"
       :auto-refresh="autoRefresh"
-      @update:window="handleWindowChange"
       @refresh="refresh()"
     />
 
     <MonitorCardGrid
       :items="displayItems"
-      :window="currentWindow"
       :countdown-seconds="countdown"
       :loading="loading"
       :intelligence-loading="analyticsLoading"
-      :detail-cache="detailCache"
-      @card-click="openDetail"
-    />
-
-    <MonitorDetailDialog
-      :show="showDetail"
-      :monitor-id="detailTarget?.id ?? null"
-      :title="detailTitle"
-      @close="closeDetail"
     />
   </AppLayout>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { extractApiErrorMessage } from '@/utils/apiError'
 import {
   list as listChannelMonitorViews,
   analytics as fetchChannelMonitorAnalytics,
-  status as fetchChannelMonitorDetail,
   type UserMonitorAnalytics,
   type UserMonitorView,
-  type UserMonitorDetail,
 } from '@/api/channelMonitor'
 import AppLayout from '@/components/layout/AppLayout.vue'
-import MonitorHero, {
-  type MonitorWindow,
-} from '@/components/user/monitor/MonitorHero.vue'
+import MonitorHero from '@/components/user/monitor/MonitorHero.vue'
 import MonitorCardGrid from '@/components/user/monitor/MonitorCardGrid.vue'
-import MonitorDetailDialog from '@/components/user/MonitorDetailDialog.vue'
 import { DEFAULT_INTERVAL_SECONDS } from '@/constants/channelMonitor'
 import { useAutoRefresh } from '@/composables/useAutoRefresh'
 
@@ -58,10 +40,6 @@ const items = ref<UserMonitorView[]>([])
 const analyticsByID = ref<Record<number, UserMonitorAnalytics>>({})
 const loading = ref(false)
 const analyticsLoading = ref(false)
-const currentWindow = ref<MonitorWindow>('7d')
-const detailCache = reactive<Record<number, UserMonitorDetail>>({})
-const showDetail = ref(false)
-const detailTarget = ref<UserMonitorView | null>(null)
 
 let abortController: AbortController | null = null
 let analyticsAbortController: AbortController | null = null
@@ -78,9 +56,6 @@ const autoRefresh = useAutoRefresh({
 const countdown = autoRefresh.countdown
 
 // ── Computed ──
-const detailTitle = computed(() => {
-  return detailTarget.value?.name || t('channelStatus.detailTitle')
-})
 const displayItems = computed(() => items.value.map(item => {
   const analytics = analyticsByID.value[item.id]
   return {
@@ -147,46 +122,7 @@ async function reloadAnalytics(ids: number[]) {
 
 async function refresh(silent = false) {
   await reload(silent)
-  // After base reload, refresh any cached detail records so non-7d availability
-  // values stay in sync without forcing the user to switch tabs again.
-  if (currentWindow.value !== '7d') {
-    await Promise.all(items.value.map(it => loadDetail(it.id, true)))
-  }
 }
-
-async function loadDetail(id: number, force = false) {
-  if (!force && detailCache[id]) return
-  try {
-    detailCache[id] = await fetchChannelMonitorDetail(id)
-  } catch (err: unknown) {
-    appStore.showError(extractApiErrorMessage(err, t('channelStatus.detailLoadError')))
-  }
-}
-
-async function ensureDetailsForWindow() {
-  if (currentWindow.value === '7d') return
-  await Promise.all(items.value.map(it => loadDetail(it.id)))
-}
-
-// ── Handlers ──
-async function handleWindowChange(value: MonitorWindow) {
-  currentWindow.value = value
-  await ensureDetailsForWindow()
-}
-
-function openDetail(row: UserMonitorView) {
-  detailTarget.value = row
-  showDetail.value = true
-}
-
-function closeDetail() {
-  showDetail.value = false
-  detailTarget.value = null
-}
-
-watch(items, () => {
-  void ensureDetailsForWindow()
-})
 
 watch(
   () => appStore.cachedPublicSettings?.channel_monitor_enabled,

@@ -16,7 +16,8 @@ Make the V1 channel status card metrics describe recent activity consistently: a
 - Compute the card availability percentage from the same latest 24 probe points that are rendered in its timeline. `operational` and `degraded` count as available; `failed` and `error` count as unavailable. Empty timeline placeholders are excluded from the denominator. When there are no probe points, show the existing empty value.
 - Keep request metrics bounded to the latest 24 successful streamed usage records for the matching group, model, and account scope. Compute each request's hit percentage as `cache_read_tokens / (input_tokens + cache_creation_tokens + cache_read_tokens) * 100`, then average only records where `cache_read_tokens > 0`. If none of the sampled records has cache reads, show the existing empty value rather than zero.
 - Keep first-token averaging over the sampled 24 streamed requests, ignoring missing and negative measurements.
-- Remove only the V1 header's 7/15/30-day selector and the page state/data fetching used solely by that selector. Keep manual refresh, auto-refresh, and the monitor detail dialog's existing historical data.
+- Remove the V1 header's 7/15/30-day selector and the page state/data fetching used solely by that selector. Keep manual refresh and auto-refresh.
+- November 27 user refinement: suppress hover hints over all three summary metrics and remove the channel status detail dialog and every card click trigger. Cards are static articles; the historical backend endpoint remains available independently.
 - Keep the existing analytics response shape to avoid an unnecessary public API contract change; the V1 card reads the fixed recent sample rather than presenting time-range choices.
 
 ## Implementation Boundary
