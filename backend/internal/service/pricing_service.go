@@ -290,7 +290,8 @@ type LiteLLMModelPricing struct {
 	Currency string `json:"currency,omitempty"`
 	// OfficialCurrency records the source currency when a domestic USD catalog
 	// entry is normalized to CNY for internal billing.
-	OfficialCurrency string `json:"official_currency,omitempty"`
+	OfficialCurrency              string `json:"official_currency,omitempty"`
+	OfficialAPIVerificationStatus string `json:"official_api_verification_status,omitempty"`
 	// DeepSeekPeakPrice marks an unmodified peak/list quote; off-peak billing is half.
 	DeepSeekPeakPrice bool `json:"deepseek_peak_price,omitempty"`
 	// ContextPricingTiers contains whole-request token prices for each input-length band.
@@ -338,6 +339,7 @@ type LiteLLMRawEntry struct {
 	CacheStorageCostPerTokenPerHour     *float64          `json:"cache_storage_cost_per_token_per_hour"`
 	Currency                            string            `json:"currency"`
 	OfficialCurrency                    string            `json:"official_currency"`
+	OfficialAPIVerificationStatus       string            `json:"official_api_verification_status"`
 	DeepSeekPeakPrice                   bool              `json:"deepseek_peak_price"`
 	ContextPricingTiers                 []PricingInterval `json:"context_pricing_tiers"`
 }
@@ -769,18 +771,19 @@ func (s *PricingService) parsePricingData(body []byte) (map[string]*LiteLLMModel
 		}
 
 		pricing := &LiteLLMModelPricing{
-			MaxInputTokens:        parsePricingTokenLimit(entry.MaxInputTokens),
-			MaxOutputTokens:       parsePricingTokenLimit(entry.MaxOutputTokens),
-			priceOverrides:        priceOverrides[modelName],
-			LiteLLMProvider:       entry.LiteLLMProvider,
-			Mode:                  entry.Mode,
-			SupportsPromptCaching: entry.SupportsPromptCaching,
-			SupportsServiceTier:   entry.SupportsServiceTier,
-			TokenPricingAbsent:    entry.InputCostPerToken == nil && entry.OutputCostPerToken == nil,
-			Currency:              entry.Currency,
-			OfficialCurrency:      entry.OfficialCurrency,
-			DeepSeekPeakPrice:     entry.DeepSeekPeakPrice,
-			ContextPricingTiers:   filterValidIntervals(entry.ContextPricingTiers),
+			MaxInputTokens:                parsePricingTokenLimit(entry.MaxInputTokens),
+			MaxOutputTokens:               parsePricingTokenLimit(entry.MaxOutputTokens),
+			priceOverrides:                priceOverrides[modelName],
+			LiteLLMProvider:               entry.LiteLLMProvider,
+			Mode:                          entry.Mode,
+			SupportsPromptCaching:         entry.SupportsPromptCaching,
+			SupportsServiceTier:           entry.SupportsServiceTier,
+			TokenPricingAbsent:            entry.InputCostPerToken == nil && entry.OutputCostPerToken == nil,
+			Currency:                      entry.Currency,
+			OfficialCurrency:              entry.OfficialCurrency,
+			OfficialAPIVerificationStatus: entry.OfficialAPIVerificationStatus,
+			DeepSeekPeakPrice:             entry.DeepSeekPeakPrice,
+			ContextPricingTiers:           filterValidIntervals(entry.ContextPricingTiers),
 		}
 		if overrides := pricing.priceOverrides; overrides.input || overrides.output || overrides.cacheRead {
 			// Operator flat prices must not be replaced by absolute catalog tier prices.

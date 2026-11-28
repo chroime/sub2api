@@ -1,0 +1,3704 @@
+{
+  "date": "2026-11-28",
+  "primary_source_cards": {
+    "deepseek-flash": {
+      "source": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
+      "fields": {
+        "input_cost_per_token": 2e-06,
+        "output_cost_per_token": 8e-06,
+        "cache_creation_input_token_cost": 0,
+        "cache_read_input_token_cost": 4e-08
+      },
+      "note": "Official peak quote; off-peak is one half. The pricing page explicitly routes the two old Flash API IDs to the current Flash model. No separate cache-write charge.",
+      "basis": "official_standard"
+    },
+    "deepseek-v4-flash": {
+      "source": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
+      "fields": {
+        "input_cost_per_token": 2e-06,
+        "output_cost_per_token": 8e-06,
+        "cache_creation_input_token_cost": 0,
+        "cache_read_input_token_cost": 4e-08
+      },
+      "note": "Official peak quote; off-peak is one half. The pricing page explicitly routes the two old Flash API IDs to the current Flash model. No separate cache-write charge.",
+      "basis": "official_standard"
+    },
+    "deepseek-v4-flash-vision-exp": {
+      "source": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
+      "fields": {
+        "input_cost_per_token": 2e-06,
+        "output_cost_per_token": 8e-06,
+        "cache_creation_input_token_cost": 0,
+        "cache_read_input_token_cost": 4e-08
+      },
+      "note": "Official peak quote; off-peak is one half. The pricing page explicitly routes the two old Flash API IDs to the current Flash model. No separate cache-write charge.",
+      "basis": "official_standard"
+    },
+    "deepseek-v4-pro": {
+      "source": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
+      "fields": {
+        "input_cost_per_token": 9e-06,
+        "output_cost_per_token": 2.7e-05,
+        "cache_creation_input_token_cost": 0,
+        "cache_read_input_token_cost": 3e-07
+      },
+      "note": "Official peak quote; off-peak is one half. No separate cache-write charge.",
+      "basis": "official_standard"
+    },
+    "glm-5.3": {
+      "source": "https://docs.bigmodel.cn/cn/guide/start/pricing",
+      "fields": {
+        "input_cost_per_token": 8e-06,
+        "output_cost_per_token": 2.8e-05,
+        "cache_creation_input_token_cost": 0,
+        "cache_read_input_token_cost": 2e-06
+      },
+      "note": "No separately billed token cache write; cache storage is currently temporarily free. Official [0,32K) / >=32K bands switch at exactly 32000 input tokens where present.",
+      "basis": "official_standard"
+    },
+    "glm-5.3-flash": {
+      "source": "https://docs.bigmodel.cn/cn/guide/start/pricing",
+      "fields": {
+        "input_cost_per_token": 8e-07,
+        "output_cost_per_token": 2.8e-06,
+        "cache_creation_input_token_cost": 0,
+        "cache_read_input_token_cost": 2.3e-07
+      },
+      "note": "No separately billed token cache write; cache storage is currently temporarily free. Official [0,32K) / >=32K bands switch at exactly 32000 input tokens where present.",
+      "basis": "official_standard"
+    },
+    "glm-5.3-flashx": {
+      "source": "https://docs.bigmodel.cn/cn/guide/start/pricing",
+      "fields": {
+        "input_cost_per_token": 2e-06,
+        "output_cost_per_token": 7e-06,
+        "cache_creation_input_token_cost": 0,
+        "cache_read_input_token_cost": 5.7e-07
+      },
+      "note": "No separately billed token cache write; cache storage is currently temporarily free. Official [0,32K) / >=32K bands switch at exactly 32000 input tokens where present.",
+      "basis": "official_standard"
+    },
+    "glm-5.3-flashx-legal": {
+      "source": "https://docs.bigmodel.cn/cn/guide/start/pricing",
+      "fields": {
+        "input_cost_per_token": 2e-06,
+        "output_cost_per_token": 7e-06,
+        "cache_creation_input_token_cost": 0,
+        "cache_read_input_token_cost": 5.7e-07
+      },
+      "note": "No separately billed token cache write; cache storage is currently temporarily free. Official [0,32K) / >=32K bands switch at exactly 32000 input tokens where present.",
+      "basis": "official_standard"
+    },
+    "glm-5.2": {
+      "source": "https://docs.bigmodel.cn/cn/guide/start/pricing",
+      "fields": {
+        "input_cost_per_token": 8e-06,
+        "output_cost_per_token": 2.8e-05,
+        "cache_creation_input_token_cost": 0,
+        "cache_read_input_token_cost": 2e-06
+      },
+      "note": "No separately billed token cache write; cache storage is currently temporarily free. Official [0,32K) / >=32K bands switch at exactly 32000 input tokens where present.",
+      "basis": "official_standard"
+    },
+    "glm-5.1": {
+      "source": "https://docs.bigmodel.cn/cn/guide/start/pricing",
+      "fields": {
+        "input_cost_per_token": 6e-06,
+        "output_cost_per_token": 2.4e-05,
+        "cache_creation_input_token_cost": 0,
+        "cache_read_input_token_cost": 1.3e-06,
+        "context_pricing_tiers": [
+          {
+            "min_tokens": 0,
+            "input_price": 6e-06,
+            "output_price": 2.4e-05,
+            "cache_write_price": 0,
+            "max_tokens": 31999,
+            "cache_read_price": 1.3e-06
+          },
+          {
+            "min_tokens": 31999,
+            "input_price": 8e-06,
+            "output_price": 2.8e-05,
+            "cache_write_price": 0,
+            "cache_read_price": 2e-06
+          }
+        ]
+      },
+      "note": "No separately billed token cache write; cache storage is currently temporarily free. Official [0,32K) / >=32K bands switch at exactly 32000 input tokens where present.",
+      "basis": "official_standard"
+    },
+    "glm-5": {
+      "source": "https://docs.bigmodel.cn/cn/guide/start/pricing",
+      "fields": {
+        "input_cost_per_token": 4e-06,
+        "output_cost_per_token": 1.8e-05,
+        "cache_creation_input_token_cost": 0,
+        "cache_read_input_token_cost": 1e-06,
+        "context_pricing_tiers": [
+          {
+            "min_tokens": 0,
+            "input_price": 4e-06,
+            "output_price": 1.8e-05,
+            "cache_write_price": 0,
+            "max_tokens": 31999,
+            "cache_read_price": 1e-06
+          },
+          {
+            "min_tokens": 31999,
+            "input_price": 6e-06,
+            "output_price": 2.2e-05,
+            "cache_write_price": 0,
+            "cache_read_price": 1.5e-06
+          }
+        ]
+      },
+      "note": "No separately billed token cache write; cache storage is currently temporarily free. Official [0,32K) / >=32K bands switch at exactly 32000 input tokens where present.",
+      "basis": "official_standard"
+    },
+    "glm-5v-turbo": {
+      "source": "https://docs.bigmodel.cn/cn/guide/start/pricing",
+      "fields": {
+        "input_cost_per_token": 5e-06,
+        "output_cost_per_token": 2.2e-05,
+        "cache_creation_input_token_cost": 0,
+        "cache_read_input_token_cost": 1.2e-06,
+        "context_pricing_tiers": [
+          {
+            "min_tokens": 0,
+            "input_price": 5e-06,
+            "output_price": 2.2e-05,
+            "cache_write_price": 0,
+            "max_tokens": 31999,
+            "cache_read_price": 1.2e-06
+          },
+          {
+            "min_tokens": 31999,
+            "input_price": 7e-06,
+            "output_price": 2.6e-05,
+            "cache_write_price": 0,
+            "cache_read_price": 1.8e-06
+          }
+        ]
+      },
+      "note": "No separately billed token cache write; cache storage is currently temporarily free. Official [0,32K) / >=32K bands switch at exactly 32000 input tokens where present.",
+      "basis": "official_standard"
+    },
+    "kimi-k3.1-pro": {
+      "source": "https://platform.kimi.com/docs/pricing/chat",
+      "fields": {
+        "input_cost_per_token": 1.3e-05,
+        "output_cost_per_token": 6.8e-05,
+        "cache_creation_input_token_cost": 1.3e-05,
+        "cache_read_input_token_cost": 1.3e-06,
+        "cache_creation_input_token_cost_above_1hr": 2.6e-05
+      },
+      "note": "K3 retains official separately charged 5m/1h cache writes. K2 lists only uncached input, cached input and output; no separate write fee. K2 is closed to new users and scheduled to retire at the end of December 2026.",
+      "basis": "official_standard"
+    },
+    "kimi-k3.1-pro-highspeed": {
+      "source": "https://platform.kimi.com/docs/pricing/chat",
+      "fields": {
+        "input_cost_per_token": 2.6e-05,
+        "output_cost_per_token": 0.000136,
+        "cache_creation_input_token_cost": 2.6e-05,
+        "cache_read_input_token_cost": 1.3e-06,
+        "cache_creation_input_token_cost_above_1hr": 5.2e-05
+      },
+      "note": "K3 retains official separately charged 5m/1h cache writes. K2 lists only uncached input, cached input and output; no separate write fee. K2 is closed to new users and scheduled to retire at the end of December 2026.",
+      "basis": "official_standard"
+    },
+    "kimi-k3": {
+      "source": "https://platform.kimi.com/docs/pricing/chat",
+      "fields": {
+        "input_cost_per_token": 2e-05,
+        "output_cost_per_token": 0.0001,
+        "cache_creation_input_token_cost": 2e-05,
+        "cache_read_input_token_cost": 2e-06,
+        "cache_creation_input_token_cost_above_1hr": 4e-05
+      },
+      "note": "K3 retains official separately charged 5m/1h cache writes. K2 lists only uncached input, cached input and output; no separate write fee. K2 is closed to new users and scheduled to retire at the end of December 2026.",
+      "basis": "official_standard"
+    },
+    "kimi-k2.7-code": {
+      "source": "https://platform.kimi.com/docs/pricing/chat",
+      "fields": {
+        "input_cost_per_token": 6.5e-06,
+        "output_cost_per_token": 2.7e-05,
+        "cache_creation_input_token_cost": 0,
+        "cache_read_input_token_cost": 1.3e-06
+      },
+      "note": "K3 retains official separately charged 5m/1h cache writes. K2 lists only uncached input, cached input and output; no separate write fee. K2 is closed to new users and scheduled to retire at the end of December 2026.",
+      "basis": "official_standard"
+    },
+    "kimi-k2.7-code-highspeed": {
+      "source": "https://platform.kimi.com/docs/pricing/chat",
+      "fields": {
+        "input_cost_per_token": 1.3e-05,
+        "output_cost_per_token": 5.4e-05,
+        "cache_creation_input_token_cost": 0,
+        "cache_read_input_token_cost": 2.6e-06
+      },
+      "note": "K3 retains official separately charged 5m/1h cache writes. K2 lists only uncached input, cached input and output; no separate write fee. K2 is closed to new users and scheduled to retire at the end of December 2026.",
+      "basis": "official_standard"
+    },
+    "kimi-k2.6": {
+      "source": "https://platform.kimi.com/docs/pricing/chat",
+      "fields": {
+        "input_cost_per_token": 6.5e-06,
+        "output_cost_per_token": 2.7e-05,
+        "cache_creation_input_token_cost": 0,
+        "cache_read_input_token_cost": 1.1e-06
+      },
+      "note": "K3 retains official separately charged 5m/1h cache writes. K2 lists only uncached input, cached input and output; no separate write fee. K2 is closed to new users and scheduled to retire at the end of December 2026.",
+      "basis": "official_standard"
+    },
+    "mimo-v2.6-pro": {
+      "source": "https://mimo.mi.com/docs/zh-CN/price/pay-as-you-go",
+      "fields": {
+        "input_cost_per_token": 3e-06,
+        "output_cost_per_token": 6e-06,
+        "cache_creation_input_token_cost": 0,
+        "cache_read_input_token_cost": 2.5e-08
+      },
+      "note": "Domestic real-time API prices. Official cache writes are temporarily free. Batch and overseas USD quotes excluded.",
+      "basis": "official_standard"
+    },
+    "mimo-v2.6-flash": {
+      "source": "https://mimo.mi.com/docs/zh-CN/price/pay-as-you-go",
+      "fields": {
+        "input_cost_per_token": 1e-06,
+        "output_cost_per_token": 2e-06,
+        "cache_creation_input_token_cost": 0,
+        "cache_read_input_token_cost": 2e-08
+      },
+      "note": "Domestic real-time API prices. Official cache writes are temporarily free. Batch and overseas USD quotes excluded.",
+      "basis": "official_standard"
+    },
+    "mimo-v2.6-pro-ultraspeed": {
+      "source": "https://mimo.mi.com/docs/zh-CN/price/pay-as-you-go",
+      "fields": {
+        "input_cost_per_token": 3e-05,
+        "output_cost_per_token": 6e-05,
+        "cache_creation_input_token_cost": 0,
+        "cache_read_input_token_cost": 2.5e-07
+      },
+      "note": "Domestic real-time API prices. Official cache writes are temporarily free. Batch and overseas USD quotes excluded.",
+      "basis": "official_standard"
+    },
+    "minimax-m3": {
+      "source": "https://platform.minimax.cn/docs/pricing/overview",
+      "fields": {
+        "input_cost_per_token": 2.1e-06,
+        "output_cost_per_token": 8.4e-06,
+        "cache_creation_input_token_cost": 0,
+        "cache_read_input_token_cost": 4.2e-07,
+        "context_pricing_tiers": [
+          {
+            "min_tokens": 0,
+            "input_price": 2.1e-06,
+            "output_price": 8.4e-06,
+            "cache_write_price": 0,
+            "max_tokens": 512000,
+            "cache_read_price": 4.2e-07
+          },
+          {
+            "min_tokens": 512000,
+            "input_price": 4.2e-06,
+            "output_price": 1.68e-05,
+            "cache_write_price": 0,
+            "cache_read_price": 8.4e-07
+          }
+        ]
+      },
+      "note": "Official standard tier after the explicitly permanent 50% discount; undiscounted values are 4.2/16.8/0.84 and 8.4/33.6/1.68 CNY per million. Priority is 1.5x and excluded. No separate cache-write line.",
+      "basis": "official_permanent_standard_discount"
+    },
+    "minimax-m3.1-flash": {
+      "source": "https://platform.minimax.cn/docs/pricing/overview",
+      "fields": {
+        "input_cost_per_token": 1e-06,
+        "output_cost_per_token": 4e-06,
+        "cache_creation_input_token_cost": 0,
+        "cache_read_input_token_cost": 1e-07
+      },
+      "note": "Official standard API input/output/cache read; no separately billed write line.",
+      "basis": "official_standard"
+    },
+    "step-3.7-flash": {
+      "source": "https://platform.stepfun.com/docs/zh/guides/pricing/details",
+      "fields": {
+        "input_cost_per_token": 1.35e-06,
+        "output_cost_per_token": 8.1e-06,
+        "cache_creation_input_token_cost": 0,
+        "cache_read_input_token_cost": 2.7e-07
+      },
+      "note": "Official Prompt Cache guide states that first cache writes are included in uncached input; there is no additional write charge.",
+      "basis": "official_standard"
+    },
+    "doubao-seed-2.1-pro": {
+      "source": "https://docs.volcengine.com/docs/ark/model-pricing?lang=zh",
+      "fields": {
+        "input_cost_per_token": 6e-06,
+        "output_cost_per_token": 3e-05,
+        "cache_creation_input_token_cost": 0,
+        "cache_read_input_token_cost": 1.2e-06
+      },
+      "note": "Standard real-time non-audio quote; Batch and discounted product tiers excluded. Implicit caching has no separate storage/write fee. Explicit-cache storage costs 0.017 CNY per million token-hours, a separate time-based charge, not a per-token write charge.",
+      "basis": "official_standard"
+    },
+    "ernie-5.1": {
+      "source": "https://cloud.baidu.com/doc/qianfan/s/wmh4sv6ya",
+      "fields": {
+        "input_cost_per_token": 4e-06,
+        "output_cost_per_token": 1.8e-05,
+        "cache_creation_input_token_cost": 0,
+        "context_pricing_tiers": [
+          {
+            "min_tokens": 0,
+            "input_price": 4e-06,
+            "output_price": 1.8e-05,
+            "cache_write_price": 0,
+            "max_tokens": 32000
+          },
+          {
+            "min_tokens": 32000,
+            "input_price": 6e-06,
+            "output_price": 2.2e-05,
+            "cache_write_price": 0
+          }
+        ]
+      },
+      "note": "Official online inference price is quoted per thousand tokens, converted exactly to per token. <=32K and (32K,128K] whole-request tiers. No separate cache-write billing line; cached read is unquoted.",
+      "basis": "official_standard"
+    },
+    "baichuan-m2": {
+      "source": "https://platform.baichuan-ai.com/prices",
+      "fields": {
+        "input_cost_per_token": 2e-06,
+        "output_cost_per_token": 2e-05,
+        "cache_creation_input_token_cost": 0
+      },
+      "note": "Official medical API card, quoted per thousand tokens and converted exactly. No separate cache-write billing item; zero does not imply cache support. Medical search is charged separately.",
+      "basis": "official_standard"
+    },
+    "baichuan-m3-plus": {
+      "source": "https://platform.baichuan-ai.com/prices",
+      "fields": {
+        "input_cost_per_token": 5e-06,
+        "output_cost_per_token": 9e-06,
+        "cache_creation_input_token_cost": 0
+      },
+      "note": "Official medical API card, quoted per thousand tokens and converted exactly. No separate cache-write billing item; zero does not imply cache support. Medical search is charged separately.",
+      "basis": "official_standard"
+    },
+    "hy3": {
+      "source": "https://cloud.tencent.com/document/product/1823/130055",
+      "fields": {
+        "input_cost_per_token": 1e-06,
+        "output_cost_per_token": 4e-06,
+        "cache_creation_input_token_cost": 0,
+        "cache_read_input_token_cost": 2.5e-07
+      },
+      "note": "Official TokenHub standard online pay-as-you-go rate. Separate 5m/1h cache-write columns show dashes; no separately billed token-write rate. This zero does not establish cache-write support. Hy4-preview retires on 2026-12-07 00:00 Asia/Shanghai.",
+      "basis": "official_standard"
+    },
+    "hy4-preview": {
+      "source": "https://cloud.tencent.com/document/product/1823/130055",
+      "fields": {
+        "input_cost_per_token": 6e-06,
+        "output_cost_per_token": 1.8e-05,
+        "cache_creation_input_token_cost": 0,
+        "cache_read_input_token_cost": 3e-07
+      },
+      "note": "Official TokenHub standard online pay-as-you-go rate. Separate 5m/1h cache-write columns show dashes; no separately billed token-write rate. This zero does not establish cache-write support. Hy4-preview retires on 2026-12-07 00:00 Asia/Shanghai.",
+      "basis": "official_standard"
+    },
+    "spark-x2-flash": {
+      "source": "https://maas.xfyun.cn/modelSquare/base/2611845619399681",
+      "fields": {
+        "input_cost_per_token": 1e-06,
+        "output_cost_per_token": 2e-06,
+        "cache_creation_input_token_cost": 0
+      },
+      "note": "Official Spark-X2-Flash product quote; exact first-party serviceId is xsparkx2flash. No separately billed cache-write item; cacheBilling=false and no cache-read discount is quoted. Catalog name is retained as an existing gateway alias.",
+      "basis": "official_standard"
+    }
+  },
+  "models": [
+    {
+      "model": "deepseek-flash",
+      "status": "verified",
+      "source": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
+      "pricing_basis": "official_standard",
+      "per_million_cny": {
+        "input_cost_per_token": "2.000000",
+        "output_cost_per_token": "8.000000",
+        "cache_read_input_token_cost": "0.04000000",
+        "cache_creation_input_token_cost": "0",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "Official peak quote; off-peak is one half. The pricing page explicitly routes the two old Flash API IDs to the current Flash model. No separate cache-write charge."
+    },
+    {
+      "model": "deepseek-v4-flash",
+      "status": "verified",
+      "source": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
+      "pricing_basis": "official_standard",
+      "per_million_cny": {
+        "input_cost_per_token": "2.000000",
+        "output_cost_per_token": "8.000000",
+        "cache_read_input_token_cost": "0.04000000",
+        "cache_creation_input_token_cost": "0",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "Official peak quote; off-peak is one half. The pricing page explicitly routes the two old Flash API IDs to the current Flash model. No separate cache-write charge."
+    },
+    {
+      "model": "deepseek-v4-flash-vision-exp",
+      "status": "verified",
+      "source": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
+      "pricing_basis": "official_standard",
+      "per_million_cny": {
+        "input_cost_per_token": "2.000000",
+        "output_cost_per_token": "8.000000",
+        "cache_read_input_token_cost": "0.04000000",
+        "cache_creation_input_token_cost": "0",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "Official peak quote; off-peak is one half. The pricing page explicitly routes the two old Flash API IDs to the current Flash model. No separate cache-write charge."
+    },
+    {
+      "model": "deepseek-v4-pro",
+      "status": "verified",
+      "source": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
+      "pricing_basis": "official_standard",
+      "per_million_cny": {
+        "input_cost_per_token": "9.000000",
+        "output_cost_per_token": "27.000000",
+        "cache_read_input_token_cost": "0.3000000",
+        "cache_creation_input_token_cost": "0",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "Official peak quote; off-peak is one half. No separate cache-write charge."
+    },
+    {
+      "model": "deepseek-v4.1-flash",
+      "status": "unconfirmed",
+      "source": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing",
+      "pricing_basis": null,
+      "per_million_cny": {
+        "input_cost_per_token": "2.000000",
+        "output_cost_per_token": "8.000000",
+        "cache_read_input_token_cost": "0.04000000",
+        "cache_creation_input_token_cost": null,
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "Historical native CNY reference retained. This exact API ID and complete current price card have not been independently confirmed in this audit; do not infer a free cache write from a missing field."
+    },
+    {
+      "model": "deepseek-v4-pro-0813",
+      "status": "unconfirmed",
+      "source": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing",
+      "pricing_basis": null,
+      "per_million_cny": {
+        "input_cost_per_token": "9.000000",
+        "output_cost_per_token": "27.000000",
+        "cache_read_input_token_cost": "0.3000000",
+        "cache_creation_input_token_cost": null,
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "Historical native CNY reference retained. This exact API ID and complete current price card have not been independently confirmed in this audit; do not infer a free cache write from a missing field."
+    },
+    {
+      "model": "kimi-k3.1-pro",
+      "status": "verified",
+      "source": "https://platform.kimi.com/docs/pricing/chat",
+      "pricing_basis": "official_standard",
+      "per_million_cny": {
+        "input_cost_per_token": "13.000000",
+        "output_cost_per_token": "68.000000",
+        "cache_read_input_token_cost": "1.3000000",
+        "cache_creation_input_token_cost": "13.000000",
+        "cache_creation_input_token_cost_above_1hr": "26.000000"
+      },
+      "tiers": [],
+      "note": "K3 retains official separately charged 5m/1h cache writes. K2 lists only uncached input, cached input and output; no separate write fee. K2 is closed to new users and scheduled to retire at the end of December 2026."
+    },
+    {
+      "model": "kimi-k3.1-pro-highspeed",
+      "status": "verified",
+      "source": "https://platform.kimi.com/docs/pricing/chat",
+      "pricing_basis": "official_standard",
+      "per_million_cny": {
+        "input_cost_per_token": "26.000000",
+        "output_cost_per_token": "136.000000",
+        "cache_read_input_token_cost": "1.3000000",
+        "cache_creation_input_token_cost": "26.000000",
+        "cache_creation_input_token_cost_above_1hr": "52.000000"
+      },
+      "tiers": [],
+      "note": "K3 retains official separately charged 5m/1h cache writes. K2 lists only uncached input, cached input and output; no separate write fee. K2 is closed to new users and scheduled to retire at the end of December 2026."
+    },
+    {
+      "model": "kimi-k3",
+      "status": "verified",
+      "source": "https://platform.kimi.com/docs/pricing/chat",
+      "pricing_basis": "official_standard",
+      "per_million_cny": {
+        "input_cost_per_token": "20.00000",
+        "output_cost_per_token": "100.0000",
+        "cache_read_input_token_cost": "2.000000",
+        "cache_creation_input_token_cost": "20.00000",
+        "cache_creation_input_token_cost_above_1hr": "40.00000"
+      },
+      "tiers": [],
+      "note": "K3 retains official separately charged 5m/1h cache writes. K2 lists only uncached input, cached input and output; no separate write fee. K2 is closed to new users and scheduled to retire at the end of December 2026."
+    },
+    {
+      "model": "kimi-k2.7-code",
+      "status": "verified",
+      "source": "https://platform.kimi.com/docs/pricing/chat",
+      "pricing_basis": "official_standard",
+      "per_million_cny": {
+        "input_cost_per_token": "6.5000000",
+        "output_cost_per_token": "27.000000",
+        "cache_read_input_token_cost": "1.3000000",
+        "cache_creation_input_token_cost": "0",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "K3 retains official separately charged 5m/1h cache writes. K2 lists only uncached input, cached input and output; no separate write fee. K2 is closed to new users and scheduled to retire at the end of December 2026."
+    },
+    {
+      "model": "kimi-k2.7-code-highspeed",
+      "status": "verified",
+      "source": "https://platform.kimi.com/docs/pricing/chat",
+      "pricing_basis": "official_standard",
+      "per_million_cny": {
+        "input_cost_per_token": "13.000000",
+        "output_cost_per_token": "54.000000",
+        "cache_read_input_token_cost": "2.6000000",
+        "cache_creation_input_token_cost": "0",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "K3 retains official separately charged 5m/1h cache writes. K2 lists only uncached input, cached input and output; no separate write fee. K2 is closed to new users and scheduled to retire at the end of December 2026."
+    },
+    {
+      "model": "kimi-k2.6",
+      "status": "verified",
+      "source": "https://platform.kimi.com/docs/pricing/chat",
+      "pricing_basis": "official_standard",
+      "per_million_cny": {
+        "input_cost_per_token": "6.5000000",
+        "output_cost_per_token": "27.000000",
+        "cache_read_input_token_cost": "1.1000000",
+        "cache_creation_input_token_cost": "0",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "K3 retains official separately charged 5m/1h cache writes. K2 lists only uncached input, cached input and output; no separate write fee. K2 is closed to new users and scheduled to retire at the end of December 2026."
+    },
+    {
+      "model": "glm-5.2",
+      "status": "verified",
+      "source": "https://docs.bigmodel.cn/cn/guide/start/pricing",
+      "pricing_basis": "official_standard",
+      "per_million_cny": {
+        "input_cost_per_token": "8.000000",
+        "output_cost_per_token": "28.000000",
+        "cache_read_input_token_cost": "2.000000",
+        "cache_creation_input_token_cost": "0",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "No separately billed token cache write; cache storage is currently temporarily free. Official [0,32K) / >=32K bands switch at exactly 32000 input tokens where present."
+    },
+    {
+      "model": "glm-5.3",
+      "status": "verified",
+      "source": "https://docs.bigmodel.cn/cn/guide/start/pricing",
+      "pricing_basis": "official_standard",
+      "per_million_cny": {
+        "input_cost_per_token": "8.000000",
+        "output_cost_per_token": "28.000000",
+        "cache_read_input_token_cost": "2.000000",
+        "cache_creation_input_token_cost": "0",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "No separately billed token cache write; cache storage is currently temporarily free. Official [0,32K) / >=32K bands switch at exactly 32000 input tokens where present."
+    },
+    {
+      "model": "glm-5.3-flash",
+      "status": "verified",
+      "source": "https://docs.bigmodel.cn/cn/guide/start/pricing",
+      "pricing_basis": "official_standard",
+      "per_million_cny": {
+        "input_cost_per_token": "0.8000000",
+        "output_cost_per_token": "2.8000000",
+        "cache_read_input_token_cost": "0.23000000",
+        "cache_creation_input_token_cost": "0",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "No separately billed token cache write; cache storage is currently temporarily free. Official [0,32K) / >=32K bands switch at exactly 32000 input tokens where present."
+    },
+    {
+      "model": "glm-5.3-flashx",
+      "status": "verified",
+      "source": "https://docs.bigmodel.cn/cn/guide/start/pricing",
+      "pricing_basis": "official_standard",
+      "per_million_cny": {
+        "input_cost_per_token": "2.000000",
+        "output_cost_per_token": "7.000000",
+        "cache_read_input_token_cost": "0.57000000",
+        "cache_creation_input_token_cost": "0",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "No separately billed token cache write; cache storage is currently temporarily free. Official [0,32K) / >=32K bands switch at exactly 32000 input tokens where present."
+    },
+    {
+      "model": "glm-5.3-flashx-legal",
+      "status": "verified",
+      "source": "https://docs.bigmodel.cn/cn/guide/start/pricing",
+      "pricing_basis": "official_standard",
+      "per_million_cny": {
+        "input_cost_per_token": "2.000000",
+        "output_cost_per_token": "7.000000",
+        "cache_read_input_token_cost": "0.57000000",
+        "cache_creation_input_token_cost": "0",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "No separately billed token cache write; cache storage is currently temporarily free. Official [0,32K) / >=32K bands switch at exactly 32000 input tokens where present."
+    },
+    {
+      "model": "glm-5v-turbo",
+      "status": "verified",
+      "source": "https://docs.bigmodel.cn/cn/guide/start/pricing",
+      "pricing_basis": "official_standard",
+      "per_million_cny": {
+        "input_cost_per_token": "5.000000",
+        "output_cost_per_token": "22.000000",
+        "cache_read_input_token_cost": "1.2000000",
+        "cache_creation_input_token_cost": "0",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [
+        {
+          "min_tokens": 0,
+          "input_price": 5e-06,
+          "output_price": 2.2e-05,
+          "cache_write_price": 0,
+          "max_tokens": 31999,
+          "cache_read_price": 1.2e-06
+        },
+        {
+          "min_tokens": 31999,
+          "input_price": 7e-06,
+          "output_price": 2.6e-05,
+          "cache_write_price": 0,
+          "cache_read_price": 1.8e-06
+        }
+      ],
+      "note": "No separately billed token cache write; cache storage is currently temporarily free. Official [0,32K) / >=32K bands switch at exactly 32000 input tokens where present."
+    },
+    {
+      "model": "minimax-m3",
+      "status": "verified",
+      "source": "https://platform.minimax.cn/docs/pricing/overview",
+      "pricing_basis": "official_permanent_standard_discount",
+      "per_million_cny": {
+        "input_cost_per_token": "2.1000000",
+        "output_cost_per_token": "8.4000000",
+        "cache_read_input_token_cost": "0.42000000",
+        "cache_creation_input_token_cost": "0",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [
+        {
+          "min_tokens": 0,
+          "input_price": 2.1e-06,
+          "output_price": 8.4e-06,
+          "cache_write_price": 0,
+          "max_tokens": 512000,
+          "cache_read_price": 4.2e-07
+        },
+        {
+          "min_tokens": 512000,
+          "input_price": 4.2e-06,
+          "output_price": 1.68e-05,
+          "cache_write_price": 0,
+          "cache_read_price": 8.4e-07
+        }
+      ],
+      "note": "Official standard tier after the explicitly permanent 50% discount; undiscounted values are 4.2/16.8/0.84 and 8.4/33.6/1.68 CNY per million. Priority is 1.5x and excluded. No separate cache-write line."
+    },
+    {
+      "model": "minimax-m3.1-flash",
+      "status": "verified",
+      "source": "https://platform.minimax.cn/docs/pricing/overview",
+      "pricing_basis": "official_standard",
+      "per_million_cny": {
+        "input_cost_per_token": "1.000000",
+        "output_cost_per_token": "4.000000",
+        "cache_read_input_token_cost": "0.1000000",
+        "cache_creation_input_token_cost": "0",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "Official standard API input/output/cache read; no separately billed write line."
+    },
+    {
+      "model": "mimo-v2.6-pro",
+      "status": "verified",
+      "source": "https://mimo.mi.com/docs/zh-CN/price/pay-as-you-go",
+      "pricing_basis": "official_standard",
+      "per_million_cny": {
+        "input_cost_per_token": "3.000000",
+        "output_cost_per_token": "6.000000",
+        "cache_read_input_token_cost": "0.025000000",
+        "cache_creation_input_token_cost": "0",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "Domestic real-time API prices. Official cache writes are temporarily free. Batch and overseas USD quotes excluded."
+    },
+    {
+      "model": "mimo-v2.6-flash",
+      "status": "verified",
+      "source": "https://mimo.mi.com/docs/zh-CN/price/pay-as-you-go",
+      "pricing_basis": "official_standard",
+      "per_million_cny": {
+        "input_cost_per_token": "1.000000",
+        "output_cost_per_token": "2.000000",
+        "cache_read_input_token_cost": "0.02000000",
+        "cache_creation_input_token_cost": "0",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "Domestic real-time API prices. Official cache writes are temporarily free. Batch and overseas USD quotes excluded."
+    },
+    {
+      "model": "mimo-v2.6-pro-ultraspeed",
+      "status": "verified",
+      "source": "https://mimo.mi.com/docs/zh-CN/price/pay-as-you-go",
+      "pricing_basis": "official_standard",
+      "per_million_cny": {
+        "input_cost_per_token": "30.00000",
+        "output_cost_per_token": "60.00000",
+        "cache_read_input_token_cost": "0.25000000",
+        "cache_creation_input_token_cost": "0",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "Domestic real-time API prices. Official cache writes are temporarily free. Batch and overseas USD quotes excluded."
+    },
+    {
+      "model": "qwen3.8-max",
+      "status": "verified",
+      "source": "https://platform.qianwenai.com/pricing/api",
+      "pricing_basis": "list_before_discount",
+      "per_million_cny": {
+        "input_cost_per_token": "12.000000",
+        "output_cost_per_token": "36.000000",
+        "cache_read_input_token_cost": "1.5000000",
+        "cache_creation_input_token_cost": "15.000000",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows."
+    },
+    {
+      "model": "qwen3.8-flash",
+      "status": "verified",
+      "source": "https://platform.qianwenai.com/pricing/api",
+      "pricing_basis": "list_before_discount",
+      "per_million_cny": {
+        "input_cost_per_token": "0.8000000",
+        "output_cost_per_token": "2.7000000",
+        "cache_read_input_token_cost": "0.1000000",
+        "cache_creation_input_token_cost": "1.25000000",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows."
+    },
+    {
+      "model": "baichuan-m2",
+      "status": "verified",
+      "source": "https://platform.baichuan-ai.com/prices",
+      "pricing_basis": "official_standard",
+      "per_million_cny": {
+        "input_cost_per_token": "2.000000",
+        "output_cost_per_token": "20.00000",
+        "cache_read_input_token_cost": null,
+        "cache_creation_input_token_cost": "0",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "Official medical API card, quoted per thousand tokens and converted exactly. No separate cache-write billing item; zero does not imply cache support. Medical search is charged separately."
+    },
+    {
+      "model": "baichuan-m3-plus",
+      "status": "verified",
+      "source": "https://platform.baichuan-ai.com/prices",
+      "pricing_basis": "official_standard",
+      "per_million_cny": {
+        "input_cost_per_token": "5.000000",
+        "output_cost_per_token": "9.000000",
+        "cache_read_input_token_cost": null,
+        "cache_creation_input_token_cost": "0",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "Official medical API card, quoted per thousand tokens and converted exactly. No separate cache-write billing item; zero does not imply cache support. Medical search is charged separately."
+    },
+    {
+      "model": "doubao-1.5-pro",
+      "status": "retired",
+      "source": "https://www.volcengine.com/docs/82379/1544106",
+      "pricing_basis": null,
+      "per_million_cny": {
+        "input_cost_per_token": "0.8000000",
+        "output_cost_per_token": "2.000000",
+        "cache_read_input_token_cost": "0.16000000",
+        "cache_creation_input_token_cost": null,
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "retired. Fifth retirement batch in 2025; not the later 32K batch."
+    },
+    {
+      "model": "doubao-1.6",
+      "status": "retired",
+      "source": "https://www.volcengine.com/docs/82379/1544106",
+      "pricing_basis": null,
+      "per_million_cny": {
+        "input_cost_per_token": "0.8000000",
+        "output_cost_per_token": "8.000000",
+        "cache_read_input_token_cost": "0.16000000",
+        "cache_creation_input_token_cost": null,
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [
+        {
+          "min_tokens": 0,
+          "input_price": 8e-07,
+          "output_price": 8e-06,
+          "max_tokens": 32000,
+          "cache_read_price": 1.6e-07
+        },
+        {
+          "min_tokens": 32000,
+          "input_price": 1.2e-06,
+          "output_price": 1.6e-05,
+          "max_tokens": 128000,
+          "cache_read_price": 1.6e-07
+        },
+        {
+          "min_tokens": 128000,
+          "input_price": 2.4e-06,
+          "output_price": 2.4e-05,
+          "cache_read_price": 1.6e-07
+        }
+      ],
+      "note": "retired. Ninth retirement batch; no current 1.6 price is asserted."
+    },
+    {
+      "model": "doubao-seed-2.1-pro",
+      "status": "verified",
+      "source": "https://docs.volcengine.com/docs/ark/model-pricing?lang=zh",
+      "pricing_basis": "official_standard",
+      "per_million_cny": {
+        "input_cost_per_token": "6.000000",
+        "output_cost_per_token": "30.00000",
+        "cache_read_input_token_cost": "1.2000000",
+        "cache_creation_input_token_cost": "0",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "Standard real-time non-audio quote; Batch and discounted product tiers excluded. Implicit caching has no separate storage/write fee. Explicit-cache storage costs 0.017 CNY per million token-hours, a separate time-based charge, not a per-token write charge."
+    },
+    {
+      "model": "ernie-4.5-turbo",
+      "status": "retired",
+      "source": "https://cloud.baidu.com/doc/qianfan/s/wmh4sv6ya",
+      "pricing_basis": null,
+      "per_million_cny": {
+        "input_cost_per_token": "0.8000000",
+        "output_cost_per_token": "3.2000000",
+        "cache_read_input_token_cost": "0.2000000",
+        "cache_creation_input_token_cost": null,
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "retired_supported_versions. The generic label is a model family rather than the exact dated/API version. Each listed version is explicitly in the retirement table; no successor price is assigned."
+    },
+    {
+      "model": "ernie-5.1",
+      "status": "verified",
+      "source": "https://cloud.baidu.com/doc/qianfan/s/wmh4sv6ya",
+      "pricing_basis": "official_standard",
+      "per_million_cny": {
+        "input_cost_per_token": "4.000000",
+        "output_cost_per_token": "18.000000",
+        "cache_read_input_token_cost": null,
+        "cache_creation_input_token_cost": "0",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [
+        {
+          "min_tokens": 0,
+          "input_price": 4e-06,
+          "output_price": 1.8e-05,
+          "cache_write_price": 0,
+          "max_tokens": 32000
+        },
+        {
+          "min_tokens": 32000,
+          "input_price": 6e-06,
+          "output_price": 2.2e-05,
+          "cache_write_price": 0
+        }
+      ],
+      "note": "Official online inference price is quoted per thousand tokens, converted exactly to per token. <=32K and (32K,128K] whole-request tiers. No separate cache-write billing line; cached read is unquoted."
+    },
+    {
+      "model": "ernie-x1-turbo",
+      "status": "retired",
+      "source": "https://cloud.baidu.com/doc/qianfan/s/wmh4sv6ya",
+      "pricing_basis": null,
+      "per_million_cny": {
+        "input_cost_per_token": "1.000000",
+        "output_cost_per_token": "4.000000",
+        "cache_read_input_token_cost": null,
+        "cache_creation_input_token_cost": null,
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "retired_supported_versions. ERNIE-X1-Turbo-Latest is separately marked retired on 2026-06-09."
+    },
+    {
+      "model": "glm-5",
+      "status": "verified",
+      "source": "https://docs.bigmodel.cn/cn/guide/start/pricing",
+      "pricing_basis": "official_standard",
+      "per_million_cny": {
+        "input_cost_per_token": "4.000000",
+        "output_cost_per_token": "18.000000",
+        "cache_read_input_token_cost": "1.000000",
+        "cache_creation_input_token_cost": "0",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [
+        {
+          "min_tokens": 0,
+          "input_price": 4e-06,
+          "output_price": 1.8e-05,
+          "cache_write_price": 0,
+          "max_tokens": 31999,
+          "cache_read_price": 1e-06
+        },
+        {
+          "min_tokens": 31999,
+          "input_price": 6e-06,
+          "output_price": 2.2e-05,
+          "cache_write_price": 0,
+          "cache_read_price": 1.5e-06
+        }
+      ],
+      "note": "No separately billed token cache write; cache storage is currently temporarily free. Official [0,32K) / >=32K bands switch at exactly 32000 input tokens where present."
+    },
+    {
+      "model": "glm-5.1",
+      "status": "verified",
+      "source": "https://docs.bigmodel.cn/cn/guide/start/pricing",
+      "pricing_basis": "official_standard",
+      "per_million_cny": {
+        "input_cost_per_token": "6.000000",
+        "output_cost_per_token": "24.000000",
+        "cache_read_input_token_cost": "1.3000000",
+        "cache_creation_input_token_cost": "0",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [
+        {
+          "min_tokens": 0,
+          "input_price": 6e-06,
+          "output_price": 2.4e-05,
+          "cache_write_price": 0,
+          "max_tokens": 31999,
+          "cache_read_price": 1.3e-06
+        },
+        {
+          "min_tokens": 31999,
+          "input_price": 8e-06,
+          "output_price": 2.8e-05,
+          "cache_write_price": 0,
+          "cache_read_price": 2e-06
+        }
+      ],
+      "note": "No separately billed token cache write; cache storage is currently temporarily free. Official [0,32K) / >=32K bands switch at exactly 32000 input tokens where present."
+    },
+    {
+      "model": "hunyuan-2.0-think",
+      "status": "retired",
+      "source": "https://cloud.tencent.com/document/product/1729/97731",
+      "pricing_basis": null,
+      "per_million_cny": {
+        "input_cost_per_token": "3.975000000",
+        "output_cost_per_token": "15.9000000",
+        "cache_read_input_token_cost": null,
+        "cache_creation_input_token_cost": null,
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "retired. Retirement announcement lists the exact base ID; migration guide lists affected dated/latest IDs. Do not copy the recommended replacement model price."
+    },
+    {
+      "model": "hy3",
+      "status": "verified",
+      "source": "https://cloud.tencent.com/document/product/1823/130055",
+      "pricing_basis": "official_standard",
+      "per_million_cny": {
+        "input_cost_per_token": "1.000000",
+        "output_cost_per_token": "4.000000",
+        "cache_read_input_token_cost": "0.25000000",
+        "cache_creation_input_token_cost": "0",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "Official TokenHub standard online pay-as-you-go rate. Separate 5m/1h cache-write columns show dashes; no separately billed token-write rate. This zero does not establish cache-write support. Hy4-preview retires on 2026-12-07 00:00 Asia/Shanghai."
+    },
+    {
+      "model": "hy4-preview",
+      "status": "verified",
+      "source": "https://cloud.tencent.com/document/product/1823/130055",
+      "pricing_basis": "official_standard",
+      "per_million_cny": {
+        "input_cost_per_token": "6.000000",
+        "output_cost_per_token": "18.000000",
+        "cache_read_input_token_cost": "0.3000000",
+        "cache_creation_input_token_cost": "0",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "Official TokenHub standard online pay-as-you-go rate. Separate 5m/1h cache-write columns show dashes; no separately billed token-write rate. This zero does not establish cache-write support. Hy4-preview retires on 2026-12-07 00:00 Asia/Shanghai."
+    },
+    {
+      "model": "hunyuan-t1",
+      "status": "retired",
+      "source": "https://cloud.tencent.com/document/product/1729/97731",
+      "pricing_basis": null,
+      "per_million_cny": {
+        "input_cost_per_token": "1.000000",
+        "output_cost_per_token": "4.000000",
+        "cache_read_input_token_cost": null,
+        "cache_creation_input_token_cost": null,
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "retired. Retirement announcement lists the exact base ID; migration guide lists affected dated/latest IDs. Do not copy the recommended replacement model price."
+    },
+    {
+      "model": "hunyuan-turbos",
+      "status": "retired",
+      "source": "https://cloud.tencent.com/document/product/1729/97731",
+      "pricing_basis": null,
+      "per_million_cny": {
+        "input_cost_per_token": "0.8000000",
+        "output_cost_per_token": "2.000000",
+        "cache_read_input_token_cost": null,
+        "cache_creation_input_token_cost": null,
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "retired. Retirement announcement lists the exact base ID; migration guide lists affected dated/latest IDs. Do not copy the recommended replacement model price."
+    },
+    {
+      "model": "mimo-v2.5",
+      "status": "retired",
+      "source": "https://mimo.mi.com/docs/zh-CN/price/pay-as-you-go",
+      "pricing_basis": null,
+      "per_million_cny": {
+        "input_cost_per_token": "1.000000",
+        "output_cost_per_token": "2.000000",
+        "cache_read_input_token_cost": "0.02000000",
+        "cache_creation_input_token_cost": null,
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "retired. Official banner says original model names are invalid. Do not borrow V2.6 rates or the current-series cache-write promotion."
+    },
+    {
+      "model": "minimax-m2.7",
+      "status": "retired",
+      "source": "https://platform.minimaxi.com/docs/guides/pricing-paygo",
+      "pricing_basis": null,
+      "per_million_cny": {
+        "input_cost_per_token": "2.1000000",
+        "output_cost_per_token": "8.4000000",
+        "cache_read_input_token_cost": "0.42000000",
+        "cache_creation_input_token_cost": null,
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "retired_for_pay_as_you_go. New-user access stopped 2026-10-19; pay-as-you-go calls ceased at retirement. M Plan/Token Plan compatibility routing to M3.1 Flash is separately described and does not establish current ordinary API pricing."
+    },
+    {
+      "model": "minimax-m2.7-highspeed",
+      "status": "retired",
+      "source": "https://platform.minimaxi.com/docs/guides/pricing-paygo",
+      "pricing_basis": null,
+      "per_million_cny": {
+        "input_cost_per_token": "4.2000000",
+        "output_cost_per_token": "16.8000000",
+        "cache_read_input_token_cost": "0.42000000",
+        "cache_creation_input_token_cost": null,
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "retired_for_pay_as_you_go. New-user access stopped 2026-10-19; pay-as-you-go calls ceased at retirement. M Plan/Token Plan compatibility routing to M3.1 Flash is separately described and does not establish current ordinary API pricing."
+    },
+    {
+      "model": "qwen3.5-flash",
+      "status": "verified",
+      "source": "https://platform.qianwenai.com/pricing/api",
+      "pricing_basis": "list_before_discount",
+      "per_million_cny": {
+        "input_cost_per_token": "0.2000000",
+        "output_cost_per_token": "2.000000",
+        "cache_read_input_token_cost": "0.02000000",
+        "cache_creation_input_token_cost": "0.25000000",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [
+        {
+          "min_tokens": 0,
+          "input_price": 2e-07,
+          "output_price": 2e-06,
+          "cache_write_price": 2.5e-07,
+          "cache_read_price": 2e-08,
+          "max_tokens": 128000
+        },
+        {
+          "min_tokens": 128000,
+          "input_price": 8e-07,
+          "output_price": 8e-06,
+          "cache_write_price": 1e-06,
+          "cache_read_price": 8e-08,
+          "max_tokens": 256000
+        },
+        {
+          "min_tokens": 256000,
+          "input_price": 1.2e-06,
+          "output_price": 1.2e-05,
+          "cache_write_price": 1.5e-06,
+          "cache_read_price": 1.2e-07
+        }
+      ],
+      "note": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows."
+    },
+    {
+      "model": "qwen3.5-plus",
+      "status": "verified",
+      "source": "https://platform.qianwenai.com/pricing/api",
+      "pricing_basis": "list_before_discount",
+      "per_million_cny": {
+        "input_cost_per_token": "0.8000000",
+        "output_cost_per_token": "4.8000000",
+        "cache_read_input_token_cost": "0.08000000",
+        "cache_creation_input_token_cost": "1.000000",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [
+        {
+          "min_tokens": 0,
+          "input_price": 8e-07,
+          "output_price": 4.8e-06,
+          "cache_write_price": 1e-06,
+          "cache_read_price": 8e-08,
+          "max_tokens": 128000
+        },
+        {
+          "min_tokens": 128000,
+          "input_price": 2e-06,
+          "output_price": 1.2e-05,
+          "cache_write_price": 2.5e-06,
+          "cache_read_price": 2e-07,
+          "max_tokens": 256000
+        },
+        {
+          "min_tokens": 256000,
+          "input_price": 4e-06,
+          "output_price": 2.4e-05,
+          "cache_write_price": 5e-06,
+          "cache_read_price": 4e-07
+        }
+      ],
+      "note": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows."
+    },
+    {
+      "model": "qwen3.6-max-preview",
+      "status": "retired",
+      "source": "https://help.aliyun.com/zh/model-studio/model-pricing",
+      "pricing_basis": null,
+      "per_million_cny": {
+        "input_cost_per_token": "9.000000",
+        "output_cost_per_token": "54.000000",
+        "cache_read_input_token_cost": null,
+        "cache_creation_input_token_cost": null,
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [
+        {
+          "min_tokens": 0,
+          "input_price": 9e-06,
+          "output_price": 5.4e-05,
+          "max_tokens": 128000
+        },
+        {
+          "min_tokens": 128000,
+          "input_price": 1.5e-05,
+          "output_price": 9e-05
+        }
+      ],
+      "note": "retired. Historical replacement-comparison table provides these base input/output rates only; it is not the complete original pricing schedule. qwen3-max-2026-01-23 and qwen3-max-2025-09-23 are also on the delayed retirement list."
+    },
+    {
+      "model": "qwen3.7-max",
+      "status": "verified",
+      "source": "https://platform.qianwenai.com/pricing/api",
+      "pricing_basis": "list_before_discount",
+      "per_million_cny": {
+        "input_cost_per_token": "12.000000",
+        "output_cost_per_token": "36.000000",
+        "cache_read_input_token_cost": "2.4000000",
+        "cache_creation_input_token_cost": "15.000000",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows."
+    },
+    {
+      "model": "qwen3.8-max-prime",
+      "status": "unconfirmed",
+      "source": "https://help.aliyun.com/zh/model-studio/model-pricing",
+      "pricing_basis": null,
+      "per_million_cny": {
+        "input_cost_per_token": "24.000000",
+        "output_cost_per_token": "72.000000",
+        "cache_read_input_token_cost": null,
+        "cache_creation_input_token_cost": null,
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "exact_name_not_verified. Exact string is absent from the downloaded current full price table and documentation index; two guessed official individual-model paths return 404. This establishes insufficient public evidence for this exact name, not conclusive global service unavailability. Do not copy qwen3.8-max prices."
+    },
+    {
+      "model": "qwen3-max",
+      "status": "retired",
+      "source": "https://help.aliyun.com/zh/model-studio/model-pricing",
+      "pricing_basis": null,
+      "per_million_cny": {
+        "input_cost_per_token": "2.5000000",
+        "output_cost_per_token": "10.00000",
+        "cache_read_input_token_cost": null,
+        "cache_creation_input_token_cost": null,
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [
+        {
+          "min_tokens": 0,
+          "input_price": 2.5e-06,
+          "output_price": 1e-05,
+          "max_tokens": 32000
+        },
+        {
+          "min_tokens": 32000,
+          "input_price": 4e-06,
+          "output_price": 1.6e-05,
+          "max_tokens": 128000
+        },
+        {
+          "min_tokens": 128000,
+          "input_price": 7e-06,
+          "output_price": 2.8e-05
+        }
+      ],
+      "note": "retired. Historical replacement-comparison table provides these base input/output rates only; it is not the complete original pricing schedule. qwen3-max-2026-01-23 and qwen3-max-2025-09-23 are also on the delayed retirement list."
+    },
+    {
+      "model": "spark-pro",
+      "status": "unconfirmed",
+      "source": "https://xinghuo.xfyun.cn/sparkapi",
+      "pricing_basis": null,
+      "per_million_cny": {
+        "input_cost_per_token": "5.000000",
+        "output_cost_per_token": "5.000000",
+        "cache_read_input_token_cost": null,
+        "cache_creation_input_token_cost": null,
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "documented_available_price_not_verified. Exact legacy HTTP model ID is documented. Current official product page did not expose a verifiable numeric Pro price; no numeric rate is asserted."
+    },
+    {
+      "model": "spark-ultra",
+      "status": "unconfirmed",
+      "source": "https://xinghuo.xfyun.cn/sparkapi",
+      "pricing_basis": null,
+      "per_million_cny": {
+        "input_cost_per_token": "0.8000000",
+        "output_cost_per_token": "0.8000000",
+        "cache_read_input_token_cost": null,
+        "cache_creation_input_token_cost": null,
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "Historical native CNY reference retained. This exact API ID and complete current price card have not been independently confirmed in this audit; do not infer a free cache write from a missing field."
+    },
+    {
+      "model": "spark-x2",
+      "status": "unconfirmed",
+      "source": "https://xinghuo.xfyun.cn/sparkapi",
+      "pricing_basis": null,
+      "per_million_cny": {
+        "input_cost_per_token": "2.000000",
+        "output_cost_per_token": "2.000000",
+        "cache_read_input_token_cost": null,
+        "cache_creation_input_token_cost": null,
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "exact_name_price_not_verified. Plain Spark-X2 is not a row in the current public 52-model catalog. Absence from this catalog alone is not proof of a formal global retirement. Do not substitute Spark-X2-Flash or Spark-X2.5 prices."
+    },
+    {
+      "model": "spark-x2.5",
+      "status": "retired",
+      "source": "https://xinghuo.xfyun.cn/sparkapi",
+      "pricing_basis": null,
+      "per_million_cny": {
+        "input_cost_per_token": "1.6000000",
+        "output_cost_per_token": "6.000000",
+        "cache_read_input_token_cost": "0.24000000",
+        "cache_creation_input_token_cost": null,
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "retired. The legacy detail page still displays a price after the explicit retirement date. Original cache price is explicitly 0.48, not 0.14/0.3. Historical 30% promotion ended at the retirement time. Separate cache-write pricing is not listed."
+    },
+    {
+      "model": "spark-x2-flash",
+      "status": "verified",
+      "source": "https://maas.xfyun.cn/modelSquare/base/2611845619399681",
+      "pricing_basis": "official_standard",
+      "per_million_cny": {
+        "input_cost_per_token": "1.000000",
+        "output_cost_per_token": "2.000000",
+        "cache_read_input_token_cost": null,
+        "cache_creation_input_token_cost": "0",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "Official Spark-X2-Flash product quote; exact first-party serviceId is xsparkx2flash. No separately billed cache-write item; cacheBilling=false and no cache-read discount is quoted. Catalog name is retained as an existing gateway alias."
+    },
+    {
+      "model": "step-3.7-flash",
+      "status": "verified",
+      "source": "https://platform.stepfun.com/docs/zh/guides/pricing/details",
+      "pricing_basis": "official_standard",
+      "per_million_cny": {
+        "input_cost_per_token": "1.35000000",
+        "output_cost_per_token": "8.1000000",
+        "cache_read_input_token_cost": "0.27000000",
+        "cache_creation_input_token_cost": "0",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "Official Prompt Cache guide states that first cache writes are included in uncached input; there is no additional write charge."
+    },
+    {
+      "model": "qwen4-max",
+      "status": "verified",
+      "source": "https://platform.qianwenai.com/pricing/api",
+      "pricing_basis": "list_before_discount",
+      "per_million_cny": {
+        "input_cost_per_token": "10.00000",
+        "output_cost_per_token": "30.00000",
+        "cache_read_input_token_cost": "0.5000000",
+        "cache_creation_input_token_cost": "12.5000000",
+        "cache_creation_input_token_cost_above_1hr": "20.00000"
+      },
+      "tiers": [],
+      "note": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows."
+    },
+    {
+      "model": "qwen3.8-max-0902",
+      "status": "verified",
+      "source": "https://platform.qianwenai.com/pricing/api",
+      "pricing_basis": "list_before_discount",
+      "per_million_cny": {
+        "input_cost_per_token": "12.000000",
+        "output_cost_per_token": "36.000000",
+        "cache_read_input_token_cost": "1.5000000",
+        "cache_creation_input_token_cost": "15.000000",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows."
+    },
+    {
+      "model": "qwen3.8-2.4t-a95b",
+      "status": "verified",
+      "source": "https://platform.qianwenai.com/pricing/api",
+      "pricing_basis": "list_before_discount",
+      "per_million_cny": {
+        "input_cost_per_token": "12.000000",
+        "output_cost_per_token": "36.000000",
+        "cache_read_input_token_cost": "1.5000000",
+        "cache_creation_input_token_cost": "15.000000",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows."
+    },
+    {
+      "model": "qwen3.8-27b",
+      "status": "verified",
+      "source": "https://platform.qianwenai.com/pricing/api",
+      "pricing_basis": "list_before_discount",
+      "per_million_cny": {
+        "input_cost_per_token": "3.000000",
+        "output_cost_per_token": "12.000000",
+        "cache_read_input_token_cost": "0.6000000",
+        "cache_creation_input_token_cost": "3.75000000",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows."
+    },
+    {
+      "model": "qwen3.7-plus",
+      "status": "verified",
+      "source": "https://platform.qianwenai.com/pricing/api",
+      "pricing_basis": "list_before_discount",
+      "per_million_cny": {
+        "input_cost_per_token": "2.000000",
+        "output_cost_per_token": "8.000000",
+        "cache_read_input_token_cost": "0.4000000",
+        "cache_creation_input_token_cost": "2.5000000",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [
+        {
+          "min_tokens": 0,
+          "input_price": 2e-06,
+          "output_price": 8e-06,
+          "cache_write_price": 2.5e-06,
+          "cache_read_price": 4e-07,
+          "max_tokens": 256000
+        },
+        {
+          "min_tokens": 256000,
+          "input_price": 6e-06,
+          "output_price": 2.4e-05,
+          "cache_write_price": 7.5e-06,
+          "cache_read_price": 1.2e-06
+        }
+      ],
+      "note": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows."
+    },
+    {
+      "model": "qwen3.7-plus-2026-05-26",
+      "status": "verified",
+      "source": "https://platform.qianwenai.com/pricing/api",
+      "pricing_basis": "list_before_discount",
+      "per_million_cny": {
+        "input_cost_per_token": "2.000000",
+        "output_cost_per_token": "8.000000",
+        "cache_read_input_token_cost": "0.4000000",
+        "cache_creation_input_token_cost": "2.5000000",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [
+        {
+          "min_tokens": 0,
+          "input_price": 2e-06,
+          "output_price": 8e-06,
+          "cache_write_price": 2.5e-06,
+          "cache_read_price": 4e-07,
+          "max_tokens": 256000
+        },
+        {
+          "min_tokens": 256000,
+          "input_price": 6e-06,
+          "output_price": 2.4e-05,
+          "cache_write_price": 7.5e-06,
+          "cache_read_price": 1.2e-06
+        }
+      ],
+      "note": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows."
+    },
+    {
+      "model": "qwen3.7-max-2026-06-08",
+      "status": "verified",
+      "source": "https://platform.qianwenai.com/pricing/api",
+      "pricing_basis": "list_before_discount",
+      "per_million_cny": {
+        "input_cost_per_token": "12.000000",
+        "output_cost_per_token": "36.000000",
+        "cache_read_input_token_cost": "2.4000000",
+        "cache_creation_input_token_cost": "15.000000",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows."
+    },
+    {
+      "model": "qwen3.7-max-2026-05-20",
+      "status": "verified",
+      "source": "https://platform.qianwenai.com/pricing/api",
+      "pricing_basis": "list_before_discount",
+      "per_million_cny": {
+        "input_cost_per_token": "12.000000",
+        "output_cost_per_token": "36.000000",
+        "cache_read_input_token_cost": "1.2000000",
+        "cache_creation_input_token_cost": "15.000000",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows."
+    },
+    {
+      "model": "qwen3.7-max-preview",
+      "status": "verified",
+      "source": "https://platform.qianwenai.com/pricing/api",
+      "pricing_basis": "list_before_discount",
+      "per_million_cny": {
+        "input_cost_per_token": "12.000000",
+        "output_cost_per_token": "36.000000",
+        "cache_read_input_token_cost": null,
+        "cache_creation_input_token_cost": "0.0",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows."
+    },
+    {
+      "model": "qwen3.7-max-2026-05-17",
+      "status": "verified",
+      "source": "https://platform.qianwenai.com/pricing/api",
+      "pricing_basis": "list_before_discount",
+      "per_million_cny": {
+        "input_cost_per_token": "12.000000",
+        "output_cost_per_token": "36.000000",
+        "cache_read_input_token_cost": null,
+        "cache_creation_input_token_cost": "0.0",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows."
+    },
+    {
+      "model": "qwen3.7-flash",
+      "status": "verified",
+      "source": "https://platform.qianwenai.com/pricing/api",
+      "pricing_basis": "list_before_discount",
+      "per_million_cny": {
+        "input_cost_per_token": "0.2000000",
+        "output_cost_per_token": "0.8000000",
+        "cache_read_input_token_cost": "0.04000000",
+        "cache_creation_input_token_cost": "0.25000000",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [
+        {
+          "min_tokens": 0,
+          "input_price": 2e-07,
+          "output_price": 8e-07,
+          "cache_write_price": 2.5e-07,
+          "cache_read_price": 4e-08,
+          "max_tokens": 32000
+        },
+        {
+          "min_tokens": 32000,
+          "input_price": 6e-07,
+          "output_price": 2.4e-06,
+          "cache_write_price": 7.5e-07,
+          "cache_read_price": 1.2e-07,
+          "max_tokens": 256000
+        },
+        {
+          "min_tokens": 256000,
+          "input_price": 1.2e-06,
+          "output_price": 4.8e-06,
+          "cache_write_price": 1.5e-06,
+          "cache_read_price": 2.4e-07
+        }
+      ],
+      "note": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows."
+    },
+    {
+      "model": "qwen3.7-flash-2026-07-15",
+      "status": "verified",
+      "source": "https://platform.qianwenai.com/pricing/api",
+      "pricing_basis": "list_before_discount",
+      "per_million_cny": {
+        "input_cost_per_token": "0.2000000",
+        "output_cost_per_token": "0.8000000",
+        "cache_read_input_token_cost": "0.04000000",
+        "cache_creation_input_token_cost": "0.25000000",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [
+        {
+          "min_tokens": 0,
+          "input_price": 2e-07,
+          "output_price": 8e-07,
+          "cache_write_price": 2.5e-07,
+          "cache_read_price": 4e-08,
+          "max_tokens": 32000
+        },
+        {
+          "min_tokens": 32000,
+          "input_price": 6e-07,
+          "output_price": 2.4e-06,
+          "cache_write_price": 7.5e-07,
+          "cache_read_price": 1.2e-07,
+          "max_tokens": 256000
+        },
+        {
+          "min_tokens": 256000,
+          "input_price": 1.2e-06,
+          "output_price": 4.8e-06,
+          "cache_write_price": 1.5e-06,
+          "cache_read_price": 2.4e-07
+        }
+      ],
+      "note": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows."
+    },
+    {
+      "model": "qwen3.6-plus",
+      "status": "verified",
+      "source": "https://platform.qianwenai.com/pricing/api",
+      "pricing_basis": "list_before_discount",
+      "per_million_cny": {
+        "input_cost_per_token": "2.000000",
+        "output_cost_per_token": "12.000000",
+        "cache_read_input_token_cost": "0.2000000",
+        "cache_creation_input_token_cost": "2.5000000",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [
+        {
+          "min_tokens": 0,
+          "input_price": 2e-06,
+          "output_price": 1.2e-05,
+          "cache_write_price": 2.5e-06,
+          "cache_read_price": 2e-07,
+          "max_tokens": 256000
+        },
+        {
+          "min_tokens": 256000,
+          "input_price": 8e-06,
+          "output_price": 4.8e-05,
+          "cache_write_price": 1e-05,
+          "cache_read_price": 8e-07
+        }
+      ],
+      "note": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows."
+    },
+    {
+      "model": "qwen3.6-plus-2026-04-02",
+      "status": "verified",
+      "source": "https://platform.qianwenai.com/pricing/api",
+      "pricing_basis": "list_before_discount",
+      "per_million_cny": {
+        "input_cost_per_token": "2.000000",
+        "output_cost_per_token": "12.000000",
+        "cache_read_input_token_cost": null,
+        "cache_creation_input_token_cost": "0.0",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [
+        {
+          "min_tokens": 0,
+          "input_price": 2e-06,
+          "output_price": 1.2e-05,
+          "cache_write_price": 0.0,
+          "max_tokens": 256000
+        },
+        {
+          "min_tokens": 256000,
+          "input_price": 8e-06,
+          "output_price": 4.8e-05,
+          "cache_write_price": 0.0
+        }
+      ],
+      "note": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows."
+    },
+    {
+      "model": "qwen3.5-plus-2026-04-20",
+      "status": "verified",
+      "source": "https://platform.qianwenai.com/pricing/api",
+      "pricing_basis": "list_before_discount",
+      "per_million_cny": {
+        "input_cost_per_token": "0.8000000",
+        "output_cost_per_token": "4.8000000",
+        "cache_read_input_token_cost": "0.08000000",
+        "cache_creation_input_token_cost": "1.000000",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [
+        {
+          "min_tokens": 0,
+          "input_price": 8e-07,
+          "output_price": 4.8e-06,
+          "cache_write_price": 1e-06,
+          "cache_read_price": 8e-08,
+          "max_tokens": 128000
+        },
+        {
+          "min_tokens": 128000,
+          "input_price": 2e-06,
+          "output_price": 1.2e-05,
+          "cache_write_price": 2.5e-06,
+          "cache_read_price": 2e-07,
+          "max_tokens": 256000
+        },
+        {
+          "min_tokens": 256000,
+          "input_price": 4e-06,
+          "output_price": 2.4e-05,
+          "cache_write_price": 5e-06,
+          "cache_read_price": 4e-07
+        }
+      ],
+      "note": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows."
+    },
+    {
+      "model": "qwen3.5-plus-2026-02-15",
+      "status": "verified",
+      "source": "https://platform.qianwenai.com/pricing/api",
+      "pricing_basis": "list_before_discount",
+      "per_million_cny": {
+        "input_cost_per_token": "0.8000000",
+        "output_cost_per_token": "4.8000000",
+        "cache_read_input_token_cost": null,
+        "cache_creation_input_token_cost": "0.0",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [
+        {
+          "min_tokens": 0,
+          "input_price": 8e-07,
+          "output_price": 4.8e-06,
+          "cache_write_price": 0.0,
+          "max_tokens": 128000
+        },
+        {
+          "min_tokens": 128000,
+          "input_price": 2e-06,
+          "output_price": 1.2e-05,
+          "cache_write_price": 0.0,
+          "max_tokens": 256000
+        },
+        {
+          "min_tokens": 256000,
+          "input_price": 4e-06,
+          "output_price": 2.4e-05,
+          "cache_write_price": 0.0
+        }
+      ],
+      "note": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows."
+    },
+    {
+      "model": "qwen3.5-ocr",
+      "status": "verified",
+      "source": "https://platform.qianwenai.com/pricing/api",
+      "pricing_basis": "list_before_discount",
+      "per_million_cny": {
+        "input_cost_per_token": "0.5000000",
+        "output_cost_per_token": "2.000000",
+        "cache_read_input_token_cost": null,
+        "cache_creation_input_token_cost": "0.0",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows."
+    },
+    {
+      "model": "qwen3.5-flash-2026-02-23",
+      "status": "verified",
+      "source": "https://platform.qianwenai.com/pricing/api",
+      "pricing_basis": "list_before_discount",
+      "per_million_cny": {
+        "input_cost_per_token": "0.2000000",
+        "output_cost_per_token": "2.000000",
+        "cache_read_input_token_cost": null,
+        "cache_creation_input_token_cost": "0.0",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [
+        {
+          "min_tokens": 0,
+          "input_price": 2e-07,
+          "output_price": 2e-06,
+          "cache_write_price": 0.0,
+          "max_tokens": 128000
+        },
+        {
+          "min_tokens": 128000,
+          "input_price": 8e-07,
+          "output_price": 8e-06,
+          "cache_write_price": 0.0,
+          "max_tokens": 256000
+        },
+        {
+          "min_tokens": 256000,
+          "input_price": 1.2e-06,
+          "output_price": 1.2e-05,
+          "cache_write_price": 0.0
+        }
+      ],
+      "note": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows."
+    },
+    {
+      "model": "qwen3.6-27b",
+      "status": "verified",
+      "source": "https://platform.qianwenai.com/pricing/api",
+      "pricing_basis": "list_before_discount",
+      "per_million_cny": {
+        "input_cost_per_token": "3.000000",
+        "output_cost_per_token": "18.000000",
+        "cache_read_input_token_cost": null,
+        "cache_creation_input_token_cost": "0.0",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows."
+    },
+    {
+      "model": "qwen3.6-35b-a3b",
+      "status": "verified",
+      "source": "https://platform.qianwenai.com/pricing/api",
+      "pricing_basis": "list_before_discount",
+      "per_million_cny": {
+        "input_cost_per_token": "1.8000000",
+        "output_cost_per_token": "10.8000000",
+        "cache_read_input_token_cost": null,
+        "cache_creation_input_token_cost": "0.0",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows."
+    },
+    {
+      "model": "qwen3.6-flash",
+      "status": "verified",
+      "source": "https://platform.qianwenai.com/pricing/api",
+      "pricing_basis": "list_before_discount",
+      "per_million_cny": {
+        "input_cost_per_token": "1.2000000",
+        "output_cost_per_token": "7.2000000",
+        "cache_read_input_token_cost": "0.12000000",
+        "cache_creation_input_token_cost": "1.5000000",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [
+        {
+          "min_tokens": 0,
+          "input_price": 1.2e-06,
+          "output_price": 7.2e-06,
+          "cache_write_price": 1.5e-06,
+          "cache_read_price": 1.2e-07,
+          "max_tokens": 256000
+        },
+        {
+          "min_tokens": 256000,
+          "input_price": 4.8e-06,
+          "output_price": 2.88e-05,
+          "cache_write_price": 6e-06,
+          "cache_read_price": 4.8e-07
+        }
+      ],
+      "note": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows."
+    },
+    {
+      "model": "qwen3.6-flash-2026-04-16",
+      "status": "verified",
+      "source": "https://platform.qianwenai.com/pricing/api",
+      "pricing_basis": "list_before_discount",
+      "per_million_cny": {
+        "input_cost_per_token": "1.2000000",
+        "output_cost_per_token": "7.2000000",
+        "cache_read_input_token_cost": null,
+        "cache_creation_input_token_cost": "0.0",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [
+        {
+          "min_tokens": 0,
+          "input_price": 1.2e-06,
+          "output_price": 7.2e-06,
+          "cache_write_price": 0.0,
+          "max_tokens": 256000
+        },
+        {
+          "min_tokens": 256000,
+          "input_price": 4.8e-06,
+          "output_price": 2.88e-05,
+          "cache_write_price": 0.0
+        }
+      ],
+      "note": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows."
+    },
+    {
+      "model": "qwen-vl-ocr",
+      "status": "verified",
+      "source": "https://platform.qianwenai.com/pricing/api",
+      "pricing_basis": "list_before_discount",
+      "per_million_cny": {
+        "input_cost_per_token": "0.3000000",
+        "output_cost_per_token": "0.5000000",
+        "cache_read_input_token_cost": null,
+        "cache_creation_input_token_cost": "0.0",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows."
+    },
+    {
+      "model": "qwen-vl-ocr-2025-11-20",
+      "status": "verified",
+      "source": "https://platform.qianwenai.com/pricing/api",
+      "pricing_basis": "list_before_discount",
+      "per_million_cny": {
+        "input_cost_per_token": "0.3000000",
+        "output_cost_per_token": "0.5000000",
+        "cache_read_input_token_cost": null,
+        "cache_creation_input_token_cost": "0.0",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows."
+    },
+    {
+      "model": "qwen-mt-lite",
+      "status": "verified",
+      "source": "https://platform.qianwenai.com/pricing/api",
+      "pricing_basis": "list_before_discount",
+      "per_million_cny": {
+        "input_cost_per_token": "0.6000000",
+        "output_cost_per_token": "1.6000000",
+        "cache_read_input_token_cost": null,
+        "cache_creation_input_token_cost": "0.0",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows."
+    },
+    {
+      "model": "qwen-mt-flash",
+      "status": "verified",
+      "source": "https://platform.qianwenai.com/pricing/api",
+      "pricing_basis": "list_before_discount",
+      "per_million_cny": {
+        "input_cost_per_token": "0.7000000",
+        "output_cost_per_token": "1.95000000",
+        "cache_read_input_token_cost": null,
+        "cache_creation_input_token_cost": "0.0",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows."
+    },
+    {
+      "model": "qwen-deep-research",
+      "status": "verified",
+      "source": "https://platform.qianwenai.com/pricing/api",
+      "pricing_basis": "list_before_discount",
+      "per_million_cny": {
+        "input_cost_per_token": "54.000000",
+        "output_cost_per_token": "163.000000",
+        "cache_read_input_token_cost": null,
+        "cache_creation_input_token_cost": "0.0",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows."
+    },
+    {
+      "model": "qwen-deep-research-2025-12-15",
+      "status": "verified",
+      "source": "https://platform.qianwenai.com/pricing/api",
+      "pricing_basis": "list_before_discount",
+      "per_million_cny": {
+        "input_cost_per_token": "79.000000",
+        "output_cost_per_token": "236.000000",
+        "cache_read_input_token_cost": null,
+        "cache_creation_input_token_cost": "0.0",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows."
+    },
+    {
+      "model": "qwen-mt-plus",
+      "status": "verified",
+      "source": "https://platform.qianwenai.com/pricing/api",
+      "pricing_basis": "list_before_discount",
+      "per_million_cny": {
+        "input_cost_per_token": "1.8000000",
+        "output_cost_per_token": "5.4000000",
+        "cache_read_input_token_cost": null,
+        "cache_creation_input_token_cost": "0.0",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows."
+    },
+    {
+      "model": "qwen3-coder-flash",
+      "status": "verified",
+      "source": "https://platform.qianwenai.com/pricing/api",
+      "pricing_basis": "list_before_discount",
+      "per_million_cny": {
+        "input_cost_per_token": "1.000000",
+        "output_cost_per_token": "4.000000",
+        "cache_read_input_token_cost": "0.2000000",
+        "cache_creation_input_token_cost": "1.25000000",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [
+        {
+          "min_tokens": 0,
+          "input_price": 1e-06,
+          "output_price": 4e-06,
+          "cache_write_price": 1.25e-06,
+          "cache_read_price": 2e-07,
+          "max_tokens": 32000
+        },
+        {
+          "min_tokens": 32000,
+          "input_price": 1.5e-06,
+          "output_price": 6e-06,
+          "cache_write_price": 1.875e-06,
+          "cache_read_price": 3e-07,
+          "max_tokens": 128000
+        },
+        {
+          "min_tokens": 128000,
+          "input_price": 2.5e-06,
+          "output_price": 1e-05,
+          "cache_write_price": 3.125e-06,
+          "cache_read_price": 5e-07,
+          "max_tokens": 256000
+        },
+        {
+          "min_tokens": 256000,
+          "input_price": 5e-06,
+          "output_price": 2.5e-05,
+          "cache_write_price": 6.25e-06,
+          "cache_read_price": 1e-06
+        }
+      ],
+      "note": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows."
+    },
+    {
+      "model": "qwen3-coder-flash-2025-07-28",
+      "status": "verified",
+      "source": "https://platform.qianwenai.com/pricing/api",
+      "pricing_basis": "list_before_discount",
+      "per_million_cny": {
+        "input_cost_per_token": "1.000000",
+        "output_cost_per_token": "4.000000",
+        "cache_read_input_token_cost": null,
+        "cache_creation_input_token_cost": "0.0",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [
+        {
+          "min_tokens": 0,
+          "input_price": 1e-06,
+          "output_price": 4e-06,
+          "cache_write_price": 0.0,
+          "max_tokens": 32000
+        },
+        {
+          "min_tokens": 32000,
+          "input_price": 1.5e-06,
+          "output_price": 6e-06,
+          "cache_write_price": 0.0,
+          "max_tokens": 128000
+        },
+        {
+          "min_tokens": 128000,
+          "input_price": 2.5e-06,
+          "output_price": 1e-05,
+          "cache_write_price": 0.0,
+          "max_tokens": 256000
+        },
+        {
+          "min_tokens": 256000,
+          "input_price": 5e-06,
+          "output_price": 2.5e-05,
+          "cache_write_price": 0.0
+        }
+      ],
+      "note": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows."
+    },
+    {
+      "model": "qwen-flash-character",
+      "status": "verified",
+      "source": "https://platform.qianwenai.com/pricing/api",
+      "pricing_basis": "list_before_discount",
+      "per_million_cny": {
+        "input_cost_per_token": "0.25000000",
+        "output_cost_per_token": "1.5000000",
+        "cache_read_input_token_cost": "0.05000000",
+        "cache_creation_input_token_cost": "0.0",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows."
+    },
+    {
+      "model": "qwen-flash-character-2026-02-26",
+      "status": "verified",
+      "source": "https://platform.qianwenai.com/pricing/api",
+      "pricing_basis": "list_before_discount",
+      "per_million_cny": {
+        "input_cost_per_token": "0.18000000",
+        "output_cost_per_token": "1.5000000",
+        "cache_read_input_token_cost": "0.036000000",
+        "cache_creation_input_token_cost": "0.0",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows."
+    },
+    {
+      "model": "qwen3.5-27b",
+      "status": "verified",
+      "source": "https://platform.qianwenai.com/pricing/api",
+      "pricing_basis": "list_before_discount",
+      "per_million_cny": {
+        "input_cost_per_token": "0.6000000",
+        "output_cost_per_token": "4.8000000",
+        "cache_read_input_token_cost": null,
+        "cache_creation_input_token_cost": "0.0",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [
+        {
+          "min_tokens": 0,
+          "input_price": 6e-07,
+          "output_price": 4.8e-06,
+          "cache_write_price": 0.0,
+          "max_tokens": 128000
+        },
+        {
+          "min_tokens": 128000,
+          "input_price": 1.8e-06,
+          "output_price": 1.44e-05,
+          "cache_write_price": 0.0
+        }
+      ],
+      "note": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows."
+    },
+    {
+      "model": "qwen3.5-122b-a10b",
+      "status": "verified",
+      "source": "https://platform.qianwenai.com/pricing/api",
+      "pricing_basis": "list_before_discount",
+      "per_million_cny": {
+        "input_cost_per_token": "0.8000000",
+        "output_cost_per_token": "6.4000000",
+        "cache_read_input_token_cost": null,
+        "cache_creation_input_token_cost": "0.0",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [
+        {
+          "min_tokens": 0,
+          "input_price": 8e-07,
+          "output_price": 6.4e-06,
+          "cache_write_price": 0.0,
+          "max_tokens": 128000
+        },
+        {
+          "min_tokens": 128000,
+          "input_price": 2e-06,
+          "output_price": 1.6e-05,
+          "cache_write_price": 0.0
+        }
+      ],
+      "note": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows."
+    },
+    {
+      "model": "qwen3.5-35b-a3b",
+      "status": "verified",
+      "source": "https://platform.qianwenai.com/pricing/api",
+      "pricing_basis": "list_before_discount",
+      "per_million_cny": {
+        "input_cost_per_token": "0.4000000",
+        "output_cost_per_token": "3.2000000",
+        "cache_read_input_token_cost": null,
+        "cache_creation_input_token_cost": "0.0",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [
+        {
+          "min_tokens": 0,
+          "input_price": 4e-07,
+          "output_price": 3.2e-06,
+          "cache_write_price": 0.0,
+          "max_tokens": 128000
+        },
+        {
+          "min_tokens": 128000,
+          "input_price": 1.6e-06,
+          "output_price": 1.28e-05,
+          "cache_write_price": 0.0
+        }
+      ],
+      "note": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows."
+    },
+    {
+      "model": "qwen3.5-397b-a17b",
+      "status": "verified",
+      "source": "https://platform.qianwenai.com/pricing/api",
+      "pricing_basis": "list_before_discount",
+      "per_million_cny": {
+        "input_cost_per_token": "1.2000000",
+        "output_cost_per_token": "7.2000000",
+        "cache_read_input_token_cost": null,
+        "cache_creation_input_token_cost": "0.0",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [
+        {
+          "min_tokens": 0,
+          "input_price": 1.2e-06,
+          "output_price": 7.2e-06,
+          "cache_write_price": 0.0,
+          "max_tokens": 128000
+        },
+        {
+          "min_tokens": 128000,
+          "input_price": 3e-06,
+          "output_price": 1.8e-05,
+          "cache_write_price": 0.0
+        }
+      ],
+      "note": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows."
+    },
+    {
+      "model": "qwen3-vl-plus",
+      "status": "verified",
+      "source": "https://platform.qianwenai.com/pricing/api",
+      "pricing_basis": "list_before_discount",
+      "per_million_cny": {
+        "input_cost_per_token": "1.000000",
+        "output_cost_per_token": "10.00000",
+        "cache_read_input_token_cost": "0.2000000",
+        "cache_creation_input_token_cost": "1.25000000",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [
+        {
+          "min_tokens": 0,
+          "input_price": 1e-06,
+          "output_price": 1e-05,
+          "cache_write_price": 1.25e-06,
+          "cache_read_price": 2e-07,
+          "max_tokens": 32000
+        },
+        {
+          "min_tokens": 32000,
+          "input_price": 1.5e-06,
+          "output_price": 1.5e-05,
+          "cache_write_price": 1.875e-06,
+          "cache_read_price": 3e-07,
+          "max_tokens": 128000
+        },
+        {
+          "min_tokens": 128000,
+          "input_price": 3e-06,
+          "output_price": 3e-05,
+          "cache_write_price": 3.75e-06,
+          "cache_read_price": 6e-07
+        }
+      ],
+      "note": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows."
+    },
+    {
+      "model": "qwen-flash",
+      "status": "verified",
+      "source": "https://platform.qianwenai.com/pricing/api",
+      "pricing_basis": "list_before_discount",
+      "per_million_cny": {
+        "input_cost_per_token": "0.15000000",
+        "output_cost_per_token": "1.5000000",
+        "cache_read_input_token_cost": "0.03000000",
+        "cache_creation_input_token_cost": "0.188000000",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [
+        {
+          "min_tokens": 0,
+          "input_price": 1.5e-07,
+          "output_price": 1.5e-06,
+          "cache_write_price": 1.88e-07,
+          "cache_read_price": 3e-08,
+          "max_tokens": 128000
+        },
+        {
+          "min_tokens": 128000,
+          "input_price": 6e-07,
+          "output_price": 6e-06,
+          "cache_write_price": 7.5e-07,
+          "cache_read_price": 1.2e-07,
+          "max_tokens": 256000
+        },
+        {
+          "min_tokens": 256000,
+          "input_price": 1.2e-06,
+          "output_price": 1.2e-05,
+          "cache_write_price": 1.5e-06,
+          "cache_read_price": 2.4e-07
+        }
+      ],
+      "note": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows."
+    },
+    {
+      "model": "qwen-flash-2025-07-28",
+      "status": "verified",
+      "source": "https://platform.qianwenai.com/pricing/api",
+      "pricing_basis": "list_before_discount",
+      "per_million_cny": {
+        "input_cost_per_token": "0.15000000",
+        "output_cost_per_token": "1.5000000",
+        "cache_read_input_token_cost": null,
+        "cache_creation_input_token_cost": "0.0",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [
+        {
+          "min_tokens": 0,
+          "input_price": 1.5e-07,
+          "output_price": 1.5e-06,
+          "cache_write_price": 0.0,
+          "max_tokens": 128000
+        },
+        {
+          "min_tokens": 128000,
+          "input_price": 6e-07,
+          "output_price": 6e-06,
+          "cache_write_price": 0.0,
+          "max_tokens": 256000
+        },
+        {
+          "min_tokens": 256000,
+          "input_price": 1.2e-06,
+          "output_price": 1.2e-05,
+          "cache_write_price": 0.0
+        }
+      ],
+      "note": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows."
+    },
+    {
+      "model": "qwen-doc-turbo",
+      "status": "verified",
+      "source": "https://platform.qianwenai.com/pricing/api",
+      "pricing_basis": "list_before_discount",
+      "per_million_cny": {
+        "input_cost_per_token": "0.6000000",
+        "output_cost_per_token": "1.000000",
+        "cache_read_input_token_cost": "0.12000000",
+        "cache_creation_input_token_cost": "0.75000000",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows."
+    },
+    {
+      "model": "qwen-plus-2025-01-25",
+      "status": "verified",
+      "source": "https://platform.qianwenai.com/pricing/api",
+      "pricing_basis": "list_before_discount",
+      "per_million_cny": {
+        "input_cost_per_token": "0.8000000",
+        "output_cost_per_token": "2.000000",
+        "cache_read_input_token_cost": null,
+        "cache_creation_input_token_cost": "0.0",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows."
+    },
+    {
+      "model": "qwen-long",
+      "status": "verified",
+      "source": "https://platform.qianwenai.com/pricing/api",
+      "pricing_basis": "list_before_discount",
+      "per_million_cny": {
+        "input_cost_per_token": "0.5000000",
+        "output_cost_per_token": "2.000000",
+        "cache_read_input_token_cost": null,
+        "cache_creation_input_token_cost": "0.0",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows."
+    },
+    {
+      "model": "qwen-plus-character",
+      "status": "verified",
+      "source": "https://platform.qianwenai.com/pricing/api",
+      "pricing_basis": "list_before_discount",
+      "per_million_cny": {
+        "input_cost_per_token": "0.8000000",
+        "output_cost_per_token": "2.000000",
+        "cache_read_input_token_cost": "0.16000000",
+        "cache_creation_input_token_cost": "1.000000",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows."
+    },
+    {
+      "model": "qwen-max",
+      "status": "verified",
+      "source": "https://platform.qianwenai.com/pricing/api",
+      "pricing_basis": "list_before_discount",
+      "per_million_cny": {
+        "input_cost_per_token": "2.4000000",
+        "output_cost_per_token": "9.6000000",
+        "cache_read_input_token_cost": "0.48000000",
+        "cache_creation_input_token_cost": "0.0",
+        "cache_creation_input_token_cost_above_1hr": null
+      },
+      "tiers": [],
+      "note": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows."
+    }
+  ],
+  "sources": [
+    {
+      "url": "https://mimo.mi.com/docs/zh-CN/price/pay-as-you-go",
+      "resolved_url": "https://mimo.mi.com/docs/zh-CN/price/pay-as-you-go",
+      "status": 200,
+      "bytes": 132494,
+      "text_chars": 1962,
+      "file": "2f08d1325b97",
+      "sha256": "9af192aca5c069369af9658270d471a2e1694a601b1b14fc4c587059dfc154fc"
+    },
+    {
+      "url": "https://docs.bigmodel.cn/cn/guide/start/pricing.md",
+      "resolved_url": "https://docs.bigmodel.cn/cn/guide/start/pricing.md",
+      "status": 200,
+      "bytes": 11488,
+      "text_chars": 7188,
+      "file": "ce24446ba0d1",
+      "sha256": "615f8993915c2aea98f5ed05b401a7701dc0381db7325553fadd680e71bec70b"
+    },
+    {
+      "url": "https://docs.bigmodel.cn/cn/guide/start/pricing",
+      "resolved_url": "https://docs.bigmodel.cn/cn/guide/start/pricing",
+      "status": 200,
+      "bytes": 221700,
+      "text_chars": 5582,
+      "file": "fcd4ee82d959",
+      "sha256": "d0c9967fe36d534dc34579356fea8a92a32878c12851638e1afb249058d9b77b"
+    },
+    {
+      "url": "https://api-docs.deepseek.com/quick_start/pricing",
+      "resolved_url": "https://api-docs.deepseek.com/quick_start/pricing/",
+      "status": 200,
+      "bytes": 29510,
+      "text_chars": 4035,
+      "file": "8eb12065b934",
+      "sha256": "92048d20fbc5dd6be1f045cb3d09c706a8a60262f638cfe5f2688be0053ed157"
+    },
+    {
+      "url": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing",
+      "resolved_url": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
+      "status": 200,
+      "bytes": 29667,
+      "text_chars": 2131,
+      "file": "616f9df39c4d",
+      "sha256": "16bfd0e0bba2faa72b305d156bfc707a7a4676d67f104d57b4930940c75fb689"
+    },
+    {
+      "url": "https://cloud.baidu.com/doc/qianfan/s/wmh4sv6ya",
+      "resolved_url": "https://cloud.baidu.com/doc/qianfan/s/wmh4sv6ya",
+      "status": 200,
+      "bytes": 380659,
+      "text_chars": 22829,
+      "file": "c47dadc26634",
+      "sha256": "58a53c48163360664de78e2a1baeffb5e05f86b150eea77a4294635b2de0e7af"
+    },
+    {
+      "url": "https://cloud.tencent.com/document/product/1729/97731",
+      "resolved_url": "https://cloud.tencent.com/document/product/1729/97731",
+      "status": 200,
+      "bytes": 288403,
+      "text_chars": 2403,
+      "file": "4214c5b68743",
+      "sha256": "eeee9ceea581eab9182de9cd655228b099404a2df2dfe4b626cc5ba8837c3988"
+    },
+    {
+      "url": "https://open.bigmodel.cn/pricing",
+      "resolved_url": "https://open.bigmodel.cn/pricing",
+      "status": 200,
+      "bytes": 5294,
+      "text_chars": 14,
+      "file": "f9ce5251bfb3",
+      "sha256": "8d8a0c0ba897316b204ef8765ea794b3eb656c6c2825a06df284b21ad1b1e5b4"
+    },
+    {
+      "url": "https://platform.baichuan-ai.com/prices",
+      "resolved_url": "https://platform.baichuan-ai.com/prices",
+      "status": 200,
+      "bytes": 10956,
+      "text_chars": 2203,
+      "file": "064fdfef6984",
+      "sha256": "dded38e8faf83443b1b21d6b24d1db854a31ac17d202ea8cf777889498a586df"
+    },
+    {
+      "url": "https://help.aliyun.com/zh/model-studio/model-pricing",
+      "resolved_url": "https://help.aliyun.com/zh/model-studio/model-pricing",
+      "status": 200,
+      "bytes": 1593568,
+      "text_chars": 85990,
+      "file": "6b43c566b2b6",
+      "sha256": "4d4b6511b2be6d17ed5271736cc892eed28d24ee43793d52a1c68a74da3ebf48"
+    },
+    {
+      "url": "https://platform.kimi.com/docs/pricing/chat",
+      "resolved_url": "https://platform.kimi.com/docs/pricing/chat",
+      "status": 200,
+      "bytes": 144799,
+      "text_chars": 1612,
+      "file": "88d8ab4c73c1",
+      "sha256": "5741792e57cbe3dd9872401c31514acbfbafb7571242a33accdde9820ace2710"
+    },
+    {
+      "url": "https://platform.stepfun.com",
+      "resolved_url": "https://platform.stepfun.com/",
+      "status": 200,
+      "bytes": 132425,
+      "text_chars": 1623,
+      "file": "da85a91891fe",
+      "sha256": "12fdb33d59e297b3830f0848caf31a6170ffef5ef3199d29fc36aed852c4bcb8"
+    },
+    {
+      "url": "https://platform.qianwenai.com/pricing/api",
+      "resolved_url": "https://platform.qianwenai.com/pricing/api",
+      "status": 200,
+      "bytes": 28399,
+      "text_chars": 637,
+      "file": "6b86c031904a",
+      "sha256": "2939cc41b9411700e85b228041102b612efa61cd3a3e1878f90361b16106e1f8"
+    },
+    {
+      "url": "https://platform.kimi.com/docs/pricing/caching",
+      "resolved_url": "https://platform.kimi.com/docs/get-api-key",
+      "status": 200,
+      "bytes": 263951,
+      "text_chars": 4518,
+      "file": "f308b201b33e",
+      "sha256": "8e531a96a827131cc4ede8acce5c9dfa898a35c10e0a4651982ebb9cb6e5854a"
+    },
+    {
+      "url": "https://xinghuo.xfyun.cn/sparkapi",
+      "resolved_url": "https://xinghuo.xfyun.cn/sparkapi",
+      "status": 200,
+      "bytes": 4085,
+      "text_chars": 12,
+      "file": "3fe513a91a24",
+      "sha256": "20519e72d5f98ee721ad7c6100a604d713278691e050a7d6cfcdc3f947f3cb66"
+    },
+    {
+      "url": "https://platform.xiaomimimo.com/docs/zh-CN/price/pay-as-you-go",
+      "resolved_url": "https://mimo.mi.com/docs/zh-CN/price/pay-as-you-go",
+      "status": 200,
+      "bytes": 132494,
+      "text_chars": 1962,
+      "file": "d5914fbc75bc",
+      "sha256": "9af192aca5c069369af9658270d471a2e1694a601b1b14fc4c587059dfc154fc"
+    },
+    {
+      "url": "https://platform.minimaxi.com/docs/guides/pricing-paygo.md",
+      "resolved_url": "https://platform.minimax.cn/docs/pricing/overview.md",
+      "status": 200,
+      "bytes": 23790,
+      "text_chars": 12482,
+      "file": "1f107eca5c93",
+      "sha256": "27173a027ea69cf5b1e73a2bf530be892ed269282a8d5e7f80436406572d2b6c"
+    },
+    {
+      "url": "https://platform.minimaxi.com/docs/guides/pricing-paygo",
+      "resolved_url": "https://platform.minimax.cn/docs/pricing/overview",
+      "status": 200,
+      "bytes": 309394,
+      "text_chars": 8533,
+      "file": "769bd6cd3b44",
+      "sha256": "c64641b0fade4367567708aab2eaa74915b90986a0cd67efbbb14249b934f64a"
+    },
+    {
+      "url": "https://platform.minimaxi.com/document/Price",
+      "resolved_url": "https://platform.minimax.cn/docs/pricing/overview#packages/speech",
+      "status": 200,
+      "bytes": 309394,
+      "text_chars": 8533,
+      "file": "906c9d34eb05",
+      "sha256": "c64641b0fade4367567708aab2eaa74915b90986a0cd67efbbb14249b934f64a"
+    },
+    {
+      "url": "https://platform.stepfun.com/docs/pricing/details",
+      "resolved_url": "https://platform.stepfun.com/docs/pricing/details",
+      "status": 404,
+      "bytes": 95819,
+      "text_chars": 330,
+      "file": "a6e4adbb7180",
+      "sha256": "deb564a3469b8b22fbde0749f9ba3b6575aceb487c0b6e88f265b3fd680ea168"
+    },
+    {
+      "url": "https://www.volcengine.com/docs/82379/1544106",
+      "resolved_url": "https://docs.volcengine.com/docs/ark/model-pricing?lang=zh",
+      "status": 200,
+      "bytes": 931935,
+      "text_chars": 1737,
+      "file": "03e1fe797aef",
+      "sha256": "9f86e080adff921a23591d7533cdd40ddca61123dc6000d8ef3040dbd55f4f34"
+    },
+    {
+      "url": "https://tokenhub.tencent.com/pricing",
+      "error": "HTTPSConnectionPool(host='tokenhub.tencent.com', port=443): Max retries exceeded with url: /pricing (Caused by ProxyError('Cannot connect to proxy.', ConnectionAbortedError(10053, '你的主机中的软件中止了一个已建立的连接。', None, 10053, None)))"
+    },
+    {
+      "url": "https://xinghuo.xfyun.cn/doc/spark/price.html",
+      "resolved_url": "https://xinghuo.xfyun.cn/doc/spark/price.html",
+      "status": 404,
+      "bytes": 154,
+      "text_chars": 41,
+      "file": "e37433069147",
+      "sha256": "07a4c662894d52026391d09a37b54bb17b763600fcb399d2e2ef437e3e950e0f"
+    },
+    {
+      "url": "https://api-docs.deepseek.com/zh-cn/guides/kv_cache",
+      "resolved_url": "https://api-docs.deepseek.com/zh-cn/guides/kv_cache/",
+      "status": 200,
+      "bytes": 38252,
+      "text_chars": 2585,
+      "file": "e6c407289527",
+      "sha256": "07ad75a1b87d9488bb947d5e81fe7decc97dfa969b47046bbaa8bccb64aa1e26"
+    },
+    {
+      "url": "https://platform.kimi.com/docs/guide/context-caching.md",
+      "resolved_url": "https://platform.kimi.com/docs/guide/context-caching.md",
+      "status": 200,
+      "bytes": 12806,
+      "text_chars": 7594,
+      "file": "fb17b957c9a9",
+      "sha256": "d26d14154c717696edab05b42c59b7986d4ccee3fb7cc7ebf318a83192e3d5e4"
+    },
+    {
+      "url": "https://platform.stepfun.com/docs/llms.txt",
+      "resolved_url": "https://platform.stepfun.com/docs/llms.txt",
+      "status": 200,
+      "bytes": 14236,
+      "text_chars": 12994,
+      "file": "88227812032c",
+      "sha256": "edb49612d6a8fe64c9584145e4c8b4e993d2efe50064401306fc549435ffc77e"
+    },
+    {
+      "url": "https://platform.kimi.com/docs/pricing/chat.md",
+      "resolved_url": "https://platform.kimi.com/docs/pricing/chat.md",
+      "status": 200,
+      "bytes": 3262,
+      "text_chars": 1797,
+      "file": "db019afae580",
+      "sha256": "9e0e32590e671bc5478fd350107f4ca9b40949e1e631352cd1f626fe688d95d0"
+    },
+    {
+      "url": "https://console.cloud.tencent.com/tokenhub",
+      "resolved_url": "https://cloud.tencent.com/login?s_url=https%3A%2F%2Fconsole.cloud.tencent.com%2Ftokenhub",
+      "status": 200,
+      "bytes": 4712,
+      "text_chars": 8,
+      "file": "8345fa21507a",
+      "sha256": "dd75d66b5870d9ca10b6e971dabdaf6c575ec2adf31df717f22377b1d7ccc430"
+    },
+    {
+      "url": "https://platform.stepfun.com/docs/pricing",
+      "resolved_url": "https://platform.stepfun.com/docs/pricing",
+      "status": 404,
+      "bytes": 95803,
+      "text_chars": 330,
+      "file": "f27d96fa43fb",
+      "sha256": "2d28543f87eb28fe483a4bb68eac1be7e543a80256ad1d336f597ed064d61b96"
+    },
+    {
+      "url": "https://www.volcengine.com/docs/82379/1544106?format=md",
+      "resolved_url": "https://docs.volcengine.com/docs/ark/model-pricing?format=md&lang=zh",
+      "status": 200,
+      "bytes": 1675878,
+      "text_chars": 17630,
+      "file": "bf2cd55f791d",
+      "sha256": "22bc58d10e0e62a874a7ee5c56dcce493e4d2f1c39d03c3aa02211b832ecea0d"
+    },
+    {
+      "url": "https://platform.stepfun.com/docs/zh/guides/developer/prompt-cache.md",
+      "resolved_url": "https://platform.stepfun.com/docs/zh/guides/developer/prompt-cache.md",
+      "status": 200,
+      "bytes": 5910,
+      "text_chars": 3162,
+      "file": "c295a16efe0b",
+      "sha256": "c94f04a2fff7fb1468923784b1510eb3874525ee40c993c9ea46106442203d9b"
+    },
+    {
+      "url": "https://platform.stepfun.com/docs/zh/guides/pricing/details.md",
+      "resolved_url": "https://platform.stepfun.com/docs/zh/guides/pricing/details.md",
+      "status": 200,
+      "bytes": 5769,
+      "text_chars": 3417,
+      "file": "cc065e212022",
+      "sha256": "bedb85ad075ab2fd3e563b28aa98903640508b0c8cdbe2f749a224dbfc0c25f8"
+    },
+    {
+      "url": "https://platform.kimi.com/docs/guide/kimi-k3-1-pro-quickstart.md",
+      "resolved_url": "https://platform.kimi.com/docs/guide/kimi-k3-1-pro-quickstart.md",
+      "status": 200,
+      "bytes": 25278,
+      "text_chars": 16183,
+      "file": "faaf55d8ec1c",
+      "sha256": "5823105807193f58b14a9424f76074a6c4fa0a3f1c5ecebf545cbdbf10fda917"
+    },
+    {
+      "url": "https://docs.volcengine.com/docs/ark/context-cache?lang=zh&format=md",
+      "resolved_url": "https://docs.volcengine.com/docs/ark/context-cache?lang=zh&format=md",
+      "status": 200,
+      "bytes": 1202710,
+      "text_chars": 42920,
+      "file": "3bef002d2440",
+      "sha256": "3461cd62a696a3ddc0707f0cc0a77a051e6b8795db4914f870fd6d953f051fe6"
+    }
+  ],
+  "remaining_primary_source_audit": {
+    "audit_date": "2026-11-28",
+    "timezone": "Asia/Shanghai",
+    "scope": "Remaining domestic-model official public RMB price and lifecycle evidence; ordinary online pay-as-you-go, not subscriptions or reseller tariffs.",
+    "unit": "CNY per 1,000,000 tokens unless explicitly noted",
+    "status_semantics": {
+      "verified": "Current official evidence supports the listed tariff for the stated exact ID/provider.",
+      "unavailable": "Do not present a current numeric price: may mean retired, exact name unverified, or public price not verified. See validity_as_of_audit and notes.",
+      "not_listed": "No separate numeric price is established; this is not an explicit free-price assertion."
+    },
+    "findings": [
+      {
+        "model": "Baichuan-M2",
+        "api_model_id": "Baichuan-M2",
+        "validity_as_of_audit": "current_catalog_supported",
+        "recommended_ui_status": "verified",
+        "current_price_cny_per_million_tokens": {
+          "input": 2,
+          "output": 20,
+          "cache_read": null
+        },
+        "cache": {
+          "read": "not_listed",
+          "write": "not_listed"
+        },
+        "context": "32k",
+        "sources": [
+          "baichuan_price",
+          "baichuan_medical_api"
+        ],
+        "notes": [
+          "Official 0.002/0.02 CNY per 1k tokens converted by multiplying by 1,000.",
+          "Cache prices are not listed."
+        ]
+      },
+      {
+        "model": "Baichuan-M3-Plus",
+        "api_model_id": "Baichuan-M3-Plus",
+        "validity_as_of_audit": "current_catalog_supported",
+        "recommended_ui_status": "verified",
+        "current_price_cny_per_million_tokens": {
+          "input": 5,
+          "output": 9,
+          "cache_read": null
+        },
+        "cache": {
+          "read": "not_listed",
+          "write": "not_listed"
+        },
+        "context": "32k",
+        "sources": [
+          "baichuan_price",
+          "baichuan_medical_api"
+        ],
+        "notes": [
+          "Official 0.005/0.009 CNY per 1k tokens converted by multiplying by 1,000.",
+          "Medical search may be triggered automatically and is separately charged at CNY 0.03 per call.",
+          "Cache prices are not listed."
+        ]
+      },
+      {
+        "model": "Hy3",
+        "api_model_id": "hy3",
+        "validity_as_of_audit": "current_catalog_supported",
+        "recommended_ui_status": "verified",
+        "current_price_cny_per_million_tokens": {
+          "input": 1,
+          "output": 4,
+          "cache_read": 0.25
+        },
+        "cache": {
+          "read": "priced",
+          "write": "dash_in_official_table"
+        },
+        "context": {
+          "window": "256k",
+          "maximum_input": "192k",
+          "maximum_output": "128k"
+        },
+        "sources": [
+          "tokenhub_price",
+          "tokenhub_models"
+        ],
+        "notes": [
+          "Online pay-as-you-go table; batch rates are excluded.",
+          "5min/1h cache-write cells show dashes, not explicit zero prices."
+        ]
+      },
+      {
+        "model": "Hy4 preview",
+        "api_model_id": "hy4-preview",
+        "validity_as_of_audit": "current_until_scheduled_retirement",
+        "recommended_ui_status": "verified",
+        "current_price_cny_per_million_tokens": {
+          "input": 6,
+          "output": 18,
+          "cache_read": 0.3
+        },
+        "cache": {
+          "read": "priced",
+          "write": "dash_in_official_table"
+        },
+        "context": {
+          "window": "1M",
+          "maximum_input": "960k",
+          "maximum_output": "64k"
+        },
+        "sources": [
+          "tokenhub_price",
+          "tokenhub_models",
+          "hy4_preview_retirement"
+        ],
+        "retirement_at": "2026-12-07T00:00:00+08:00",
+        "notes": [
+          "Future retirement, still current on 2026-11-28.",
+          "Hy4 and Hy4 flash promotions are separate rows; do not apply them to Hy4 preview.",
+          "5min/1h cache-write cells show dashes, not explicit zero prices."
+        ]
+      },
+      {
+        "model": "Tencent HY 2.0 Think",
+        "api_model_id": "hunyuan-2.0-thinking",
+        "validity_as_of_audit": "retired",
+        "recommended_ui_status": "unavailable",
+        "current_price_cny_per_million_tokens": null,
+        "cache": {
+          "read": "not_listed",
+          "write": "not_listed"
+        },
+        "context": null,
+        "sources": [
+          "tencent_legacy_retirement",
+          "tencent_legacy_ids"
+        ],
+        "retirement_at": "2026-06-22T00:00:00+08:00",
+        "notes": [
+          "Retirement announcement lists the exact base ID; migration guide lists affected dated/latest IDs.",
+          "Do not copy the recommended replacement model price."
+        ]
+      },
+      {
+        "model": "Hunyuan-T1",
+        "api_model_id": "hunyuan-t1",
+        "validity_as_of_audit": "retired",
+        "recommended_ui_status": "unavailable",
+        "current_price_cny_per_million_tokens": null,
+        "cache": {
+          "read": "not_listed",
+          "write": "not_listed"
+        },
+        "context": null,
+        "sources": [
+          "tencent_legacy_retirement",
+          "tencent_legacy_ids"
+        ],
+        "retirement_at": "2026-06-22T00:00:00+08:00",
+        "notes": [
+          "Retirement announcement lists the exact base ID; migration guide lists affected dated/latest IDs.",
+          "Do not copy the recommended replacement model price."
+        ]
+      },
+      {
+        "model": "Hunyuan-TurboS",
+        "api_model_id": "hunyuan-turbos",
+        "validity_as_of_audit": "retired",
+        "recommended_ui_status": "unavailable",
+        "current_price_cny_per_million_tokens": null,
+        "cache": {
+          "read": "not_listed",
+          "write": "not_listed"
+        },
+        "context": null,
+        "sources": [
+          "tencent_legacy_retirement",
+          "tencent_legacy_ids"
+        ],
+        "retirement_at": "2026-06-22T00:00:00+08:00",
+        "notes": [
+          "Retirement announcement lists the exact base ID; migration guide lists affected dated/latest IDs.",
+          "Do not copy the recommended replacement model price."
+        ]
+      },
+      {
+        "model": "Spark-X2.5",
+        "api_model_id": "spark-x2.5",
+        "validity_as_of_audit": "retired",
+        "recommended_ui_status": "unavailable",
+        "current_price_cny_per_million_tokens": null,
+        "cache": {
+          "read": "not_listed",
+          "write": "not_listed"
+        },
+        "context": "256k",
+        "sources": [
+          "spark_x25_retirement",
+          "spark_x25_price",
+          "spark_x25_metadata",
+          "spark_current_catalog"
+        ],
+        "retirement_at": "2026-11-24T10:00:00+08:00",
+        "historical_price_cny_per_million_tokens": {
+          "input": 3.2,
+          "output": 12,
+          "cache_read": 0.48
+        },
+        "historical_promotional_price_cny_per_million_tokens": {
+          "input": 0.96,
+          "output": 3.6,
+          "cache_read": 0.14
+        },
+        "notes": [
+          "The legacy detail page still displays a price after the explicit retirement date.",
+          "Original cache price is explicitly 0.48, not 0.14/0.3.",
+          "Historical 30% promotion ended at the retirement time.",
+          "Separate cache-write pricing is not listed."
+        ]
+      },
+      {
+        "model": "Spark-X2-Flash",
+        "api_model_id": "xsparkx2flash",
+        "validity_as_of_audit": "current_catalog_supported",
+        "recommended_ui_status": "verified",
+        "current_price_cny_per_million_tokens": {
+          "input": 1,
+          "output": 2,
+          "cache_read": null
+        },
+        "cache": {
+          "read": "not_listed",
+          "write": "not_listed"
+        },
+        "context": {
+          "window": "256k",
+          "maximum_input": "192k"
+        },
+        "sources": [
+          "spark_flash_price",
+          "spark_flash_metadata",
+          "spark_current_catalog"
+        ],
+        "api_model_id_evidence": "Public official catalog serviceId; generic API documentation tells users to obtain model ID from API calling panel.",
+        "notes": [
+          "Catalog inferencePrice.cacheBilling is false; rendered cache-hit cells are --.",
+          "No numeric cache-read or cache-write price is established."
+        ]
+      },
+      {
+        "model": "Spark Lite",
+        "api_model_id": "lite",
+        "validity_as_of_audit": "documented_available",
+        "recommended_ui_status": "verified",
+        "current_price_cny_per_million_tokens": {
+          "input": 0,
+          "output": 0,
+          "cache_read": null
+        },
+        "cache": {
+          "read": "not_listed",
+          "write": "not_listed"
+        },
+        "context": {
+          "maximum_input": "8K",
+          "maximum_output": "4K"
+        },
+        "sources": [
+          "spark_http_models"
+        ],
+        "notes": [
+          "Official HTTP model comparison explicitly says Lite supports free use.",
+          "Cache support/pricing is not established."
+        ]
+      },
+      {
+        "model": "Spark Pro",
+        "api_model_id": "generalv3",
+        "validity_as_of_audit": "documented_available_price_not_verified",
+        "recommended_ui_status": "unavailable",
+        "current_price_cny_per_million_tokens": null,
+        "cache": {
+          "read": "not_listed",
+          "write": "not_listed"
+        },
+        "context": {
+          "maximum_input": "8K",
+          "maximum_output": "8K"
+        },
+        "sources": [
+          "spark_http_models"
+        ],
+        "notes": [
+          "Exact legacy HTTP model ID is documented.",
+          "Current official product page did not expose a verifiable numeric Pro price; no numeric rate is asserted."
+        ]
+      },
+      {
+        "model": "Spark Max",
+        "api_model_id": "generalv3.5",
+        "validity_as_of_audit": "legacy_backend_changed",
+        "recommended_ui_status": "unavailable",
+        "current_price_cny_per_million_tokens": null,
+        "cache": {
+          "read": "not_listed",
+          "write": "not_listed"
+        },
+        "context": null,
+        "sources": [
+          "spark_http_models"
+        ],
+        "backend_change_date": "2026-03-10",
+        "notes": [
+          "Official notice states Max package is withdrawn and backend service upgrades to Ultra with usage merged.",
+          "This does not establish the old Max model price as current."
+        ]
+      },
+      {
+        "model": "Spark 4.0 Ultra",
+        "api_model_id": "4.0Ultra",
+        "validity_as_of_audit": "legacy_backend_changed_price_not_verified",
+        "recommended_ui_status": "unavailable",
+        "current_price_cny_per_million_tokens": null,
+        "cache": {
+          "read": "not_listed",
+          "write": "not_listed"
+        },
+        "context": null,
+        "sources": [
+          "spark_http_models"
+        ],
+        "notes": [
+          "Official notice says Ultra was upgraded to X1.5 fast-thinking mode.",
+          "4.0Ultra is the documented HTTP model parameter; current numeric tariff was not verified."
+        ]
+      },
+      {
+        "model": "Spark-X2",
+        "api_model_id": null,
+        "validity_as_of_audit": "exact_name_price_not_verified",
+        "recommended_ui_status": "unavailable",
+        "current_price_cny_per_million_tokens": null,
+        "cache": {
+          "read": "not_listed",
+          "write": "not_listed"
+        },
+        "context": null,
+        "sources": [
+          "spark_current_catalog"
+        ],
+        "notes": [
+          "Plain Spark-X2 is not a row in the current public 52-model catalog.",
+          "Absence from this catalog alone is not proof of a formal global retirement.",
+          "Do not substitute Spark-X2-Flash or Spark-X2.5 prices."
+        ]
+      },
+      {
+        "model": "MiniMax-M2.7",
+        "api_model_id": "MiniMax-M2.7",
+        "validity_as_of_audit": "retired_for_pay_as_you_go",
+        "recommended_ui_status": "unavailable",
+        "current_price_cny_per_million_tokens": null,
+        "cache": {
+          "read": "not_listed",
+          "write": "not_listed"
+        },
+        "context": null,
+        "sources": [
+          "minimax_retirement"
+        ],
+        "retirement_date": "2026-11-18",
+        "notes": [
+          "New-user access stopped 2026-10-19; pay-as-you-go calls ceased at retirement.",
+          "M Plan/Token Plan compatibility routing to M3.1 Flash is separately described and does not establish current ordinary API pricing."
+        ]
+      },
+      {
+        "model": "MiniMax-M2.7-highspeed",
+        "api_model_id": "MiniMax-M2.7-highspeed",
+        "validity_as_of_audit": "retired_for_pay_as_you_go",
+        "recommended_ui_status": "unavailable",
+        "current_price_cny_per_million_tokens": null,
+        "cache": {
+          "read": "not_listed",
+          "write": "not_listed"
+        },
+        "context": null,
+        "sources": [
+          "minimax_retirement"
+        ],
+        "retirement_date": "2026-11-18",
+        "notes": [
+          "New-user access stopped 2026-10-19; pay-as-you-go calls ceased at retirement.",
+          "M Plan/Token Plan compatibility routing to M3.1 Flash is separately described and does not establish current ordinary API pricing."
+        ]
+      },
+      {
+        "model": "mimo-v2.5",
+        "api_model_id": "mimo-v2.5",
+        "validity_as_of_audit": "retired",
+        "recommended_ui_status": "unavailable",
+        "current_price_cny_per_million_tokens": null,
+        "cache": {
+          "read": "not_listed",
+          "write": "not_listed"
+        },
+        "context": null,
+        "sources": [
+          "mimo_price_retirement"
+        ],
+        "retirement_at": "2026-10-21T10:00:00+08:00",
+        "notes": [
+          "Official banner says original model names are invalid.",
+          "Do not borrow V2.6 rates or the current-series cache-write promotion."
+        ]
+      },
+      {
+        "model": "mimo-v2.5-pro",
+        "api_model_id": "mimo-v2.5-pro",
+        "validity_as_of_audit": "retired",
+        "recommended_ui_status": "unavailable",
+        "current_price_cny_per_million_tokens": null,
+        "cache": {
+          "read": "not_listed",
+          "write": "not_listed"
+        },
+        "context": null,
+        "sources": [
+          "mimo_price_retirement"
+        ],
+        "retirement_at": "2026-10-21T10:00:00+08:00",
+        "notes": [
+          "Official banner says original model names are invalid.",
+          "Do not borrow V2.6 rates or the current-series cache-write promotion."
+        ]
+      },
+      {
+        "model": "ERNIE 4.5 Turbo",
+        "api_model_id": null,
+        "validity_as_of_audit": "retired_supported_versions",
+        "recommended_ui_status": "unavailable",
+        "current_price_cny_per_million_tokens": null,
+        "cache": {
+          "read": "not_listed",
+          "write": "not_listed"
+        },
+        "context": null,
+        "sources": [
+          "ernie_retirement"
+        ],
+        "retired_model_ids": [
+          "ERNIE-4.5-Turbo-128K",
+          "ERNIE-4.5-Turbo-20260402",
+          "ERNIE-4.5-Turbo-32K",
+          "ERNIE-4.5-Turbo-32K-Lowlatency"
+        ],
+        "retirement_date": "2026-10-29",
+        "notes": [
+          "The generic label is a model family rather than the exact dated/API version.",
+          "Each listed version is explicitly in the retirement table; no successor price is assigned."
+        ]
+      },
+      {
+        "model": "ERNIE X1 Turbo",
+        "api_model_id": null,
+        "validity_as_of_audit": "retired_supported_versions",
+        "recommended_ui_status": "unavailable",
+        "current_price_cny_per_million_tokens": null,
+        "cache": {
+          "read": "not_listed",
+          "write": "not_listed"
+        },
+        "context": null,
+        "sources": [
+          "ernie_retirement"
+        ],
+        "retired_model_ids": [
+          "ERNIE-X1-Turbo-32K",
+          "ERNIE-X1-Turbo-32K-Preview",
+          "ERNIE-X1-Turbo-Preview"
+        ],
+        "retirement_date": "2026-06-30",
+        "notes": [
+          "ERNIE-X1-Turbo-Latest is separately marked retired on 2026-06-09."
+        ]
+      },
+      {
+        "model": "Doubao 1.5 Pro 32K",
+        "api_model_id": "doubao-1-5-pro-32k-250115",
+        "validity_as_of_audit": "retired",
+        "recommended_ui_status": "unavailable",
+        "current_price_cny_per_million_tokens": null,
+        "cache": {
+          "read": "not_listed",
+          "write": "not_listed"
+        },
+        "context": null,
+        "sources": [
+          "doubao_retirement"
+        ],
+        "retirement_at": "2026-09-21T14:00:00+08:00",
+        "notes": [
+          "Ninth retirement batch; residual endpoints migrate to a new model, whose tariff is distinct."
+        ]
+      },
+      {
+        "model": "Doubao 1.5 Pro 256K",
+        "api_model_id": "doubao-1-5-pro-256k-250115",
+        "validity_as_of_audit": "retired",
+        "recommended_ui_status": "unavailable",
+        "current_price_cny_per_million_tokens": null,
+        "cache": {
+          "read": "not_listed",
+          "write": "not_listed"
+        },
+        "context": null,
+        "sources": [
+          "doubao_2025_retirement"
+        ],
+        "retirement_at": "2025-11-27T14:00:00+08:00",
+        "notes": [
+          "Fifth retirement batch in 2025; not the later 32K batch."
+        ]
+      },
+      {
+        "model": "Doubao 1.6 (doubao-seed-1-6-250615)",
+        "api_model_id": "doubao-seed-1-6-250615",
+        "validity_as_of_audit": "retired",
+        "recommended_ui_status": "unavailable",
+        "current_price_cny_per_million_tokens": null,
+        "cache": {
+          "read": "not_listed",
+          "write": "not_listed"
+        },
+        "context": null,
+        "sources": [
+          "doubao_retirement"
+        ],
+        "retirement_at": "2026-09-21T14:00:00+08:00",
+        "notes": [
+          "Ninth retirement batch; no current 1.6 price is asserted."
+        ]
+      },
+      {
+        "model": "Doubao 1.6 (doubao-seed-1-6-251015)",
+        "api_model_id": "doubao-seed-1-6-251015",
+        "validity_as_of_audit": "retired",
+        "recommended_ui_status": "unavailable",
+        "current_price_cny_per_million_tokens": null,
+        "cache": {
+          "read": "not_listed",
+          "write": "not_listed"
+        },
+        "context": null,
+        "sources": [
+          "doubao_retirement"
+        ],
+        "retirement_at": "2026-09-21T14:00:00+08:00",
+        "notes": [
+          "Ninth retirement batch; no current 1.6 price is asserted."
+        ]
+      },
+      {
+        "model": "qwen3-max",
+        "api_model_id": "qwen3-max",
+        "validity_as_of_audit": "retired",
+        "recommended_ui_status": "unavailable",
+        "current_price_cny_per_million_tokens": null,
+        "cache": {
+          "read": "not_listed",
+          "write": "not_listed"
+        },
+        "context": null,
+        "sources": [
+          "qwen_retirement",
+          "qwen_historical_price"
+        ],
+        "retirement_at": "2026-10-10T00:00:00+08:00",
+        "historical_price_cny_per_million_tokens": {
+          "input": 2.5,
+          "output": 10,
+          "cache_read": null
+        },
+        "notes": [
+          "Historical replacement-comparison table provides these base input/output rates only; it is not the complete original pricing schedule.",
+          "qwen3-max-2026-01-23 and qwen3-max-2025-09-23 are also on the delayed retirement list."
+        ]
+      },
+      {
+        "model": "qwen3.6-max-preview",
+        "api_model_id": "qwen3.6-max-preview",
+        "validity_as_of_audit": "retired",
+        "recommended_ui_status": "unavailable",
+        "current_price_cny_per_million_tokens": null,
+        "cache": {
+          "read": "not_listed",
+          "write": "not_listed"
+        },
+        "context": null,
+        "sources": [
+          "qwen_retirement",
+          "qwen_historical_price"
+        ],
+        "retirement_at": "2026-10-10T00:00:00+08:00",
+        "historical_price_cny_per_million_tokens": {
+          "input": 9,
+          "output": 54,
+          "cache_read": null
+        },
+        "notes": [
+          "Historical replacement-comparison table provides these base input/output rates only; it is not the complete original pricing schedule.",
+          "qwen3-max-2026-01-23 and qwen3-max-2025-09-23 are also on the delayed retirement list."
+        ]
+      },
+      {
+        "model": "qwen3.8-max-prime",
+        "api_model_id": null,
+        "validity_as_of_audit": "exact_name_not_verified",
+        "recommended_ui_status": "unavailable",
+        "current_price_cny_per_million_tokens": null,
+        "cache": {
+          "read": "not_listed",
+          "write": "not_listed"
+        },
+        "context": null,
+        "sources": [
+          "qwen_current_prices",
+          "qwen_current_index",
+          "qwen_prime_doc_404",
+          "qwen_prime_market_404"
+        ],
+        "notes": [
+          "Exact string is absent from the downloaded current full price table and documentation index; two guessed official individual-model paths return 404.",
+          "This establishes insufficient public evidence for this exact name, not conclusive global service unavailability.",
+          "Do not copy qwen3.8-max prices."
+        ]
+      },
+      {
+        "model": "DeepSeek-V4.1-Flash-1017",
+        "api_model_id": "deepseek-flash",
+        "validity_as_of_audit": "current_catalog_supported",
+        "recommended_ui_status": "verified",
+        "current_price_cny_per_million_tokens": {
+          "off_peak": {
+            "input": 1,
+            "output": 4,
+            "cache_read": 0.02
+          },
+          "peak": {
+            "input": 2,
+            "output": 8,
+            "cache_read": 0.04
+          }
+        },
+        "cache": {
+          "read": "priced",
+          "write": "no_separate_price_listed"
+        },
+        "context": {
+          "window": "1M",
+          "maximum_output": "384K"
+        },
+        "sources": [
+          "deepseek_price",
+          "deepseek_calling_names",
+          "deepseek_1017_release",
+          "deepseek_cache"
+        ],
+        "model_version": "DeepSeek-V4.1-Flash-1017",
+        "notes": [
+          "Exact first-party API model name is deepseek-flash; version/presentation names are not established as interchangeable API IDs.",
+          "Peak: Beijing Monday-Friday excluding China statutory holidays 09:00-12:00 and 14:00-18:00; all other times off-peak.",
+          "No separate cache-write/storage charge is stated in the captured current price table; do not label it explicitly free from absence alone."
+        ]
+      },
+      {
+        "model": "DeepSeek-V4-Pro-0813",
+        "api_model_id": "deepseek-v4-pro",
+        "validity_as_of_audit": "listed_on_current_price_page",
+        "recommended_ui_status": "verified",
+        "current_price_cny_per_million_tokens": {
+          "off_peak": {
+            "input": 4.5,
+            "output": 13.5,
+            "cache_read": 0.15
+          },
+          "peak": {
+            "input": 9,
+            "output": 27,
+            "cache_read": 0.3
+          }
+        },
+        "cache": {
+          "read": "priced",
+          "write": "no_separate_price_listed"
+        },
+        "context": {
+          "window": "1M",
+          "maximum_output": "384K"
+        },
+        "sources": [
+          "deepseek_price"
+        ],
+        "model_version": "DeepSeek-V4-Pro-0813",
+        "notes": [
+          "Current price page lists API model deepseek-v4-pro and version DeepSeek-V4-Pro-0813.",
+          "Do not infer deepseek-v4-pro-0813 is itself an accepted first-party API parameter.",
+          "An older September announcement described temporary routing to Flash; the captured current price table now explicitly lists Pro separately."
+        ]
+      }
+    ],
+    "sources": {
+      "baichuan_price": {
+        "url": "https://platform.baichuan-ai.com/prices",
+        "local_file": "064fdfef6984.txt",
+        "sha256": "9deccdba7c6a558360027d9dfc028cd29e5bfec3f0902bb82fe9320438a7cd86",
+        "kind": "official_document"
+      },
+      "baichuan_medical_api": {
+        "url": "https://platform.baichuan-ai.com/docs-v2/medical",
+        "local_file": "remaining/baichuan-medical-api.yaml",
+        "sha256": "d98f88ef4d9872183ce62a89f853310c0c4793e43185722fadc2393863ad3699",
+        "kind": "official_document",
+        "note": "Readable YAML extracted from the public documentation response captured by Playwright; raw response: remaining/baichuan-medical-doc-response.txt."
+      },
+      "tokenhub_price": {
+        "url": "https://cloud.tencent.com/document/product/1823/130055",
+        "local_file": "remaining/d44657229887.html",
+        "sha256": "d3f87efdd0cbb7ac198488892dc7d5b1a4c459cb43740a1a2eae3f9ad30a63d1",
+        "kind": "official_document",
+        "note": "Updated 2026-11-26 18:13:00. Use online pay-as-you-go Guangzhou table, not batch table."
+      },
+      "tokenhub_models": {
+        "url": "https://cloud.tencent.com/document/product/1823/130051",
+        "local_file": "remaining/1daba19c5a17.txt",
+        "sha256": "d74502b5eacd4eb9591dfaf289b4c4d9da5b228c218b6d8edd83e4ba3d7d1df9",
+        "kind": "official_document",
+        "note": "Updated 2026-11-27 14:06:30."
+      },
+      "tencent_legacy_retirement": {
+        "url": "https://cloud.tencent.com/announce/detail/2301",
+        "local_file": "remaining/aab6736e64bb.txt",
+        "sha256": "b482bc60cc37d59dd9e460f9127899a7f95db7dd7e510f8aef241de5b106b8a7",
+        "kind": "official_document"
+      },
+      "tencent_legacy_ids": {
+        "url": "https://cloud.tencent.com/document/product/1729/131925",
+        "local_file": "remaining/84cb61a4729d.txt",
+        "sha256": "7b125c6749e2a173e25d9e09617565f42984220c2e008f1f7918b4ef4cd93847",
+        "kind": "official_document"
+      },
+      "hy4_preview_retirement": {
+        "url": "https://cloud.tencent.com/announce/detail/2559",
+        "local_file": "remaining/d33fc46a673e.txt",
+        "sha256": "c4f6356bcf5d4047c08b237cded41eed69d34858b27c122ac7fccca09523ed60",
+        "kind": "official_document"
+      },
+      "spark_x25_price": {
+        "url": "https://maas.xfyun.cn/modelSquare/base/2624708664591360",
+        "local_file": "remaining/spark-x25-browser.txt",
+        "sha256": "a87818489ad30e3f6142102e73eea4b8d9b4d4502dfaa666a34c9d92118a8fce",
+        "kind": "official_browser_text"
+      },
+      "spark_x25_metadata": {
+        "url": "https://maas.xfyun.cn/api/v1/gpt-finetune/model/2624708664591360",
+        "local_file": "remaining/71bce558832a.html",
+        "sha256": "bd282ecf23565973a8bee46c045ce3d6fcd22b7235231bf0b87821e28423d8c5",
+        "kind": "official_public_catalog_response"
+      },
+      "spark_x25_retirement": {
+        "url": "https://maas.xfyun.cn/doc/guide/0%E3%80%81%E5%85%AC%E5%91%8A/0.4%20%E8%80%81%E6%97%A7%E6%A8%A1%E5%9E%8B%E4%B8%8B%E7%BA%BF%E9%80%9A%E7%9F%A5%EF%BC%88261124%EF%BC%89.html",
+        "local_file": "remaining/c025e1a5a07f.txt",
+        "sha256": "9c2a55967d19d416696992c032c2e9d55cd0d81bc9ddc95354ec236f41edf4d8",
+        "kind": "official_document"
+      },
+      "spark_flash_price": {
+        "url": "https://maas.xfyun.cn/modelSquare/base/2611845619399681",
+        "local_file": "remaining/spark-x2-flash-browser.txt",
+        "sha256": "d5e8d2b270ce53c675978e4f984427c836598099a516ff264db767504b0a0a7c",
+        "kind": "official_browser_text"
+      },
+      "spark_flash_metadata": {
+        "url": "https://maas.xfyun.cn/api/v1/gpt-finetune/model/2611845619399681",
+        "local_file": "remaining/48dea61d766b.html",
+        "sha256": "4852f793a14402b2838ce8b798261e11c9c937b6adbc257e4938bd4adb757a4f",
+        "kind": "official_public_catalog_response"
+      },
+      "spark_current_catalog": {
+        "url": "https://maas.xfyun.cn/api/v1/gpt-finetune/model/base/list-v2?page=1&size=9999&sort=0",
+        "local_file": "remaining/71731f6cd396.html",
+        "sha256": "472f4a9e7ab01abb2cf32ed36ef714baba1fdf1942dbc8998c72b789d06e916a",
+        "kind": "official_public_catalog_response",
+        "note": "52 public model rows; Spark-X2-Flash is listed, plain Spark-X2 and Spark-X2.5 are not."
+      },
+      "spark_http_models": {
+        "url": "https://www.xfyun.cn/doc/spark/HTTP%E8%B0%83%E7%94%A8%E6%96%87%E6%A1%A3.html",
+        "local_file": "remaining/d3e124ee6d9d.txt",
+        "sha256": "96adaef16dfa1e73e733cdff522911f009d34891d98936944993870015d7efaa",
+        "kind": "official_document"
+      },
+      "minimax_retirement": {
+        "url": "https://platform.minimax.cn/docs/faq/models.md",
+        "local_file": "remaining/efcb0960ac57.html",
+        "sha256": "db051274c2fd0715e15809b2608357d381b1ec8a11a40c76d48023f3ec34e26c",
+        "kind": "official_document"
+      },
+      "mimo_price_retirement": {
+        "url": "https://mimo.mi.com/docs/zh-CN/price/pay-as-you-go",
+        "local_file": "2f08d1325b97.txt",
+        "sha256": "2797bb184c49580d62606d1254d8effa0b89e970f7ae4ee73ecd46787ff6556d",
+        "kind": "official_document"
+      },
+      "ernie_retirement": {
+        "url": "https://cloud.baidu.com/doc/qianfan/s/zmh4stou3",
+        "local_file": "remaining/66ee41f067e7.html",
+        "sha256": "83048eff59bccf0d1e1543a9740d1bffebc14e399b491fcef4af955d0310be0a",
+        "kind": "official_document",
+        "note": "Retirement table updated 2026-11-20."
+      },
+      "doubao_retirement": {
+        "url": "https://docs.volcengine.com/docs/zh/ark/model-deprecation-notice.md",
+        "local_file": "remaining/d3a3ac5f5bf1.html",
+        "sha256": "7d37ed6ff52a74968b9201235fe350b996bfd9f954043dc04284fd026facabd9",
+        "kind": "official_document",
+        "note": "Raw Markdown despite .html extension. Hyphens are Markdown-escaped in model IDs."
+      },
+      "doubao_2025_retirement": {
+        "url": "https://docs.volcengine.com/docs/zh/ark/model-deprecation-announcement-2025.md",
+        "local_file": "remaining/c1cb708103d5.html",
+        "sha256": "71f13177ddecf9089062b3f4def3df620acfe9a578f9fd03536f864ba9c9251b",
+        "kind": "official_document",
+        "note": "Raw Markdown despite .html extension."
+      },
+      "qwen_retirement": {
+        "url": "https://platform.qianwenai.com/docs/changelog/model-deprecations/delayed-deprecation.md",
+        "local_file": "remaining/bb2cd8be1f38.html",
+        "sha256": "1f418d2b2e89ec547bce95006cc6d1d352b444bee40241e29a19c6f1c6867ba4",
+        "kind": "official_document",
+        "note": "Raw Markdown despite .html extension."
+      },
+      "qwen_historical_price": {
+        "url": "https://platform.qianwenai.com/docs/changelog/model-deprecations/mainline-models.md",
+        "local_file": "remaining/64f2bc8c2ba8.html",
+        "sha256": "cc2adee6cf9da8c7e52f98a73860aa87acdc68e33ab0d5b6f0312b7b1579fffb",
+        "kind": "official_document",
+        "note": "Raw Markdown; historical base-price comparison does not establish all original tiers."
+      },
+      "qwen_current_prices": {
+        "url": "https://platform.qianwenai.com/docs/developer-guides/getting-started/model-prices.md",
+        "local_file": "remaining/dff655d77543.html",
+        "sha256": "5a5ed480bed018416f26988f3951e66056e3504c0d59d9d961b5b56f23f16bdd",
+        "kind": "official_document"
+      },
+      "qwen_current_index": {
+        "url": "https://platform.qianwenai.com/llms.txt",
+        "local_file": "remaining/385c2b6b4a5c.html",
+        "sha256": "274adcbcefbba84d16e0dcdf72593d305e115246fc9514d0f0c17f61d790863a",
+        "kind": "official_document"
+      },
+      "qwen_prime_doc_404": {
+        "url": "https://platform.qianwenai.com/docs/models/qwen3-8-max-prime.md",
+        "local_file": "remaining/fca3b2394e28.html",
+        "sha256": "718afdc99a84b665cabd894ca59c06fc1aa67901171d328d439ae3e416a9f60f",
+        "kind": "official_document",
+        "note": "HTTP 404, not evidence that every possible endpoint is unavailable."
+      },
+      "qwen_prime_market_404": {
+        "url": "https://www.qianwenai.com/models/qwen3.8-max-prime",
+        "local_file": "remaining/bc503d58e857.html",
+        "sha256": "9760678afa406031d15631258e7a157d394acadc70d0c77eda5074ececfcfd36",
+        "kind": "official_document",
+        "note": "HTTP 404."
+      },
+      "deepseek_price": {
+        "url": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
+        "local_file": "616f9df39c4d.txt",
+        "sha256": "b89d266bfea36cdbe1549896b68b31c1230b42037982a8da889131fc3181b81d",
+        "kind": "official_document"
+      },
+      "deepseek_calling_names": {
+        "url": "https://api-docs.deepseek.com/zh-cn/",
+        "local_file": "remaining/ab2d19ce77bf.txt",
+        "sha256": "27d1e991a2ac78d8687385e666dc3569fec977a8affe52a9560f3ac30d113695",
+        "kind": "official_document"
+      },
+      "deepseek_1017_release": {
+        "url": "https://api-docs.deepseek.com/zh-cn/news/news261017/",
+        "local_file": "remaining/737706544d5c.txt",
+        "sha256": "17145a3b5764f8b9bfca5ea0e2de4aaefdc9f6ea780b7e8d1b1985d2bf97d5cd",
+        "kind": "official_document"
+      },
+      "deepseek_cache": {
+        "url": "https://api-docs.deepseek.com/zh-cn/guides/kv_cache/",
+        "local_file": "e6c407289527.txt",
+        "sha256": "3cb72fb8c5b7899ee07e34a64d015ec98e697f84aa39ba01415292bdf1eb95fd",
+        "kind": "official_document"
+      }
+    },
+    "limitations": [
+      "No paid inference requests were made.",
+      "Lifecycle statements apply to the named first-party/provider API service; self-hosted or reseller offerings may differ.",
+      "Websites retain stale detail pages after retirement, so explicit lifecycle notices override residual historical prices.",
+      "Model family labels, release-version names and exact API parameters are distinguished."
+    ]
+  },
+  "qwen_official_source_sha256": "df7a469f10b721ddae809c667d1e1e94eb2b3b372eea174d9cee657b676540f2"
+}

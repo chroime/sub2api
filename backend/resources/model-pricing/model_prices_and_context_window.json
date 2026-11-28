@@ -1210,7 +1210,7 @@
     "max_output_tokens": 393216,
     "max_tokens": 393216,
     "mode": "chat",
-    "source": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing",
+    "source": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
     "supported_endpoints": [
       "/v1/chat/completions"
     ],
@@ -1223,13 +1223,19 @@
     "supports_system_messages": true,
     "supports_tool_choice": true,
     "supports_vision": true,
+    "currency": "CNY",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_notes": "Official peak quote; off-peak is one half. The pricing page explicitly routes the two old Flash API IDs to the current Flash model. No separate cache-write charge.",
+    "deepseek_peak_price": true,
+    "pricing_reference": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "official_standard",
     "input_cost_per_token": 2e-06,
     "output_cost_per_token": 8e-06,
+    "cache_creation_input_token_cost": 0,
     "cache_read_input_token_cost": 4e-08,
-    "currency": "CNY",
-    "pricing_verified_at": "2026-11-23",
-    "pricing_notes": "Native CNY reference quote (peak/list price). Billing applies the off-peak discount separately.",
-    "deepseek_peak_price": true
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28"
   },
   "deepseek-v4-flash": {
     "litellm_provider": "deepseek",
@@ -1237,7 +1243,7 @@
     "max_output_tokens": 393216,
     "max_tokens": 393216,
     "mode": "chat",
-    "source": "https://api-docs.deepseek.com/quick_start/pricing",
+    "source": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
     "supported_endpoints": [
       "/v1/chat/completions"
     ],
@@ -1250,17 +1256,18 @@
     "supports_system_messages": true,
     "supports_tool_choice": true,
     "currency": "CNY",
-    "pricing_verified_at": "2026-11-22",
-    "pricing_notes": "Native CNY reference quote (peak/list price). Billing applies the off-peak discount separately.",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_notes": "Official peak quote; off-peak is one half. The pricing page explicitly routes the two old Flash API IDs to the current Flash model. No separate cache-write charge.",
+    "deepseek_peak_price": true,
+    "pricing_reference": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "official_standard",
     "input_cost_per_token": 2e-06,
     "output_cost_per_token": 8e-06,
+    "cache_creation_input_token_cost": 0,
     "cache_read_input_token_cost": 4e-08,
-    "deepseek_peak_price": true,
-    "pricing_reference": "https://mofcloud.cn/tools/llm-explorer/",
-    "pricing_reference_model": "deepseek-v4-flash",
-    "pricing_data_source": "https://www.llmabacus.com",
-    "pricing_data_license": "CC-BY-4.0",
-    "pricing_collected_at": "2026-11-23"
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28"
   },
   "deepseek-v4-flash-vision-exp": {
     "litellm_provider": "deepseek",
@@ -1268,7 +1275,7 @@
     "max_output_tokens": 393216,
     "max_tokens": 393216,
     "mode": "chat",
-    "source": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing",
+    "source": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
     "supported_endpoints": [
       "/v1/chat/completions"
     ],
@@ -1281,13 +1288,19 @@
     "supports_system_messages": true,
     "supports_tool_choice": true,
     "supports_vision": true,
+    "currency": "CNY",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_notes": "Official peak quote; off-peak is one half. The pricing page explicitly routes the two old Flash API IDs to the current Flash model. No separate cache-write charge.",
+    "deepseek_peak_price": true,
+    "pricing_reference": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "official_standard",
     "input_cost_per_token": 2e-06,
     "output_cost_per_token": 8e-06,
+    "cache_creation_input_token_cost": 0,
     "cache_read_input_token_cost": 4e-08,
-    "currency": "CNY",
-    "pricing_verified_at": "2026-11-23",
-    "pricing_notes": "Native CNY reference quote (peak/list price). Billing applies the off-peak discount separately.",
-    "deepseek_peak_price": true
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28"
   },
   "deepseek-v4-pro": {
     "litellm_provider": "deepseek",
@@ -1295,7 +1308,7 @@
     "max_output_tokens": 393216,
     "max_tokens": 393216,
     "mode": "chat",
-    "source": "https://api-docs.deepseek.com/quick_start/pricing",
+    "source": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
     "supported_endpoints": [
       "/v1/chat/completions"
     ],
@@ -1308,17 +1321,18 @@
     "supports_system_messages": true,
     "supports_tool_choice": true,
     "currency": "CNY",
-    "pricing_verified_at": "2026-11-22",
-    "pricing_notes": "Native CNY reference quote (peak/list price). Billing applies the off-peak discount separately.",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_notes": "Official peak quote; off-peak is one half. No separate cache-write charge.",
+    "deepseek_peak_price": true,
+    "pricing_reference": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "official_standard",
     "input_cost_per_token": 9e-06,
     "output_cost_per_token": 2.7e-05,
+    "cache_creation_input_token_cost": 0,
     "cache_read_input_token_cost": 3e-07,
-    "deepseek_peak_price": true,
-    "pricing_reference": "https://mofcloud.cn/tools/llm-explorer/",
-    "pricing_reference_model": "deepseek-v4-pro",
-    "pricing_data_source": "https://www.llmabacus.com",
-    "pricing_data_license": "CC-BY-4.0",
-    "pricing_collected_at": "2026-11-23"
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28"
   },
   "gemini-2.0-flash": {
     "cache_read_input_token_cost": 2.5e-08,
@@ -7007,7 +7021,10 @@
     "litellm_provider": "deepseek",
     "pricing_verified_at": "2026-11-23",
     "pricing_notes": "Native CNY reference quote (peak/list price). Billing applies the off-peak discount separately.",
-    "deepseek_peak_price": true
+    "deepseek_peak_price": true,
+    "official_api_verification_status": "unconfirmed",
+    "official_api_checked_at": "2026-11-28",
+    "official_api_verification_note": "Historical native CNY reference retained. This exact API ID and complete current price card have not been independently confirmed in this audit; do not infer a free cache write from a missing field."
   },
   "deepseek-v4-pro-0813": {
     "input_cost_per_token": 9e-06,
@@ -7019,192 +7036,336 @@
     "litellm_provider": "deepseek",
     "pricing_verified_at": "2026-11-23",
     "pricing_notes": "Native CNY reference quote (peak/list price). Billing applies the off-peak discount separately.",
-    "deepseek_peak_price": true
+    "deepseek_peak_price": true,
+    "official_api_verification_status": "unconfirmed",
+    "official_api_checked_at": "2026-11-28",
+    "official_api_verification_note": "Historical native CNY reference retained. This exact API ID and complete current price card have not been independently confirmed in this audit; do not infer a free cache write from a missing field."
   },
   "kimi-k3.1-pro": {
+    "currency": "CNY",
+    "source": "https://platform.kimi.com/docs/pricing/chat",
+    "mode": "chat",
+    "litellm_provider": "moonshot",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_reference": "https://platform.kimi.com/docs/pricing/chat",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "official_standard",
+    "pricing_notes": "K3 retains official separately charged 5m/1h cache writes. K2 lists only uncached input, cached input and output; no separate write fee. K2 is closed to new users and scheduled to retire at the end of December 2026.",
     "input_cost_per_token": 1.3e-05,
     "output_cost_per_token": 6.8e-05,
-    "cache_read_input_token_cost": 1.3e-06,
     "cache_creation_input_token_cost": 1.3e-05,
+    "cache_read_input_token_cost": 1.3e-06,
     "cache_creation_input_token_cost_above_1hr": 2.6e-05,
-    "currency": "CNY",
-    "source": "https://platform.kimi.com/docs/pricing/chat",
-    "mode": "chat",
-    "litellm_provider": "moonshot",
-    "pricing_verified_at": "2026-11-23"
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28"
   },
   "kimi-k3.1-pro-highspeed": {
+    "currency": "CNY",
+    "source": "https://platform.kimi.com/docs/pricing/chat",
+    "mode": "chat",
+    "litellm_provider": "moonshot",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_reference": "https://platform.kimi.com/docs/pricing/chat",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "official_standard",
+    "pricing_notes": "K3 retains official separately charged 5m/1h cache writes. K2 lists only uncached input, cached input and output; no separate write fee. K2 is closed to new users and scheduled to retire at the end of December 2026.",
     "input_cost_per_token": 2.6e-05,
     "output_cost_per_token": 0.000136,
-    "cache_read_input_token_cost": 1.3e-06,
     "cache_creation_input_token_cost": 2.6e-05,
+    "cache_read_input_token_cost": 1.3e-06,
     "cache_creation_input_token_cost_above_1hr": 5.2e-05,
-    "currency": "CNY",
-    "source": "https://platform.kimi.com/docs/pricing/chat",
-    "mode": "chat",
-    "litellm_provider": "moonshot",
-    "pricing_verified_at": "2026-11-23"
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28"
   },
   "kimi-k3": {
+    "currency": "CNY",
+    "source": "https://platform.kimi.com/docs/pricing/chat",
+    "mode": "chat",
+    "litellm_provider": "moonshot",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_reference": "https://platform.kimi.com/docs/pricing/chat",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "official_standard",
+    "pricing_notes": "K3 retains official separately charged 5m/1h cache writes. K2 lists only uncached input, cached input and output; no separate write fee. K2 is closed to new users and scheduled to retire at the end of December 2026.",
     "input_cost_per_token": 2e-05,
     "output_cost_per_token": 0.0001,
-    "cache_read_input_token_cost": 2e-06,
     "cache_creation_input_token_cost": 2e-05,
+    "cache_read_input_token_cost": 2e-06,
     "cache_creation_input_token_cost_above_1hr": 4e-05,
-    "currency": "CNY",
-    "source": "https://platform.kimi.com/docs/pricing/chat",
-    "mode": "chat",
-    "litellm_provider": "moonshot",
-    "pricing_verified_at": "2026-11-23"
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28"
   },
   "kimi-k2.7-code": {
-    "input_cost_per_token": 6.5e-06,
-    "output_cost_per_token": 2.7e-05,
-    "cache_read_input_token_cost": 1.3e-06,
     "currency": "CNY",
     "source": "https://platform.kimi.com/docs/pricing/chat",
     "mode": "chat",
     "litellm_provider": "moonshot",
-    "pricing_verified_at": "2026-11-23"
+    "pricing_verified_at": "2026-11-28",
+    "pricing_reference": "https://platform.kimi.com/docs/pricing/chat",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "official_standard",
+    "pricing_notes": "K3 retains official separately charged 5m/1h cache writes. K2 lists only uncached input, cached input and output; no separate write fee. K2 is closed to new users and scheduled to retire at the end of December 2026.",
+    "input_cost_per_token": 6.5e-06,
+    "output_cost_per_token": 2.7e-05,
+    "cache_creation_input_token_cost": 0,
+    "cache_read_input_token_cost": 1.3e-06,
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28"
   },
   "kimi-k2.7-code-highspeed": {
+    "currency": "CNY",
+    "source": "https://platform.kimi.com/docs/pricing/chat",
+    "mode": "chat",
+    "litellm_provider": "moonshot",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_reference": "https://platform.kimi.com/docs/pricing/chat",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "official_standard",
+    "pricing_notes": "K3 retains official separately charged 5m/1h cache writes. K2 lists only uncached input, cached input and output; no separate write fee. K2 is closed to new users and scheduled to retire at the end of December 2026.",
     "input_cost_per_token": 1.3e-05,
     "output_cost_per_token": 5.4e-05,
+    "cache_creation_input_token_cost": 0,
     "cache_read_input_token_cost": 2.6e-06,
-    "currency": "CNY",
-    "source": "https://platform.kimi.com/docs/pricing/chat",
-    "mode": "chat",
-    "litellm_provider": "moonshot",
-    "pricing_verified_at": "2026-11-23"
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28"
   },
   "kimi-k2.6": {
-    "input_cost_per_token": 6.5e-06,
-    "output_cost_per_token": 2.7e-05,
-    "cache_read_input_token_cost": 1.1e-06,
     "currency": "CNY",
     "source": "https://platform.kimi.com/docs/pricing/chat",
     "mode": "chat",
     "litellm_provider": "moonshot",
-    "pricing_verified_at": "2026-11-23"
+    "pricing_verified_at": "2026-11-28",
+    "pricing_reference": "https://platform.kimi.com/docs/pricing/chat",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "official_standard",
+    "pricing_notes": "K3 retains official separately charged 5m/1h cache writes. K2 lists only uncached input, cached input and output; no separate write fee. K2 is closed to new users and scheduled to retire at the end of December 2026.",
+    "input_cost_per_token": 6.5e-06,
+    "output_cost_per_token": 2.7e-05,
+    "cache_creation_input_token_cost": 0,
+    "cache_read_input_token_cost": 1.1e-06,
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28"
   },
   "glm-5.2": {
-    "input_cost_per_token": 8e-06,
-    "output_cost_per_token": 2.8e-05,
-    "cache_read_input_token_cost": 2e-06,
     "currency": "CNY",
     "source": "https://docs.bigmodel.cn/cn/guide/start/pricing",
     "mode": "chat",
     "litellm_provider": "zhipu",
-    "pricing_verified_at": "2026-11-23"
+    "pricing_verified_at": "2026-11-28",
+    "pricing_reference": "https://docs.bigmodel.cn/cn/guide/start/pricing",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "official_standard",
+    "pricing_notes": "No separately billed token cache write; cache storage is currently temporarily free. Official [0,32K) / >=32K bands switch at exactly 32000 input tokens where present.",
+    "input_cost_per_token": 8e-06,
+    "output_cost_per_token": 2.8e-05,
+    "cache_creation_input_token_cost": 0,
+    "cache_read_input_token_cost": 2e-06,
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28"
   },
   "glm-5.3": {
+    "currency": "CNY",
+    "source": "https://docs.bigmodel.cn/cn/guide/start/pricing",
+    "mode": "chat",
+    "litellm_provider": "zhipu",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_reference": "https://docs.bigmodel.cn/cn/guide/start/pricing",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "official_standard",
+    "pricing_notes": "No separately billed token cache write; cache storage is currently temporarily free. Official [0,32K) / >=32K bands switch at exactly 32000 input tokens where present.",
     "input_cost_per_token": 8e-06,
     "output_cost_per_token": 2.8e-05,
+    "cache_creation_input_token_cost": 0,
     "cache_read_input_token_cost": 2e-06,
-    "currency": "CNY",
-    "source": "https://docs.bigmodel.cn/cn/guide/start/pricing",
-    "mode": "chat",
-    "litellm_provider": "zhipu",
-    "pricing_verified_at": "2026-11-23"
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28"
   },
   "glm-5.3-flash": {
+    "currency": "CNY",
+    "source": "https://docs.bigmodel.cn/cn/guide/start/pricing",
+    "mode": "chat",
+    "litellm_provider": "zhipu",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_reference": "https://docs.bigmodel.cn/cn/guide/start/pricing",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "official_standard",
+    "pricing_notes": "No separately billed token cache write; cache storage is currently temporarily free. Official [0,32K) / >=32K bands switch at exactly 32000 input tokens where present.",
     "input_cost_per_token": 8e-07,
     "output_cost_per_token": 2.8e-06,
-    "cache_read_input_token_cost": 2.3e-07,
     "cache_creation_input_token_cost": 0,
-    "currency": "CNY",
-    "source": "https://docs.bigmodel.cn/cn/guide/start/pricing",
-    "mode": "chat",
-    "litellm_provider": "zhipu",
-    "pricing_verified_at": "2026-11-23"
+    "cache_read_input_token_cost": 2.3e-07,
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28"
   },
   "glm-5.3-flashx": {
-    "input_cost_per_token": 2e-06,
-    "output_cost_per_token": 7e-06,
-    "cache_read_input_token_cost": 5.7e-07,
-    "cache_creation_input_token_cost": 0,
     "currency": "CNY",
     "source": "https://docs.bigmodel.cn/cn/guide/start/pricing",
     "mode": "chat",
     "litellm_provider": "zhipu",
-    "pricing_verified_at": "2026-11-23"
+    "pricing_verified_at": "2026-11-28",
+    "pricing_reference": "https://docs.bigmodel.cn/cn/guide/start/pricing",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "official_standard",
+    "pricing_notes": "No separately billed token cache write; cache storage is currently temporarily free. Official [0,32K) / >=32K bands switch at exactly 32000 input tokens where present.",
+    "input_cost_per_token": 2e-06,
+    "output_cost_per_token": 7e-06,
+    "cache_creation_input_token_cost": 0,
+    "cache_read_input_token_cost": 5.7e-07,
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28"
   },
   "glm-5.3-flashx-legal": {
+    "currency": "CNY",
+    "source": "https://docs.bigmodel.cn/cn/guide/start/pricing",
+    "mode": "chat",
+    "litellm_provider": "zhipu",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_reference": "https://docs.bigmodel.cn/cn/guide/start/pricing",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "official_standard",
+    "pricing_notes": "No separately billed token cache write; cache storage is currently temporarily free. Official [0,32K) / >=32K bands switch at exactly 32000 input tokens where present.",
     "input_cost_per_token": 2e-06,
     "output_cost_per_token": 7e-06,
-    "cache_read_input_token_cost": 5.7e-07,
     "cache_creation_input_token_cost": 0,
-    "currency": "CNY",
-    "source": "https://docs.bigmodel.cn/cn/guide/start/pricing",
-    "mode": "chat",
-    "litellm_provider": "zhipu",
-    "pricing_verified_at": "2026-11-23"
+    "cache_read_input_token_cost": 5.7e-07,
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28"
   },
   "glm-5v-turbo": {
-    "input_cost_per_token": 5e-06,
-    "output_cost_per_token": 2.2e-05,
-    "cache_read_input_token_cost": 1.2e-06,
-    "input_cost_per_token_above_32k_tokens": 7e-06,
-    "output_cost_per_token_above_32k_tokens": 2.6e-05,
-    "cache_read_input_token_cost_above_32k_tokens": 1.8e-06,
     "currency": "CNY",
     "source": "https://docs.bigmodel.cn/cn/guide/start/pricing",
     "mode": "chat",
     "litellm_provider": "zhipu",
-    "pricing_verified_at": "2026-11-23"
+    "pricing_verified_at": "2026-11-28",
+    "pricing_reference": "https://docs.bigmodel.cn/cn/guide/start/pricing",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "official_standard",
+    "pricing_notes": "No separately billed token cache write; cache storage is currently temporarily free. Official [0,32K) / >=32K bands switch at exactly 32000 input tokens where present.",
+    "input_cost_per_token": 5e-06,
+    "output_cost_per_token": 2.2e-05,
+    "cache_creation_input_token_cost": 0,
+    "cache_read_input_token_cost": 1.2e-06,
+    "context_pricing_tiers": [
+      {
+        "min_tokens": 0,
+        "input_price": 5e-06,
+        "output_price": 2.2e-05,
+        "cache_write_price": 0,
+        "max_tokens": 31999,
+        "cache_read_price": 1.2e-06
+      },
+      {
+        "min_tokens": 31999,
+        "input_price": 7e-06,
+        "output_price": 2.6e-05,
+        "cache_write_price": 0,
+        "cache_read_price": 1.8e-06
+      }
+    ],
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28"
   },
   "minimax-m3": {
+    "currency": "CNY",
+    "source": "https://platform.minimax.cn/docs/pricing/overview",
+    "mode": "chat",
+    "litellm_provider": "minimax",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_reference": "https://platform.minimax.cn/docs/pricing/overview",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "official_permanent_standard_discount",
+    "pricing_notes": "Official standard tier after the explicitly permanent 50% discount; undiscounted values are 4.2/16.8/0.84 and 8.4/33.6/1.68 CNY per million. Priority is 1.5x and excluded. No separate cache-write line.",
     "input_cost_per_token": 2.1e-06,
     "output_cost_per_token": 8.4e-06,
+    "cache_creation_input_token_cost": 0,
     "cache_read_input_token_cost": 4.2e-07,
-    "input_cost_per_token_above_512k_tokens": 4.2e-06,
-    "output_cost_per_token_above_512k_tokens": 1.68e-05,
-    "cache_read_input_token_cost_above_512k_tokens": 8.4e-07,
-    "currency": "CNY",
-    "source": "https://platform.minimaxi.com/document/Price",
-    "mode": "chat",
-    "litellm_provider": "minimax",
-    "pricing_verified_at": "2026-11-23"
+    "context_pricing_tiers": [
+      {
+        "min_tokens": 0,
+        "input_price": 2.1e-06,
+        "output_price": 8.4e-06,
+        "cache_write_price": 0,
+        "max_tokens": 512000,
+        "cache_read_price": 4.2e-07
+      },
+      {
+        "min_tokens": 512000,
+        "input_price": 4.2e-06,
+        "output_price": 1.68e-05,
+        "cache_write_price": 0,
+        "cache_read_price": 8.4e-07
+      }
+    ],
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28"
   },
   "minimax-m3.1-flash": {
-    "input_cost_per_token": 1e-06,
-    "output_cost_per_token": 4e-06,
-    "cache_read_input_token_cost": 1e-07,
     "currency": "CNY",
-    "source": "https://platform.minimaxi.com/document/Price",
+    "source": "https://platform.minimax.cn/docs/pricing/overview",
     "mode": "chat",
     "litellm_provider": "minimax",
-    "pricing_verified_at": "2026-11-23"
+    "pricing_verified_at": "2026-11-28",
+    "pricing_reference": "https://platform.minimax.cn/docs/pricing/overview",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "official_standard",
+    "pricing_notes": "Official standard API input/output/cache read; no separately billed write line.",
+    "input_cost_per_token": 1e-06,
+    "output_cost_per_token": 4e-06,
+    "cache_creation_input_token_cost": 0,
+    "cache_read_input_token_cost": 1e-07,
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28"
   },
   "mimo-v2.6-pro": {
+    "currency": "CNY",
+    "source": "https://mimo.mi.com/docs/zh-CN/price/pay-as-you-go",
+    "mode": "chat",
+    "litellm_provider": "xiaomi",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_reference": "https://mimo.mi.com/docs/zh-CN/price/pay-as-you-go",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "official_standard",
+    "pricing_notes": "Domestic real-time API prices. Official cache writes are temporarily free. Batch and overseas USD quotes excluded.",
     "input_cost_per_token": 3e-06,
     "output_cost_per_token": 6e-06,
+    "cache_creation_input_token_cost": 0,
     "cache_read_input_token_cost": 2.5e-08,
-    "currency": "CNY",
-    "source": "https://platform.xiaomimimo.com/docs/zh-CN/price/pay-as-you-go",
-    "mode": "chat",
-    "litellm_provider": "xiaomi",
-    "pricing_verified_at": "2026-11-23"
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28"
   },
   "mimo-v2.6-flash": {
+    "currency": "CNY",
+    "source": "https://mimo.mi.com/docs/zh-CN/price/pay-as-you-go",
+    "mode": "chat",
+    "litellm_provider": "xiaomi",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_reference": "https://mimo.mi.com/docs/zh-CN/price/pay-as-you-go",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "official_standard",
+    "pricing_notes": "Domestic real-time API prices. Official cache writes are temporarily free. Batch and overseas USD quotes excluded.",
     "input_cost_per_token": 1e-06,
     "output_cost_per_token": 2e-06,
+    "cache_creation_input_token_cost": 0,
     "cache_read_input_token_cost": 2e-08,
-    "currency": "CNY",
-    "source": "https://platform.xiaomimimo.com/docs/zh-CN/price/pay-as-you-go",
-    "mode": "chat",
-    "litellm_provider": "xiaomi",
-    "pricing_verified_at": "2026-11-23"
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28"
   },
   "mimo-v2.6-pro-ultraspeed": {
-    "input_cost_per_token": 3e-05,
-    "output_cost_per_token": 6e-05,
-    "cache_read_input_token_cost": 2.5e-07,
     "currency": "CNY",
-    "source": "https://platform.xiaomimimo.com/docs/zh-CN/price/pay-as-you-go",
+    "source": "https://mimo.mi.com/docs/zh-CN/price/pay-as-you-go",
     "mode": "chat",
     "litellm_provider": "xiaomi",
-    "pricing_verified_at": "2026-11-23"
+    "pricing_verified_at": "2026-11-28",
+    "pricing_reference": "https://mimo.mi.com/docs/zh-CN/price/pay-as-you-go",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "official_standard",
+    "pricing_notes": "Domestic real-time API prices. Official cache writes are temporarily free. Batch and overseas USD quotes excluded.",
+    "input_cost_per_token": 3e-05,
+    "output_cost_per_token": 6e-05,
+    "cache_creation_input_token_cost": 0,
+    "cache_read_input_token_cost": 2.5e-07,
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28"
   },
   "qwen3.8-max": {
     "input_cost_per_token": 1.2e-05,
@@ -7220,6 +7381,8 @@
     "pricing_verified_at": "2026-11-28",
     "pricing_collected_at": "2026-11-28",
     "pricing_basis": "list_before_discount",
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28",
     "pricing_cache_read_kind": "ordinary",
     "official_api_price_rows": [
       {
@@ -7282,6 +7445,8 @@
     "pricing_verified_at": "2026-11-28",
     "pricing_collected_at": "2026-11-28",
     "pricing_basis": "list_before_discount",
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28",
     "pricing_cache_read_kind": "ordinary",
     "official_api_price_rows": [
       {
@@ -7335,28 +7500,32 @@
     "mode": "chat",
     "litellm_provider": "baichuan",
     "source": "https://platform.baichuan-ai.com/prices",
-    "pricing_reference": "https://mofcloud.cn/tools/llm-explorer/",
-    "pricing_reference_model": "baichuan-m2",
-    "pricing_data_source": "https://www.llmabacus.com",
-    "pricing_data_license": "CC-BY-4.0",
-    "pricing_verified_at": "2026-11-22",
-    "pricing_collected_at": "2026-11-23",
+    "pricing_reference": "https://platform.baichuan-ai.com/prices",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
     "input_cost_per_token": 2e-06,
-    "output_cost_per_token": 2e-05
+    "output_cost_per_token": 2e-05,
+    "cache_creation_input_token_cost": 0,
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28",
+    "pricing_basis": "official_standard",
+    "pricing_notes": "Official medical API card, quoted per thousand tokens and converted exactly. No separate cache-write billing item; zero does not imply cache support. Medical search is charged separately."
   },
   "baichuan-m3-plus": {
     "currency": "CNY",
     "mode": "chat",
     "litellm_provider": "baichuan",
     "source": "https://platform.baichuan-ai.com/prices",
-    "pricing_reference": "https://mofcloud.cn/tools/llm-explorer/",
-    "pricing_reference_model": "baichuan-m3-plus",
-    "pricing_data_source": "https://www.llmabacus.com",
-    "pricing_data_license": "CC-BY-4.0",
-    "pricing_verified_at": "2026-11-22",
-    "pricing_collected_at": "2026-11-23",
+    "pricing_reference": "https://platform.baichuan-ai.com/prices",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
     "input_cost_per_token": 5e-06,
-    "output_cost_per_token": 9e-06
+    "output_cost_per_token": 9e-06,
+    "cache_creation_input_token_cost": 0,
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28",
+    "pricing_basis": "official_standard",
+    "pricing_notes": "Official medical API card, quoted per thousand tokens and converted exactly. No separate cache-write billing item; zero does not imply cache support. Medical search is charged separately."
   },
   "doubao-1.5-pro": {
     "currency": "CNY",
@@ -7371,7 +7540,14 @@
     "pricing_collected_at": "2026-11-23",
     "input_cost_per_token": 8e-07,
     "output_cost_per_token": 2e-06,
-    "cache_read_input_token_cost": 1.6e-07
+    "cache_read_input_token_cost": 1.6e-07,
+    "official_api_verification_status": "retired",
+    "official_api_checked_at": "2026-11-28",
+    "official_api_verification_note": "retired. Fifth retirement batch in 2025; not the later 32K batch.",
+    "official_api_evidence": [
+      "https://docs.volcengine.com/docs/zh/ark/model-deprecation-announcement-2025.md"
+    ],
+    "official_api_retirement_at": "2025-11-27T14:00:00+08:00"
   },
   "doubao-1.6": {
     "currency": "CNY",
@@ -7408,22 +7584,31 @@
         "output_price": 2.4e-05,
         "cache_read_price": 1.6e-07
       }
-    ]
+    ],
+    "official_api_verification_status": "retired",
+    "official_api_checked_at": "2026-11-28",
+    "official_api_verification_note": "retired. Ninth retirement batch; no current 1.6 price is asserted.",
+    "official_api_evidence": [
+      "https://docs.volcengine.com/docs/zh/ark/model-deprecation-notice.md"
+    ],
+    "official_api_retirement_at": "2026-09-21T14:00:00+08:00"
   },
   "doubao-seed-2.1-pro": {
     "currency": "CNY",
     "mode": "chat",
     "litellm_provider": "bytedance",
-    "source": "https://www.volcengine.com/docs/82379/1544106",
-    "pricing_reference": "https://mofcloud.cn/tools/llm-explorer/",
-    "pricing_reference_model": "doubao-seed-2-1-pro",
-    "pricing_data_source": "https://www.llmabacus.com",
-    "pricing_data_license": "CC-BY-4.0",
-    "pricing_verified_at": "2026-09-28",
-    "pricing_collected_at": "2026-11-23",
+    "source": "https://docs.volcengine.com/docs/ark/model-pricing?lang=zh",
+    "pricing_reference": "https://docs.volcengine.com/docs/ark/model-pricing?lang=zh",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "official_standard",
+    "pricing_notes": "Standard real-time non-audio quote; Batch and discounted product tiers excluded. Implicit caching has no separate storage/write fee. Explicit-cache storage costs 0.017 CNY per million token-hours, a separate time-based charge, not a per-token write charge.",
     "input_cost_per_token": 6e-06,
     "output_cost_per_token": 3e-05,
-    "cache_read_input_token_cost": 1.2e-06
+    "cache_creation_input_token_cost": 0,
+    "cache_read_input_token_cost": 1.2e-06,
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28"
   },
   "ernie-4.5-turbo": {
     "currency": "CNY",
@@ -7438,34 +7623,45 @@
     "pricing_collected_at": "2026-11-23",
     "input_cost_per_token": 8e-07,
     "output_cost_per_token": 3.2e-06,
-    "cache_read_input_token_cost": 2e-07
+    "cache_read_input_token_cost": 2e-07,
+    "official_api_verification_status": "retired",
+    "official_api_checked_at": "2026-11-28",
+    "official_api_verification_note": "retired_supported_versions. The generic label is a model family rather than the exact dated/API version. Each listed version is explicitly in the retirement table; no successor price is assigned.",
+    "official_api_evidence": [
+      "https://cloud.baidu.com/doc/qianfan/s/zmh4stou3"
+    ],
+    "official_api_retirement_at": "2026-10-29"
   },
   "ernie-5.1": {
     "currency": "CNY",
     "mode": "chat",
     "litellm_provider": "baidu",
     "source": "https://cloud.baidu.com/doc/qianfan/s/wmh4sv6ya",
-    "pricing_reference": "https://mofcloud.cn/tools/llm-explorer/",
-    "pricing_reference_model": "ernie-5-1",
-    "pricing_data_source": "https://www.llmabacus.com",
-    "pricing_data_license": "CC-BY-4.0",
-    "pricing_verified_at": "2026-09-28",
-    "pricing_collected_at": "2026-11-23",
+    "pricing_reference": "https://cloud.baidu.com/doc/qianfan/s/wmh4sv6ya",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "official_standard",
+    "pricing_notes": "Official online inference price is quoted per thousand tokens, converted exactly to per token. <=32K and (32K,128K] whole-request tiers. No separate cache-write billing line; cached read is unquoted.",
     "input_cost_per_token": 4e-06,
     "output_cost_per_token": 1.8e-05,
+    "cache_creation_input_token_cost": 0,
     "context_pricing_tiers": [
       {
         "min_tokens": 0,
         "input_price": 4e-06,
         "output_price": 1.8e-05,
+        "cache_write_price": 0,
         "max_tokens": 32000
       },
       {
         "min_tokens": 32000,
         "input_price": 6e-06,
-        "output_price": 2.2e-05
+        "output_price": 2.2e-05,
+        "cache_write_price": 0
       }
-    ]
+    ],
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28"
   },
   "ernie-x1-turbo": {
     "currency": "CNY",
@@ -7479,67 +7675,82 @@
     "pricing_verified_at": "2026-09-28",
     "pricing_collected_at": "2026-11-23",
     "input_cost_per_token": 1e-06,
-    "output_cost_per_token": 4e-06
+    "output_cost_per_token": 4e-06,
+    "official_api_verification_status": "retired",
+    "official_api_checked_at": "2026-11-28",
+    "official_api_verification_note": "retired_supported_versions. ERNIE-X1-Turbo-Latest is separately marked retired on 2026-06-09.",
+    "official_api_evidence": [
+      "https://cloud.baidu.com/doc/qianfan/s/zmh4stou3"
+    ],
+    "official_api_retirement_at": "2026-06-30"
   },
   "glm-5": {
     "currency": "CNY",
     "mode": "chat",
     "litellm_provider": "zhipu",
-    "source": "https://open.bigmodel.cn/pricing",
-    "pricing_reference": "https://mofcloud.cn/tools/llm-explorer/",
-    "pricing_reference_model": "glm-5",
-    "pricing_data_source": "https://www.llmabacus.com",
-    "pricing_data_license": "CC-BY-4.0",
-    "pricing_verified_at": "2026-09-28",
-    "pricing_collected_at": "2026-11-23",
+    "source": "https://docs.bigmodel.cn/cn/guide/start/pricing",
+    "pricing_reference": "https://docs.bigmodel.cn/cn/guide/start/pricing",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "official_standard",
+    "pricing_notes": "No separately billed token cache write; cache storage is currently temporarily free. Official [0,32K) / >=32K bands switch at exactly 32000 input tokens where present.",
     "input_cost_per_token": 4e-06,
     "output_cost_per_token": 1.8e-05,
+    "cache_creation_input_token_cost": 0,
     "cache_read_input_token_cost": 1e-06,
     "context_pricing_tiers": [
       {
         "min_tokens": 0,
         "input_price": 4e-06,
         "output_price": 1.8e-05,
-        "max_tokens": 32000,
+        "cache_write_price": 0,
+        "max_tokens": 31999,
         "cache_read_price": 1e-06
       },
       {
-        "min_tokens": 32000,
+        "min_tokens": 31999,
         "input_price": 6e-06,
         "output_price": 2.2e-05,
+        "cache_write_price": 0,
         "cache_read_price": 1.5e-06
       }
-    ]
+    ],
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28"
   },
   "glm-5.1": {
     "currency": "CNY",
     "mode": "chat",
     "litellm_provider": "zhipu",
-    "source": "https://open.bigmodel.cn/pricing",
-    "pricing_reference": "https://mofcloud.cn/tools/llm-explorer/",
-    "pricing_reference_model": "glm-5-1",
-    "pricing_data_source": "https://www.llmabacus.com",
-    "pricing_data_license": "CC-BY-4.0",
-    "pricing_verified_at": "2026-09-28",
-    "pricing_collected_at": "2026-11-23",
+    "source": "https://docs.bigmodel.cn/cn/guide/start/pricing",
+    "pricing_reference": "https://docs.bigmodel.cn/cn/guide/start/pricing",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "official_standard",
+    "pricing_notes": "No separately billed token cache write; cache storage is currently temporarily free. Official [0,32K) / >=32K bands switch at exactly 32000 input tokens where present.",
     "input_cost_per_token": 6e-06,
     "output_cost_per_token": 2.4e-05,
+    "cache_creation_input_token_cost": 0,
     "cache_read_input_token_cost": 1.3e-06,
     "context_pricing_tiers": [
       {
         "min_tokens": 0,
         "input_price": 6e-06,
         "output_price": 2.4e-05,
-        "max_tokens": 32000,
+        "cache_write_price": 0,
+        "max_tokens": 31999,
         "cache_read_price": 1.3e-06
       },
       {
-        "min_tokens": 32000,
+        "min_tokens": 31999,
         "input_price": 8e-06,
         "output_price": 2.8e-05,
+        "cache_write_price": 0,
         "cache_read_price": 2e-06
       }
-    ]
+    ],
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28"
   },
   "hunyuan-2.0-think": {
     "currency": "CNY",
@@ -7553,37 +7764,49 @@
     "pricing_verified_at": "2026-09-28",
     "pricing_collected_at": "2026-11-23",
     "input_cost_per_token": 3.975e-06,
-    "output_cost_per_token": 1.59e-05
+    "output_cost_per_token": 1.59e-05,
+    "official_api_verification_status": "retired",
+    "official_api_checked_at": "2026-11-28",
+    "official_api_verification_note": "retired. Retirement announcement lists the exact base ID; migration guide lists affected dated/latest IDs. Do not copy the recommended replacement model price.",
+    "official_api_evidence": [
+      "https://cloud.tencent.com/announce/detail/2301",
+      "https://cloud.tencent.com/document/product/1729/131925"
+    ],
+    "official_api_retirement_at": "2026-06-22T00:00:00+08:00"
   },
   "hy3": {
     "currency": "CNY",
     "mode": "chat",
     "litellm_provider": "tencent",
-    "source": "https://cloud.tencent.com/document/product/1729/97731",
-    "pricing_reference": "https://mofcloud.cn/tools/llm-explorer/",
-    "pricing_reference_model": "hunyuan-hy3",
-    "pricing_data_source": "https://www.llmabacus.com",
-    "pricing_data_license": "CC-BY-4.0",
-    "pricing_verified_at": "2026-09-28",
-    "pricing_collected_at": "2026-11-23",
+    "source": "https://cloud.tencent.com/document/product/1823/130055",
+    "pricing_reference": "https://cloud.tencent.com/document/product/1823/130055",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
     "input_cost_per_token": 1e-06,
     "output_cost_per_token": 4e-06,
-    "cache_read_input_token_cost": 2.5e-07
+    "cache_creation_input_token_cost": 0,
+    "cache_read_input_token_cost": 2.5e-07,
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28",
+    "pricing_basis": "official_standard",
+    "pricing_notes": "Official TokenHub standard online pay-as-you-go rate. Separate 5m/1h cache-write columns show dashes; no separately billed token-write rate. This zero does not establish cache-write support. Hy4-preview retires on 2026-12-07 00:00 Asia/Shanghai."
   },
   "hy4-preview": {
     "currency": "CNY",
     "mode": "chat",
     "litellm_provider": "tencent",
-    "source": "https://cloud.tencent.com/document/product/1729/97731",
-    "pricing_reference": "https://mofcloud.cn/tools/llm-explorer/",
-    "pricing_reference_model": "hunyuan-hy4-preview",
-    "pricing_data_source": "https://www.llmabacus.com",
-    "pricing_data_license": "CC-BY-4.0",
-    "pricing_verified_at": "2026-09-28",
-    "pricing_collected_at": "2026-11-23",
+    "source": "https://cloud.tencent.com/document/product/1823/130055",
+    "pricing_reference": "https://cloud.tencent.com/document/product/1823/130055",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
     "input_cost_per_token": 6e-06,
     "output_cost_per_token": 1.8e-05,
-    "cache_read_input_token_cost": 3e-07
+    "cache_creation_input_token_cost": 0,
+    "cache_read_input_token_cost": 3e-07,
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28",
+    "pricing_basis": "official_standard",
+    "pricing_notes": "Official TokenHub standard online pay-as-you-go rate. Separate 5m/1h cache-write columns show dashes; no separately billed token-write rate. This zero does not establish cache-write support. Hy4-preview retires on 2026-12-07 00:00 Asia/Shanghai."
   },
   "hunyuan-t1": {
     "currency": "CNY",
@@ -7597,7 +7820,15 @@
     "pricing_verified_at": "2026-09-28",
     "pricing_collected_at": "2026-11-23",
     "input_cost_per_token": 1e-06,
-    "output_cost_per_token": 4e-06
+    "output_cost_per_token": 4e-06,
+    "official_api_verification_status": "retired",
+    "official_api_checked_at": "2026-11-28",
+    "official_api_verification_note": "retired. Retirement announcement lists the exact base ID; migration guide lists affected dated/latest IDs. Do not copy the recommended replacement model price.",
+    "official_api_evidence": [
+      "https://cloud.tencent.com/announce/detail/2301",
+      "https://cloud.tencent.com/document/product/1729/131925"
+    ],
+    "official_api_retirement_at": "2026-06-22T00:00:00+08:00"
   },
   "hunyuan-turbos": {
     "currency": "CNY",
@@ -7611,7 +7842,15 @@
     "pricing_verified_at": "2026-09-28",
     "pricing_collected_at": "2026-11-23",
     "input_cost_per_token": 8e-07,
-    "output_cost_per_token": 2e-06
+    "output_cost_per_token": 2e-06,
+    "official_api_verification_status": "retired",
+    "official_api_checked_at": "2026-11-28",
+    "official_api_verification_note": "retired. Retirement announcement lists the exact base ID; migration guide lists affected dated/latest IDs. Do not copy the recommended replacement model price.",
+    "official_api_evidence": [
+      "https://cloud.tencent.com/announce/detail/2301",
+      "https://cloud.tencent.com/document/product/1729/131925"
+    ],
+    "official_api_retirement_at": "2026-06-22T00:00:00+08:00"
   },
   "mimo-v2.5": {
     "currency": "CNY",
@@ -7626,7 +7865,14 @@
     "pricing_collected_at": "2026-11-23",
     "input_cost_per_token": 1e-06,
     "output_cost_per_token": 2e-06,
-    "cache_read_input_token_cost": 2e-08
+    "cache_read_input_token_cost": 2e-08,
+    "official_api_verification_status": "retired",
+    "official_api_checked_at": "2026-11-28",
+    "official_api_verification_note": "retired. Official banner says original model names are invalid. Do not borrow V2.6 rates or the current-series cache-write promotion.",
+    "official_api_evidence": [
+      "https://mimo.mi.com/docs/zh-CN/price/pay-as-you-go"
+    ],
+    "official_api_retirement_at": "2026-10-21T10:00:00+08:00"
   },
   "minimax-m2.7": {
     "currency": "CNY",
@@ -7641,7 +7887,14 @@
     "pricing_collected_at": "2026-11-23",
     "input_cost_per_token": 2.1e-06,
     "output_cost_per_token": 8.4e-06,
-    "cache_read_input_token_cost": 4.2e-07
+    "cache_read_input_token_cost": 4.2e-07,
+    "official_api_verification_status": "retired",
+    "official_api_checked_at": "2026-11-28",
+    "official_api_verification_note": "retired_for_pay_as_you_go. New-user access stopped 2026-10-19; pay-as-you-go calls ceased at retirement. M Plan/Token Plan compatibility routing to M3.1 Flash is separately described and does not establish current ordinary API pricing.",
+    "official_api_evidence": [
+      "https://platform.minimax.cn/docs/faq/models.md"
+    ],
+    "official_api_retirement_at": "2026-11-18"
   },
   "minimax-m2.7-highspeed": {
     "currency": "CNY",
@@ -7656,7 +7909,14 @@
     "pricing_collected_at": "2026-11-23",
     "input_cost_per_token": 4.2e-06,
     "output_cost_per_token": 1.68e-05,
-    "cache_read_input_token_cost": 4.2e-07
+    "cache_read_input_token_cost": 4.2e-07,
+    "official_api_verification_status": "retired",
+    "official_api_checked_at": "2026-11-28",
+    "official_api_verification_note": "retired_for_pay_as_you_go. New-user access stopped 2026-10-19; pay-as-you-go calls ceased at retirement. M Plan/Token Plan compatibility routing to M3.1 Flash is separately described and does not establish current ordinary API pricing.",
+    "official_api_evidence": [
+      "https://platform.minimax.cn/docs/faq/models.md"
+    ],
+    "official_api_retirement_at": "2026-11-18"
   },
   "qwen3.5-flash": {
     "input_cost_per_token": 2e-07,
@@ -7672,6 +7932,8 @@
     "pricing_verified_at": "2026-11-28",
     "pricing_collected_at": "2026-11-28",
     "pricing_basis": "list_before_discount",
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28",
     "pricing_cache_read_kind": "explicit",
     "official_api_price_rows": [
       {
@@ -7818,6 +8080,8 @@
     "pricing_verified_at": "2026-11-28",
     "pricing_collected_at": "2026-11-28",
     "pricing_basis": "list_before_discount",
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28",
     "pricing_cache_read_kind": "explicit",
     "official_api_price_rows": [
       {
@@ -7976,9 +8240,14 @@
         "output_price": 9e-05
       }
     ],
-    "official_api_verification_status": "not_listed",
+    "official_api_verification_status": "retired",
     "official_api_checked_at": "2026-11-28",
-    "official_api_verification_note": "This exact model ID is absent from the current official API pricing response. Historical prices and their original attribution are retained; they are not verified official list prices from this update."
+    "official_api_verification_note": "retired. Historical replacement-comparison table provides these base input/output rates only; it is not the complete original pricing schedule. qwen3-max-2026-01-23 and qwen3-max-2025-09-23 are also on the delayed retirement list.",
+    "official_api_evidence": [
+      "https://platform.qianwenai.com/docs/changelog/model-deprecations/delayed-deprecation.md",
+      "https://platform.qianwenai.com/docs/changelog/model-deprecations/mainline-models.md"
+    ],
+    "official_api_retirement_at": "2026-10-10T00:00:00+08:00"
   },
   "qwen3.7-max": {
     "input_cost_per_token": 1.2e-05,
@@ -7994,6 +8263,8 @@
     "pricing_verified_at": "2026-11-28",
     "pricing_collected_at": "2026-11-28",
     "pricing_basis": "list_before_discount",
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28",
     "pricing_cache_read_kind": "ordinary",
     "official_api_price_rows": [
       {
@@ -8055,9 +8326,15 @@
     "pricing_collected_at": "2026-11-23",
     "input_cost_per_token": 2.4e-05,
     "output_cost_per_token": 7.2e-05,
-    "official_api_verification_status": "not_listed",
+    "official_api_verification_status": "unconfirmed",
     "official_api_checked_at": "2026-11-28",
-    "official_api_verification_note": "This exact model ID is absent from the current official API pricing response. Historical prices and their original attribution are retained; they are not verified official list prices from this update."
+    "official_api_verification_note": "exact_name_not_verified. Exact string is absent from the downloaded current full price table and documentation index; two guessed official individual-model paths return 404. This establishes insufficient public evidence for this exact name, not conclusive global service unavailability. Do not copy qwen3.8-max prices.",
+    "official_api_evidence": [
+      "https://platform.qianwenai.com/docs/developer-guides/getting-started/model-prices.md",
+      "https://platform.qianwenai.com/llms.txt",
+      "https://platform.qianwenai.com/docs/models/qwen3-8-max-prime.md",
+      "https://www.qianwenai.com/models/qwen3.8-max-prime"
+    ]
   },
   "qwen3-max": {
     "currency": "CNY",
@@ -8091,9 +8368,14 @@
         "output_price": 2.8e-05
       }
     ],
-    "official_api_verification_status": "not_listed",
+    "official_api_verification_status": "retired",
     "official_api_checked_at": "2026-11-28",
-    "official_api_verification_note": "This exact model ID is absent from the current official API pricing response. Historical prices and their original attribution are retained; they are not verified official list prices from this update."
+    "official_api_verification_note": "retired. Historical replacement-comparison table provides these base input/output rates only; it is not the complete original pricing schedule. qwen3-max-2026-01-23 and qwen3-max-2025-09-23 are also on the delayed retirement list.",
+    "official_api_evidence": [
+      "https://platform.qianwenai.com/docs/changelog/model-deprecations/delayed-deprecation.md",
+      "https://platform.qianwenai.com/docs/changelog/model-deprecations/mainline-models.md"
+    ],
+    "official_api_retirement_at": "2026-10-10T00:00:00+08:00"
   },
   "spark-pro": {
     "currency": "CNY",
@@ -8107,7 +8389,13 @@
     "pricing_verified_at": "2026-09-28",
     "pricing_collected_at": "2026-11-23",
     "input_cost_per_token": 5e-06,
-    "output_cost_per_token": 5e-06
+    "output_cost_per_token": 5e-06,
+    "official_api_verification_status": "unconfirmed",
+    "official_api_checked_at": "2026-11-28",
+    "official_api_verification_note": "documented_available_price_not_verified. Exact legacy HTTP model ID is documented. Current official product page did not expose a verifiable numeric Pro price; no numeric rate is asserted.",
+    "official_api_evidence": [
+      "https://www.xfyun.cn/doc/spark/HTTP%E8%B0%83%E7%94%A8%E6%96%87%E6%A1%A3.html"
+    ]
   },
   "spark-ultra": {
     "currency": "CNY",
@@ -8121,7 +8409,10 @@
     "pricing_verified_at": "2026-09-28",
     "pricing_collected_at": "2026-11-23",
     "input_cost_per_token": 8e-07,
-    "output_cost_per_token": 8e-07
+    "output_cost_per_token": 8e-07,
+    "official_api_verification_status": "unconfirmed",
+    "official_api_checked_at": "2026-11-28",
+    "official_api_verification_note": "Historical native CNY reference retained. This exact API ID and complete current price card have not been independently confirmed in this audit; do not infer a free cache write from a missing field."
   },
   "spark-x2": {
     "currency": "CNY",
@@ -8135,7 +8426,13 @@
     "pricing_verified_at": "2026-09-28",
     "pricing_collected_at": "2026-11-23",
     "input_cost_per_token": 2e-06,
-    "output_cost_per_token": 2e-06
+    "output_cost_per_token": 2e-06,
+    "official_api_verification_status": "unconfirmed",
+    "official_api_checked_at": "2026-11-28",
+    "official_api_verification_note": "exact_name_price_not_verified. Plain Spark-X2 is not a row in the current public 52-model catalog. Absence from this catalog alone is not proof of a formal global retirement. Do not substitute Spark-X2-Flash or Spark-X2.5 prices.",
+    "official_api_evidence": [
+      "https://maas.xfyun.cn/api/v1/gpt-finetune/model/base/list-v2?page=1&size=9999&sort=0"
+    ]
   },
   "spark-x2.5": {
     "currency": "CNY",
@@ -8150,36 +8447,50 @@
     "pricing_collected_at": "2026-11-23",
     "input_cost_per_token": 1.6e-06,
     "output_cost_per_token": 6e-06,
-    "cache_read_input_token_cost": 2.4e-07
+    "cache_read_input_token_cost": 2.4e-07,
+    "official_api_verification_status": "retired",
+    "official_api_checked_at": "2026-11-28",
+    "official_api_verification_note": "retired. The legacy detail page still displays a price after the explicit retirement date. Original cache price is explicitly 0.48, not 0.14/0.3. Historical 30% promotion ended at the retirement time. Separate cache-write pricing is not listed.",
+    "official_api_evidence": [
+      "https://maas.xfyun.cn/doc/guide/0%E3%80%81%E5%85%AC%E5%91%8A/0.4%20%E8%80%81%E6%97%A7%E6%A8%A1%E5%9E%8B%E4%B8%8B%E7%BA%BF%E9%80%9A%E7%9F%A5%EF%BC%88261124%EF%BC%89.html",
+      "https://maas.xfyun.cn/modelSquare/base/2624708664591360",
+      "https://maas.xfyun.cn/api/v1/gpt-finetune/model/2624708664591360",
+      "https://maas.xfyun.cn/api/v1/gpt-finetune/model/base/list-v2?page=1&size=9999&sort=0"
+    ],
+    "official_api_retirement_at": "2026-11-24T10:00:00+08:00"
   },
   "spark-x2-flash": {
     "currency": "CNY",
     "mode": "chat",
     "litellm_provider": "xfyun",
-    "source": "https://xinghuo.xfyun.cn/sparkapi",
-    "pricing_reference": "https://mofcloud.cn/tools/llm-explorer/",
-    "pricing_reference_model": "spark-x2-flash",
-    "pricing_data_source": "https://www.llmabacus.com",
-    "pricing_data_license": "CC-BY-4.0",
-    "pricing_verified_at": "2026-09-28",
-    "pricing_collected_at": "2026-11-23",
-    "input_cost_per_token": 2e-06,
-    "output_cost_per_token": 2e-06
+    "source": "https://maas.xfyun.cn/modelSquare/base/2611845619399681",
+    "pricing_reference": "https://maas.xfyun.cn/modelSquare/base/2611845619399681",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "input_cost_per_token": 1e-06,
+    "output_cost_per_token": 2e-06,
+    "cache_creation_input_token_cost": 0,
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28",
+    "pricing_basis": "official_standard",
+    "pricing_notes": "Official Spark-X2-Flash product quote; exact first-party serviceId is xsparkx2flash. No separately billed cache-write item; cacheBilling=false and no cache-read discount is quoted. Catalog name is retained as an existing gateway alias."
   },
   "step-3.7-flash": {
     "currency": "CNY",
     "mode": "chat",
     "litellm_provider": "stepfun",
-    "source": "https://platform.stepfun.com",
-    "pricing_reference": "https://mofcloud.cn/tools/llm-explorer/",
-    "pricing_reference_model": "step-3-7-flash",
-    "pricing_data_source": "https://www.llmabacus.com",
-    "pricing_data_license": "CC-BY-4.0",
-    "pricing_verified_at": "2026-09-28",
-    "pricing_collected_at": "2026-11-23",
+    "source": "https://platform.stepfun.com/docs/zh/guides/pricing/details",
+    "pricing_reference": "https://platform.stepfun.com/docs/zh/guides/pricing/details",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "official_standard",
+    "pricing_notes": "Official Prompt Cache guide states that first cache writes are included in uncached input; there is no additional write charge.",
     "input_cost_per_token": 1.35e-06,
     "output_cost_per_token": 8.1e-06,
-    "cache_read_input_token_cost": 2.7e-07
+    "cache_creation_input_token_cost": 0,
+    "cache_read_input_token_cost": 2.7e-07,
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28"
   },
   "qwen4-max": {
     "input_cost_per_token": 1e-05,
@@ -8196,6 +8507,8 @@
     "pricing_verified_at": "2026-11-28",
     "pricing_collected_at": "2026-11-28",
     "pricing_basis": "list_before_discount",
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28",
     "pricing_cache_read_kind": "ordinary",
     "official_api_price_rows": [
       {
@@ -8265,6 +8578,8 @@
     "pricing_verified_at": "2026-11-28",
     "pricing_collected_at": "2026-11-28",
     "pricing_basis": "list_before_discount",
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28",
     "pricing_cache_read_kind": "ordinary",
     "official_api_price_rows": [
       {
@@ -8327,6 +8642,8 @@
     "pricing_verified_at": "2026-11-28",
     "pricing_collected_at": "2026-11-28",
     "pricing_basis": "list_before_discount",
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28",
     "pricing_cache_read_kind": "ordinary",
     "official_api_price_rows": [
       {
@@ -8384,6 +8701,8 @@
     "pricing_verified_at": "2026-11-28",
     "pricing_collected_at": "2026-11-28",
     "pricing_basis": "list_before_discount",
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28",
     "pricing_cache_read_kind": "ordinary",
     "official_api_price_rows": [
       {
@@ -8441,6 +8760,8 @@
     "pricing_verified_at": "2026-11-28",
     "pricing_collected_at": "2026-11-28",
     "pricing_basis": "list_before_discount",
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28",
     "pricing_cache_read_kind": "ordinary",
     "official_api_price_rows": [
       {
@@ -8570,6 +8891,8 @@
     "pricing_verified_at": "2026-11-28",
     "pricing_collected_at": "2026-11-28",
     "pricing_basis": "list_before_discount",
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28",
     "pricing_cache_read_kind": "ordinary",
     "official_api_price_rows": [
       {
@@ -8689,6 +9012,8 @@
     "pricing_verified_at": "2026-11-28",
     "pricing_collected_at": "2026-11-28",
     "pricing_basis": "list_before_discount",
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28",
     "pricing_cache_read_kind": "ordinary",
     "official_api_price_rows": [
       {
@@ -8751,6 +9076,8 @@
     "pricing_verified_at": "2026-11-28",
     "pricing_collected_at": "2026-11-28",
     "pricing_basis": "list_before_discount",
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28",
     "pricing_cache_read_kind": "explicit",
     "official_api_price_rows": [
       {
@@ -8795,6 +9122,7 @@
   "qwen3.7-max-preview": {
     "input_cost_per_token": 1.2e-05,
     "output_cost_per_token": 3.6e-05,
+    "cache_creation_input_token_cost": 0.0,
     "currency": "CNY",
     "mode": "chat",
     "litellm_provider": "dashscope",
@@ -8804,6 +9132,8 @@
     "pricing_verified_at": "2026-11-28",
     "pricing_collected_at": "2026-11-28",
     "pricing_basis": "list_before_discount",
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28",
     "pricing_cache_read_kind": "not_quoted",
     "official_api_price_rows": [
       {
@@ -8834,6 +9164,7 @@
   "qwen3.7-max-2026-05-17": {
     "input_cost_per_token": 1.2e-05,
     "output_cost_per_token": 3.6e-05,
+    "cache_creation_input_token_cost": 0.0,
     "currency": "CNY",
     "mode": "chat",
     "litellm_provider": "dashscope",
@@ -8843,6 +9174,8 @@
     "pricing_verified_at": "2026-11-28",
     "pricing_collected_at": "2026-11-28",
     "pricing_basis": "list_before_discount",
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28",
     "pricing_cache_read_kind": "not_quoted",
     "official_api_price_rows": [
       {
@@ -8884,6 +9217,8 @@
     "pricing_verified_at": "2026-11-28",
     "pricing_collected_at": "2026-11-28",
     "pricing_basis": "list_before_discount",
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28",
     "pricing_cache_read_kind": "ordinary",
     "official_api_price_rows": [
       {
@@ -9051,6 +9386,8 @@
     "pricing_verified_at": "2026-11-28",
     "pricing_collected_at": "2026-11-28",
     "pricing_basis": "list_before_discount",
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28",
     "pricing_cache_read_kind": "ordinary",
     "official_api_price_rows": [
       {
@@ -9203,6 +9540,8 @@
     "pricing_verified_at": "2026-11-28",
     "pricing_collected_at": "2026-11-28",
     "pricing_basis": "list_before_discount",
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28",
     "pricing_cache_read_kind": "explicit",
     "official_api_price_rows": [
       {
@@ -9297,6 +9636,7 @@
   "qwen3.6-plus-2026-04-02": {
     "input_cost_per_token": 2e-06,
     "output_cost_per_token": 1.2e-05,
+    "cache_creation_input_token_cost": 0.0,
     "currency": "CNY",
     "mode": "chat",
     "litellm_provider": "dashscope",
@@ -9306,6 +9646,8 @@
     "pricing_verified_at": "2026-11-28",
     "pricing_collected_at": "2026-11-28",
     "pricing_basis": "list_before_discount",
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28",
     "pricing_cache_read_kind": "not_quoted",
     "official_api_price_rows": [
       {
@@ -9354,12 +9696,14 @@
         "min_tokens": 0,
         "input_price": 2e-06,
         "output_price": 1.2e-05,
+        "cache_write_price": 0.0,
         "max_tokens": 256000
       },
       {
         "min_tokens": 256000,
         "input_price": 8e-06,
-        "output_price": 4.8e-05
+        "output_price": 4.8e-05,
+        "cache_write_price": 0.0
       }
     ],
     "max_input_tokens": 991808,
@@ -9379,6 +9723,8 @@
     "pricing_verified_at": "2026-11-28",
     "pricing_collected_at": "2026-11-28",
     "pricing_basis": "list_before_discount",
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28",
     "pricing_cache_read_kind": "explicit",
     "official_api_price_rows": [
       {
@@ -9514,6 +9860,7 @@
   "qwen3.5-plus-2026-02-15": {
     "input_cost_per_token": 8e-07,
     "output_cost_per_token": 4.8e-06,
+    "cache_creation_input_token_cost": 0.0,
     "currency": "CNY",
     "mode": "chat",
     "litellm_provider": "dashscope",
@@ -9523,6 +9870,8 @@
     "pricing_verified_at": "2026-11-28",
     "pricing_collected_at": "2026-11-28",
     "pricing_basis": "list_before_discount",
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28",
     "pricing_cache_read_kind": "not_quoted",
     "official_api_price_rows": [
       {
@@ -9590,18 +9939,21 @@
         "min_tokens": 0,
         "input_price": 8e-07,
         "output_price": 4.8e-06,
+        "cache_write_price": 0.0,
         "max_tokens": 128000
       },
       {
         "min_tokens": 128000,
         "input_price": 2e-06,
         "output_price": 1.2e-05,
+        "cache_write_price": 0.0,
         "max_tokens": 256000
       },
       {
         "min_tokens": 256000,
         "input_price": 4e-06,
-        "output_price": 2.4e-05
+        "output_price": 2.4e-05,
+        "cache_write_price": 0.0
       }
     ],
     "max_input_tokens": 991808,
@@ -9610,6 +9962,7 @@
   "qwen3.5-ocr": {
     "input_cost_per_token": 5e-07,
     "output_cost_per_token": 2e-06,
+    "cache_creation_input_token_cost": 0.0,
     "currency": "CNY",
     "mode": "chat",
     "litellm_provider": "dashscope",
@@ -9619,6 +9972,8 @@
     "pricing_verified_at": "2026-11-28",
     "pricing_collected_at": "2026-11-28",
     "pricing_basis": "list_before_discount",
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28",
     "pricing_cache_read_kind": "not_quoted",
     "official_api_price_rows": [
       {
@@ -9649,6 +10004,7 @@
   "qwen3.5-flash-2026-02-23": {
     "input_cost_per_token": 2e-07,
     "output_cost_per_token": 2e-06,
+    "cache_creation_input_token_cost": 0.0,
     "currency": "CNY",
     "mode": "chat",
     "litellm_provider": "dashscope",
@@ -9658,6 +10014,8 @@
     "pricing_verified_at": "2026-11-28",
     "pricing_collected_at": "2026-11-28",
     "pricing_basis": "list_before_discount",
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28",
     "pricing_cache_read_kind": "not_quoted",
     "official_api_price_rows": [
       {
@@ -9725,18 +10083,21 @@
         "min_tokens": 0,
         "input_price": 2e-07,
         "output_price": 2e-06,
+        "cache_write_price": 0.0,
         "max_tokens": 128000
       },
       {
         "min_tokens": 128000,
         "input_price": 8e-07,
         "output_price": 8e-06,
+        "cache_write_price": 0.0,
         "max_tokens": 256000
       },
       {
         "min_tokens": 256000,
         "input_price": 1.2e-06,
-        "output_price": 1.2e-05
+        "output_price": 1.2e-05,
+        "cache_write_price": 0.0
       }
     ],
     "max_input_tokens": 991808,
@@ -9745,6 +10106,7 @@
   "qwen3.6-27b": {
     "input_cost_per_token": 3e-06,
     "output_cost_per_token": 1.8e-05,
+    "cache_creation_input_token_cost": 0.0,
     "currency": "CNY",
     "mode": "chat",
     "litellm_provider": "dashscope",
@@ -9754,6 +10116,8 @@
     "pricing_verified_at": "2026-11-28",
     "pricing_collected_at": "2026-11-28",
     "pricing_basis": "list_before_discount",
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28",
     "pricing_cache_read_kind": "not_quoted",
     "official_api_price_rows": [
       {
@@ -9784,6 +10148,7 @@
   "qwen3.6-35b-a3b": {
     "input_cost_per_token": 1.8e-06,
     "output_cost_per_token": 1.08e-05,
+    "cache_creation_input_token_cost": 0.0,
     "currency": "CNY",
     "mode": "chat",
     "litellm_provider": "dashscope",
@@ -9793,6 +10158,8 @@
     "pricing_verified_at": "2026-11-28",
     "pricing_collected_at": "2026-11-28",
     "pricing_basis": "list_before_discount",
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28",
     "pricing_cache_read_kind": "not_quoted",
     "official_api_price_rows": [
       {
@@ -9834,6 +10201,8 @@
     "pricing_verified_at": "2026-11-28",
     "pricing_collected_at": "2026-11-28",
     "pricing_basis": "list_before_discount",
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28",
     "pricing_cache_read_kind": "explicit",
     "official_api_price_rows": [
       {
@@ -9928,6 +10297,7 @@
   "qwen3.6-flash-2026-04-16": {
     "input_cost_per_token": 1.2e-06,
     "output_cost_per_token": 7.2e-06,
+    "cache_creation_input_token_cost": 0.0,
     "currency": "CNY",
     "mode": "chat",
     "litellm_provider": "dashscope",
@@ -9937,6 +10307,8 @@
     "pricing_verified_at": "2026-11-28",
     "pricing_collected_at": "2026-11-28",
     "pricing_basis": "list_before_discount",
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28",
     "pricing_cache_read_kind": "not_quoted",
     "official_api_price_rows": [
       {
@@ -9985,12 +10357,14 @@
         "min_tokens": 0,
         "input_price": 1.2e-06,
         "output_price": 7.2e-06,
+        "cache_write_price": 0.0,
         "max_tokens": 256000
       },
       {
         "min_tokens": 256000,
         "input_price": 4.8e-06,
-        "output_price": 2.88e-05
+        "output_price": 2.88e-05,
+        "cache_write_price": 0.0
       }
     ],
     "max_input_tokens": 991808,
@@ -9999,6 +10373,7 @@
   "qwen-vl-ocr": {
     "input_cost_per_token": 3e-07,
     "output_cost_per_token": 5e-07,
+    "cache_creation_input_token_cost": 0.0,
     "currency": "CNY",
     "mode": "chat",
     "litellm_provider": "dashscope",
@@ -10008,6 +10383,8 @@
     "pricing_verified_at": "2026-11-28",
     "pricing_collected_at": "2026-11-28",
     "pricing_basis": "list_before_discount",
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28",
     "pricing_cache_read_kind": "not_quoted",
     "official_api_price_rows": [
       {
@@ -10038,6 +10415,7 @@
   "qwen-vl-ocr-2025-11-20": {
     "input_cost_per_token": 3e-07,
     "output_cost_per_token": 5e-07,
+    "cache_creation_input_token_cost": 0.0,
     "currency": "CNY",
     "mode": "chat",
     "litellm_provider": "dashscope",
@@ -10047,6 +10425,8 @@
     "pricing_verified_at": "2026-11-28",
     "pricing_collected_at": "2026-11-28",
     "pricing_basis": "list_before_discount",
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28",
     "pricing_cache_read_kind": "not_quoted",
     "official_api_price_rows": [
       {
@@ -10077,6 +10457,7 @@
   "qwen-mt-lite": {
     "input_cost_per_token": 6e-07,
     "output_cost_per_token": 1.6e-06,
+    "cache_creation_input_token_cost": 0.0,
     "currency": "CNY",
     "mode": "chat",
     "litellm_provider": "dashscope",
@@ -10086,6 +10467,8 @@
     "pricing_verified_at": "2026-11-28",
     "pricing_collected_at": "2026-11-28",
     "pricing_basis": "list_before_discount",
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28",
     "pricing_cache_read_kind": "not_quoted",
     "official_api_price_rows": [
       {
@@ -10116,6 +10499,7 @@
   "qwen-mt-flash": {
     "input_cost_per_token": 7e-07,
     "output_cost_per_token": 1.95e-06,
+    "cache_creation_input_token_cost": 0.0,
     "currency": "CNY",
     "mode": "chat",
     "litellm_provider": "dashscope",
@@ -10125,6 +10509,8 @@
     "pricing_verified_at": "2026-11-28",
     "pricing_collected_at": "2026-11-28",
     "pricing_basis": "list_before_discount",
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28",
     "pricing_cache_read_kind": "not_quoted",
     "official_api_price_rows": [
       {
@@ -10155,6 +10541,7 @@
   "qwen-deep-research": {
     "input_cost_per_token": 5.4e-05,
     "output_cost_per_token": 0.000163,
+    "cache_creation_input_token_cost": 0.0,
     "currency": "CNY",
     "mode": "chat",
     "litellm_provider": "dashscope",
@@ -10164,6 +10551,8 @@
     "pricing_verified_at": "2026-11-28",
     "pricing_collected_at": "2026-11-28",
     "pricing_basis": "list_before_discount",
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28",
     "pricing_cache_read_kind": "not_quoted",
     "official_api_price_rows": [
       {
@@ -10194,6 +10583,7 @@
   "qwen-deep-research-2025-12-15": {
     "input_cost_per_token": 7.9e-05,
     "output_cost_per_token": 0.000236,
+    "cache_creation_input_token_cost": 0.0,
     "currency": "CNY",
     "mode": "chat",
     "litellm_provider": "dashscope",
@@ -10203,6 +10593,8 @@
     "pricing_verified_at": "2026-11-28",
     "pricing_collected_at": "2026-11-28",
     "pricing_basis": "list_before_discount",
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28",
     "pricing_cache_read_kind": "not_quoted",
     "official_api_price_rows": [
       {
@@ -10233,6 +10625,7 @@
   "qwen-mt-plus": {
     "input_cost_per_token": 1.8e-06,
     "output_cost_per_token": 5.4e-06,
+    "cache_creation_input_token_cost": 0.0,
     "currency": "CNY",
     "mode": "chat",
     "litellm_provider": "dashscope",
@@ -10242,6 +10635,8 @@
     "pricing_verified_at": "2026-11-28",
     "pricing_collected_at": "2026-11-28",
     "pricing_basis": "list_before_discount",
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28",
     "pricing_cache_read_kind": "not_quoted",
     "official_api_price_rows": [
       {
@@ -10283,6 +10678,8 @@
     "pricing_verified_at": "2026-11-28",
     "pricing_collected_at": "2026-11-28",
     "pricing_basis": "list_before_discount",
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28",
     "pricing_cache_read_kind": "ordinary",
     "official_api_price_rows": [
       {
@@ -10487,6 +10884,7 @@
   "qwen3-coder-flash-2025-07-28": {
     "input_cost_per_token": 1e-06,
     "output_cost_per_token": 4e-06,
+    "cache_creation_input_token_cost": 0.0,
     "currency": "CNY",
     "mode": "chat",
     "litellm_provider": "dashscope",
@@ -10496,6 +10894,8 @@
     "pricing_verified_at": "2026-11-28",
     "pricing_collected_at": "2026-11-28",
     "pricing_basis": "list_before_discount",
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28",
     "pricing_cache_read_kind": "not_quoted",
     "official_api_price_rows": [
       {
@@ -10582,24 +10982,28 @@
         "min_tokens": 0,
         "input_price": 1e-06,
         "output_price": 4e-06,
+        "cache_write_price": 0.0,
         "max_tokens": 32000
       },
       {
         "min_tokens": 32000,
         "input_price": 1.5e-06,
         "output_price": 6e-06,
+        "cache_write_price": 0.0,
         "max_tokens": 128000
       },
       {
         "min_tokens": 128000,
         "input_price": 2.5e-06,
         "output_price": 1e-05,
+        "cache_write_price": 0.0,
         "max_tokens": 256000
       },
       {
         "min_tokens": 256000,
         "input_price": 5e-06,
-        "output_price": 2.5e-05
+        "output_price": 2.5e-05,
+        "cache_write_price": 0.0
       }
     ],
     "max_input_tokens": 997952,
@@ -10608,6 +11012,7 @@
   "qwen-flash-character": {
     "input_cost_per_token": 2.5e-07,
     "output_cost_per_token": 1.5e-06,
+    "cache_creation_input_token_cost": 0.0,
     "cache_read_input_token_cost": 5e-08,
     "currency": "CNY",
     "mode": "chat",
@@ -10618,6 +11023,8 @@
     "pricing_verified_at": "2026-11-28",
     "pricing_collected_at": "2026-11-28",
     "pricing_basis": "list_before_discount",
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28",
     "pricing_cache_read_kind": "ordinary",
     "official_api_price_rows": [
       {
@@ -10655,6 +11062,7 @@
   "qwen-flash-character-2026-02-26": {
     "input_cost_per_token": 1.8e-07,
     "output_cost_per_token": 1.5e-06,
+    "cache_creation_input_token_cost": 0.0,
     "cache_read_input_token_cost": 3.6e-08,
     "currency": "CNY",
     "mode": "chat",
@@ -10665,6 +11073,8 @@
     "pricing_verified_at": "2026-11-28",
     "pricing_collected_at": "2026-11-28",
     "pricing_basis": "list_before_discount",
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28",
     "pricing_cache_read_kind": "ordinary",
     "official_api_price_rows": [
       {
@@ -10702,6 +11112,7 @@
   "qwen3.5-27b": {
     "input_cost_per_token": 6e-07,
     "output_cost_per_token": 4.8e-06,
+    "cache_creation_input_token_cost": 0.0,
     "currency": "CNY",
     "mode": "chat",
     "litellm_provider": "dashscope",
@@ -10711,6 +11122,8 @@
     "pricing_verified_at": "2026-11-28",
     "pricing_collected_at": "2026-11-28",
     "pricing_basis": "list_before_discount",
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28",
     "pricing_cache_read_kind": "not_quoted",
     "official_api_price_rows": [
       {
@@ -10759,12 +11172,14 @@
         "min_tokens": 0,
         "input_price": 6e-07,
         "output_price": 4.8e-06,
+        "cache_write_price": 0.0,
         "max_tokens": 128000
       },
       {
         "min_tokens": 128000,
         "input_price": 1.8e-06,
-        "output_price": 1.44e-05
+        "output_price": 1.44e-05,
+        "cache_write_price": 0.0
       }
     ],
     "max_input_tokens": 260096,
@@ -10773,6 +11188,7 @@
   "qwen3.5-122b-a10b": {
     "input_cost_per_token": 8e-07,
     "output_cost_per_token": 6.4e-06,
+    "cache_creation_input_token_cost": 0.0,
     "currency": "CNY",
     "mode": "chat",
     "litellm_provider": "dashscope",
@@ -10782,6 +11198,8 @@
     "pricing_verified_at": "2026-11-28",
     "pricing_collected_at": "2026-11-28",
     "pricing_basis": "list_before_discount",
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28",
     "pricing_cache_read_kind": "not_quoted",
     "official_api_price_rows": [
       {
@@ -10830,12 +11248,14 @@
         "min_tokens": 0,
         "input_price": 8e-07,
         "output_price": 6.4e-06,
+        "cache_write_price": 0.0,
         "max_tokens": 128000
       },
       {
         "min_tokens": 128000,
         "input_price": 2e-06,
-        "output_price": 1.6e-05
+        "output_price": 1.6e-05,
+        "cache_write_price": 0.0
       }
     ],
     "max_input_tokens": 260096,
@@ -10844,6 +11264,7 @@
   "qwen3.5-35b-a3b": {
     "input_cost_per_token": 4e-07,
     "output_cost_per_token": 3.2e-06,
+    "cache_creation_input_token_cost": 0.0,
     "currency": "CNY",
     "mode": "chat",
     "litellm_provider": "dashscope",
@@ -10853,6 +11274,8 @@
     "pricing_verified_at": "2026-11-28",
     "pricing_collected_at": "2026-11-28",
     "pricing_basis": "list_before_discount",
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28",
     "pricing_cache_read_kind": "not_quoted",
     "official_api_price_rows": [
       {
@@ -10901,12 +11324,14 @@
         "min_tokens": 0,
         "input_price": 4e-07,
         "output_price": 3.2e-06,
+        "cache_write_price": 0.0,
         "max_tokens": 128000
       },
       {
         "min_tokens": 128000,
         "input_price": 1.6e-06,
-        "output_price": 1.28e-05
+        "output_price": 1.28e-05,
+        "cache_write_price": 0.0
       }
     ],
     "max_input_tokens": 260096,
@@ -10915,6 +11340,7 @@
   "qwen3.5-397b-a17b": {
     "input_cost_per_token": 1.2e-06,
     "output_cost_per_token": 7.2e-06,
+    "cache_creation_input_token_cost": 0.0,
     "currency": "CNY",
     "mode": "chat",
     "litellm_provider": "dashscope",
@@ -10924,6 +11350,8 @@
     "pricing_verified_at": "2026-11-28",
     "pricing_collected_at": "2026-11-28",
     "pricing_basis": "list_before_discount",
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28",
     "pricing_cache_read_kind": "not_quoted",
     "official_api_price_rows": [
       {
@@ -10972,12 +11400,14 @@
         "min_tokens": 0,
         "input_price": 1.2e-06,
         "output_price": 7.2e-06,
+        "cache_write_price": 0.0,
         "max_tokens": 128000
       },
       {
         "min_tokens": 128000,
         "input_price": 3e-06,
-        "output_price": 1.8e-05
+        "output_price": 1.8e-05,
+        "cache_write_price": 0.0
       }
     ],
     "max_input_tokens": 260096,
@@ -10997,6 +11427,8 @@
     "pricing_verified_at": "2026-11-28",
     "pricing_collected_at": "2026-11-28",
     "pricing_basis": "list_before_discount",
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28",
     "pricing_cache_read_kind": "ordinary",
     "official_api_price_rows": [
       {
@@ -11164,6 +11596,8 @@
     "pricing_verified_at": "2026-11-28",
     "pricing_collected_at": "2026-11-28",
     "pricing_basis": "list_before_discount",
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28",
     "pricing_cache_read_kind": "ordinary",
     "official_api_price_rows": [
       {
@@ -11320,6 +11754,7 @@
   "qwen-flash-2025-07-28": {
     "input_cost_per_token": 1.5e-07,
     "output_cost_per_token": 1.5e-06,
+    "cache_creation_input_token_cost": 0.0,
     "currency": "CNY",
     "mode": "chat",
     "litellm_provider": "dashscope",
@@ -11329,6 +11764,8 @@
     "pricing_verified_at": "2026-11-28",
     "pricing_collected_at": "2026-11-28",
     "pricing_basis": "list_before_discount",
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28",
     "pricing_cache_read_kind": "not_quoted",
     "official_api_price_rows": [
       {
@@ -11396,18 +11833,21 @@
         "min_tokens": 0,
         "input_price": 1.5e-07,
         "output_price": 1.5e-06,
+        "cache_write_price": 0.0,
         "max_tokens": 128000
       },
       {
         "min_tokens": 128000,
         "input_price": 6e-07,
         "output_price": 6e-06,
+        "cache_write_price": 0.0,
         "max_tokens": 256000
       },
       {
         "min_tokens": 256000,
         "input_price": 1.2e-06,
-        "output_price": 1.2e-05
+        "output_price": 1.2e-05,
+        "cache_write_price": 0.0
       }
     ],
     "max_input_tokens": 997952,
@@ -11427,6 +11867,8 @@
     "pricing_verified_at": "2026-11-28",
     "pricing_collected_at": "2026-11-28",
     "pricing_basis": "list_before_discount",
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28",
     "pricing_cache_read_kind": "ordinary",
     "official_api_price_rows": [
       {
@@ -11478,6 +11920,7 @@
   "qwen-plus-2025-01-25": {
     "input_cost_per_token": 8e-07,
     "output_cost_per_token": 2e-06,
+    "cache_creation_input_token_cost": 0.0,
     "currency": "CNY",
     "mode": "chat",
     "litellm_provider": "dashscope",
@@ -11487,6 +11930,8 @@
     "pricing_verified_at": "2026-11-28",
     "pricing_collected_at": "2026-11-28",
     "pricing_basis": "list_before_discount",
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28",
     "pricing_cache_read_kind": "not_quoted",
     "official_api_price_rows": [
       {
@@ -11517,6 +11962,7 @@
   "qwen-long": {
     "input_cost_per_token": 5e-07,
     "output_cost_per_token": 2e-06,
+    "cache_creation_input_token_cost": 0.0,
     "currency": "CNY",
     "mode": "chat",
     "litellm_provider": "dashscope",
@@ -11526,6 +11972,8 @@
     "pricing_verified_at": "2026-11-28",
     "pricing_collected_at": "2026-11-28",
     "pricing_basis": "list_before_discount",
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28",
     "pricing_cache_read_kind": "not_quoted",
     "official_api_price_rows": [
       {
@@ -11567,6 +12015,8 @@
     "pricing_verified_at": "2026-11-28",
     "pricing_collected_at": "2026-11-28",
     "pricing_basis": "list_before_discount",
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28",
     "pricing_cache_read_kind": "ordinary",
     "official_api_price_rows": [
       {
@@ -11618,6 +12068,7 @@
   "qwen-max": {
     "input_cost_per_token": 2.4e-06,
     "output_cost_per_token": 9.6e-06,
+    "cache_creation_input_token_cost": 0.0,
     "cache_read_input_token_cost": 4.8e-07,
     "currency": "CNY",
     "mode": "chat",
@@ -11628,6 +12079,8 @@
     "pricing_verified_at": "2026-11-28",
     "pricing_collected_at": "2026-11-28",
     "pricing_basis": "list_before_discount",
+    "official_api_verification_status": "verified",
+    "official_api_checked_at": "2026-11-28",
     "pricing_cache_read_kind": "ordinary",
     "official_api_price_rows": [
       {

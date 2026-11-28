@@ -695,7 +695,8 @@ func (s *ModelPlazaService) lookupOfficialPricing(ctx context.Context, modelName
 	}
 	if s.pricingService != nil && isDomesticPricingModelName(modelName) {
 		catalog := s.pricingService.GetModelPricing(modelName)
-		if catalog == nil || strings.EqualFold(catalog.OfficialCurrency, "USD") {
+		if catalog == nil || strings.EqualFold(catalog.OfficialCurrency, "USD") ||
+			(catalog.OfficialAPIVerificationStatus != "" && catalog.OfficialAPIVerificationStatus != "verified") {
 			memo[modelName] = nil
 			return nil
 		}

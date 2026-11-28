@@ -111,6 +111,7 @@ type ModelPricing struct {
 	CacheCreationPricePerToken         float64 // 缓存创建每token价格（单位由 Currency 指示）
 	CacheCreationPricePerTokenPriority float64 // priority service tier 下缓存创建每token价格（单位由 Currency 指示）
 	CacheCreationPriceExplicit         bool    // 是否由渠道/区间定价显式设定（为 true 时即使 == 0 也不回退）
+	CacheCreationPriceQuoted           bool    // 目录显式报价（含零价），仅供展示保留缺失/免费区别
 	priceOverrides                     tokenPriceOverrides
 	CacheReadPricePerToken             float64            // 缓存读取每token价格（单位由 Currency 指示）
 	CacheReadPricePerTokenPriority     float64            // priority service tier 下缓存读取每token价格（单位由 Currency 指示）
@@ -1619,6 +1620,7 @@ func (s *BillingService) getModelPricingAt(model string, pricingAt time.Time) (*
 				OutputPricePerTokenPriority:        litellmPricing.OutputCostPerTokenPriority,
 				CacheCreationPriceExplicit:         (openai.IsGPT6SolOrLunaModelSpelling(model) || openai.IsGPT61SolModelSpelling(model) || openai.IsGPT61TerraModelSpelling(model) || openai.GPT62ModelID(model) != "") && litellmPricing.CacheCreationInputTokenCostExplicit,
 				CacheCreationPricePerToken:         litellmPricing.CacheCreationInputTokenCost,
+				CacheCreationPriceQuoted:           litellmPricing.CacheCreationInputTokenCostExplicit,
 				CacheCreationPricePerTokenPriority: litellmPricing.CacheCreationInputTokenCostPriority,
 				CacheReadPricePerToken:             litellmPricing.CacheReadInputTokenCost,
 				CacheReadPricePerTokenPriority:     litellmPricing.CacheReadInputTokenCostPriority,

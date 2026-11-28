@@ -64,6 +64,9 @@ def standard_prices(rows):
 def fields_from_prices(prices):
     fields = {field: float(amount(prices[kind]) / Decimal(1_000_000))
               for kind, field in FIELDS.items() if kind in prices}
+    # This is a complete official price card. No cache-creation line means
+    # there is no separately quoted write charge, rather than an unknown price.
+    fields.setdefault("cache_creation_input_token_cost", 0.0)
     cache_kind = "input_token_cache" if "input_token_cache" in prices else "input_token_cache_read"
     if cache_kind in prices:
         fields["cache_read_input_token_cost"] = float(amount(prices[cache_kind]) / Decimal(1_000_000))
@@ -116,6 +119,7 @@ def price_card(series, item, collected_at):
         "source": REFERENCE, "pricing_reference": REFERENCE,
         "pricing_data_source": ENDPOINT, "pricing_verified_at": collected_at,
         "pricing_collected_at": collected_at, "pricing_basis": "list_before_discount",
+        "official_api_verification_status": "verified", "official_api_checked_at": collected_at,
         "pricing_cache_read_kind": bands[0][3], "official_api_price_rows": original_rows,
         "supports_prompt_caching": any("cache_read_input_token_cost" in band[2] for band in bands),
         "pricing_notes": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows.",

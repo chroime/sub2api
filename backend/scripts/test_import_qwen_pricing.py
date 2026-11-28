@@ -17,6 +17,25 @@ def response(*models):
 
 
 class ImportQwenPricingTests(unittest.TestCase):
+    def test_no_separate_official_cache_write_charge_is_explicit_zero(self):
+        catalog = {}
+        import_models(catalog, response(model()), "2026-11-28")
+        self.assertIn("cache_creation_input_token_cost", catalog["qwen3.7-plus"])
+        self.assertEqual(0, catalog["qwen3.7-plus"]["cache_creation_input_token_cost"])
+
+    def test_each_context_tier_preserves_free_and_paid_cache_writes(self):
+        tiers = [
+            {"RangeName": "输入<=128k", "Prices": [quote("input_token", 1), quote("output_token", 4)]},
+            {"RangeName": "128k<输入<=256k", "Prices": [quote("input_token", 2), quote("output_token", 8), quote("input_token_cache_creation_5m", 2.5)]},
+        ]
+        catalog = {}
+        import_models(catalog, response(model(Prices=[], MultiPrices=tiers)), "2026-11-28")
+        entry = catalog["qwen3.7-plus"]
+        self.assertIn("cache_creation_input_token_cost", entry)
+        self.assertEqual(0, entry["cache_creation_input_token_cost"])
+        self.assertEqual(0, entry["context_pricing_tiers"][0]["cache_write_price"])
+        self.assertEqual(2.5e-6, entry["context_pricing_tiers"][1]["cache_write_price"])
+
     def test_original_prices_ignore_discounts_and_batch_quotes(self):
         entry = model(Prices=[quote("input_token", 2, Discount="0.8"), quote("output_token", 8, Discount="0.8"), quote("input_token_batch", 1), quote("output_token_batch", 4), quote("input_token", 0.01, TimeBand="off_peak")])
         catalog = {"qwen3.7-plus": {"input_cost_per_token_priority": 9, "context_pricing_tiers": [{"input_price": 99}], "pricing_data_source": "third-party"}, "gpt-existing": {"input_cost_per_token": 123}}

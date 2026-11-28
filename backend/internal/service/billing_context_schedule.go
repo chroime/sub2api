@@ -391,20 +391,34 @@ type explicitContextFields struct {
 	input, output, cacheWrite, cacheWrite1h, cacheWrite12h, cacheRead bool
 }
 
-// explicitContextPricingFields 判断各项是否被分组卡/渠道定价（含命中区间）显式配置。
+// explicitContextPricingFields 判断各项是否被目录阶梯或分组卡/渠道定价显式配置。
 // 显式配置为 0 时计费按 $0 收，展示应为 $0 而非“无价”。
 func explicitContextPricingFields(resolved *ResolvedPricing, contextTokens int) explicitContextFields {
 	var out explicitContextFields
-	if resolved == nil || resolved.channelPricing == nil {
+	if resolved == nil {
+		return out
+	}
+	if base := resolved.BasePricing; base != nil {
+		out.cacheWrite = base.CacheCreationPriceQuoted
+		if iv := FindMatchingInterval(base.ContextPricingTiers, contextTokens); iv != nil {
+			out.input = iv.InputPrice != nil
+			out.output = iv.OutputPrice != nil
+			out.cacheWrite = out.cacheWrite || iv.CacheWritePrice != nil
+			out.cacheWrite1h = iv.CacheWrite1hPrice != nil
+			out.cacheWrite12h = iv.CacheWrite12hPrice != nil
+			out.cacheRead = iv.CacheReadPrice != nil
+		}
+	}
+	if resolved.channelPricing == nil {
 		return out
 	}
 	cp := resolved.channelPricing
-	out.input = cp.InputPrice != nil
-	out.output = cp.OutputPrice != nil
-	out.cacheWrite = cp.CacheWritePrice != nil
-	out.cacheWrite1h = cp.CacheWrite1hPrice != nil || cp.CacheWritePrice != nil
-	out.cacheWrite12h = cp.CacheWrite12hPrice != nil
-	out.cacheRead = cp.CacheReadPrice != nil
+	out.input = out.input || cp.InputPrice != nil
+	out.output = out.output || cp.OutputPrice != nil
+	out.cacheWrite = out.cacheWrite || cp.CacheWritePrice != nil
+	out.cacheWrite1h = out.cacheWrite1h || cp.CacheWrite1hPrice != nil || cp.CacheWritePrice != nil
+	out.cacheWrite12h = out.cacheWrite12h || cp.CacheWrite12hPrice != nil
+	out.cacheRead = out.cacheRead || cp.CacheReadPrice != nil
 	if iv := FindMatchingInterval(resolved.Intervals, contextTokens); iv != nil {
 		out.input = out.input || iv.InputPrice != nil
 		out.output = out.output || iv.OutputPrice != nil

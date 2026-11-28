@@ -50,6 +50,21 @@ class ImportDomesticPricingTests(unittest.TestCase):
         self.assertEqual(0.3e-6, catalog["deepseek-v4-pro"]["cache_read_input_token_cost"])
         self.assertTrue(catalog["deepseek-v4-pro"]["deepseek_peak_price"])
 
+    def test_primary_verified_deepseek_quote_survives_secondary_import(self):
+        import copy
+        official = {
+            "currency": "CNY", "input_cost_per_token": 9e-6,
+            "output_cost_per_token": 27e-6, "cache_creation_input_token_cost": 0,
+            "official_api_verification_status": "verified",
+            "pricing_reference": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
+        }
+        catalog = {"deepseek-v4-pro": copy.deepcopy(official)}
+        index = self.index().replace("mimo-v2-6-pro", "deepseek-v4-pro")
+        secondary = self.model(id="deepseek-v4-pro", vendor_id="deepseek", input_price_orig_per_m=999)
+        report = import_models(catalog, index, {"models": [secondary]})
+        self.assertEqual(official, catalog["deepseek-v4-pro"])
+        self.assertEqual(["deepseek-v4-pro"], report["preserved_direct_vendor_prices"])
+
     def test_bad_prices_are_rejected(self):
         for value in [-1, "NaN", "Infinity"]:
             with self.subTest(value=value), self.assertRaises(ValueError):

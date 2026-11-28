@@ -157,6 +157,9 @@ def import_models(catalog, index_html, dataset):
         if model.get("billing_currency") != "CNY" or model.get("country") != "CN" or model.get("retired"):
             raise ValueError(f"Reference source is not an active native CNY model: {source_id}")
         existing = catalog.get(model_id, {})
+        if existing.get("currency") == "CNY" and existing.get("official_api_verification_status") == "verified":
+            preserved.append(model_id)
+            continue
         # DeepSeek's reference quote is the peak/list price. Keep that exact
         # quote in the catalog; billing applies the off-peak adjustment separately.
         deepseek = model["vendor_id"] == "deepseek"
