@@ -7209,24 +7209,126 @@
   "qwen3.8-max": {
     "input_cost_per_token": 1.2e-05,
     "output_cost_per_token": 3.6e-05,
-    "cache_read_input_token_cost": 2.2e-07,
+    "cache_creation_input_token_cost": 1.5e-05,
+    "cache_read_input_token_cost": 1.5e-06,
     "currency": "CNY",
-    "source": "https://mofcloud.cn/tools/llm-explorer/qwen3-8-max/",
     "mode": "chat",
     "litellm_provider": "dashscope",
-    "pricing_verified_at": "2026-11-23",
-    "pricing_notes": "User-confirmed reference image (2026-11-23): CNY 12 input, 36 output, 0.22 cache read per million tokens. Cache-write price was not quoted."
+    "source": "https://platform.qianwenai.com/pricing/api",
+    "pricing_reference": "https://platform.qianwenai.com/pricing/api",
+    "pricing_data_source": "https://platform-home.qianwenai.com/data/api.json?product=AliyunDeliveryService&action=ListModelSeries",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "list_before_discount",
+    "pricing_cache_read_kind": "ordinary",
+    "official_api_price_rows": [
+      {
+        "range": "",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "12",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "36",
+            "PriceName": "输出"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache",
+            "PriceUnit": "每百万tokens",
+            "Price": "1.5",
+            "PriceName": "输入（缓存命中）"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_creation_5m",
+            "PriceUnit": "每百万tokens",
+            "Price": "15",
+            "PriceName": "5分钟显式缓存创建"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_read",
+            "PriceUnit": "每百万tokens",
+            "Price": "1",
+            "PriceName": "显式缓存命中"
+          }
+        ]
+      }
+    ],
+    "supports_prompt_caching": true,
+    "pricing_notes": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows.",
+    "max_input_tokens": 991808,
+    "max_output_tokens": 131072
   },
   "qwen3.8-flash": {
-    "input_cost_per_token": 7.9e-07,
-    "output_cost_per_token": 2.67e-06,
+    "input_cost_per_token": 8e-07,
+    "output_cost_per_token": 2.7e-06,
+    "cache_creation_input_token_cost": 1.25e-06,
     "cache_read_input_token_cost": 1e-07,
     "currency": "CNY",
-    "source": "https://mofcloud.cn/tools/llm-explorer/qwen3-8-flash/",
     "mode": "chat",
     "litellm_provider": "dashscope",
-    "pricing_verified_at": "2026-11-23",
-    "pricing_notes": "User-confirmed reference image (2026-11-23): CNY 0.79 input, 2.67 output, 0.10 cache read per million tokens. Cache-write price was not quoted."
+    "source": "https://platform.qianwenai.com/pricing/api",
+    "pricing_reference": "https://platform.qianwenai.com/pricing/api",
+    "pricing_data_source": "https://platform-home.qianwenai.com/data/api.json?product=AliyunDeliveryService&action=ListModelSeries",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "list_before_discount",
+    "pricing_cache_read_kind": "ordinary",
+    "official_api_price_rows": [
+      {
+        "range": "",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.8",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "2.7",
+            "PriceName": "输出"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.1",
+            "PriceName": "输入（缓存命中）"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_creation_5m",
+            "PriceUnit": "每百万tokens",
+            "Price": "1.25",
+            "PriceName": "5分钟显式缓存创建"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_read",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.1",
+            "PriceName": "显式缓存命中"
+          }
+        ]
+      }
+    ],
+    "supports_prompt_caching": true,
+    "pricing_notes": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows.",
+    "max_input_tokens": 991808,
+    "max_output_tokens": 131072
   },
   "baichuan-m2": {
     "currency": "CNY",
@@ -7557,70 +7659,296 @@
     "cache_read_input_token_cost": 4.2e-07
   },
   "qwen3.5-flash": {
-    "currency": "CNY",
-    "mode": "chat",
-    "litellm_provider": "alibaba",
-    "source": "https://help.aliyun.com/zh/model-studio/model-pricing",
-    "pricing_reference": "https://mofcloud.cn/tools/llm-explorer/",
-    "pricing_reference_model": "qwen3-5-flash",
-    "pricing_data_source": "https://www.llmabacus.com",
-    "pricing_data_license": "CC-BY-4.0",
-    "pricing_verified_at": "2026-10-10",
-    "pricing_collected_at": "2026-11-23",
     "input_cost_per_token": 2e-07,
     "output_cost_per_token": 2e-06,
+    "cache_creation_input_token_cost": 2.5e-07,
+    "cache_read_input_token_cost": 2e-08,
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "dashscope",
+    "source": "https://platform.qianwenai.com/pricing/api",
+    "pricing_reference": "https://platform.qianwenai.com/pricing/api",
+    "pricing_data_source": "https://platform-home.qianwenai.com/data/api.json?product=AliyunDeliveryService&action=ListModelSeries",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "list_before_discount",
+    "pricing_cache_read_kind": "explicit",
+    "official_api_price_rows": [
+      {
+        "range": "输入<=128k",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.2",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "2",
+            "PriceName": "输出"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_creation_5m",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.25",
+            "PriceName": "5分钟显式缓存创建"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_read",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.02",
+            "PriceName": "显式缓存命中"
+          }
+        ]
+      },
+      {
+        "range": "128k<输入<=256k",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.8",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "8",
+            "PriceName": "输出"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_creation_5m",
+            "PriceUnit": "每百万tokens",
+            "Price": "1",
+            "PriceName": "5分钟显式缓存创建"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_read",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.08",
+            "PriceName": "显式缓存命中"
+          }
+        ]
+      },
+      {
+        "range": "256k<输入<=1m",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "1.2",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "12",
+            "PriceName": "输出"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_creation_5m",
+            "PriceUnit": "每百万tokens",
+            "Price": "1.5",
+            "PriceName": "5分钟显式缓存创建"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_read",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.12",
+            "PriceName": "显式缓存命中"
+          }
+        ]
+      }
+    ],
+    "supports_prompt_caching": true,
+    "pricing_notes": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows.",
     "context_pricing_tiers": [
       {
         "min_tokens": 0,
         "input_price": 2e-07,
         "output_price": 2e-06,
+        "cache_write_price": 2.5e-07,
+        "cache_read_price": 2e-08,
         "max_tokens": 128000
       },
       {
         "min_tokens": 128000,
         "input_price": 8e-07,
         "output_price": 8e-06,
+        "cache_write_price": 1e-06,
+        "cache_read_price": 8e-08,
         "max_tokens": 256000
       },
       {
         "min_tokens": 256000,
         "input_price": 1.2e-06,
-        "output_price": 1.2e-05
+        "output_price": 1.2e-05,
+        "cache_write_price": 1.5e-06,
+        "cache_read_price": 1.2e-07
       }
-    ]
+    ],
+    "max_input_tokens": 991808,
+    "max_output_tokens": 65536
   },
   "qwen3.5-plus": {
-    "currency": "CNY",
-    "mode": "chat",
-    "litellm_provider": "alibaba",
-    "source": "https://help.aliyun.com/zh/model-studio/model-pricing",
-    "pricing_reference": "https://mofcloud.cn/tools/llm-explorer/",
-    "pricing_reference_model": "qwen3-5-plus",
-    "pricing_data_source": "https://www.llmabacus.com",
-    "pricing_data_license": "CC-BY-4.0",
-    "pricing_verified_at": "2026-10-10",
-    "pricing_collected_at": "2026-11-23",
     "input_cost_per_token": 8e-07,
     "output_cost_per_token": 4.8e-06,
+    "cache_creation_input_token_cost": 1e-06,
+    "cache_read_input_token_cost": 8e-08,
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "dashscope",
+    "source": "https://platform.qianwenai.com/pricing/api",
+    "pricing_reference": "https://platform.qianwenai.com/pricing/api",
+    "pricing_data_source": "https://platform-home.qianwenai.com/data/api.json?product=AliyunDeliveryService&action=ListModelSeries",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "list_before_discount",
+    "pricing_cache_read_kind": "explicit",
+    "official_api_price_rows": [
+      {
+        "range": "输入<=128k",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.8",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "4.8",
+            "PriceName": "输出"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_creation_5m",
+            "PriceUnit": "每百万tokens",
+            "Price": "1",
+            "PriceName": "5分钟显式缓存创建"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_read",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.08",
+            "PriceName": "显式缓存命中"
+          }
+        ]
+      },
+      {
+        "range": "128k<输入<=256k",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "2",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "12",
+            "PriceName": "输出"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_creation_5m",
+            "PriceUnit": "每百万tokens",
+            "Price": "2.5",
+            "PriceName": "5分钟显式缓存创建"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_read",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.2",
+            "PriceName": "显式缓存命中"
+          }
+        ]
+      },
+      {
+        "range": "256k<输入<=1m",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "4",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "24",
+            "PriceName": "输出"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_creation_5m",
+            "PriceUnit": "每百万tokens",
+            "Price": "5",
+            "PriceName": "5分钟显式缓存创建"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_read",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.4",
+            "PriceName": "显式缓存命中"
+          }
+        ]
+      }
+    ],
+    "supports_prompt_caching": true,
+    "pricing_notes": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows.",
     "context_pricing_tiers": [
       {
         "min_tokens": 0,
         "input_price": 8e-07,
         "output_price": 4.8e-06,
+        "cache_write_price": 1e-06,
+        "cache_read_price": 8e-08,
         "max_tokens": 128000
       },
       {
         "min_tokens": 128000,
         "input_price": 2e-06,
         "output_price": 1.2e-05,
+        "cache_write_price": 2.5e-06,
+        "cache_read_price": 2e-07,
         "max_tokens": 256000
       },
       {
         "min_tokens": 256000,
         "input_price": 4e-06,
-        "output_price": 2.4e-05
+        "output_price": 2.4e-05,
+        "cache_write_price": 5e-06,
+        "cache_read_price": 4e-07
       }
-    ]
+    ],
+    "max_input_tokens": 991808,
+    "max_output_tokens": 65536
   },
   "qwen3.6-max-preview": {
     "currency": "CNY",
@@ -7647,21 +7975,72 @@
         "input_price": 1.5e-05,
         "output_price": 9e-05
       }
-    ]
+    ],
+    "official_api_verification_status": "not_listed",
+    "official_api_checked_at": "2026-11-28",
+    "official_api_verification_note": "This exact model ID is absent from the current official API pricing response. Historical prices and their original attribution are retained; they are not verified official list prices from this update."
   },
   "qwen3.7-max": {
+    "input_cost_per_token": 1.2e-05,
+    "output_cost_per_token": 3.6e-05,
+    "cache_creation_input_token_cost": 1.5e-05,
+    "cache_read_input_token_cost": 2.4e-06,
     "currency": "CNY",
     "mode": "chat",
-    "litellm_provider": "alibaba",
-    "source": "https://help.aliyun.com/zh/model-studio/model-pricing",
-    "pricing_reference": "https://mofcloud.cn/tools/llm-explorer/",
-    "pricing_reference_model": "qwen3-7-max",
-    "pricing_data_source": "https://www.llmabacus.com",
-    "pricing_data_license": "CC-BY-4.0",
-    "pricing_verified_at": "2026-10-10",
-    "pricing_collected_at": "2026-11-23",
-    "input_cost_per_token": 1.2e-05,
-    "output_cost_per_token": 3.6e-05
+    "litellm_provider": "dashscope",
+    "source": "https://platform.qianwenai.com/pricing/api",
+    "pricing_reference": "https://platform.qianwenai.com/pricing/api",
+    "pricing_data_source": "https://platform-home.qianwenai.com/data/api.json?product=AliyunDeliveryService&action=ListModelSeries",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "list_before_discount",
+    "pricing_cache_read_kind": "ordinary",
+    "official_api_price_rows": [
+      {
+        "range": "",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "12",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "36",
+            "PriceName": "输出"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache",
+            "PriceUnit": "每百万tokens",
+            "Price": "2.4",
+            "PriceName": "输入（缓存命中）"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_creation_5m",
+            "PriceUnit": "每百万tokens",
+            "Price": "15",
+            "PriceName": "5分钟显式缓存创建"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_read",
+            "PriceUnit": "每百万tokens",
+            "Price": "1.2",
+            "PriceName": "显式缓存命中"
+          }
+        ]
+      }
+    ],
+    "supports_prompt_caching": true,
+    "pricing_notes": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows.",
+    "max_input_tokens": 991808,
+    "max_output_tokens": 131072
   },
   "qwen3.8-max-prime": {
     "currency": "CNY",
@@ -7675,7 +8054,10 @@
     "pricing_verified_at": "2026-10-10",
     "pricing_collected_at": "2026-11-23",
     "input_cost_per_token": 2.4e-05,
-    "output_cost_per_token": 7.2e-05
+    "output_cost_per_token": 7.2e-05,
+    "official_api_verification_status": "not_listed",
+    "official_api_checked_at": "2026-11-28",
+    "official_api_verification_note": "This exact model ID is absent from the current official API pricing response. Historical prices and their original attribution are retained; they are not verified official list prices from this update."
   },
   "qwen3-max": {
     "currency": "CNY",
@@ -7708,7 +8090,10 @@
         "input_price": 7e-06,
         "output_price": 2.8e-05
       }
-    ]
+    ],
+    "official_api_verification_status": "not_listed",
+    "official_api_checked_at": "2026-11-28",
+    "official_api_verification_note": "This exact model ID is absent from the current official API pricing response. Historical prices and their original attribution are retained; they are not verified official list prices from this update."
   },
   "spark-pro": {
     "currency": "CNY",
@@ -7795,5 +8180,3486 @@
     "input_cost_per_token": 1.35e-06,
     "output_cost_per_token": 8.1e-06,
     "cache_read_input_token_cost": 2.7e-07
+  },
+  "qwen4-max": {
+    "input_cost_per_token": 1e-05,
+    "output_cost_per_token": 3e-05,
+    "cache_creation_input_token_cost": 1.25e-05,
+    "cache_creation_input_token_cost_above_1hr": 2e-05,
+    "cache_read_input_token_cost": 5e-07,
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "dashscope",
+    "source": "https://platform.qianwenai.com/pricing/api",
+    "pricing_reference": "https://platform.qianwenai.com/pricing/api",
+    "pricing_data_source": "https://platform-home.qianwenai.com/data/api.json?product=AliyunDeliveryService&action=ListModelSeries",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "list_before_discount",
+    "pricing_cache_read_kind": "ordinary",
+    "official_api_price_rows": [
+      {
+        "range": "",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "10",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "30",
+            "PriceName": "输出"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.5",
+            "PriceName": "输入（缓存命中）"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_creation_5m",
+            "PriceUnit": "每百万tokens",
+            "Price": "12.5",
+            "PriceName": "5分钟显式缓存创建"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_creation_1h",
+            "PriceUnit": "每百万tokens",
+            "Price": "20",
+            "PriceName": "1小时显式缓存创建"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_read",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.5",
+            "PriceName": "显式缓存命中"
+          }
+        ]
+      }
+    ],
+    "supports_prompt_caching": true,
+    "pricing_notes": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows.",
+    "max_input_tokens": 991808,
+    "max_output_tokens": 131072
+  },
+  "qwen3.8-max-0902": {
+    "input_cost_per_token": 1.2e-05,
+    "output_cost_per_token": 3.6e-05,
+    "cache_creation_input_token_cost": 1.5e-05,
+    "cache_read_input_token_cost": 1.5e-06,
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "dashscope",
+    "source": "https://platform.qianwenai.com/pricing/api",
+    "pricing_reference": "https://platform.qianwenai.com/pricing/api",
+    "pricing_data_source": "https://platform-home.qianwenai.com/data/api.json?product=AliyunDeliveryService&action=ListModelSeries",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "list_before_discount",
+    "pricing_cache_read_kind": "ordinary",
+    "official_api_price_rows": [
+      {
+        "range": "",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "12",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "36",
+            "PriceName": "输出"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache",
+            "PriceUnit": "每百万tokens",
+            "Price": "1.5",
+            "PriceName": "输入（缓存命中）"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_creation_5m",
+            "PriceUnit": "每百万tokens",
+            "Price": "15",
+            "PriceName": "5分钟显式缓存创建"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_read",
+            "PriceUnit": "每百万tokens",
+            "Price": "1",
+            "PriceName": "显式缓存命中"
+          }
+        ]
+      }
+    ],
+    "supports_prompt_caching": true,
+    "pricing_notes": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows.",
+    "max_input_tokens": 991808,
+    "max_output_tokens": 131072
+  },
+  "qwen3.8-2.4t-a95b": {
+    "input_cost_per_token": 1.2e-05,
+    "output_cost_per_token": 3.6e-05,
+    "cache_creation_input_token_cost": 1.5e-05,
+    "cache_read_input_token_cost": 1.5e-06,
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "dashscope",
+    "source": "https://platform.qianwenai.com/pricing/api",
+    "pricing_reference": "https://platform.qianwenai.com/pricing/api",
+    "pricing_data_source": "https://platform-home.qianwenai.com/data/api.json?product=AliyunDeliveryService&action=ListModelSeries",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "list_before_discount",
+    "pricing_cache_read_kind": "ordinary",
+    "official_api_price_rows": [
+      {
+        "range": "",
+        "prices": [
+          {
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "12",
+            "PriceName": "输入"
+          },
+          {
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "36",
+            "PriceName": "输出"
+          },
+          {
+            "Type": "input_token_cache",
+            "PriceUnit": "每百万tokens",
+            "Price": "1.5",
+            "PriceName": "输入（缓存命中）"
+          },
+          {
+            "Type": "input_token_cache_creation_5m",
+            "PriceUnit": "每百万tokens",
+            "Price": "15",
+            "PriceName": "5分钟显式缓存创建"
+          },
+          {
+            "Type": "input_token_cache_read",
+            "PriceUnit": "每百万tokens",
+            "Price": "1",
+            "PriceName": "显式缓存命中"
+          }
+        ]
+      }
+    ],
+    "supports_prompt_caching": true,
+    "pricing_notes": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows.",
+    "max_input_tokens": 991808,
+    "max_output_tokens": 131072
+  },
+  "qwen3.8-27b": {
+    "input_cost_per_token": 3e-06,
+    "output_cost_per_token": 1.2e-05,
+    "cache_creation_input_token_cost": 3.75e-06,
+    "cache_read_input_token_cost": 6e-07,
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "dashscope",
+    "source": "https://platform.qianwenai.com/pricing/api",
+    "pricing_reference": "https://platform.qianwenai.com/pricing/api",
+    "pricing_data_source": "https://platform-home.qianwenai.com/data/api.json?product=AliyunDeliveryService&action=ListModelSeries",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "list_before_discount",
+    "pricing_cache_read_kind": "ordinary",
+    "official_api_price_rows": [
+      {
+        "range": "",
+        "prices": [
+          {
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "3",
+            "PriceName": "输入"
+          },
+          {
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "12",
+            "PriceName": "输出"
+          },
+          {
+            "Type": "input_token_cache",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.6",
+            "PriceName": "输入（缓存命中）"
+          },
+          {
+            "Type": "input_token_cache_creation_5m",
+            "PriceUnit": "每百万tokens",
+            "Price": "3.75",
+            "PriceName": "5分钟显式缓存创建"
+          },
+          {
+            "Type": "input_token_cache_read",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.3",
+            "PriceName": "显式缓存命中"
+          }
+        ]
+      }
+    ],
+    "supports_prompt_caching": true,
+    "pricing_notes": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows.",
+    "max_input_tokens": 991808,
+    "max_output_tokens": 131072
+  },
+  "qwen3.7-plus": {
+    "input_cost_per_token": 2e-06,
+    "output_cost_per_token": 8e-06,
+    "cache_creation_input_token_cost": 2.5e-06,
+    "cache_read_input_token_cost": 4e-07,
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "dashscope",
+    "source": "https://platform.qianwenai.com/pricing/api",
+    "pricing_reference": "https://platform.qianwenai.com/pricing/api",
+    "pricing_data_source": "https://platform-home.qianwenai.com/data/api.json?product=AliyunDeliveryService&action=ListModelSeries",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "list_before_discount",
+    "pricing_cache_read_kind": "ordinary",
+    "official_api_price_rows": [
+      {
+        "range": "输入<=256k",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "Discount": "0.8",
+            "PriceUnit": "每百万tokens",
+            "Price": "2",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "Discount": "0.8",
+            "PriceUnit": "每百万tokens",
+            "Price": "8",
+            "PriceName": "输出"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache",
+            "Discount": "0.8",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.4",
+            "PriceName": "输入（缓存命中）"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_creation_5m",
+            "Discount": "0.8",
+            "PriceUnit": "每百万tokens",
+            "Price": "2.5",
+            "PriceName": "5分钟显式缓存创建"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_read",
+            "Discount": "0.8",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.2",
+            "PriceName": "显式缓存命中"
+          }
+        ]
+      },
+      {
+        "range": "256k<输入<=1m",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "Discount": "0.8",
+            "PriceUnit": "每百万tokens",
+            "Price": "6",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "Discount": "0.8",
+            "PriceUnit": "每百万tokens",
+            "Price": "24",
+            "PriceName": "输出"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache",
+            "Discount": "0.8",
+            "PriceUnit": "每百万tokens",
+            "Price": "1.2",
+            "PriceName": "输入（缓存命中）"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_creation_5m",
+            "Discount": "0.8",
+            "PriceUnit": "每百万tokens",
+            "Price": "7.5",
+            "PriceName": "5分钟显式缓存创建"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_read",
+            "Discount": "0.8",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.6",
+            "PriceName": "显式缓存命中"
+          }
+        ]
+      }
+    ],
+    "supports_prompt_caching": true,
+    "pricing_notes": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows.",
+    "context_pricing_tiers": [
+      {
+        "min_tokens": 0,
+        "input_price": 2e-06,
+        "output_price": 8e-06,
+        "cache_write_price": 2.5e-06,
+        "cache_read_price": 4e-07,
+        "max_tokens": 256000
+      },
+      {
+        "min_tokens": 256000,
+        "input_price": 6e-06,
+        "output_price": 2.4e-05,
+        "cache_write_price": 7.5e-06,
+        "cache_read_price": 1.2e-06
+      }
+    ],
+    "max_input_tokens": 991808,
+    "max_output_tokens": 131072
+  },
+  "qwen3.7-plus-2026-05-26": {
+    "input_cost_per_token": 2e-06,
+    "output_cost_per_token": 8e-06,
+    "cache_creation_input_token_cost": 2.5e-06,
+    "cache_read_input_token_cost": 4e-07,
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "dashscope",
+    "source": "https://platform.qianwenai.com/pricing/api",
+    "pricing_reference": "https://platform.qianwenai.com/pricing/api",
+    "pricing_data_source": "https://platform-home.qianwenai.com/data/api.json?product=AliyunDeliveryService&action=ListModelSeries",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "list_before_discount",
+    "pricing_cache_read_kind": "ordinary",
+    "official_api_price_rows": [
+      {
+        "range": "输入<=256k",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "2",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "8",
+            "PriceName": "输出"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.4",
+            "PriceName": "输入（缓存命中）"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_creation_5m",
+            "PriceUnit": "每百万tokens",
+            "Price": "2.5",
+            "PriceName": "5分钟显式缓存创建"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_read",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.2",
+            "PriceName": "显式缓存命中"
+          }
+        ]
+      },
+      {
+        "range": "256k<输入<=1m",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "6",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "24",
+            "PriceName": "输出"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache",
+            "PriceUnit": "每百万tokens",
+            "Price": "1.2",
+            "PriceName": "输入（缓存命中）"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_creation_5m",
+            "PriceUnit": "每百万tokens",
+            "Price": "7.5",
+            "PriceName": "5分钟显式缓存创建"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_read",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.6",
+            "PriceName": "显式缓存命中"
+          }
+        ]
+      }
+    ],
+    "supports_prompt_caching": true,
+    "pricing_notes": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows.",
+    "context_pricing_tiers": [
+      {
+        "min_tokens": 0,
+        "input_price": 2e-06,
+        "output_price": 8e-06,
+        "cache_write_price": 2.5e-06,
+        "cache_read_price": 4e-07,
+        "max_tokens": 256000
+      },
+      {
+        "min_tokens": 256000,
+        "input_price": 6e-06,
+        "output_price": 2.4e-05,
+        "cache_write_price": 7.5e-06,
+        "cache_read_price": 1.2e-06
+      }
+    ],
+    "max_input_tokens": 991808,
+    "max_output_tokens": 131072
+  },
+  "qwen3.7-max-2026-06-08": {
+    "input_cost_per_token": 1.2e-05,
+    "output_cost_per_token": 3.6e-05,
+    "cache_creation_input_token_cost": 1.5e-05,
+    "cache_read_input_token_cost": 2.4e-06,
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "dashscope",
+    "source": "https://platform.qianwenai.com/pricing/api",
+    "pricing_reference": "https://platform.qianwenai.com/pricing/api",
+    "pricing_data_source": "https://platform-home.qianwenai.com/data/api.json?product=AliyunDeliveryService&action=ListModelSeries",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "list_before_discount",
+    "pricing_cache_read_kind": "ordinary",
+    "official_api_price_rows": [
+      {
+        "range": "",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "12",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "36",
+            "PriceName": "输出"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache",
+            "PriceUnit": "每百万tokens",
+            "Price": "2.4",
+            "PriceName": "输入（缓存命中）"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_creation_5m",
+            "PriceUnit": "每百万tokens",
+            "Price": "15",
+            "PriceName": "5分钟显式缓存创建"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_read",
+            "PriceUnit": "每百万tokens",
+            "Price": "1.2",
+            "PriceName": "显式缓存命中"
+          }
+        ]
+      }
+    ],
+    "supports_prompt_caching": true,
+    "pricing_notes": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows.",
+    "max_input_tokens": 991808,
+    "max_output_tokens": 131072
+  },
+  "qwen3.7-max-2026-05-20": {
+    "input_cost_per_token": 1.2e-05,
+    "output_cost_per_token": 3.6e-05,
+    "cache_creation_input_token_cost": 1.5e-05,
+    "cache_read_input_token_cost": 1.2e-06,
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "dashscope",
+    "source": "https://platform.qianwenai.com/pricing/api",
+    "pricing_reference": "https://platform.qianwenai.com/pricing/api",
+    "pricing_data_source": "https://platform-home.qianwenai.com/data/api.json?product=AliyunDeliveryService&action=ListModelSeries",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "list_before_discount",
+    "pricing_cache_read_kind": "explicit",
+    "official_api_price_rows": [
+      {
+        "range": "",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "12",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "36",
+            "PriceName": "输出"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_creation_5m",
+            "PriceUnit": "每百万tokens",
+            "Price": "15",
+            "PriceName": "5分钟显式缓存创建"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_read",
+            "PriceUnit": "每百万tokens",
+            "Price": "1.2",
+            "PriceName": "显式缓存命中"
+          }
+        ]
+      }
+    ],
+    "supports_prompt_caching": true,
+    "pricing_notes": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows.",
+    "max_input_tokens": 991808,
+    "max_output_tokens": 131072
+  },
+  "qwen3.7-max-preview": {
+    "input_cost_per_token": 1.2e-05,
+    "output_cost_per_token": 3.6e-05,
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "dashscope",
+    "source": "https://platform.qianwenai.com/pricing/api",
+    "pricing_reference": "https://platform.qianwenai.com/pricing/api",
+    "pricing_data_source": "https://platform-home.qianwenai.com/data/api.json?product=AliyunDeliveryService&action=ListModelSeries",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "list_before_discount",
+    "pricing_cache_read_kind": "not_quoted",
+    "official_api_price_rows": [
+      {
+        "range": "",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "12",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "36",
+            "PriceName": "输出"
+          }
+        ]
+      }
+    ],
+    "supports_prompt_caching": false,
+    "pricing_notes": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows.",
+    "max_input_tokens": 991808,
+    "max_output_tokens": 131072
+  },
+  "qwen3.7-max-2026-05-17": {
+    "input_cost_per_token": 1.2e-05,
+    "output_cost_per_token": 3.6e-05,
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "dashscope",
+    "source": "https://platform.qianwenai.com/pricing/api",
+    "pricing_reference": "https://platform.qianwenai.com/pricing/api",
+    "pricing_data_source": "https://platform-home.qianwenai.com/data/api.json?product=AliyunDeliveryService&action=ListModelSeries",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "list_before_discount",
+    "pricing_cache_read_kind": "not_quoted",
+    "official_api_price_rows": [
+      {
+        "range": "",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "12",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "36",
+            "PriceName": "输出"
+          }
+        ]
+      }
+    ],
+    "supports_prompt_caching": false,
+    "pricing_notes": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows.",
+    "max_input_tokens": 991808,
+    "max_output_tokens": 131072
+  },
+  "qwen3.7-flash": {
+    "input_cost_per_token": 2e-07,
+    "output_cost_per_token": 8e-07,
+    "cache_creation_input_token_cost": 2.5e-07,
+    "cache_read_input_token_cost": 4e-08,
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "dashscope",
+    "source": "https://platform.qianwenai.com/pricing/api",
+    "pricing_reference": "https://platform.qianwenai.com/pricing/api",
+    "pricing_data_source": "https://platform-home.qianwenai.com/data/api.json?product=AliyunDeliveryService&action=ListModelSeries",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "list_before_discount",
+    "pricing_cache_read_kind": "ordinary",
+    "official_api_price_rows": [
+      {
+        "range": "输入<=32k",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.2",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.8",
+            "PriceName": "输出"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.04",
+            "PriceName": "输入（缓存命中）"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_creation_5m",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.25",
+            "PriceName": "5分钟显式缓存创建"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_read",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.02",
+            "PriceName": "显式缓存命中"
+          }
+        ]
+      },
+      {
+        "range": "32k<输入<=256k",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.6",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "2.4",
+            "PriceName": "输出"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.12",
+            "PriceName": "输入（缓存命中）"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_creation_5m",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.75",
+            "PriceName": "5分钟显式缓存创建"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_read",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.06",
+            "PriceName": "显式缓存命中"
+          }
+        ]
+      },
+      {
+        "range": "256k<输入<=1m",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "1.2",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "4.8",
+            "PriceName": "输出"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.24",
+            "PriceName": "输入（缓存命中）"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_creation_5m",
+            "PriceUnit": "每百万tokens",
+            "Price": "1.5",
+            "PriceName": "5分钟显式缓存创建"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_read",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.12",
+            "PriceName": "显式缓存命中"
+          }
+        ]
+      }
+    ],
+    "supports_prompt_caching": true,
+    "pricing_notes": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows.",
+    "context_pricing_tiers": [
+      {
+        "min_tokens": 0,
+        "input_price": 2e-07,
+        "output_price": 8e-07,
+        "cache_write_price": 2.5e-07,
+        "cache_read_price": 4e-08,
+        "max_tokens": 32000
+      },
+      {
+        "min_tokens": 32000,
+        "input_price": 6e-07,
+        "output_price": 2.4e-06,
+        "cache_write_price": 7.5e-07,
+        "cache_read_price": 1.2e-07,
+        "max_tokens": 256000
+      },
+      {
+        "min_tokens": 256000,
+        "input_price": 1.2e-06,
+        "output_price": 4.8e-06,
+        "cache_write_price": 1.5e-06,
+        "cache_read_price": 2.4e-07
+      }
+    ],
+    "max_input_tokens": 991808,
+    "max_output_tokens": 131072
+  },
+  "qwen3.7-flash-2026-07-15": {
+    "input_cost_per_token": 2e-07,
+    "output_cost_per_token": 8e-07,
+    "cache_creation_input_token_cost": 2.5e-07,
+    "cache_read_input_token_cost": 4e-08,
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "dashscope",
+    "source": "https://platform.qianwenai.com/pricing/api",
+    "pricing_reference": "https://platform.qianwenai.com/pricing/api",
+    "pricing_data_source": "https://platform-home.qianwenai.com/data/api.json?product=AliyunDeliveryService&action=ListModelSeries",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "list_before_discount",
+    "pricing_cache_read_kind": "ordinary",
+    "official_api_price_rows": [
+      {
+        "range": "输入<=32k",
+        "prices": [
+          {
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.2",
+            "PriceName": "输入"
+          },
+          {
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.8",
+            "PriceName": "输出"
+          },
+          {
+            "Type": "input_token_cache",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.04",
+            "PriceName": "输入（缓存命中）"
+          },
+          {
+            "Type": "input_token_cache_creation_5m",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.25",
+            "PriceName": "5分钟显式缓存创建"
+          },
+          {
+            "Type": "input_token_cache_read",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.02",
+            "PriceName": "显式缓存命中"
+          }
+        ]
+      },
+      {
+        "range": "32k<输入<=256k",
+        "prices": [
+          {
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.6",
+            "PriceName": "输入"
+          },
+          {
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "2.4",
+            "PriceName": "输出"
+          },
+          {
+            "Type": "input_token_cache",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.12",
+            "PriceName": "输入（缓存命中）"
+          },
+          {
+            "Type": "input_token_cache_creation_5m",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.75",
+            "PriceName": "5分钟显式缓存创建"
+          },
+          {
+            "Type": "input_token_cache_read",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.06",
+            "PriceName": "显式缓存命中"
+          }
+        ]
+      },
+      {
+        "range": "256k<输入<=1m",
+        "prices": [
+          {
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "1.2",
+            "PriceName": "输入"
+          },
+          {
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "4.8",
+            "PriceName": "输出"
+          },
+          {
+            "Type": "input_token_cache",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.24",
+            "PriceName": "输入（缓存命中）"
+          },
+          {
+            "Type": "input_token_cache_creation_5m",
+            "PriceUnit": "每百万tokens",
+            "Price": "1.5",
+            "PriceName": "5分钟显式缓存创建"
+          },
+          {
+            "Type": "input_token_cache_read",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.12",
+            "PriceName": "显式缓存命中"
+          }
+        ]
+      }
+    ],
+    "supports_prompt_caching": true,
+    "pricing_notes": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows.",
+    "context_pricing_tiers": [
+      {
+        "min_tokens": 0,
+        "input_price": 2e-07,
+        "output_price": 8e-07,
+        "cache_write_price": 2.5e-07,
+        "cache_read_price": 4e-08,
+        "max_tokens": 32000
+      },
+      {
+        "min_tokens": 32000,
+        "input_price": 6e-07,
+        "output_price": 2.4e-06,
+        "cache_write_price": 7.5e-07,
+        "cache_read_price": 1.2e-07,
+        "max_tokens": 256000
+      },
+      {
+        "min_tokens": 256000,
+        "input_price": 1.2e-06,
+        "output_price": 4.8e-06,
+        "cache_write_price": 1.5e-06,
+        "cache_read_price": 2.4e-07
+      }
+    ],
+    "max_input_tokens": 991808,
+    "max_output_tokens": 131072
+  },
+  "qwen3.6-plus": {
+    "input_cost_per_token": 2e-06,
+    "output_cost_per_token": 1.2e-05,
+    "cache_creation_input_token_cost": 2.5e-06,
+    "cache_read_input_token_cost": 2e-07,
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "dashscope",
+    "source": "https://platform.qianwenai.com/pricing/api",
+    "pricing_reference": "https://platform.qianwenai.com/pricing/api",
+    "pricing_data_source": "https://platform-home.qianwenai.com/data/api.json?product=AliyunDeliveryService&action=ListModelSeries",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "list_before_discount",
+    "pricing_cache_read_kind": "explicit",
+    "official_api_price_rows": [
+      {
+        "range": "输入<=256k",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "2",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "12",
+            "PriceName": "输出"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_creation_5m",
+            "PriceUnit": "每百万tokens",
+            "Price": "2.5",
+            "PriceName": "5分钟显式缓存创建"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_read",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.2",
+            "PriceName": "显式缓存命中"
+          }
+        ]
+      },
+      {
+        "range": "256k<输入<=1m",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "8",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "48",
+            "PriceName": "输出"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_creation_5m",
+            "PriceUnit": "每百万tokens",
+            "Price": "10",
+            "PriceName": "5分钟显式缓存创建"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_read",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.8",
+            "PriceName": "显式缓存命中"
+          }
+        ]
+      }
+    ],
+    "supports_prompt_caching": true,
+    "pricing_notes": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows.",
+    "context_pricing_tiers": [
+      {
+        "min_tokens": 0,
+        "input_price": 2e-06,
+        "output_price": 1.2e-05,
+        "cache_write_price": 2.5e-06,
+        "cache_read_price": 2e-07,
+        "max_tokens": 256000
+      },
+      {
+        "min_tokens": 256000,
+        "input_price": 8e-06,
+        "output_price": 4.8e-05,
+        "cache_write_price": 1e-05,
+        "cache_read_price": 8e-07
+      }
+    ],
+    "max_input_tokens": 991808,
+    "max_output_tokens": 65536
+  },
+  "qwen3.6-plus-2026-04-02": {
+    "input_cost_per_token": 2e-06,
+    "output_cost_per_token": 1.2e-05,
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "dashscope",
+    "source": "https://platform.qianwenai.com/pricing/api",
+    "pricing_reference": "https://platform.qianwenai.com/pricing/api",
+    "pricing_data_source": "https://platform-home.qianwenai.com/data/api.json?product=AliyunDeliveryService&action=ListModelSeries",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "list_before_discount",
+    "pricing_cache_read_kind": "not_quoted",
+    "official_api_price_rows": [
+      {
+        "range": "输入<=256k",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "2",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "12",
+            "PriceName": "输出"
+          }
+        ]
+      },
+      {
+        "range": "256k<输入<=1m",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "8",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "48",
+            "PriceName": "输出"
+          }
+        ]
+      }
+    ],
+    "supports_prompt_caching": false,
+    "pricing_notes": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows.",
+    "context_pricing_tiers": [
+      {
+        "min_tokens": 0,
+        "input_price": 2e-06,
+        "output_price": 1.2e-05,
+        "max_tokens": 256000
+      },
+      {
+        "min_tokens": 256000,
+        "input_price": 8e-06,
+        "output_price": 4.8e-05
+      }
+    ],
+    "max_input_tokens": 991808,
+    "max_output_tokens": 65536
+  },
+  "qwen3.5-plus-2026-04-20": {
+    "input_cost_per_token": 8e-07,
+    "output_cost_per_token": 4.8e-06,
+    "cache_creation_input_token_cost": 1e-06,
+    "cache_read_input_token_cost": 8e-08,
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "dashscope",
+    "source": "https://platform.qianwenai.com/pricing/api",
+    "pricing_reference": "https://platform.qianwenai.com/pricing/api",
+    "pricing_data_source": "https://platform-home.qianwenai.com/data/api.json?product=AliyunDeliveryService&action=ListModelSeries",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "list_before_discount",
+    "pricing_cache_read_kind": "explicit",
+    "official_api_price_rows": [
+      {
+        "range": "输入<=128k",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.8",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "4.8",
+            "PriceName": "输出"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_creation_5m",
+            "PriceUnit": "每百万tokens",
+            "Price": "1",
+            "PriceName": "5分钟显式缓存创建"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_read",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.08",
+            "PriceName": "显式缓存命中"
+          }
+        ]
+      },
+      {
+        "range": "128k<输入<=256k",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "2",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "12",
+            "PriceName": "输出"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_creation_5m",
+            "PriceUnit": "每百万tokens",
+            "Price": "2.5",
+            "PriceName": "5分钟显式缓存创建"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_read",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.2",
+            "PriceName": "显式缓存命中"
+          }
+        ]
+      },
+      {
+        "range": "256k<输入<=1m",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "4",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "24",
+            "PriceName": "输出"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_creation_5m",
+            "PriceUnit": "每百万tokens",
+            "Price": "5",
+            "PriceName": "5分钟显式缓存创建"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_read",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.4",
+            "PriceName": "显式缓存命中"
+          }
+        ]
+      }
+    ],
+    "supports_prompt_caching": true,
+    "pricing_notes": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows.",
+    "context_pricing_tiers": [
+      {
+        "min_tokens": 0,
+        "input_price": 8e-07,
+        "output_price": 4.8e-06,
+        "cache_write_price": 1e-06,
+        "cache_read_price": 8e-08,
+        "max_tokens": 128000
+      },
+      {
+        "min_tokens": 128000,
+        "input_price": 2e-06,
+        "output_price": 1.2e-05,
+        "cache_write_price": 2.5e-06,
+        "cache_read_price": 2e-07,
+        "max_tokens": 256000
+      },
+      {
+        "min_tokens": 256000,
+        "input_price": 4e-06,
+        "output_price": 2.4e-05,
+        "cache_write_price": 5e-06,
+        "cache_read_price": 4e-07
+      }
+    ],
+    "max_input_tokens": 991808,
+    "max_output_tokens": 65536
+  },
+  "qwen3.5-plus-2026-02-15": {
+    "input_cost_per_token": 8e-07,
+    "output_cost_per_token": 4.8e-06,
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "dashscope",
+    "source": "https://platform.qianwenai.com/pricing/api",
+    "pricing_reference": "https://platform.qianwenai.com/pricing/api",
+    "pricing_data_source": "https://platform-home.qianwenai.com/data/api.json?product=AliyunDeliveryService&action=ListModelSeries",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "list_before_discount",
+    "pricing_cache_read_kind": "not_quoted",
+    "official_api_price_rows": [
+      {
+        "range": "输入<=128k",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.8",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "4.8",
+            "PriceName": "输出"
+          }
+        ]
+      },
+      {
+        "range": "128k<输入<=256k",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "2",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "12",
+            "PriceName": "输出"
+          }
+        ]
+      },
+      {
+        "range": "256k<输入<=1m",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "4",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "24",
+            "PriceName": "输出"
+          }
+        ]
+      }
+    ],
+    "supports_prompt_caching": false,
+    "pricing_notes": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows.",
+    "context_pricing_tiers": [
+      {
+        "min_tokens": 0,
+        "input_price": 8e-07,
+        "output_price": 4.8e-06,
+        "max_tokens": 128000
+      },
+      {
+        "min_tokens": 128000,
+        "input_price": 2e-06,
+        "output_price": 1.2e-05,
+        "max_tokens": 256000
+      },
+      {
+        "min_tokens": 256000,
+        "input_price": 4e-06,
+        "output_price": 2.4e-05
+      }
+    ],
+    "max_input_tokens": 991808,
+    "max_output_tokens": 65536
+  },
+  "qwen3.5-ocr": {
+    "input_cost_per_token": 5e-07,
+    "output_cost_per_token": 2e-06,
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "dashscope",
+    "source": "https://platform.qianwenai.com/pricing/api",
+    "pricing_reference": "https://platform.qianwenai.com/pricing/api",
+    "pricing_data_source": "https://platform-home.qianwenai.com/data/api.json?product=AliyunDeliveryService&action=ListModelSeries",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "list_before_discount",
+    "pricing_cache_read_kind": "not_quoted",
+    "official_api_price_rows": [
+      {
+        "range": "",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.5",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "2",
+            "PriceName": "输出"
+          }
+        ]
+      }
+    ],
+    "supports_prompt_caching": false,
+    "pricing_notes": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows.",
+    "max_input_tokens": 49152,
+    "max_output_tokens": 16384
+  },
+  "qwen3.5-flash-2026-02-23": {
+    "input_cost_per_token": 2e-07,
+    "output_cost_per_token": 2e-06,
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "dashscope",
+    "source": "https://platform.qianwenai.com/pricing/api",
+    "pricing_reference": "https://platform.qianwenai.com/pricing/api",
+    "pricing_data_source": "https://platform-home.qianwenai.com/data/api.json?product=AliyunDeliveryService&action=ListModelSeries",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "list_before_discount",
+    "pricing_cache_read_kind": "not_quoted",
+    "official_api_price_rows": [
+      {
+        "range": "输入<=128k",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.2",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "2",
+            "PriceName": "输出"
+          }
+        ]
+      },
+      {
+        "range": "128k<输入<=256k",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.8",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "8",
+            "PriceName": "输出"
+          }
+        ]
+      },
+      {
+        "range": "256k<输入<=1m",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "1.2",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "12",
+            "PriceName": "输出"
+          }
+        ]
+      }
+    ],
+    "supports_prompt_caching": false,
+    "pricing_notes": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows.",
+    "context_pricing_tiers": [
+      {
+        "min_tokens": 0,
+        "input_price": 2e-07,
+        "output_price": 2e-06,
+        "max_tokens": 128000
+      },
+      {
+        "min_tokens": 128000,
+        "input_price": 8e-07,
+        "output_price": 8e-06,
+        "max_tokens": 256000
+      },
+      {
+        "min_tokens": 256000,
+        "input_price": 1.2e-06,
+        "output_price": 1.2e-05
+      }
+    ],
+    "max_input_tokens": 991808,
+    "max_output_tokens": 65536
+  },
+  "qwen3.6-27b": {
+    "input_cost_per_token": 3e-06,
+    "output_cost_per_token": 1.8e-05,
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "dashscope",
+    "source": "https://platform.qianwenai.com/pricing/api",
+    "pricing_reference": "https://platform.qianwenai.com/pricing/api",
+    "pricing_data_source": "https://platform-home.qianwenai.com/data/api.json?product=AliyunDeliveryService&action=ListModelSeries",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "list_before_discount",
+    "pricing_cache_read_kind": "not_quoted",
+    "official_api_price_rows": [
+      {
+        "range": "",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "3",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "18",
+            "PriceName": "输出"
+          }
+        ]
+      }
+    ],
+    "supports_prompt_caching": false,
+    "pricing_notes": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows.",
+    "max_input_tokens": 260096,
+    "max_output_tokens": 65536
+  },
+  "qwen3.6-35b-a3b": {
+    "input_cost_per_token": 1.8e-06,
+    "output_cost_per_token": 1.08e-05,
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "dashscope",
+    "source": "https://platform.qianwenai.com/pricing/api",
+    "pricing_reference": "https://platform.qianwenai.com/pricing/api",
+    "pricing_data_source": "https://platform-home.qianwenai.com/data/api.json?product=AliyunDeliveryService&action=ListModelSeries",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "list_before_discount",
+    "pricing_cache_read_kind": "not_quoted",
+    "official_api_price_rows": [
+      {
+        "range": "",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "1.8",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "10.8",
+            "PriceName": "输出"
+          }
+        ]
+      }
+    ],
+    "supports_prompt_caching": false,
+    "pricing_notes": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows.",
+    "max_input_tokens": 260096,
+    "max_output_tokens": 65536
+  },
+  "qwen3.6-flash": {
+    "input_cost_per_token": 1.2e-06,
+    "output_cost_per_token": 7.2e-06,
+    "cache_creation_input_token_cost": 1.5e-06,
+    "cache_read_input_token_cost": 1.2e-07,
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "dashscope",
+    "source": "https://platform.qianwenai.com/pricing/api",
+    "pricing_reference": "https://platform.qianwenai.com/pricing/api",
+    "pricing_data_source": "https://platform-home.qianwenai.com/data/api.json?product=AliyunDeliveryService&action=ListModelSeries",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "list_before_discount",
+    "pricing_cache_read_kind": "explicit",
+    "official_api_price_rows": [
+      {
+        "range": "输入<=256k",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "1.2",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "7.2",
+            "PriceName": "输出"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_creation_5m",
+            "PriceUnit": "每百万tokens",
+            "Price": "1.5",
+            "PriceName": "5分钟显式缓存创建"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_read",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.12",
+            "PriceName": "显式缓存命中"
+          }
+        ]
+      },
+      {
+        "range": "256k<输入<=1m",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "4.8",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "28.8",
+            "PriceName": "输出"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_creation_5m",
+            "PriceUnit": "每百万tokens",
+            "Price": "6",
+            "PriceName": "5分钟显式缓存创建"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_read",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.48",
+            "PriceName": "显式缓存命中"
+          }
+        ]
+      }
+    ],
+    "supports_prompt_caching": true,
+    "pricing_notes": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows.",
+    "context_pricing_tiers": [
+      {
+        "min_tokens": 0,
+        "input_price": 1.2e-06,
+        "output_price": 7.2e-06,
+        "cache_write_price": 1.5e-06,
+        "cache_read_price": 1.2e-07,
+        "max_tokens": 256000
+      },
+      {
+        "min_tokens": 256000,
+        "input_price": 4.8e-06,
+        "output_price": 2.88e-05,
+        "cache_write_price": 6e-06,
+        "cache_read_price": 4.8e-07
+      }
+    ],
+    "max_input_tokens": 991808,
+    "max_output_tokens": 65536
+  },
+  "qwen3.6-flash-2026-04-16": {
+    "input_cost_per_token": 1.2e-06,
+    "output_cost_per_token": 7.2e-06,
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "dashscope",
+    "source": "https://platform.qianwenai.com/pricing/api",
+    "pricing_reference": "https://platform.qianwenai.com/pricing/api",
+    "pricing_data_source": "https://platform-home.qianwenai.com/data/api.json?product=AliyunDeliveryService&action=ListModelSeries",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "list_before_discount",
+    "pricing_cache_read_kind": "not_quoted",
+    "official_api_price_rows": [
+      {
+        "range": "输入<=256k",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "1.2",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "7.2",
+            "PriceName": "输出"
+          }
+        ]
+      },
+      {
+        "range": "256k<输入<=1m",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "4.8",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "28.8",
+            "PriceName": "输出"
+          }
+        ]
+      }
+    ],
+    "supports_prompt_caching": false,
+    "pricing_notes": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows.",
+    "context_pricing_tiers": [
+      {
+        "min_tokens": 0,
+        "input_price": 1.2e-06,
+        "output_price": 7.2e-06,
+        "max_tokens": 256000
+      },
+      {
+        "min_tokens": 256000,
+        "input_price": 4.8e-06,
+        "output_price": 2.88e-05
+      }
+    ],
+    "max_input_tokens": 991808,
+    "max_output_tokens": 65536
+  },
+  "qwen-vl-ocr": {
+    "input_cost_per_token": 3e-07,
+    "output_cost_per_token": 5e-07,
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "dashscope",
+    "source": "https://platform.qianwenai.com/pricing/api",
+    "pricing_reference": "https://platform.qianwenai.com/pricing/api",
+    "pricing_data_source": "https://platform-home.qianwenai.com/data/api.json?product=AliyunDeliveryService&action=ListModelSeries",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "list_before_discount",
+    "pricing_cache_read_kind": "not_quoted",
+    "official_api_price_rows": [
+      {
+        "range": "",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.3",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.5",
+            "PriceName": "输出"
+          }
+        ]
+      }
+    ],
+    "supports_prompt_caching": false,
+    "pricing_notes": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows.",
+    "max_input_tokens": 30000,
+    "max_output_tokens": 8192
+  },
+  "qwen-vl-ocr-2025-11-20": {
+    "input_cost_per_token": 3e-07,
+    "output_cost_per_token": 5e-07,
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "dashscope",
+    "source": "https://platform.qianwenai.com/pricing/api",
+    "pricing_reference": "https://platform.qianwenai.com/pricing/api",
+    "pricing_data_source": "https://platform-home.qianwenai.com/data/api.json?product=AliyunDeliveryService&action=ListModelSeries",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "list_before_discount",
+    "pricing_cache_read_kind": "not_quoted",
+    "official_api_price_rows": [
+      {
+        "range": "",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.3",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.5",
+            "PriceName": "输出"
+          }
+        ]
+      }
+    ],
+    "supports_prompt_caching": false,
+    "pricing_notes": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows.",
+    "max_input_tokens": 30000,
+    "max_output_tokens": 8192
+  },
+  "qwen-mt-lite": {
+    "input_cost_per_token": 6e-07,
+    "output_cost_per_token": 1.6e-06,
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "dashscope",
+    "source": "https://platform.qianwenai.com/pricing/api",
+    "pricing_reference": "https://platform.qianwenai.com/pricing/api",
+    "pricing_data_source": "https://platform-home.qianwenai.com/data/api.json?product=AliyunDeliveryService&action=ListModelSeries",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "list_before_discount",
+    "pricing_cache_read_kind": "not_quoted",
+    "official_api_price_rows": [
+      {
+        "range": "",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.6",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "1.6",
+            "PriceName": "输出"
+          }
+        ]
+      }
+    ],
+    "supports_prompt_caching": false,
+    "pricing_notes": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows.",
+    "max_input_tokens": 8192,
+    "max_output_tokens": 8192
+  },
+  "qwen-mt-flash": {
+    "input_cost_per_token": 7e-07,
+    "output_cost_per_token": 1.95e-06,
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "dashscope",
+    "source": "https://platform.qianwenai.com/pricing/api",
+    "pricing_reference": "https://platform.qianwenai.com/pricing/api",
+    "pricing_data_source": "https://platform-home.qianwenai.com/data/api.json?product=AliyunDeliveryService&action=ListModelSeries",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "list_before_discount",
+    "pricing_cache_read_kind": "not_quoted",
+    "official_api_price_rows": [
+      {
+        "range": "",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.7",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "1.95",
+            "PriceName": "输出"
+          }
+        ]
+      }
+    ],
+    "supports_prompt_caching": false,
+    "pricing_notes": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows.",
+    "max_input_tokens": 8192,
+    "max_output_tokens": 8192
+  },
+  "qwen-deep-research": {
+    "input_cost_per_token": 5.4e-05,
+    "output_cost_per_token": 0.000163,
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "dashscope",
+    "source": "https://platform.qianwenai.com/pricing/api",
+    "pricing_reference": "https://platform.qianwenai.com/pricing/api",
+    "pricing_data_source": "https://platform-home.qianwenai.com/data/api.json?product=AliyunDeliveryService&action=ListModelSeries",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "list_before_discount",
+    "pricing_cache_read_kind": "not_quoted",
+    "official_api_price_rows": [
+      {
+        "range": "",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "54",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "163",
+            "PriceName": "输出"
+          }
+        ]
+      }
+    ],
+    "supports_prompt_caching": false,
+    "pricing_notes": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows.",
+    "max_input_tokens": 997952,
+    "max_output_tokens": 32768
+  },
+  "qwen-deep-research-2025-12-15": {
+    "input_cost_per_token": 7.9e-05,
+    "output_cost_per_token": 0.000236,
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "dashscope",
+    "source": "https://platform.qianwenai.com/pricing/api",
+    "pricing_reference": "https://platform.qianwenai.com/pricing/api",
+    "pricing_data_source": "https://platform-home.qianwenai.com/data/api.json?product=AliyunDeliveryService&action=ListModelSeries",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "list_before_discount",
+    "pricing_cache_read_kind": "not_quoted",
+    "official_api_price_rows": [
+      {
+        "range": "",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "79",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "236",
+            "PriceName": "输出"
+          }
+        ]
+      }
+    ],
+    "supports_prompt_caching": false,
+    "pricing_notes": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows.",
+    "max_input_tokens": 997952,
+    "max_output_tokens": 32768
+  },
+  "qwen-mt-plus": {
+    "input_cost_per_token": 1.8e-06,
+    "output_cost_per_token": 5.4e-06,
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "dashscope",
+    "source": "https://platform.qianwenai.com/pricing/api",
+    "pricing_reference": "https://platform.qianwenai.com/pricing/api",
+    "pricing_data_source": "https://platform-home.qianwenai.com/data/api.json?product=AliyunDeliveryService&action=ListModelSeries",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "list_before_discount",
+    "pricing_cache_read_kind": "not_quoted",
+    "official_api_price_rows": [
+      {
+        "range": "",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "1.8",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "5.4",
+            "PriceName": "输出"
+          }
+        ]
+      }
+    ],
+    "supports_prompt_caching": false,
+    "pricing_notes": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows.",
+    "max_input_tokens": 8192,
+    "max_output_tokens": 8192
+  },
+  "qwen3-coder-flash": {
+    "input_cost_per_token": 1e-06,
+    "output_cost_per_token": 4e-06,
+    "cache_creation_input_token_cost": 1.25e-06,
+    "cache_read_input_token_cost": 2e-07,
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "dashscope",
+    "source": "https://platform.qianwenai.com/pricing/api",
+    "pricing_reference": "https://platform.qianwenai.com/pricing/api",
+    "pricing_data_source": "https://platform-home.qianwenai.com/data/api.json?product=AliyunDeliveryService&action=ListModelSeries",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "list_before_discount",
+    "pricing_cache_read_kind": "ordinary",
+    "official_api_price_rows": [
+      {
+        "range": "输入<=32k",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "1",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "4",
+            "PriceName": "输出"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.2",
+            "PriceName": "输入（缓存命中）"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_creation_5m",
+            "PriceUnit": "每百万tokens",
+            "Price": "1.25",
+            "PriceName": "5分钟显式缓存创建"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_read",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.1",
+            "PriceName": "显式缓存命中"
+          }
+        ]
+      },
+      {
+        "range": "32k<输入<=128k",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "1.5",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "6",
+            "PriceName": "输出"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.3",
+            "PriceName": "输入（缓存命中）"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_creation_5m",
+            "PriceUnit": "每百万tokens",
+            "Price": "1.875",
+            "PriceName": "5分钟显式缓存创建"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_read",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.15",
+            "PriceName": "显式缓存命中"
+          }
+        ]
+      },
+      {
+        "range": "128k<输入<=256k",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "2.5",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "10",
+            "PriceName": "输出"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.5",
+            "PriceName": "输入（缓存命中）"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_creation_5m",
+            "PriceUnit": "每百万tokens",
+            "Price": "3.125",
+            "PriceName": "5分钟显式缓存创建"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_read",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.25",
+            "PriceName": "显式缓存命中"
+          }
+        ]
+      },
+      {
+        "range": "256k<输入<=1m",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "5",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "25",
+            "PriceName": "输出"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache",
+            "PriceUnit": "每百万tokens",
+            "Price": "1",
+            "PriceName": "输入（缓存命中）"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_creation_5m",
+            "PriceUnit": "每百万tokens",
+            "Price": "6.25",
+            "PriceName": "5分钟显式缓存创建"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_read",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.5",
+            "PriceName": "显式缓存命中"
+          }
+        ]
+      }
+    ],
+    "supports_prompt_caching": true,
+    "pricing_notes": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows.",
+    "context_pricing_tiers": [
+      {
+        "min_tokens": 0,
+        "input_price": 1e-06,
+        "output_price": 4e-06,
+        "cache_write_price": 1.25e-06,
+        "cache_read_price": 2e-07,
+        "max_tokens": 32000
+      },
+      {
+        "min_tokens": 32000,
+        "input_price": 1.5e-06,
+        "output_price": 6e-06,
+        "cache_write_price": 1.875e-06,
+        "cache_read_price": 3e-07,
+        "max_tokens": 128000
+      },
+      {
+        "min_tokens": 128000,
+        "input_price": 2.5e-06,
+        "output_price": 1e-05,
+        "cache_write_price": 3.125e-06,
+        "cache_read_price": 5e-07,
+        "max_tokens": 256000
+      },
+      {
+        "min_tokens": 256000,
+        "input_price": 5e-06,
+        "output_price": 2.5e-05,
+        "cache_write_price": 6.25e-06,
+        "cache_read_price": 1e-06
+      }
+    ],
+    "max_input_tokens": 997952,
+    "max_output_tokens": 65536
+  },
+  "qwen3-coder-flash-2025-07-28": {
+    "input_cost_per_token": 1e-06,
+    "output_cost_per_token": 4e-06,
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "dashscope",
+    "source": "https://platform.qianwenai.com/pricing/api",
+    "pricing_reference": "https://platform.qianwenai.com/pricing/api",
+    "pricing_data_source": "https://platform-home.qianwenai.com/data/api.json?product=AliyunDeliveryService&action=ListModelSeries",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "list_before_discount",
+    "pricing_cache_read_kind": "not_quoted",
+    "official_api_price_rows": [
+      {
+        "range": "输入<=32k",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "1",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "4",
+            "PriceName": "输出"
+          }
+        ]
+      },
+      {
+        "range": "32k<输入<=128k",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "1.5",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "6",
+            "PriceName": "输出"
+          }
+        ]
+      },
+      {
+        "range": "128k<输入<=256k",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "2.5",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "10",
+            "PriceName": "输出"
+          }
+        ]
+      },
+      {
+        "range": "256k<输入<=1m",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "5",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "25",
+            "PriceName": "输出"
+          }
+        ]
+      }
+    ],
+    "supports_prompt_caching": false,
+    "pricing_notes": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows.",
+    "context_pricing_tiers": [
+      {
+        "min_tokens": 0,
+        "input_price": 1e-06,
+        "output_price": 4e-06,
+        "max_tokens": 32000
+      },
+      {
+        "min_tokens": 32000,
+        "input_price": 1.5e-06,
+        "output_price": 6e-06,
+        "max_tokens": 128000
+      },
+      {
+        "min_tokens": 128000,
+        "input_price": 2.5e-06,
+        "output_price": 1e-05,
+        "max_tokens": 256000
+      },
+      {
+        "min_tokens": 256000,
+        "input_price": 5e-06,
+        "output_price": 2.5e-05
+      }
+    ],
+    "max_input_tokens": 997952,
+    "max_output_tokens": 65536
+  },
+  "qwen-flash-character": {
+    "input_cost_per_token": 2.5e-07,
+    "output_cost_per_token": 1.5e-06,
+    "cache_read_input_token_cost": 5e-08,
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "dashscope",
+    "source": "https://platform.qianwenai.com/pricing/api",
+    "pricing_reference": "https://platform.qianwenai.com/pricing/api",
+    "pricing_data_source": "https://platform-home.qianwenai.com/data/api.json?product=AliyunDeliveryService&action=ListModelSeries",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "list_before_discount",
+    "pricing_cache_read_kind": "ordinary",
+    "official_api_price_rows": [
+      {
+        "range": "",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.25",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "1.5",
+            "PriceName": "输出"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.05",
+            "PriceName": "输入（缓存命中）"
+          }
+        ]
+      }
+    ],
+    "supports_prompt_caching": true,
+    "pricing_notes": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows.",
+    "max_input_tokens": 8000,
+    "max_output_tokens": 4096
+  },
+  "qwen-flash-character-2026-02-26": {
+    "input_cost_per_token": 1.8e-07,
+    "output_cost_per_token": 1.5e-06,
+    "cache_read_input_token_cost": 3.6e-08,
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "dashscope",
+    "source": "https://platform.qianwenai.com/pricing/api",
+    "pricing_reference": "https://platform.qianwenai.com/pricing/api",
+    "pricing_data_source": "https://platform-home.qianwenai.com/data/api.json?product=AliyunDeliveryService&action=ListModelSeries",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "list_before_discount",
+    "pricing_cache_read_kind": "ordinary",
+    "official_api_price_rows": [
+      {
+        "range": "",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.18",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "1.5",
+            "PriceName": "输出"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.036",
+            "PriceName": "输入（缓存命中）"
+          }
+        ]
+      }
+    ],
+    "supports_prompt_caching": true,
+    "pricing_notes": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows.",
+    "max_input_tokens": 8192,
+    "max_output_tokens": 4096
+  },
+  "qwen3.5-27b": {
+    "input_cost_per_token": 6e-07,
+    "output_cost_per_token": 4.8e-06,
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "dashscope",
+    "source": "https://platform.qianwenai.com/pricing/api",
+    "pricing_reference": "https://platform.qianwenai.com/pricing/api",
+    "pricing_data_source": "https://platform-home.qianwenai.com/data/api.json?product=AliyunDeliveryService&action=ListModelSeries",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "list_before_discount",
+    "pricing_cache_read_kind": "not_quoted",
+    "official_api_price_rows": [
+      {
+        "range": "输入<=128k",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.6",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "4.8",
+            "PriceName": "输出"
+          }
+        ]
+      },
+      {
+        "range": "128k<输入<=256k",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "1.8",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "14.4",
+            "PriceName": "输出"
+          }
+        ]
+      }
+    ],
+    "supports_prompt_caching": false,
+    "pricing_notes": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows.",
+    "context_pricing_tiers": [
+      {
+        "min_tokens": 0,
+        "input_price": 6e-07,
+        "output_price": 4.8e-06,
+        "max_tokens": 128000
+      },
+      {
+        "min_tokens": 128000,
+        "input_price": 1.8e-06,
+        "output_price": 1.44e-05
+      }
+    ],
+    "max_input_tokens": 260096,
+    "max_output_tokens": 65536
+  },
+  "qwen3.5-122b-a10b": {
+    "input_cost_per_token": 8e-07,
+    "output_cost_per_token": 6.4e-06,
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "dashscope",
+    "source": "https://platform.qianwenai.com/pricing/api",
+    "pricing_reference": "https://platform.qianwenai.com/pricing/api",
+    "pricing_data_source": "https://platform-home.qianwenai.com/data/api.json?product=AliyunDeliveryService&action=ListModelSeries",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "list_before_discount",
+    "pricing_cache_read_kind": "not_quoted",
+    "official_api_price_rows": [
+      {
+        "range": "输入<=128k",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.8",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "6.4",
+            "PriceName": "输出"
+          }
+        ]
+      },
+      {
+        "range": "128k<输入<=256k",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "2",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "16",
+            "PriceName": "输出"
+          }
+        ]
+      }
+    ],
+    "supports_prompt_caching": false,
+    "pricing_notes": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows.",
+    "context_pricing_tiers": [
+      {
+        "min_tokens": 0,
+        "input_price": 8e-07,
+        "output_price": 6.4e-06,
+        "max_tokens": 128000
+      },
+      {
+        "min_tokens": 128000,
+        "input_price": 2e-06,
+        "output_price": 1.6e-05
+      }
+    ],
+    "max_input_tokens": 260096,
+    "max_output_tokens": 65536
+  },
+  "qwen3.5-35b-a3b": {
+    "input_cost_per_token": 4e-07,
+    "output_cost_per_token": 3.2e-06,
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "dashscope",
+    "source": "https://platform.qianwenai.com/pricing/api",
+    "pricing_reference": "https://platform.qianwenai.com/pricing/api",
+    "pricing_data_source": "https://platform-home.qianwenai.com/data/api.json?product=AliyunDeliveryService&action=ListModelSeries",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "list_before_discount",
+    "pricing_cache_read_kind": "not_quoted",
+    "official_api_price_rows": [
+      {
+        "range": "输入<=128k",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.4",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "3.2",
+            "PriceName": "输出"
+          }
+        ]
+      },
+      {
+        "range": "128k<输入<=256k",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "1.6",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "12.8",
+            "PriceName": "输出"
+          }
+        ]
+      }
+    ],
+    "supports_prompt_caching": false,
+    "pricing_notes": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows.",
+    "context_pricing_tiers": [
+      {
+        "min_tokens": 0,
+        "input_price": 4e-07,
+        "output_price": 3.2e-06,
+        "max_tokens": 128000
+      },
+      {
+        "min_tokens": 128000,
+        "input_price": 1.6e-06,
+        "output_price": 1.28e-05
+      }
+    ],
+    "max_input_tokens": 260096,
+    "max_output_tokens": 65536
+  },
+  "qwen3.5-397b-a17b": {
+    "input_cost_per_token": 1.2e-06,
+    "output_cost_per_token": 7.2e-06,
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "dashscope",
+    "source": "https://platform.qianwenai.com/pricing/api",
+    "pricing_reference": "https://platform.qianwenai.com/pricing/api",
+    "pricing_data_source": "https://platform-home.qianwenai.com/data/api.json?product=AliyunDeliveryService&action=ListModelSeries",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "list_before_discount",
+    "pricing_cache_read_kind": "not_quoted",
+    "official_api_price_rows": [
+      {
+        "range": "输入<=128k",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "1.2",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "7.2",
+            "PriceName": "输出"
+          }
+        ]
+      },
+      {
+        "range": "128k<输入<=256k",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "3",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "18",
+            "PriceName": "输出"
+          }
+        ]
+      }
+    ],
+    "supports_prompt_caching": false,
+    "pricing_notes": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows.",
+    "context_pricing_tiers": [
+      {
+        "min_tokens": 0,
+        "input_price": 1.2e-06,
+        "output_price": 7.2e-06,
+        "max_tokens": 128000
+      },
+      {
+        "min_tokens": 128000,
+        "input_price": 3e-06,
+        "output_price": 1.8e-05
+      }
+    ],
+    "max_input_tokens": 260096,
+    "max_output_tokens": 65536
+  },
+  "qwen3-vl-plus": {
+    "input_cost_per_token": 1e-06,
+    "output_cost_per_token": 1e-05,
+    "cache_creation_input_token_cost": 1.25e-06,
+    "cache_read_input_token_cost": 2e-07,
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "dashscope",
+    "source": "https://platform.qianwenai.com/pricing/api",
+    "pricing_reference": "https://platform.qianwenai.com/pricing/api",
+    "pricing_data_source": "https://platform-home.qianwenai.com/data/api.json?product=AliyunDeliveryService&action=ListModelSeries",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "list_before_discount",
+    "pricing_cache_read_kind": "ordinary",
+    "official_api_price_rows": [
+      {
+        "range": "输入<=32k",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "1",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "10",
+            "PriceName": "输出"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.2",
+            "PriceName": "输入（缓存命中）"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_creation_5m",
+            "PriceUnit": "每百万tokens",
+            "Price": "1.25",
+            "PriceName": "5分钟显式缓存创建"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_read",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.1",
+            "PriceName": "显式缓存命中"
+          }
+        ]
+      },
+      {
+        "range": "32k<输入<=128k",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "1.5",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "15",
+            "PriceName": "输出"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.3",
+            "PriceName": "输入（缓存命中）"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_creation_5m",
+            "PriceUnit": "每百万tokens",
+            "Price": "1.875",
+            "PriceName": "5分钟显式缓存创建"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_read",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.15",
+            "PriceName": "显式缓存命中"
+          }
+        ]
+      },
+      {
+        "range": "128k<输入<=256k",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "3",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "30",
+            "PriceName": "输出"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.6",
+            "PriceName": "输入（缓存命中）"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_creation_5m",
+            "PriceUnit": "每百万tokens",
+            "Price": "3.75",
+            "PriceName": "5分钟显式缓存创建"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_read",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.3",
+            "PriceName": "显式缓存命中"
+          }
+        ]
+      }
+    ],
+    "supports_prompt_caching": true,
+    "pricing_notes": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows.",
+    "context_pricing_tiers": [
+      {
+        "min_tokens": 0,
+        "input_price": 1e-06,
+        "output_price": 1e-05,
+        "cache_write_price": 1.25e-06,
+        "cache_read_price": 2e-07,
+        "max_tokens": 32000
+      },
+      {
+        "min_tokens": 32000,
+        "input_price": 1.5e-06,
+        "output_price": 1.5e-05,
+        "cache_write_price": 1.875e-06,
+        "cache_read_price": 3e-07,
+        "max_tokens": 128000
+      },
+      {
+        "min_tokens": 128000,
+        "input_price": 3e-06,
+        "output_price": 3e-05,
+        "cache_write_price": 3.75e-06,
+        "cache_read_price": 6e-07
+      }
+    ],
+    "max_input_tokens": 260096,
+    "max_output_tokens": 32768
+  },
+  "qwen-flash": {
+    "input_cost_per_token": 1.5e-07,
+    "output_cost_per_token": 1.5e-06,
+    "cache_creation_input_token_cost": 1.88e-07,
+    "cache_read_input_token_cost": 3e-08,
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "dashscope",
+    "source": "https://platform.qianwenai.com/pricing/api",
+    "pricing_reference": "https://platform.qianwenai.com/pricing/api",
+    "pricing_data_source": "https://platform-home.qianwenai.com/data/api.json?product=AliyunDeliveryService&action=ListModelSeries",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "list_before_discount",
+    "pricing_cache_read_kind": "ordinary",
+    "official_api_price_rows": [
+      {
+        "range": "输入<=128k",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.15",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "1.5",
+            "PriceName": "输出"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.03",
+            "PriceName": "输入（缓存命中）"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_creation_5m",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.188",
+            "PriceName": "5分钟显式缓存创建"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_read",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.015",
+            "PriceName": "显式缓存命中"
+          }
+        ]
+      },
+      {
+        "range": "128k<输入<=256k",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.6",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "6",
+            "PriceName": "输出"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.12",
+            "PriceName": "输入（缓存命中）"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_creation_5m",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.75",
+            "PriceName": "5分钟显式缓存创建"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_read",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.06",
+            "PriceName": "显式缓存命中"
+          }
+        ]
+      },
+      {
+        "range": "256k<输入<=1m",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "1.2",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "12",
+            "PriceName": "输出"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.24",
+            "PriceName": "输入（缓存命中）"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_creation_5m",
+            "PriceUnit": "每百万tokens",
+            "Price": "1.5",
+            "PriceName": "5分钟显式缓存创建"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_read",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.12",
+            "PriceName": "显式缓存命中"
+          }
+        ]
+      }
+    ],
+    "supports_prompt_caching": true,
+    "pricing_notes": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows.",
+    "context_pricing_tiers": [
+      {
+        "min_tokens": 0,
+        "input_price": 1.5e-07,
+        "output_price": 1.5e-06,
+        "cache_write_price": 1.88e-07,
+        "cache_read_price": 3e-08,
+        "max_tokens": 128000
+      },
+      {
+        "min_tokens": 128000,
+        "input_price": 6e-07,
+        "output_price": 6e-06,
+        "cache_write_price": 7.5e-07,
+        "cache_read_price": 1.2e-07,
+        "max_tokens": 256000
+      },
+      {
+        "min_tokens": 256000,
+        "input_price": 1.2e-06,
+        "output_price": 1.2e-05,
+        "cache_write_price": 1.5e-06,
+        "cache_read_price": 2.4e-07
+      }
+    ],
+    "max_input_tokens": 997952,
+    "max_output_tokens": 32768
+  },
+  "qwen-flash-2025-07-28": {
+    "input_cost_per_token": 1.5e-07,
+    "output_cost_per_token": 1.5e-06,
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "dashscope",
+    "source": "https://platform.qianwenai.com/pricing/api",
+    "pricing_reference": "https://platform.qianwenai.com/pricing/api",
+    "pricing_data_source": "https://platform-home.qianwenai.com/data/api.json?product=AliyunDeliveryService&action=ListModelSeries",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "list_before_discount",
+    "pricing_cache_read_kind": "not_quoted",
+    "official_api_price_rows": [
+      {
+        "range": "输入<=128k",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.15",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "1.5",
+            "PriceName": "输出"
+          }
+        ]
+      },
+      {
+        "range": "128k<输入<=256k",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.6",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "6",
+            "PriceName": "输出"
+          }
+        ]
+      },
+      {
+        "range": "256k<输入<=1m",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "1.2",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "12",
+            "PriceName": "输出"
+          }
+        ]
+      }
+    ],
+    "supports_prompt_caching": false,
+    "pricing_notes": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows.",
+    "context_pricing_tiers": [
+      {
+        "min_tokens": 0,
+        "input_price": 1.5e-07,
+        "output_price": 1.5e-06,
+        "max_tokens": 128000
+      },
+      {
+        "min_tokens": 128000,
+        "input_price": 6e-07,
+        "output_price": 6e-06,
+        "max_tokens": 256000
+      },
+      {
+        "min_tokens": 256000,
+        "input_price": 1.2e-06,
+        "output_price": 1.2e-05
+      }
+    ],
+    "max_input_tokens": 997952,
+    "max_output_tokens": 32768
+  },
+  "qwen-doc-turbo": {
+    "input_cost_per_token": 6e-07,
+    "output_cost_per_token": 1e-06,
+    "cache_creation_input_token_cost": 7.5e-07,
+    "cache_read_input_token_cost": 1.2e-07,
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "dashscope",
+    "source": "https://platform.qianwenai.com/pricing/api",
+    "pricing_reference": "https://platform.qianwenai.com/pricing/api",
+    "pricing_data_source": "https://platform-home.qianwenai.com/data/api.json?product=AliyunDeliveryService&action=ListModelSeries",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "list_before_discount",
+    "pricing_cache_read_kind": "ordinary",
+    "official_api_price_rows": [
+      {
+        "range": "",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.6",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "1",
+            "PriceName": "输出"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.12",
+            "PriceName": "输入（缓存命中）"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_creation_5m",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.75",
+            "PriceName": "5分钟显式缓存创建"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_read",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.06",
+            "PriceName": "显式缓存命中"
+          }
+        ]
+      }
+    ],
+    "supports_prompt_caching": true,
+    "pricing_notes": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows.",
+    "max_input_tokens": 253952,
+    "max_output_tokens": 8192
+  },
+  "qwen-plus-2025-01-25": {
+    "input_cost_per_token": 8e-07,
+    "output_cost_per_token": 2e-06,
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "dashscope",
+    "source": "https://platform.qianwenai.com/pricing/api",
+    "pricing_reference": "https://platform.qianwenai.com/pricing/api",
+    "pricing_data_source": "https://platform-home.qianwenai.com/data/api.json?product=AliyunDeliveryService&action=ListModelSeries",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "list_before_discount",
+    "pricing_cache_read_kind": "not_quoted",
+    "official_api_price_rows": [
+      {
+        "range": "",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.8",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "2",
+            "PriceName": "输出"
+          }
+        ]
+      }
+    ],
+    "supports_prompt_caching": false,
+    "pricing_notes": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows.",
+    "max_input_tokens": 129024,
+    "max_output_tokens": 8192
+  },
+  "qwen-long": {
+    "input_cost_per_token": 5e-07,
+    "output_cost_per_token": 2e-06,
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "dashscope",
+    "source": "https://platform.qianwenai.com/pricing/api",
+    "pricing_reference": "https://platform.qianwenai.com/pricing/api",
+    "pricing_data_source": "https://platform-home.qianwenai.com/data/api.json?product=AliyunDeliveryService&action=ListModelSeries",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "list_before_discount",
+    "pricing_cache_read_kind": "not_quoted",
+    "official_api_price_rows": [
+      {
+        "range": "",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.5",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "2",
+            "PriceName": "输出"
+          }
+        ]
+      }
+    ],
+    "supports_prompt_caching": false,
+    "pricing_notes": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows.",
+    "max_input_tokens": 10000000,
+    "max_output_tokens": 8192
+  },
+  "qwen-plus-character": {
+    "input_cost_per_token": 8e-07,
+    "output_cost_per_token": 2e-06,
+    "cache_creation_input_token_cost": 1e-06,
+    "cache_read_input_token_cost": 1.6e-07,
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "dashscope",
+    "source": "https://platform.qianwenai.com/pricing/api",
+    "pricing_reference": "https://platform.qianwenai.com/pricing/api",
+    "pricing_data_source": "https://platform-home.qianwenai.com/data/api.json?product=AliyunDeliveryService&action=ListModelSeries",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "list_before_discount",
+    "pricing_cache_read_kind": "ordinary",
+    "official_api_price_rows": [
+      {
+        "range": "",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.8",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "2",
+            "PriceName": "输出"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.16",
+            "PriceName": "输入（缓存命中）"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_creation_5m",
+            "PriceUnit": "每百万tokens",
+            "Price": "1",
+            "PriceName": "5分钟显式缓存创建"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache_read",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.08",
+            "PriceName": "显式缓存命中"
+          }
+        ]
+      }
+    ],
+    "supports_prompt_caching": true,
+    "pricing_notes": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows.",
+    "max_input_tokens": 32768,
+    "max_output_tokens": 4096
+  },
+  "qwen-max": {
+    "input_cost_per_token": 2.4e-06,
+    "output_cost_per_token": 9.6e-06,
+    "cache_read_input_token_cost": 4.8e-07,
+    "currency": "CNY",
+    "mode": "chat",
+    "litellm_provider": "dashscope",
+    "source": "https://platform.qianwenai.com/pricing/api",
+    "pricing_reference": "https://platform.qianwenai.com/pricing/api",
+    "pricing_data_source": "https://platform-home.qianwenai.com/data/api.json?product=AliyunDeliveryService&action=ListModelSeries",
+    "pricing_verified_at": "2026-11-28",
+    "pricing_collected_at": "2026-11-28",
+    "pricing_basis": "list_before_discount",
+    "pricing_cache_read_kind": "ordinary",
+    "official_api_price_rows": [
+      {
+        "range": "",
+        "prices": [
+          {
+            "TimeBand": "standard",
+            "Type": "input_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "2.4",
+            "PriceName": "输入"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "output_token",
+            "PriceUnit": "每百万tokens",
+            "Price": "9.6",
+            "PriceName": "输出"
+          },
+          {
+            "TimeBand": "standard",
+            "Type": "input_token_cache",
+            "PriceUnit": "每百万tokens",
+            "Price": "0.48",
+            "PriceName": "输入（缓存命中）"
+          }
+        ]
+      }
+    ],
+    "supports_prompt_caching": true,
+    "pricing_notes": "Official API regular list prices in native CNY before Discount. Batch, time discounts and tool fees are excluded. Ordinary cache-hit prices take precedence when quoted; distinct explicit-cache prices remain in official_api_price_rows.",
+    "max_input_tokens": 30720,
+    "max_output_tokens": 8192
   }
 }
