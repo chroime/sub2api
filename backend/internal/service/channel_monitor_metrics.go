@@ -9,11 +9,11 @@ import (
 	"time"
 )
 
-// MonitorUsageMetric contains means from the latest 24 successful streaming
+// MonitorUsageMetric contains statistics from the latest 24 successful streaming
 // requests for the monitor's exact group/platform/primary model and optional
 // account. Nil means no measured samples, not zero.
 type MonitorUsageMetric struct {
-	CacheRatePct *float64 `json:"cache_rate_pct"` // 0–100, mean per-request cache percentage
+	CacheRatePct *float64 `json:"cache_rate_pct"` // 0–100, summed actual cache reads / complete input tokens
 	FirstTokenMs *float64 `json:"first_token_ms"` // mean measured time to first token
 }
 

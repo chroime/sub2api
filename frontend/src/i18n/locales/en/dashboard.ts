@@ -589,7 +589,7 @@ export default {
     recentAvailabilityHint: 'Latest 24 channel checks; errors count as unavailable and empty slots are excluded',
     recent24Metrics: 'Latest 24 probe and streaming request metrics',
     cacheRate: 'Cache Rate',
-    recentStreamCacheHint: 'Mean hit rate for cache-bearing requests among the latest 24 successful streams; requests with no cache reads are excluded',
+    recentStreamCacheHint: 'Actual-token-weighted cache rate over the latest 24 successful streams: summed cache reads divided by complete upstream input, including cache reads and writes. Zero-hit input is included; missing or invalid upstream usage is omitted and cache writes count once.',
     recentStreamFirstTokenHint: 'Mean first-token time over the latest 24 successful streaming requests; missing or invalid measurements are omitted',
     firstToken: 'First Token',
     userRate: 'User rate',

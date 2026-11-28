@@ -11,3 +11,11 @@ Qwen 50 个文本型号与全量官方 ListModelSeries API 折扣前原价一致
 完整逐型号价格、来源、生命周期证据和哈希见同名 JSON 报告。原始网页、官方 API 响应与浏览器证据位于 `E:/workspace/agent/sub2api/.dev/domestic-pricing-audit-20261128`。
 
 验证：16 项 Python 导入测试、3,187 项 Go 定价/计费/广场/上下文测试、165 项前端测试、生产构建及浏览器零价/收费价验证通过。此文档记录源码验证，正式发布结果以服务器发布回执为准。
+
+## 同日后续修正：版本名称的价格关联
+
+首次核验将精确 API 参数核验与价格展示绑定，导致站内 `deepseek-v4.1-flash` 的官方参考价被隐藏。当前官网价格页和调用文档列出 `deepseek-flash`，模型版本为 DeepSeek-V4.1-Flash-1017；2026-11-28 13:44（北京时间）再次抓取确认。
+
+站内调用名保持 `deepseek-v4.1-flash`，新增明确的 `verified_price_alias` 和 `official_pricing_model=deepseek-flash` 元数据，仅在官方展示中解析已核验的规范价卡。当前峰值参考价为输入 2、输出 8、缓存读取 0.04、单列缓存写入 0 元/百万 Token，空闲时段输入/输出/读取均为一半。路由名称、别名自身计费数值及分组配置沿用；此状态证明价格关联，不声称官网额外接受某个 API 参数。
+
+因此当前目录有 81 个直接核验价卡及 1 个明确版本价格关联，13 个已下线条目及 5 个未确认条目。来源：[官方价格页](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/)、[首次调用 API](https://api-docs.deepseek.com/zh-cn/)。

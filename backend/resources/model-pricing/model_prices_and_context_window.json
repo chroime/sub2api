@@ -7022,9 +7022,10 @@
     "pricing_verified_at": "2026-11-23",
     "pricing_notes": "Native CNY reference quote (peak/list price). Billing applies the off-peak discount separately.",
     "deepseek_peak_price": true,
-    "official_api_verification_status": "unconfirmed",
+    "official_api_verification_status": "verified_price_alias",
     "official_api_checked_at": "2026-11-28",
-    "official_api_verification_note": "Historical native CNY reference retained. This exact API ID and complete current price card have not been independently confirmed in this audit; do not infer a free cache write from a missing field."
+    "official_api_verification_note": "Verified price reference for the DeepSeek-V4.1-Flash-1017 model version. The site public name deepseek-v4.1-flash is preserved; current first-party documentation uses deepseek-flash. This metadata verifies the price association, not acceptance of an additional first-party API parameter.",
+    "official_pricing_model": "deepseek-flash"
   },
   "deepseek-v4-pro-0813": {
     "input_cost_per_token": 9e-06,

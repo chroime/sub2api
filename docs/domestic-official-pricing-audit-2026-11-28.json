@@ -488,18 +488,19 @@
     },
     {
       "model": "deepseek-v4.1-flash",
-      "status": "unconfirmed",
+      "status": "verified_price_alias",
       "source": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing",
-      "pricing_basis": null,
+      "pricing_basis": "explicit_version_price_reference",
       "per_million_cny": {
         "input_cost_per_token": "2.000000",
         "output_cost_per_token": "8.000000",
         "cache_read_input_token_cost": "0.04000000",
-        "cache_creation_input_token_cost": null,
+        "cache_creation_input_token_cost": "0",
         "cache_creation_input_token_cost_above_1hr": null
       },
       "tiers": [],
-      "note": "Historical native CNY reference retained. This exact API ID and complete current price card have not been independently confirmed in this audit; do not infer a free cache write from a missing field."
+      "note": "Display-only verified price reference to deepseek-flash (DeepSeek-V4.1-Flash-1017); preserve this site call name and billing values. The current official documentation uses deepseek-flash. A price-reference mapping does not assert API parameter acceptance.",
+      "official_pricing_model": "deepseek-flash"
     },
     {
       "model": "deepseek-v4-pro-0813",
@@ -3700,5 +3701,12 @@
       "Model family labels, release-version names and exact API parameters are distinguished."
     ]
   },
-  "qwen_official_source_sha256": "df7a469f10b721ddae809c667d1e1e94eb2b3b372eea174d9cee657b676540f2"
+  "qwen_official_source_sha256": "df7a469f10b721ddae809c667d1e1e94eb2b3b372eea174d9cee657b676540f2",
+  "followup_version_price_reference": {
+    "checked_at": "2026-11-28T13:44:36+08:00",
+    "model": "deepseek-v4.1-flash",
+    "canonical": "deepseek-flash",
+    "source": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
+    "source_html_sha256": "16bfd0e0bba2faa72b305d156bfc707a7a4676d67f104d57b4930940c75fb689"
+  }
 }

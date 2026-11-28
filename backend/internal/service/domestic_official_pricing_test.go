@@ -73,3 +73,52 @@ func TestDomesticOfficialCatalogCacheWriteQuotes(t *testing.T) {
 		require.Nil(t, quote, "an unverified or retired first-party quote is not a current official reference: %s", model)
 	}
 }
+
+func TestDomesticOfficialDeepSeekV41ReferenceQuote(t *testing.T) {
+	body, err := os.ReadFile(filepath.Join("..", "..", "resources", "model-pricing", "model_prices_and_context_window.json"))
+	require.NoError(t, err)
+	pricing := &PricingService{}
+	pricing.pricingData, err = pricing.parsePricingData(body)
+	require.NoError(t, err)
+	billing := NewBillingService(&config.Config{}, pricing)
+	plaza := &ModelPlazaService{pricingService: pricing, billingService: billing, resolver: NewModelPricingResolver(nil, billing)}
+	before := *pricing.GetModelPricing("deepseek-v4.1-flash")
+	quote := plaza.lookupOfficialPricing(context.Background(), "deepseek-v4.1-flash", PlatformOpenAI, map[string]*PlazaOfficialPricing{})
+	require.NotNil(t, quote, "a public version name must retain its explicitly verified official reference")
+	require.Equal(t, "CNY", quote.Currency)
+	require.InDelta(t, 2e-6, *quote.InputPrice, 1e-15)
+	require.InDelta(t, 8e-6, *quote.OutputPrice, 1e-15)
+	require.InDelta(t, .04e-6, *quote.CacheReadPrice, 1e-15)
+	require.NotNil(t, quote.CacheWritePrice)
+	require.Zero(t, *quote.CacheWritePrice)
+	require.Equal(t, before, *pricing.GetModelPricing("deepseek-v4.1-flash"), "official display must not mutate the site's billing catalog")
+}
+
+func TestDomesticOfficialPriceAliasRequiresVerifiedCanonicalCard(t *testing.T) {
+	for _, status := range []string{"verified", "unconfirmed", "not_listed", "missing"} {
+		t.Run(status, func(t *testing.T) {
+			pricing := &PricingService{}
+			var err error
+			pricing.pricingData, err = pricing.parsePricingData([]byte(`{
+ "deepseek-flash":{"currency":"CNY","input_cost_per_token":0.000002,"output_cost_per_token":0.000008,"cache_read_input_token_cost":0.00000004,"cache_creation_input_token_cost":0,"deepseek_peak_price":true,"official_api_verification_status":"verified"},
+ "deepseek-v4.1-flash":{"currency":"CNY","input_cost_per_token":0.000007,"output_cost_per_token":0.000009,"deepseek_peak_price":true,"official_api_verification_status":"verified_price_alias","official_pricing_model":"deepseek-flash"}
+}`))
+			require.NoError(t, err)
+			if status == "missing" {
+				delete(pricing.pricingData, "deepseek-flash")
+			} else {
+				pricing.pricingData["deepseek-flash"].OfficialAPIVerificationStatus = status
+			}
+			billing := NewBillingService(&config.Config{}, pricing)
+			plaza := &ModelPlazaService{pricingService: pricing, billingService: billing}
+			quote := plaza.lookupOfficialPricing(context.Background(), "deepseek-v4.1-flash", PlatformOpenAI, map[string]*PlazaOfficialPricing{})
+			if status != "verified" {
+				require.Nil(t, quote, "do not resurrect absent or unverified canonical quotes")
+				return
+			}
+			require.NotNil(t, quote)
+			require.InDelta(t, 2e-6, *quote.InputPrice, 1e-15, "official view resolves the canonical card, not the alias's billing values")
+			require.InDelta(t, 7e-6, pricing.GetModelPricing("deepseek-v4.1-flash").InputCostPerToken, 1e-15)
+		})
+	}
+}

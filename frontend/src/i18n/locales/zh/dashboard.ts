@@ -594,7 +594,7 @@ export default {
     recentAvailabilityHint: '最近 24 次渠道探测；异常计为不可用，无记录不计入',
     recent24Metrics: '最近 24 次探测与流式请求指标',
     cacheRate: '缓存命中率',
-    recentStreamCacheHint: '最近 24 次成功流式请求中，实际命中过缓存的请求的单次命中率平均值；无缓存请求不计入',
+    recentStreamCacheHint: '最近 24 次成功流式请求的真实 Token 加权命中率：缓存读取总数 ÷（上游普通输入 + 缓存读取 + 缓存写入）总数；零命中请求计入分母，缺失或异常的上游用量不计入，缓存写入明细只计一次',
     recentStreamFirstTokenHint: '最近 24 次成功流式请求的首 Token 平均耗时；忽略缺失或无效测量',
     firstToken: '首 Token',
     userRate: '用户倍率',

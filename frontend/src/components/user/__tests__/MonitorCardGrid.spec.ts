@@ -94,8 +94,10 @@ describe('monitor metric sample description', () => {
     expect(wrapper.findAll('[data-metric][title]')).toHaveLength(0)
   })
 
-  it('explains that cache rate excludes requests without cache reads', () => {
-    expect(zhDashboard.monitorCommon.recentStreamCacheHint).toContain('无缓存请求不计入')
-    expect(enDashboard.monitorCommon.recentStreamCacheHint).toContain('requests with no cache reads are excluded')
+  it('explains actual-token weighting and zero-hit input in the denominator', () => {
+    expect(zhDashboard.monitorCommon.recentStreamCacheHint).toContain('真实 Token 加权')
+    expect(zhDashboard.monitorCommon.recentStreamCacheHint).toContain('零命中请求计入分母')
+    expect(enDashboard.monitorCommon.recentStreamCacheHint).toContain('Actual-token-weighted')
+    expect(enDashboard.monitorCommon.recentStreamCacheHint).toContain('Zero-hit input is included')
   })
 })

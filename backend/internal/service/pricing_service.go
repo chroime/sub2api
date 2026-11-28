@@ -292,6 +292,9 @@ type LiteLLMModelPricing struct {
 	// entry is normalized to CNY for internal billing.
 	OfficialCurrency              string `json:"official_currency,omitempty"`
 	OfficialAPIVerificationStatus string `json:"official_api_verification_status,omitempty"`
+	// OfficialPricingModel is an explicit, display-only reference to a verified
+	// canonical card. It does not rename routed models or alter billing values.
+	OfficialPricingModel string `json:"official_pricing_model,omitempty"`
 	// DeepSeekPeakPrice marks an unmodified peak/list quote; off-peak billing is half.
 	DeepSeekPeakPrice bool `json:"deepseek_peak_price,omitempty"`
 	// ContextPricingTiers contains whole-request token prices for each input-length band.
@@ -340,6 +343,7 @@ type LiteLLMRawEntry struct {
 	Currency                            string            `json:"currency"`
 	OfficialCurrency                    string            `json:"official_currency"`
 	OfficialAPIVerificationStatus       string            `json:"official_api_verification_status"`
+	OfficialPricingModel                string            `json:"official_pricing_model"`
 	DeepSeekPeakPrice                   bool              `json:"deepseek_peak_price"`
 	ContextPricingTiers                 []PricingInterval `json:"context_pricing_tiers"`
 }
@@ -782,6 +786,7 @@ func (s *PricingService) parsePricingData(body []byte) (map[string]*LiteLLMModel
 			Currency:                      entry.Currency,
 			OfficialCurrency:              entry.OfficialCurrency,
 			OfficialAPIVerificationStatus: entry.OfficialAPIVerificationStatus,
+			OfficialPricingModel:          entry.OfficialPricingModel,
 			DeepSeekPeakPrice:             entry.DeepSeekPeakPrice,
 			ContextPricingTiers:           filterValidIntervals(entry.ContextPricingTiers),
 		}

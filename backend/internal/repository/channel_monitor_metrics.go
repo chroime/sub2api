@@ -12,9 +12,15 @@ import (
 
 // Use explicit, active group IDs only; an unbound monitor has no inferred
 // usage or billing multiplier. Both metrics use the same latest 24 streaming
-// records; each request has equal weight, independent of availability windows.
+// records, independent of availability windows. Cache rate weights actual
+// upstream input tokens; TTFT remains the mean of measured request latencies.
 const monitorStreamingSampleSelect = `
- SELECT ul.input_tokens,ul.cache_creation_tokens,ul.cache_read_tokens,ul.first_token_ms
+ SELECT ul.input_tokens,ul.upstream_input_tokens,
+ ul.cache_creation_tokens,ul.cache_read_tokens,ul.first_token_ms,
+ ul.cache_creation_5m_tokens,ul.cache_creation_1h_tokens,
+ ul.cache_creation_30m_tokens,ul.cache_creation_12h_tokens,
+ ul.upstream_cache_read_tokens,ul.upstream_cache_creation_tokens,
+ ul.upstream_cache_creation_5m_tokens,ul.upstream_cache_creation_1h_tokens
  FROM usage_logs ul
  WHERE ul.group_id=g.id AND ul.stream=TRUE
  AND COALESCE(NULLIF(BTRIM(ul.requested_model),''),NULLIF(BTRIM(ul.model),''))=m.primary_model
@@ -31,8 +37,9 @@ const monitorStreamingSampleOrder = `
 // cache-free requests must not be replaced with older cache-bearing requests.
 const monitorUsageMetricsQuery = `
 SELECT m.id,
- AVG(100.0*ul.cache_read_tokens/NULLIF(ul.input_tokens::bigint+ul.cache_creation_tokens+ul.cache_read_tokens,0))
-  FILTER (WHERE ul.cache_read_tokens > 0),
+ 100.0*SUM(tokens.cache_read_tokens) FILTER (WHERE measurement.valid)
+ /NULLIF(SUM(tokens.input_tokens+tokens.cache_read_tokens+GREATEST(tokens.cache_creation_tokens,tokens.ttl_creation_tokens))
+  FILTER (WHERE measurement.valid),0),
  AVG(ul.first_token_ms) FILTER (WHERE ul.first_token_ms >= 0)
 FROM channel_monitors m
 ` + monitorBoundGroupJoin + `
@@ -41,6 +48,25 @@ JOIN LATERAL (
  UNION ALL
  (` + monitorStreamingSampleSelect + ` AND m.account_id IS NOT NULL AND ul.account_id=m.account_id` + monitorStreamingSampleOrder + `)
 ) ul ON TRUE
+CROSS JOIN LATERAL (
+ SELECT (ul.upstream_cache_read_tokens<>0 OR ul.upstream_cache_creation_tokens<>0
+  OR ul.upstream_cache_creation_5m_tokens<>0 OR ul.upstream_cache_creation_1h_tokens<>0) AS present
+) upstream_cache
+CROSS JOIN LATERAL (
+ SELECT ul.upstream_input_tokens::bigint AS input_tokens,
+ CASE WHEN upstream_cache.present THEN ul.upstream_cache_read_tokens ELSE ul.cache_read_tokens END::bigint AS cache_read_tokens,
+ CASE WHEN upstream_cache.present THEN ul.upstream_cache_creation_tokens ELSE ul.cache_creation_tokens END::bigint AS cache_creation_tokens,
+ CASE WHEN upstream_cache.present THEN ul.upstream_cache_creation_5m_tokens::bigint+ul.upstream_cache_creation_1h_tokens
+  ELSE ul.cache_creation_5m_tokens::bigint+ul.cache_creation_1h_tokens+ul.cache_creation_30m_tokens+ul.cache_creation_12h_tokens END AS ttl_creation_tokens,
+ CASE WHEN upstream_cache.present THEN ul.upstream_cache_creation_5m_tokens>=0 AND ul.upstream_cache_creation_1h_tokens>=0
+  ELSE ul.cache_creation_5m_tokens>=0 AND ul.cache_creation_1h_tokens>=0 AND ul.cache_creation_30m_tokens>=0 AND ul.cache_creation_12h_tokens>=0 END AS ttl_valid
+) tokens
+CROSS JOIN LATERAL (
+ SELECT tokens.input_tokens IS NOT NULL AND tokens.input_tokens>=0
+  AND NOT(tokens.input_tokens=0 AND ul.input_tokens>0)
+  AND tokens.cache_read_tokens>=0 AND tokens.cache_creation_tokens>=0 AND tokens.ttl_valid
+  AND NOT(tokens.cache_creation_tokens>0 AND tokens.ttl_creation_tokens>0 AND tokens.cache_creation_tokens<>tokens.ttl_creation_tokens) AS valid
+) measurement
 WHERE m.id=ANY($1) AND m.enabled=TRUE
 GROUP BY m.id`
 

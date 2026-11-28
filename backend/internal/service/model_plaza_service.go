@@ -693,8 +693,19 @@ func (s *ModelPlazaService) lookupOfficialPricing(ctx context.Context, modelName
 	if s.billingService == nil {
 		return nil
 	}
+	pricingModel := modelName
 	if s.pricingService != nil && isDomesticPricingModelName(modelName) {
 		catalog := s.pricingService.GetModelPricing(modelName)
+		if catalog != nil && catalog.OfficialAPIVerificationStatus == "verified_price_alias" {
+			pricingModel = strings.TrimSpace(catalog.OfficialPricingModel)
+			catalog = s.pricingService.GetModelPricing(pricingModel)
+			// Resolve only one explicitly declared hop to a verified card. An
+			// API-name audit must not erase a known version's price reference.
+			if catalog == nil || catalog.OfficialAPIVerificationStatus != "verified" {
+				memo[modelName] = nil
+				return nil
+			}
+		}
 		if catalog == nil || strings.EqualFold(catalog.OfficialCurrency, "USD") ||
 			(catalog.OfficialAPIVerificationStatus != "" && catalog.OfficialAPIVerificationStatus != "verified") {
 			memo[modelName] = nil
@@ -705,7 +716,7 @@ func (s *ModelPlazaService) lookupOfficialPricing(ctx context.Context, modelName
 		return cached
 	}
 	var result *PlazaOfficialPricing
-	if mp, err := s.billingService.GetModelPricing(modelName); err == nil && mp != nil {
+	if mp, err := s.billingService.GetModelPricing(pricingModel); err == nil && mp != nil {
 		result = &PlazaOfficialPricing{
 			Currency:        mp.Currency,
 			InputPrice:      nonZeroPtr(mp.InputPricePerToken),
@@ -719,7 +730,7 @@ func (s *ModelPlazaService) lookupOfficialPricing(ctx context.Context, modelName
 		// A catalog's explicit zero is a free quote, while an absent field is
 		// unknown. Preserve that distinction without changing billing policy.
 		if mp.CacheCreationPricePerToken == 0 && s.pricingService != nil {
-			catalog := s.pricingService.GetModelPricing(modelName)
+			catalog := s.pricingService.GetModelPricing(pricingModel)
 			if catalog != nil && !catalog.TokenPricingAbsent && catalog.CacheCreationInputTokenCostExplicit && catalog.CacheCreationInputTokenCost == 0 {
 				zero := 0.0
 				result.CacheWritePrice = &zero
@@ -731,7 +742,7 @@ func (s *ModelPlazaService) lookupOfficialPricing(ctx context.Context, modelName
 		}
 		result.CacheWrite12hPrice = mp.CacheCreation12hPricePerToken
 		if s.resolver != nil {
-			sched, schedErr := s.billingService.ResolveContextPricingSchedule(ctx, s.resolver, ContextPricingScheduleInput{Model: modelName})
+			sched, schedErr := s.billingService.ResolveContextPricingSchedule(ctx, s.resolver, ContextPricingScheduleInput{Model: pricingModel})
 			if schedErr == nil && sched != nil && len(sched.Tiers) > 1 {
 				result.Intervals = plazaIntervalsFromTiers(sched.Tiers)
 			}
