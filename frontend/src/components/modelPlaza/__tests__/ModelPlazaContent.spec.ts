@@ -55,6 +55,12 @@ function model(name: string, platform = 'openai'): PlazaModel {
 }
 
 async function selectGroup(wrapper: ReturnType<typeof render>, id: number | 'all') {
+  if (id === 'all') {
+    await wrapper.get('[data-price-view=official]').trigger('click')
+    expect(wrapper.find('#plaza-group-select').exists()).toBe(false)
+    return
+  }
+  await wrapper.get('[data-price-view=site]').trigger('click')
   await wrapper.get('#plaza-group-select').trigger('click')
   const index = wrapper.getComponent(Select).props('options').findIndex(option => option.value === id)
   expect(index).toBeGreaterThanOrEqual(0)
@@ -107,6 +113,7 @@ describe('model plaza group selection', () => {
     const wrapper = render([group({ id: 10, name: 'Flagship' })], true)
     try {
       expect(monitorList).not.toHaveBeenCalled()
+      await wrapper.get('[data-price-view=site]').trigger('click')
       await wrapper.get('#plaza-group-select').trigger('click')
       await flushPromises()
       expect(monitorList).toHaveBeenCalledTimes(1)
@@ -121,10 +128,10 @@ describe('model plaza group selection', () => {
       expect(option.get('[data-monitor-kind=intelligence]').attributes('data-monitor-state')).toBe('ready')
       expect(option.get('[data-monitor-kind=intelligence]').findAll('[data-monitor-bar]').at(-1)!.attributes('data-status')).toBe('pass')
       await availability.trigger('click')
-      expect(wrapper.getComponent(Select).props('modelValue')).toBe('all')
+      expect(wrapper.getComponent(Select).props('modelValue')).toBe(10)
       expect(wrapper.find('[role=listbox]').exists()).toBe(true)
       expect(wrapper.get('[data-group-monitor-detail]').text()).toContain('gpt-6.1-sol')
-      await wrapper.findAll('[role=option]')[1]!.trigger('click')
+      await wrapper.findAll('[role=option]')[0]!.trigger('click')
       expect(wrapper.getComponent(Select).props('modelValue')).toBe(10)
     } finally { wrapper.unmount() }
   })
@@ -135,6 +142,7 @@ describe('model plaza group selection', () => {
     settings.channel_monitor_mode = mode === 'v2' ? 'v2' : 'v1'
     const wrapper = render([group({ id: 10 })])
     try {
+      await wrapper.get('[data-price-view=site]').trigger('click')
       await wrapper.get('#plaza-group-select').trigger('click')
       await flushPromises()
       expect(monitorList).not.toHaveBeenCalled()
@@ -143,6 +151,26 @@ describe('model plaza group selection', () => {
       expect(option.findAll('[data-monitor-kind]')).toHaveLength(2)
       expect(option.get('[data-monitor-kind=availability]').attributes('data-monitor-state')).toBe('disabled')
       expect(option.get('[data-monitor-kind=intelligence]').attributes('data-monitor-state')).toBe('disabled')
+    } finally { wrapper.unmount() }
+  })
+
+  it('cancels a protected monitor request when leaving site prices', async () => {
+    auth.mockReturnValue({ isAuthenticated: true })
+    let signal: AbortSignal | undefined
+    monitorList.mockImplementation(options => {
+      signal = options.signal
+      return new Promise(() => {})
+    })
+    const wrapper = render([group({ id: 10, models: [model('gpt-live')] })])
+    try {
+      await wrapper.get('[data-price-view=site]').trigger('click')
+      await wrapper.get('#plaza-group-select').trigger('click')
+      await flushPromises()
+      expect(monitorList).toHaveBeenCalledTimes(1)
+      expect(signal?.aborted).toBe(false)
+      await wrapper.get('[data-price-view=official]').trigger('click')
+      expect(signal?.aborted).toBe(true)
+      expect(wrapper.find('[role=listbox]').exists()).toBe(false)
     } finally { wrapper.unmount() }
   })
 
@@ -158,21 +186,23 @@ describe('model plaza group selection', () => {
       group({ id: 10, name: 'B same order', sort_order: 10, rate_multiplier: 3, user_rate_multiplier: 4 })
     ]
     const wrapper = render(groups, embedded)
+    await wrapper.get('[data-price-view=site]').trigger('click')
     await wrapper.get('#plaza-group-select').trigger('click')
     expect(wrapper.findAllComponents(GroupOptionItem).map(option => option.props('name'))).toEqual(['Z first', 'B same order', 'A cheap'])
     expect(wrapper.findAllComponents(GroupOptionItem).map(option => option.props('userRateMultiplier'))).toEqual([2, 4, 0.01])
-    expect(wrapper.getComponent(Select).props('options').map(option => option.value)).toEqual(['all', 20, 10, 30])
+    expect(wrapper.getComponent(Select).props('options').map(option => option.value)).toEqual([20, 10, 30])
     expect(groups.map(item => item.id)).toEqual([30, 20, 10])
     wrapper.unmount()
   })
 
-  it('uses zero and a stable ID tie-break for older responses without sort_order', () => {
+  it('uses zero and a stable ID tie-break for older responses without sort_order', async () => {
     const wrapper = render([
       group({ id: 30, name: 'A', rate_multiplier: 0.1 }),
       group({ id: 10, name: 'Z', rate_multiplier: 5 }),
       group({ id: 20, name: 'First', sort_order: -1 })
     ])
-    expect(wrapper.getComponent(Select).props('options').map(option => option.value)).toEqual(['all', 20, 10, 30])
+    await wrapper.get('[data-price-view=site]').trigger('click')
+    expect(wrapper.getComponent(Select).props('options').map(option => option.value)).toEqual([20, 10, 30])
     wrapper.unmount()
   })
 
@@ -180,6 +210,7 @@ describe('model plaza group selection', () => {
     const identity = { label: '自营', color: 'teal' } as const
     const selected = group({ id: 10, name: 'Flagship', description: 'Full description', identity, rate_multiplier: 1, user_rate_multiplier: 0.35, peak_rate_enabled: true, peak_start: '14:00', peak_end: '18:00', peak_rate_multiplier: 2 })
     const wrapper = render([selected, group({ id: 20, name: 'Unlabelled', is_exclusive: true })], true)
+    await wrapper.get('[data-price-view=site]').trigger('click')
     await wrapper.get('#plaza-group-select').trigger('click')
     const option = wrapper.findAllComponents(GroupOptionItem).find(item => item.props('name') === 'Flagship')!
     expect(option).toBeDefined()
@@ -189,7 +220,7 @@ describe('model plaza group selection', () => {
     expect(option.props()).toMatchObject({ peakRateEnabled: true, peakStart: '14:00', peakEnd: '18:00', peakRateMultiplier: 2 })
     const unlabelled = wrapper.findAllComponents(GroupOptionItem).find(item => item.props('name') === 'Unlabelled')!
     expect(unlabelled.find('[data-group-identity]').exists()).toBe(false)
-    await wrapper.findAll('[role="option"]')[1]!.trigger('click')
+    await wrapper.findAll('[role="option"]')[0]!.trigger('click')
     const current = wrapper.get('#plaza-group-select').getComponent(GroupBadge)
     expect(current.props('identity')).toEqual(identity)
     expect(current.props('rateMultiplier')).toBe(1)
@@ -197,8 +228,8 @@ describe('model plaza group selection', () => {
     expect(current.props('alwaysShowRate')).toBe(true)
     expectModelScope(wrapper, [], selected.id)
     await selectGroup(wrapper, 'all')
-    expect(wrapper.get('#plaza-group-select').find('[data-group-identity]').exists()).toBe(false)
-    expect(wrapper.get('#plaza-group-select').text()).toBe('modelPlaza.filters.officialScope')
+    expect(wrapper.find('#plaza-group-select').exists()).toBe(false)
+    expect(wrapper.get('[data-price-view=official]').attributes('aria-pressed')).toBe('true')
     wrapper.unmount()
   })
 
@@ -206,15 +237,16 @@ describe('model plaza group selection', () => {
     const selected = group({ id: 20, name: 'Selected', sort_order: -1 })
     const other = group({ id: 10, name: 'Other', sort_order: 10 })
     const wrapper = render([other, selected], true)
+    await wrapper.get('[data-price-view=site]').trigger('click')
     await wrapper.get('#plaza-group-select').trigger('click')
-    await wrapper.findAll('[role="option"]')[1]!.trigger('click')
+    await wrapper.findAll('[role="option"]')[0]!.trigger('click')
     expect(wrapper.getComponent(Select).props('modelValue')).toBe(20)
     await wrapper.setProps({ response: { description: '', groups: [group({ ...other, sort_order: -2 }), selected] } })
     expect(wrapper.getComponent(Select).props('modelValue')).toBe(20)
-    expect(wrapper.getComponent(Select).props('options').map(option => option.value)).toEqual(['all', 10, 20])
+    expect(wrapper.getComponent(Select).props('options').map(option => option.value)).toEqual([10, 20])
     await wrapper.setProps({ response: { description: '', groups: [other] } })
-    expect(wrapper.getComponent(Select).props('modelValue')).toBe('all')
-    expect(wrapper.getComponent(Select).props('options').map(option => option.value)).toEqual(['all', 10])
+    expect(wrapper.getComponent(Select).props('modelValue')).toBe(10)
+    expect(wrapper.getComponent(Select).props('options').map(option => option.value)).toEqual([10])
     wrapper.unmount()
   })
 
@@ -304,7 +336,8 @@ describe('model plaza group selection', () => {
     const b = group({ id: 20, name: 'B', models: [] })
     const wrapper = render([a, b])
     try {
-      expect(wrapper.getComponent(Select).props('options').map(option => option.value)).toEqual(['all', 10, 20])
+      await wrapper.get('[data-price-view=site]').trigger('click')
+      expect(wrapper.getComponent(Select).props('options').map(option => option.value)).toEqual([10, 20])
       await selectGroup(wrapper, a.id)
       expectModelScope(wrapper, a.models, a.id)
 
@@ -312,13 +345,13 @@ describe('model plaza group selection', () => {
       expectModelScope(wrapper, [], b.id)
       expectVendorCounts(wrapper, ['modelPlaza.vendor.all 0'])
       expect(wrapper.get('section .plaza-empty').text()).toBe('modelPlaza.detail.noModels')
-      expect(wrapper.getComponent(Select).props('options').map(option => option.value)).toEqual(['all', 10, 20])
+      expect(wrapper.getComponent(Select).props('options').map(option => option.value)).toEqual([10, 20])
 
       await selectGroup(wrapper, a.id)
       expectModelScope(wrapper, a.models, a.id)
       expectVendorCounts(wrapper, ['modelPlaza.vendor.all 1', 'OpenAI 1'])
       expect(wrapper.find('section .plaza-empty').exists()).toBe(false)
-      expect(wrapper.getComponent(Select).props('options').map(option => option.value)).toEqual(['all', 10, 20])
+      expect(wrapper.getComponent(Select).props('options').map(option => option.value)).toEqual([10, 20])
     } finally { wrapper.unmount() }
   })
 

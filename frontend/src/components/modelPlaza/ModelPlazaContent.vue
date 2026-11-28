@@ -38,21 +38,37 @@
       {{ t('modelPlaza.empty') }}
     </div>
 
-    <!-- Full-width price scope, vendor filters and model table. -->
+    <!-- Price view, access group, vendor filters and model table. -->
     <div v-else class="space-y-4">
       <section class="min-w-0 space-y-4">
-        <!-- 分组选择与监测信息。 -->
         <div class="plaza-toolbar overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-dark-700 dark:bg-dark-800" data-plaza-toolbar>
         <div class="flex flex-wrap items-center gap-3 p-4">
-          <label for="plaza-group-select" class="hidden text-sm font-semibold text-gray-700 dark:text-dark-200 sm:block">
-            {{ t('modelPlaza.filters.priceScope') }}
+          <span class="shrink-0 text-sm font-semibold text-gray-700 dark:text-dark-200">{{ t('modelPlaza.filters.priceView') }}</span>
+          <div class="plaza-price-views inline-flex min-w-0 rounded-xl bg-gray-100 p-1 dark:bg-dark-900/70" role="group" :aria-label="t('modelPlaza.filters.priceView')">
+            <button
+              v-for="view in priceViews" :key="view" type="button" :data-price-view="view" :aria-pressed="priceView === view"
+              class="min-h-10 rounded-lg px-3 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500"
+              :class="priceView === view ? 'bg-white text-primary-700 shadow-sm dark:bg-dark-700 dark:text-primary-300' : 'text-gray-600 hover:text-gray-900 dark:text-dark-300 dark:hover:text-white'"
+              @click="selectPriceView(view)"
+            >{{ t(view === 'official' ? 'modelPlaza.filters.officialScope' : 'modelPlaza.priceTable.sitePrice') }}</button>
+          </div>
+          <label class="plaza-model-search relative w-full min-w-0 sm:ml-auto sm:w-auto sm:min-w-[220px] sm:flex-1">
+            <Icon name="search" size="sm" class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input v-model="searchQuery" type="search" class="input plaza-search w-full py-2.5 pl-9 text-sm" :placeholder="t('modelPlaza.filters.searchPlaceholder')" :aria-label="t('modelPlaza.filters.searchPlaceholder')" />
+          </label>
+          <button v-if="searchActive || selectedVendor !== 'all'" type="button" data-clear-plaza-filters class="text-xs text-gray-500 hover:text-primary-600" @click="clearFilters">{{ t('modelPlaza.filters.clear') }}</button>
+        </div>
+        <div v-if="priceView === 'site'" class="plaza-access-group flex flex-wrap items-center gap-3 border-t border-gray-200 p-4 dark:border-dark-700">
+          <label for="plaza-group-select" class="shrink-0 text-sm font-semibold text-gray-700 dark:text-dark-200">
+            {{ t('modelPlaza.filters.accessGroup') }}
           </label>
           <div class="plaza-group-select min-w-0 w-full sm:w-80 lg:w-[360px]">
             <Select
               id="plaza-group-select"
               :model-value="selectedGroupId"
               :options="groupSelectOptions"
-              :search-placeholder="t('modelPlaza.priceTable.groupLabel')"
+              :aria-label="t('modelPlaza.filters.accessGroup')"
+              :search-placeholder="t('modelPlaza.filters.searchGroups')"
               :dropdown-width="600"
               interactive-options
               @update:model-value="onGroupChange"
@@ -75,7 +91,6 @@
                   always-show-rate
                   class="max-w-full"
                 />
-                <span v-else>{{ t('modelPlaza.filters.officialScope') }}</span>
               </template>
               <template #option="{ option, selected }">
                 <GroupOptionItem
@@ -101,15 +116,10 @@
               </template>
             </Select>
           </div>
-          <label class="plaza-model-search relative min-w-0 flex-1 sm:ml-auto sm:min-w-[220px]">
-            <Icon name="search" size="sm" class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input v-model="searchQuery" type="search" class="input plaza-search w-full py-2.5 pl-9 text-sm" :placeholder="t('modelPlaza.filters.searchPlaceholder')" :aria-label="t('modelPlaza.filters.searchPlaceholder')" />
-          </label>
-          <button v-if="searchActive || selectedVendor !== 'all'" type="button" data-clear-plaza-filters class="text-xs text-gray-500 hover:text-primary-600" @click="clearFilters">{{ t('modelPlaza.filters.clear') }}</button>
         </div>
         <PlazaVendorFilter :vendors="scopeVendors" :vendor="selectedVendor" @update:vendor="selectVendor" />
         </div>
-        <p v-if="!selectedGroup" class="text-xs leading-relaxed text-gray-500 dark:text-dark-300">{{ t('modelPlaza.priceTable.allGroupsHint') }}</p>
+        <p data-price-view-hint class="text-xs leading-relaxed text-gray-500 dark:text-dark-300">{{ t(priceView === 'official' ? 'modelPlaza.filters.officialViewHint' : 'modelPlaza.filters.siteViewHint') }}</p>
 
         <p
           v-if="selectedGroup?.description"
@@ -139,8 +149,8 @@
           v-else
           class="plaza-empty rounded-2xl border border-dashed border-gray-300 px-5 py-12 text-center text-base plaza-muted text-gray-500 dark:border-dark-600 dark:text-dark-400"
         >
-          <p>{{ searchActive ? t('modelPlaza.noSearchResult') : t('modelPlaza.detail.noModels') }}</p>
-          <button v-if="searchActive || selectedVendor !== 'all'" type="button" data-empty-clear class="mt-3 text-sm font-medium text-primary-600 dark:text-primary-400" @click="clearFilters">{{ t('modelPlaza.filters.showAllVendors') }}</button>
+          <p>{{ emptyMessage }}</p>
+          <button v-if="searchActive || selectedVendor !== 'all'" type="button" data-empty-clear class="mt-3 text-sm font-medium text-primary-600 dark:text-primary-400" @click="clearFilters">{{ t(selectedGroup ? 'modelPlaza.filters.showGroupModels' : 'modelPlaza.filters.showCatalogModels') }}</button>
         </div>
       </section>
     </div>
@@ -181,7 +191,10 @@ const authStore = useAuthStore()
 const isAuthenticated = computed(() => authStore.isAuthenticated)
 
 const selectedVendor = ref<string>('all')
-const selectedGroupId = ref<number | 'all'>('all')
+const priceViews = ['official', 'site'] as const
+type PriceView = typeof priceViews[number]
+const priceView = ref<PriceView>('official')
+const selectedGroupId = ref<number | null>(null)
 const groupPickerOpen = ref(false)
 const searchQuery = ref('')
 const highlightedKey = ref('')
@@ -209,17 +222,24 @@ interface PlazaGroupSelectOption extends SelectOption {
   group?: ModelPlazaGroup
 }
 
-const groupSelectOptions = computed<PlazaGroupSelectOption[]>(() => [
-  { value: 'all', label: t('modelPlaza.filters.officialScope') },
-  ...sortedGroups.value.map((g) => ({ value: g.id, label: `${g.name} · ${effectiveRate(g)}x`, description: g.description, group: g }))
-])
+const groupSelectOptions = computed<PlazaGroupSelectOption[]>(() =>
+  sortedGroups.value.map((g) => ({ value: g.id, label: `${g.name} · ${effectiveRate(g)}x`, description: g.description, group: g }))
+)
+
+function selectPriceView(view: PriceView) {
+  groupPickerOpen.value = false
+  if (view === 'site' && !groups.value.some(g => g.id === selectedGroupId.value)) {
+    selectedGroupId.value = sortedGroups.value[0]?.id ?? null
+  }
+  priceView.value = view
+}
 
 function onGroupChange(value: string | number | boolean | null) {
-  selectedGroupId.value = typeof value === 'number' ? value : 'all'
+  if (typeof value === 'number' && groups.value.some(g => g.id === value)) selectedGroupId.value = value
 }
 
 const selectedGroup = computed<ModelPlazaGroup | null>(() =>
-  selectedGroupId.value === 'all' ? null : groups.value.find((g) => g.id === selectedGroupId.value) ?? null
+  priceView.value === 'site' ? groups.value.find((g) => g.id === selectedGroupId.value) ?? null : null
 )
 
 const appStore = useAppStore()
@@ -247,17 +267,17 @@ const peakNote = computed(() => {
 
 // 数据刷新后选中的分组可能已不可见。
 watch(groups, (list) => {
-  if (selectedGroupId.value !== 'all' && !list.some((g) => g.id === selectedGroupId.value)) {
-    selectedGroupId.value = 'all'
+  if (!list.some((g) => g.id === selectedGroupId.value)) {
+    selectedGroupId.value = priceView.value === 'site' ? sortedGroups.value[0]?.id ?? null : null
   }
 })
 
-const scopeVendors = computed(() =>
-  buildVendorTree(collectPlazaModels(groups.value, selectedGroupId.value), '', t('modelPlaza.vendor.other'))
-)
+const scopeModels = computed(() => collectPlazaModels(groups.value, selectedGroup.value?.id ?? 'all'))
+
+const scopeVendors = computed(() => buildVendorTree(scopeModels.value, '', t('modelPlaza.vendor.other')))
 
 const vendorTree = computed(() =>
-  buildVendorTree(collectPlazaModels(groups.value, selectedGroupId.value), searchQuery.value, t('modelPlaza.vendor.other'))
+  buildVendorTree(scopeModels.value, searchQuery.value, t('modelPlaza.vendor.other'))
 )
 
 const tableModels = computed<PlazaModel[]>(() => {
@@ -268,6 +288,16 @@ const tableModels = computed<PlazaModel[]>(() => {
 const currentVendorLabel = computed(() => {
   if (selectedVendor.value === 'all') return t('modelPlaza.vendor.all')
   return vendorTree.value.find((n) => n.key === selectedVendor.value)?.label ?? modelVendorLabel(selectedVendor.value)
+})
+
+const emptyMessage = computed(() => {
+  if (selectedGroup.value && scopeModels.value.length === 0) return t('modelPlaza.detail.noModels')
+  if (selectedVendor.value !== 'all' && !scopeVendors.value.some(vendor => vendor.key === selectedVendor.value)) {
+    return selectedGroup.value
+      ? t('modelPlaza.detail.noVendorInGroup', { group: selectedGroup.value.name, vendor: currentVendorLabel.value })
+      : t('modelPlaza.detail.noVendorInCatalog', { vendor: currentVendorLabel.value })
+  }
+  return t(searchActive.value ? 'modelPlaza.noSearchResult' : 'modelPlaza.detail.noCatalogModels')
 })
 
 function selectVendor(key: string) {

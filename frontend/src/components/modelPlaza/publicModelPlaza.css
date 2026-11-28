@@ -204,6 +204,18 @@
   border-color: var(--public-border-strong);
 }
 .public-model-plaza .plaza-vendor-filter { border-color: var(--public-border); }
+.public-model-plaza .plaza-access-group { border-color: var(--public-border); }
+.public-model-plaza .plaza-price-views { background: var(--public-surface-soft); }
+.public-model-plaza .plaza-price-views button { color: var(--public-muted); }
+.public-model-plaza .plaza-price-views button[aria-pressed="true"] {
+  color: var(--public-accent);
+  background: var(--public-accent-soft);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--public-accent) 35%, var(--public-border));
+}
+.public-model-plaza .plaza-price-views button:focus-visible,
+.public-model-plaza .plaza-vendor-filter button:focus-visible {
+  outline-color: var(--public-accent);
+}
 .public-model-plaza .plaza-vendor-filter button[aria-pressed="true"] {
   color: var(--public-accent);
   background: var(--public-accent-soft);

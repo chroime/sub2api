@@ -713,7 +713,7 @@ export default {
   // Model Plaza (public group/model pricing showcase)
   modelPlaza: {
     title: 'Model Plaza',
-    description: 'Browse available models and pricing by group',
+    description: 'View official reference prices or choose an access group for your payable prices',
     loading: 'Loading...',
     empty: 'No groups to display',
     loadFailed: 'Failed to load model plaza',
@@ -721,6 +721,13 @@ export default {
     anonymousHint: 'Sign in to see your exclusive groups and personal rates',
     filters: {
       priceScope: "Price scope",
+      priceView: 'View prices',
+      accessGroup: 'Access group',
+      searchGroups: 'Search access groups',
+      officialViewHint: 'Official reference prices for models listed across the access groups.',
+      siteViewHint: 'Payable prices for available models in the selected group, including your applicable group or personal rate.',
+      showGroupModels: 'View all models in this group',
+      showCatalogModels: 'View all catalog models',
       officialScope: "Official reference",
       allVendors: "All vendors",
       searchVendors: "Search vendors",
@@ -765,14 +772,17 @@ export default {
       source_group: "Group peak schedule",
       contextBasis: "Billing basis",
       timeHint: "Each rule has its own timezone and weekday conditions. Overlapping rules combine according to billing. Listed official quotes retain their peak or off-peak basis.",
-      scopeHint: "Badges describe the selected price scope. Token prices are per million tokens; missing cache prices are unquoted.",
+      scopeHint: "Badges describe the rules for the selected price view. Token prices are per million tokens; missing cache prices are unquoted.",
     },
     badges: {
       exclusive: 'Exclusive',
       subscription: 'Subscription'
     },
     detail: {
-      noModels: 'No models configured for this group',
+      noModels: 'No models are available in this group',
+      noCatalogModels: 'No models listed yet',
+      noVendorInGroup: 'No {vendor} models are available in the “{group}” group.',
+      noVendorInCatalog: 'No {vendor} models are listed in this catalog.',
       noPricing: 'Pricing not configured',
       peakNote: 'Peak hours {window}: billing rate ×{multiplier}',
       longContextDisabledNote: 'Long-context tier pricing is disabled for this group: requests above the threshold are billed at the base tier; official tiers are for reference only'
@@ -814,6 +824,7 @@ export default {
     },
     vendor: {
       treeLabel: 'Model vendors',
+      modelCount: '{count} model | {count} models',
       all: 'All models',
       other: 'Other',
       expand: 'Expand {vendor}',

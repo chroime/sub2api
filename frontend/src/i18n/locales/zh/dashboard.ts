@@ -718,7 +718,7 @@ export default {
   // Model Plaza (public group/model pricing showcase)
   modelPlaza: {
     title: '模型广场',
-    description: '按分组浏览可用模型与价格',
+    description: '查看官方参考价，或选择接入分组了解本站实付价',
     loading: '加载中...',
     empty: '暂无可展示的分组',
     loadFailed: '加载模型广场失败',
@@ -726,6 +726,13 @@ export default {
     anonymousHint: '登录后可查看你的专属分组与专属倍率',
     filters: {
       priceScope: "价格范围",
+      priceView: '查看价格',
+      accessGroup: '接入分组',
+      searchGroups: '搜索接入分组',
+      officialViewHint: '汇总各接入分组的已收录模型，展示官方参考价。',
+      siteViewHint: '展示所选分组内可用模型的本站实付价，已计入适用的分组或专属倍率。',
+      showGroupModels: '查看该分组全部模型',
+      showCatalogModels: '查看全部目录模型',
       officialScope: "官方参考价",
       allVendors: "全部厂商",
       searchVendors: "搜索厂商名称",
@@ -770,14 +777,17 @@ export default {
       source_group: "分组高峰规则",
       contextBasis: "计费基准",
       timeHint: "时区和工作日限制按各条规则分别生效；多条规则重叠时按真实计费口径叠加。官方表价保留其高峰或低谷基准。",
-      scopeHint: "标记描述当前所选价格范围。Token 价格单位为每百万 Token；缺失缓存价格表示未定价。",
+      scopeHint: "标记描述当前价格视图的计费规则。Token 价格单位为每百万 Token；缺失缓存价格表示未定价。",
     },
     badges: {
       exclusive: '专属分组',
       subscription: '订阅'
     },
     detail: {
-      noModels: '该分组暂未配置模型',
+      noModels: '该分组暂无可用模型',
+      noCatalogModels: '暂无已收录的模型',
+      noVendorInGroup: '“{group}”分组暂无 {vendor} 模型。',
+      noVendorInCatalog: '当前目录暂无 {vendor} 模型。',
       noPricing: '未配置定价',
       peakNote: '高峰时段 {window} 计费倍率 ×{multiplier}',
       longContextDisabledNote: '该分组未启用长上下文阶梯计费，超阈值请求仍按基础档计费，官方阶梯仅供参考'
@@ -818,6 +828,7 @@ export default {
     },
     vendor: {
       treeLabel: '模型厂商',
+      modelCount: '{count} 款模型',
       all: '全部模型',
       other: '其他',
       expand: '展开 {vendor}',
